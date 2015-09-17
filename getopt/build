@@ -1,0 +1,40 @@
+#!/usr/bin/env pbuild
+
+pmodules.configure() {
+	:
+}
+
+pmodules.build() {
+	case ${OS} in
+		Linux )
+			declare -x LDFLAGS="-lintl"
+			;;
+		Darwin )
+			declare -x LDFLAGS="-lintl -liconv -framework CoreFoundation"
+			;;
+	esac
+
+	cd "${MODULE_SRCDIR}"
+	make -e
+}
+
+pmodules.install() {
+	cd "${MODULE_SRCDIR}"
+	declare -x DESTDIR="${PREFIX}"
+	declare -x prefix=''
+	make -e install
+}
+
+pmodules.cleanup_build() {
+	cd "${MODULE_SRCDIR}"
+	make -e realclean
+}
+
+pmodules.add_to_group 'Tools'
+pmodules.make_all
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

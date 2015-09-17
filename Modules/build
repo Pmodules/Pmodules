@@ -1,0 +1,55 @@
+#!/usr/bin/env pbuild
+
+TCL_DIR="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
+
+PATH="${TCL_DIR}/bin:${PATH}"
+
+pmodules.configure() {
+	case ${OS} in
+		Linux )
+			declare -x LIBS="-lz -lpthread"
+			;;
+		Darwin )
+			declare -x LIBS="-lz -framework CoreFoundation"
+			;;
+	esac
+	CPPFLAGS="-DUSE_INTERP_ERRORLINE" "${MODULE_SRCDIR}"/configure \
+		--prefix="${PREFIX}" \
+		--exec-prefix="${PREFIX}" \
+		--with-module-path="${PMODULES_ROOT}/Tools/${PMODULES_MODULEFILES_DIR}" \
+		--with-tcl="${TCL_DIR}/lib" \
+		--without-x \
+		--disable-versioning \
+		|| exit 1
+}
+
+pmodules.post_install() {
+	rm -v    ${PREFIX}/Modules/bin/add.modules
+	rm -v    ${PREFIX}/Modules/bin/mkroot
+	rm -rfv  ${PREFIX}/Modules/modulefiles
+	mv -v    ${PREFIX}/Modules/share/man/man1/module.1 ${PREFIX}/share/man/man1
+	mv -v    ${PREFIX}/Modules/share/man/man4/modulefile.4 ${PREFIX}/share/man/man4
+	rmdir    ${PREFIX}/Modules/bin
+	rmdir    ${PREFIX}/Modules/share/man/man1
+	rmdir    ${PREFIX}/Modules/share/man/man4
+	rmdir    ${PREFIX}/Modules/share/man
+	rmdir    ${PREFIX}/Modules/share
+	rmdir    ${PREFIX}/Modules
+}
+	
+# fake module command
+module() {
+    :
+}
+
+# use system gcc to compile
+declare -rx CC=gcc
+
+pmodules.add_to_group 'Tools'
+pmodules.make_all
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

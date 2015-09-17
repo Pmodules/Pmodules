@@ -1,0 +1,155 @@
+#!/bin/bash
+
+#############################################################################
+# bash 3 or newer ...
+#
+if [ ${BASH_VERSINFO:-0} -lt 3 ]; then
+	echo "BASH version ${BASH_VERSION} ist not supported! You need at least version 3..."
+	return
+fi
+
+#############################################################################
+# implement module comand as function
+#
+module() {
+	local -r modulecmd="${PMODULES_HOME}/bin/modulecmd"
+
+	local -a args=()
+	local -a switches=()
+
+	while (( $# > 0 ));do
+		case $1 in
+		-* )
+			switches+=( $1 )
+			;;
+		[/~a-zA-Z]* )
+			args+=( $1 )
+			;;
+		esac
+		shift
+	done
+
+	[[ ${#args[@]} == 0 ]] && args+=( 'help' )
+	[[ ${#args[@]} == 1 ]] && args+=( '--' )
+
+	local -i i=1
+	for (( i=1; i < ${#args[@]}; i++ )); do
+		eval $( "${modulecmd}" bash "${args[0]}" "${switches[@]}" "${args[i]}" )
+	done
+}
+export -f module
+
+#############################################################################
+# helper functions
+#
+std::append_path () {
+	local -r P=$1
+	local -r d=$2
+
+        if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
+		if [[ -z ${!P} ]]; then
+			eval $P=${d}
+		else
+			eval $P="${!P}:${d}"
+        	fi
+	fi
+}
+
+#
+# Replace or remove a directory in a path variable.
+#
+# To remove a dir:
+#	std::replace_path PATH <pattern>
+#
+# To replace a dir:
+#	std::replace_path PATH <pattern> /replacement/path
+#
+# Args:
+#	$1 name of the shell variable to set (e.g. PATH)
+#	$2 a grep pattern identifying the element to be removed/replaced
+#	$3 the replacement string (use "" for removal)
+#
+# Based on solution published here:
+# https://stackoverflow.com/questions/273909/how-do-i-manipulate-path-elements-in-shell-scripts 
+#
+std::replace_path () {
+	local -r path=$1
+	local -r removepat=$2
+	local -r replacestr=$3
+
+	local -r removestr=$(echo "${!path}" | tr ":" "\n" | grep -m 1 "^$removepat\$")
+    	export $path=$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
+                   sed '/^\s*$/d' | tr "\n" ":" | sed -e 's|^:||' -e 's|:$||')
+}
+
+save_env() {
+	local s=''
+	while (( $# > 0 )); do
+		s+="$( typeset -p $1 );"
+		shift
+	done
+	echo export PMODULES_ENV=$( "${PMODULES_HOME}/bin/base64" --wrap=0 <<< "$s" )	
+}
+
+#module purge
+
+#############################################################################
+# setup environment
+#
+declare -x LOADEDMODULES=''
+declare -x _LMFILES_=''
+declare -x PMODULES_USED_GROUPS=''
+declare -x MODULEPATH=''
+for group in ${PMODULES_DEFAULT_GROUPS//:/ }; do
+	std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+	std::append_path PMODULES_USED_GROUPS "${group}"
+done
+declare -x UsedReleases=''
+for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
+	std::append_path UsedReleases "${r}"
+done
+
+eval $(save_env UsedReleases PMODULES_DEFAULT_RELEASES PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES)
+unset UsedReleases
+unset PMODULES_DEFAULT_RELEASES
+unset PMODULES_DEFAULT_GROUPS
+unset PMODULES_DEFINED_RELEASES
+
+std::replace_path PATH    "${PMODULES_HOME%/*}/.*"
+std::replace_path MANPATH "${PMODULES_HOME%/*}/.*"
+std::append_path  PATH    "${PMODULES_HOME}/bin"
+
+if [[ -r /etc/man.config ]]; then
+	declare _manconf='/etc/man.config'
+elif [[ -r /etc/man.conf ]]; then
+	declare _manconf='/etc/man.conf'
+fi
+if [[ -n ${_manconf} ]]; then
+	while read name value rest; do
+		std::append_path MANPATH "${value}"
+	done < <(grep "^MANPATH\s" "${_manconf}")
+	unset _manconf
+else
+	std::append_path  MANPATH "${PMODULES_HOME}/share/man"
+	std::append_path  MANPATH "/usr/share/man"
+fi
+
+#############################################################################
+# initialize bash completion
+#
+if [[ -r "${PMODULES_HOME}/init/bash_completion" ]]; then
+	source "${PMODULES_HOME}/init/bash_completion"
+fi
+
+#############################################################################
+# legacy...
+#
+unset MODULE_VERSION
+unset MODULE_VERSION_STACK
+unset MODULESHOME
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

@@ -1,0 +1,775 @@
+#!@PMODULES_HOME@/bin/bash
+
+# we have to unset CDPATH, otherwise 'cd' prints the directoy!
+unset CDPATH
+
+# used for some output only
+declare -r  CMD=$(basename "$0")
+
+declare -r  mydir=$(cd $(dirname "$0") && pwd)
+declare -r  prefix=$(dirname "${mydir}")
+declare -r  bindir="${prefix}/bin"
+declare -r  libdir="${prefix}/lib"
+declare -r  libexecdir="${prefix}/libexec"
+
+source "${libdir}/libpmodules.bash"
+
+PATH="${bindir}:${PATH}"
+
+_exit () {
+	std::die 1 "Interrupted..."
+}
+
+_err () {
+	std::info "Oops: got an error in function '${FUNCNAME[1]}', line ${BASH_LINENO[0]}"
+	std::die 1 "Aborting ..."
+}
+
+trap '_exit' INT TERM
+trap '_err' ERR
+
+
+# make sure that everything is used from this version
+declare PMODULES_VERSION='@PMODULES_VERSION@'
+
+print_version() {
+	echo "
+Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
+Copyright GNU GPL v2
+" 1>&2
+}
+
+usage() {
+	local -r prog=$(basename $0)
+	print_version
+	echo "
+Usage: ${prog} [ switches ] [ subcommand ] [subcommand-args ]
+
+Switches:
+        --dry-run     do nothing
+        --force       force overwrite
+
+Available SubCommands and Args:
+        init [--src=<src>] [--user=<user>] <dst>
+                Initialize a new minimal Pmodule environment.
+
+        install <module> [--with=<dep>...]
+                Install matching modules
+
+        sync [--delete] [--dst=<dst>] <src>
+                Synchronize modules.
+"
+}
+
+declare force='no'
+declare dry_run='no'
+declare DRY=''
+declare subcommand=''
+declare sargs=()
+
+subcommand_help_init() {
+	echo "
+init [--src=<src>] [--user=<user>] [--version=<version>] <dst>
+                Initialize a new minimal Pmodule environment in directory
+                <dst>. The <user> parameter must only be present if
+                 ${prog} is executed as root.
+" 1>&2
+}
+
+subcommand_help_install() {
+	echo "
+install <module>... [--with=<dep>...] [--release=<release>...] [--src=<src>]
+                Install matching modules
+" 1>&2
+}
+
+subcommand_help_sync() {
+	echo "
+sync [--delete] [--dst=<dst>] <src>
+                Synchronize environment modules and configuration files
+                from Pmodule environment <src> to Pmodule environment <dst>
+                (default: currently active Pmodule environment).
+                Not yet implemented:
+                If --delete is given, unmarked modules present in <dst>
+                will be deleted.
+" 1>&2
+}
+
+subcommand_help() {
+	if [[ $# == 0 ]]; then
+	        usage
+	elif typeset -F subcommand_help_$1 > /dev/null 2>&1 ; then
+	        # help for sub-command
+		subcommand_help_$1
+	else
+		usage
+	fi
+}
+
+#
+# Derive the relative module installation path
+# from the relative modulefile path
+#
+# $1: relative module file path
+#
+get_module_prefix() {
+	local -a comp=( ${1//\// } )    # split rel.path into components
+	local path="${comp[0]}"		# result path
+	local -i i
+	for ((i=1; i<${#comp[@]}-1; i+=2)); do
+		path+="/${comp[$((-i-1))]}/${comp[$((-i))]}"
+	done
+	echo "${path}"
+}
+
+#
+# Derive the relative module release file path
+# from the relative module file path
+#
+# $1: relative module file path
+#
+get_releasefile_name() {
+	echo "$(dirname "$1")/.release-$(basename "$1")"
+}
+
+#
+# Sync a module from one Pmodules environment to another:
+# - sync module installation
+# - sync modulefile
+# - sync release file
+#
+# Note:
+#   We do not take care of files in $PMODULES_ROOT/$PMODULES_TEMPLATES_DIR. If
+#   the modulefile is a sym-link it is expected that the target exists.
+#
+# $1: relative modulefile path (something like: Tools/gnuplot/5.0.0)
+# $2: source prefix of Pmodule environment
+# $3: target prefix of Pmodule environment
+#
+sync_module() {
+	local -r rel_modulefile=$1
+	local -r src_prefix=$2
+	local -r target_prefix=$3
+
+	local -r rel_module_prefix=$( get_module_prefix "${rel_modulefile}" )
+	local -r rel_releasefile=$( get_releasefile_name "${rel_modulefile}" )
+
+	# install/update module
+	if [[ ! -d "${target_prefix}/${rel_module_prefix}" ]] || [[ "${force}" == 'yes' ]]; then
+		$DRY mkdir -p "${target_prefix}/${rel_module_prefix}" || return $?
+		$DRY rsync --links --perms --recursive --delete \
+		      "${src_prefix}/${rel_module_prefix}/" \
+		      "${target_prefix}/${rel_module_prefix}/" 2>/dev/null || return $?
+	fi
+	local -r src_modulefile="${src_prefix}/${rel_modulefile}"
+	local -r src_releasefile="${src_prefix}/${rel_releasefile}"
+	local -r target_modulefile="${target_prefix}/${rel_modulefile}"
+	local -r target_releasefile="${target_prefix}/${rel_releasefile}"
+
+	# create target directory for module- and release-file
+	if [[ -e "${src_modulefile}" ]] || [[ -e "${src_releasefile}" ]]; then
+	        local dir=$( dirname "${target_modulefile}" )
+		$DRY mkdir -p "${dir}" || return $?
+	fi
+
+	# copy modulefile
+	if [[ -e "${src_modulefile}" ]]; then
+	        $DRY rsync --links --perms --recursive \
+		     "${src_modulefile}" "${target_modulefile}" 2>/dev/null || return $?
+	fi
+
+	# copy release-file
+	if [[ -e "${src_releasefile}" ]]; then
+	        $DRY rsync --links --perms --recursive \
+		     "${src_releasefile}" "${target_releasefile}" 2>/dev/null|| return $?
+	fi
+}
+
+#
+# Sync the Pmodules configuration and templates
+#
+# $1: source prefix of Pmodule environment
+# $2: target prefix of Pmodule environment
+#
+sync_config() {
+	src="$1/${PMODULES_CONFIG_DIR}/"
+	dst="$2/${PMODULES_CONFIG_DIR}/"
+	$DRY rsync --recursive --links --perms --delete \
+		"${src}" "${dst}" 2>/dev/null || return $?
+	sed -i.bak "s/PMODULES_VERSION=\(.*\)/PMODULES_VERSION=${PMODULES_VERSION}/" "${dst}/environment.bash"
+	echo
+
+	src="$1/${PMODULES_TEMPLATES_DIR}/"
+	dst="$2/${PMODULES_TEMPLATES_DIR}/"
+	$DRY rsync --recursive --links --perms --delete --exclude="${src}/.git*" \
+		"${src}" "${dst}" 2>/dev/null || return $?
+	echo
+}
+
+#
+# Delete a module
+#
+# $1: relative modulefile path
+# $2: target prefix of Pmodule environment
+#
+delete_module() {
+        echo "Not implemented yet!"
+}
+
+subcommand_init() {
+	local src=''
+	local target_prefixes=()
+	local user=''
+	local opts=''
+	opts=$(pmodules::get_options -o h -l src: -l user: -l help -l version: -- "$@")
+	if [[ $? != 0 ]]; then
+		subcommand_help_init
+		exit 1
+	fi
+	eval set --  "${opts}"
+	while (($# > 0)); do
+		case $1 in
+			--src )
+				src=$2
+				shift
+				;;
+			--user )
+				user=$2
+				shift
+				;;
+			--version )
+				PMODULES_VERSION=$2
+				shift
+				;;
+			-- )
+				:
+				;;
+			-* | -h | --help )
+				echo "$1: illegal option" 1>&2
+				subcommand_help_init
+				exit 1
+				;;
+			* )
+				target_prefixes+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	(( ${#target_prefixes[@]} != 0 )) || \
+		std::die 1 "Error: no target directory specified!"
+
+	# if source directory is not passed as argument, derive it from script name
+	if [[ -z "${src}" ]]; then
+	    src=$(cd "${bindir}/../../../.." && pwd) 
+	fi
+	[[ -d "${src}" ]] || \
+		std::die 1 "Error: ${src}: source directory does not exist!"
+	[[ -r "${src}/config/profile.bash" ]] || \
+		std::die 1 "Error: ${src}: shell profile does not exist or is not readable!"
+	source "${src}/config/profile.bash"
+
+	local -i euid=$(id -u)
+	if (( euid == 0 )); then
+	        [[ -n "${user}" ]] || \
+		    std::die 1 "Error: --user parameter is required!"
+		id -u "${user}" > /dev/null 2>&1 || \
+		    std::die 1 "Error: Unable to retrieve user id of user '${user}'"
+	else
+		[[ -z "${user}" ]] || \
+		    std::die 1 "Error: --user option is only allowed if running as root!"
+	fi
+
+	pmodules::check_env || \
+		std::die 1 "Giving up..."
+
+	echo "
+Attempting to create a minimal module environment from the
+environment at '${PMODULES_ROOT}'
+"
+
+	init_pmodules_environment() {
+		local -r src_prefix="${PMODULES_ROOT}"
+		local -r target_prefix=$1
+		local src=''
+		local dst=''
+		echo "Initializing target directory '${target_prefix}' ..."
+		echo
+		if [[ -d "${target_prefix}" ]]  && [[ ${force} == no ]]; then
+			echo "Warning: ${target_prefix} already exists."
+			std::get_YN_answer "Do you really want to re-run the initialization? (y/N) " || \
+			        std::die 1 "Abort ..."
+		fi
+		force='yes'
+		echo "Creating target directory '${target_prefix}'..."
+		$DRY mkdir -p "${target_prefix}" || \
+		        std::die 1 "Error: make directory failed!"
+		echo
+
+		echo "Syncing configuration ..."
+		sync_config "${PMODULES_ROOT}" \
+		            "${target_prefix}" || \
+		        std::die 1 "Error: configuration synchronization failed!"
+
+		echo "Syncing Pmodules ${PMODULES_VERSION} from '${src_prefix}' to '${target_prefix}'..."
+		sync_module "Tools/Pmodules/${PMODULES_VERSION}" \
+			    "${src_prefix}" \
+			    "${target_prefix}" || \
+		        std::die 1 "Error: sync Pmodules failed!"
+		mkdir -p "${target_prefix}/Tools/${PMODULES_MODULEFILES_DIR}"
+		echo
+
+		dst="${target_prefix}/${PMODULES_CONFIG_DIR}/environment.bash"
+		echo "Adding installation source '${src_prefix}' to '${dst}'..."
+		sed -i.bak '/PMODULES_INSTALL_SOURCE/d' "${dst}"
+		echo "declare -x PMODULES_INSTALL_SOURCE=\"${src_prefix}\"" >> "${dst}"
+		echo
+
+		if [[ -n "${user}" ]]; then
+	                echo "Changing user of new module environment to '${user}'..."
+                        $DRY chown -R "${user}" "${target_prefix}" || \
+			        std::die 1 "Error: changing owner failed!"
+                        echo
+		fi
+		echo "New minimal module environment created at '${target_prefix}'."
+		echo "To use this environment, execute"
+		echo "   sudo ln -fs ${target_prefix} /opt/psi"
+		echo "   source /opt/psi/${PMODULES_CONFIG_DIR}/profile.bash"
+	}
+
+	umask 022
+	for target_prefix in "${target_prefixes[@]}"; do
+		init_pmodules_environment "${target_prefix}"
+	done
+
+}
+
+declare -a Groups=()
+declare -A HierarchyDepths
+
+get_groups () {
+	local -r root="$1"
+	{
+		cd "${root}" 
+		# for some unknown reason [A-Z]* doesn't work on (some?) SL6 systems
+		for f in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
+			[[  -d ${f}/${PMODULES_MODULEFILES_DIR} ]] || continue
+			Groups+=( $f )
+		done
+	};
+}
+
+#
+# $1: root of modulefile hierarchy
+get_hierarchy_depth () {
+	local -r root="$1"
+	local -a modulefiles_dir
+	std::split_fname modulefiles_dir "${PMODULES_MODULEFILES_DIR}"
+	local -ir off=$(( ${#modulefiles_dir[@]} + 3 ))
+	{
+		cd "${root}"
+		local group
+		for group in "${Groups[@]}"; do
+			local  fname=$(find "${group}/${PMODULES_MODULEFILES_DIR}" \
+					    -depth \( -type f -o -type l \) -print -quit)
+			[[ -n ${fname} ]] || continue
+			#local -a tmp2=( ${fname//\// } )
+			local -a tmp
+			std::split_fname tmp "${fname}"
+			(( HierarchyDepths[$group]=${#tmp[@]}-off ))
+		done
+	};
+}
+
+subcommand_install() {
+	local	    opts=''
+	local -a    with=()
+	local -a    releases=()
+	local -a    module_pattern=()
+	local	    src_prefix="${PMODULES_INSTALL_SOURCE}"
+	local -r    target_prefix="${PMODULES_ROOT}"
+	local	    modulefile=''
+	local -A    modules_to_install
+	local -A    dependencies_to_install
+	local -A    map_to_family
+	local -a    initial_modulepath=()
+
+	#
+	# Resolve dependencies to given module
+	#
+	# $1: modulefile relativ to src prefix. Something like:
+	#     MPI/modulefiles/gcc/4.9.2/openmpi/1.8.4/hdf5/1.8.14
+	#
+	# Notes:
+	#   The variables
+	#	initial_modulepath
+	#	modules_to_install
+	#	map_to_family
+	#   from the calling function are used!
+	#
+	resolve_dependencies_of_module () {
+	 	local -r modulefile=$1
+		local -a modulepath=( "${initial_modulepath[@]}" )
+
+		# compute filename with dependencies of given module
+		local -i i=0 n=0
+		std::split_fname items n "${modulefile}"
+		local fname_dependencies="${src_prefix}/${items[0]}"
+		for (( i = n-2; i >= 2; i-=2 )); do
+			fname_dependencies+="/${items[$i]}/${items[i+1]}"
+		done
+		fname_dependencies+='/.dependencies'
+		[[ -r ${fname_dependencies} ]] || return 0
+
+		# loop over all dependecies
+		local dep
+		while read dep; do
+			# skip empty lines
+			# :FIXME: skip comments?!
+			[[ -z ${dep} ]] && continue
+
+			# search for module with current modulepath and remember
+			local modulename=$(find "${modulepath[@]}" -path "*/${dep}" 2>/dev/null | head -n 1 )
+			[[ -n ${modulename} ]] || \
+			        std::die 3 "Oops: required module '${dep}' not found!"
+			modulename=${modulename/${src_prefix}\/}
+			dependencies_to_install[${modulename}]='.'
+			resolve_dependencies_of_module "${modulename}"
+			# append new node in hierarchy to modulepath
+			if [[ -n ${map_to_family[${dep}]} ]]; then
+				local path="${src_prefix}/${map_to_family[${dep}]}/${PMODULES_MODULEFILES_DIR}/"
+				path+="${modulename/*\/${PMODULES_MODULEFILES_DIR}\/}"
+				modulepath+=( "${path}" )
+			fi
+		done < "${fname_dependencies}"
+	}
+
+	print_modules_to_install() {
+		local modulefile
+		std::info "The following modules will be installed/updated:"
+		for modulefile in "${!modules_to_install[@]}"; do
+			if [[ -e "${target_prefix}/${modulefile}" ]]; then
+				std::info "    Updating: ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+			else
+				std::info "    Installing: ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+			fi
+		done 2>&1 | sort
+		if (( ${#dependencies_to_install[@]} > 0 )); then
+			std::info "\nThe following dependencies will be installed/updated:"
+			for modulefile in "${!dependencies_to_install[@]}"; do
+				if [[ -e "${target_prefix}/${modulefile}" ]]; then
+					std::info "    Updating: ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+				else
+					std::info "    Installing: ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+				fi
+			done 2>&1 | sort
+		fi
+		std::info ""
+		std::get_YN_answer "Do you want to continue? [n] " || \
+			std::die 1 "Aborting..."
+		std::info ""
+	}
+	
+	opts=$(pmodules::get_options -o hf -l dry-run -l force -l with: -l release: -l help -l src: -- "$@")
+	if [[ $? != 0 ]]; then
+		subcommand_help_install
+		exit 1
+	fi
+	eval set --  "${opts}"
+	while (($# > 0)); do
+		case $1 in
+			--dry-run )
+				DRY='echo'
+				;;
+			--force | -f )
+				force='yes'
+				;;
+			--release )
+				releases+=( "$2" )
+				shift
+				;;
+			--src )
+				src_prefix="$2"
+				shift
+				;;
+			--with )
+				with+=( "$2" )
+				shift
+				;;
+			-- )
+				:
+				;;
+			-h | --help )
+				subcommand_help_install
+				exit 1
+				;;
+			-* )
+				echo "$1: illegal option" 1>&2
+				subcommand_help_init
+				exit 1
+				;;
+			* )
+				module_pattern+=( "$1" )
+				;;
+		esac
+		shift
+	done
+
+	[[ -n ${src_prefix} ]] \
+		|| std::die 3 "Oops: no installation source given."
+	[[ -d ${src_prefix} ]] \
+		|| std::die 3 "Oops: '${src_prefix}' is not a valid installation source."
+
+	# scan available groups and their depth
+	get_groups "${src_prefix}"
+	get_hierarchy_depth "${src_prefix}"
+
+	# set initial modulepath
+	local group
+	for  group in "${!HierarchyDepths[@]}"; do
+		if (( ${HierarchyDepths[${group}]} == 0 )); then
+			initial_modulepath+=( "${src_prefix}/${group}/${PMODULES_MODULEFILES_DIR}" )
+		fi
+	done
+
+	#
+	# create a mapping from module name to their family.
+	# Examples:
+	#     gcc/5.2.0 -> Compiler
+	#     openmpi/1.8.4 -> MPI
+	local    _fname=''	
+	while read _fname; do
+		local _family="${_fname%/${PMODULES_MODULEFILES_DIR}/*}"
+		local -a items
+		std::split_fname items "${_fname#*/${PMODULES_MODULEFILES_DIR}/}"
+		local -i n=${#items[*]}
+		# We are only interested in families adding something to
+		# the modulepath. 
+		if (( n >= 4 )); then
+			local _key=$( IFS='/'; echo "${items[*]:$n-4:2}" )
+			map_to_family[$_key]=${_family}
+		fi
+	done < <({ cd "${src_prefix}" && \
+				 find */"${PMODULES_MODULEFILES_DIR}" \
+				      \( -type l -o -type f \) \! -name ".*"; } 2>/dev/null )
+
+	#
+	# search for to be installed modules and their dependencies
+	#
+	local -i n=0
+	while read modulefile; do
+		resolve_dependencies_of_module "${modulefile}"
+		modules_to_install["${modulefile}"]+='.'
+		let n+=1
+	done < <(${PMODULES_HOME}/bin/modulecmd bash search \
+				 "${module_pattern[@]}" \
+				 "${with[@]/#/--with=}" \
+				 "${releases[@]/#/--release=}" \
+				 --no-header --print-modulefiles \
+				 --src="${src_prefix}"  2>&1 1>/dev/null)
+	(( n == 0 )) && \
+		std::die 0 "No matching modules found ..."
+	print_modules_to_install
+
+	# install ...
+	for modulefile in "${!modules_to_install[@]}" "${!dependencies_to_install[@]}"; do
+		if [[ -e "${target_prefix}/${modulefile}" ]]; then
+			std::info "    Updating: ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+		else
+			std::info "    Installing: ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+		fi
+		sync_module "${modulefile}" \
+			    "${src_prefix}" \
+			    "${target_prefix}"
+	done
+	std::info "\nDone!\n"
+}
+
+#
+# delete specified module(s)
+#
+subcommand_delete() {
+	:
+}
+
+#
+# remove modules which have been removed in our source
+#
+subcommand_cleanup() {
+	:
+}
+
+subcommand_sync() {
+	local delete=false
+	local opts=''
+	local dst_prefix=''
+	local src_prefix=''
+
+	opts=$(pmodules::get_options -o h -l dst: -l delete -l help -- "$@")
+	if [[ $? != 0 ]]; then
+		subcommand_help_sync
+		exit 1
+	fi
+	eval set --  "${opts}"
+	while (($# > 0)); do
+		case $1 in
+			--dst )
+				dst_prefix="$2"
+				shift
+				;;
+			--delete )
+				delete=true
+				;;
+			-- )
+				:
+				;;
+			-* | -h | --help )
+				echo "$1: illegal option" 1>&2
+				subcommand_help_init
+				exit 1
+				;;
+			* )
+				[[ -n "${src_prefix}" ]] && \
+				        std::die 1 "Error: Only one source is allowed!"
+				src_prefix="$1"
+				;;
+		esac
+		shift
+	done
+	unset -v opts
+
+	if [[ -z "${dst_prefix}" ]]; then
+		dst_prefix="${PMODULES_ROOT}"
+	fi
+	(
+		PMODULES_ROOT="${dst_prefix}" pmodules::check_env || \
+		        std::die 1 "Error: invalid destination modules environment!"
+	) || std::die 1 "Giving up..."
+	
+	: ${src_prefix:=${PMODULES_INSTALL_SOURCE}} 
+	if [[ -z "${src_prefix}" ]]; then
+            std::die 1 "Error: no source module environment was specified!"
+        fi
+	(
+		PMODULES_ROOT="${src_prefix}" pmodules::check_env || \
+		    std::die 1 "Error: invalid source modules environment!"
+	) || std::die 1 "Giving up..."
+	[[ "$( cd "$src_prefix"; pwd -P )" == "$( cd "$dst_prefix"; pwd -P )" ]] && \
+	    std::die 1 "Error: source and destination are equal!"
+	local modbin=${PMODULES_HOME#"${PMODULES_ROOT}/"}/bin/modulecmd.tcl
+	local file_type_src=$( file -b "${src_prefix}/${modbin}" 2>&1 || echo err1 )
+	local file_type_dst=$( file -b "${dst_prefix}/${modbin}" 2>&1 || echo err2 )
+	[[ "${file_type_src}" == "${file_type_dst}" ]] || \
+	    std::die 1 "Error: The file signatures in the source and destination installation do not match!"
+	unset -v file_type_src file_type_dst
+	local dialog_script="${PMODULES_HOME}/bin/dialog.bash"
+	[[ -r "$dialog_script" ]] || \
+		std::die 1 "Error: Unable to find dialog script of installation $dialog_script";
+
+	DIALOG_LIB=1                # use dialog script as a library
+	source "$dialog_script"     # dialog functions
+
+	# Redefine module_out to append modules to the selected_modules variable
+        local -a selected_modules
+	module_out() {
+		local -a args=(${modlist[$1]})
+		local path=""
+		IFS=/
+		[[ -n "${args[3]}" ]] && path="/${args[*]:3}"
+		unset IFS
+		selected_modules+=( "${args[2]}${path}/${args[0]}" )
+	}
+
+	module_picker "${dst_prefix}" "${src_prefix}" || {
+		# this calls module_out for each selected module,
+		#filling up the selected_modules array
+		echo "Abort!"
+		exit 1
+	}
+
+	local -a destination_modules=( $(cd "${dst_prefix}/${PMODULES_MODULEFILES_DIR}"; find -L . -type f | while read f; do n=${f##*/}; [[ "${n:0:1}" == "." ]] || echo ${f#./}; done) )
+
+	# redefine set difference, the version in dialog.bash only handles integers
+	set_difference() {  #  $1 \ $2
+		local -a operand1=($1)
+		local -a operand2=($2)
+		local -A members
+		local elem
+		for elem in "${operand1[@]}"; do
+			members[$elem]=1
+		done
+		for elem in "${operand2[@]}"; do
+			unset members[$elem]
+		done
+		echo ${!members[@]}
+	}
+
+	if [[ "$delete" == "true" ]]; then
+		local -a modules_delete=( $(set_difference "${destination_modules[*]}" "${selected_modules[*]}") )
+		for m in "${modules_delete[@]}"; do
+                        echo "Deleting module $m ..."
+			delete_module "$m" "$dst_prefix"
+		done
+		unset modules_delete
+	fi
+
+	local -a modules_copy=( $(set_difference "${selected_modules[*]}" "${destination_modules[*]}") )
+	if [[ -n $modules_copy ]]; then
+		echo "Syncing configuration ..."
+		sync_config "$src_prefix" "$dst_prefix" || \
+		        std::die 1 "Error: syncing the configuration failed"
+        fi
+        for m in "${modules_copy[@]}"; do
+                echo "Copying module $m ..."
+		sync_module "$m" "$src_prefix" "$dst_prefix" || \
+		        std::die 1 "Error: syncing of module $m failed!"
+        done
+	unset modules_copy
+}
+
+while (($# > 0)); do
+	case $1 in
+		-h | -H | -\? | --help | -help )
+			usage
+			exit 1
+			;;
+		-V | --version )
+			print_version
+			exit 1
+			;;
+		-f | --force )
+			force='yes'
+			;;
+		--dry-run )
+			dry_run='yes'
+			DRY='echo'
+			;;
+		-* )
+			echo "$1: unknown switch.\n" 1>&2
+			exit 1
+			;;
+		init|install|sync|help )
+			subcommand="subcommand_$1"
+			shift
+			sargs=( $* )
+			shift $#
+			;;
+		* )
+			echo "$1: unknown sub-command" 1>&2
+			exit 1
+	esac
+	shift || :
+done
+
+if [[ -z ${subcommand} ]]; then
+        usage
+	exit 1
+fi
+[[ -z "${PMODULES_ROOT}" ]] && \
+        std::die 1 "Error: No current module environment is configured!"
+$subcommand "${sargs[@]}"
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

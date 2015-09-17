@@ -1,0 +1,10 @@
+#!/usr/bin/env pbuild
+
+pmodules.configure() {
+    "${MODULE_SRCDIR}"/configure \
+		      --prefix="${PREFIX}" \
+	|| exit 1
+}
+
+pmodules.add_to_group 'Tools'
+pmodules.make_all

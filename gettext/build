@@ -1,0 +1,22 @@
+#!/usr/bin/env pbuild
+
+pmodules.configure() {
+    "${MODULE_SRCDIR}"/configure \
+		      --prefix="${PREFIX}" \
+		      --disable-java \
+		      --disable-threads \
+		      --disable-shared \
+		      --enable-relocatable \
+		      --disable-openmp \
+		      --disable-acl \
+		      --disable-curses \
+		      --with-included-gettext \
+		      --without-libiconv-prefix \
+		      --without-libintl-prefix \
+		      --with-included-libxml \
+		      --with-pic=yes \
+	|| exit 1
+}
+
+pmodules.add_to_group 'Tools'
+pmodules.make_all

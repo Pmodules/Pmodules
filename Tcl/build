@@ -1,0 +1,24 @@
+#!/usr/bin/env pbuild
+
+pmodules.configure() {
+	case ${OS} in
+	Linux )
+		srcdir="${MODULE_SRCDIR}/unix"
+		;;
+	Darwin )
+		srcdir="${MODULE_SRCDIR}/macosx"
+		;;
+	esac
+	"${srcdir}"/configure \
+		--prefix="${PREFIX}" \
+		--enable-shared=no \
+		|| exit 1
+}
+
+pmodules.post_install() {
+	{ cd "${PREFIX}"/bin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
+}
+
+pmodules.add_to_group 'Tools'
+pmodules.set_docfiles 'license.terms' 'README'
+pmodules.make_all

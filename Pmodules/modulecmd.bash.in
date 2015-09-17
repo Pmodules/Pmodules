@@ -1,0 +1,1666 @@
+#!@PMODULES_HOME@/bin/bash --noprofile
+#
+
+#set -o nounset
+# we have to unset CDPATH, otherwise 'cd' prints the directoy!
+unset CDPATH
+
+# used for some output only
+declare -r  CMD='module'
+
+declare -r  mydir=$(cd $(dirname "$0") && pwd)
+declare -r  prefix=$(dirname "${mydir}")
+declare -r  bindir="${prefix}/bin"
+declare -r  libdir="${prefix}/lib"
+declare -r  libexecdir="${prefix}/libexec"
+
+source "${libdir}/libpmodules.bash"
+
+PATH="${bindir}:${PATH}"
+
+declare -r  version='@PMODULES_VERSION@'
+declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
+
+declare -rx TCL_LIBRARY="${libdir}/tcl8.6"
+
+# required for pre 0.99.3 modulefiles
+declare -rx PSI_LIBMODULES="${TCL_LIBRARY}/libmodules.tcl"
+
+declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
+
+shopt -s nullglob
+declare -a Groups='()'
+declare -A HierarchyDepths='()'
+
+export_env() {
+	local s=''
+	if [[ "${shell}" == "bash" ]]; then
+		while (( $# > 0 )); do
+			echo -n "export $1=\"${!1}\";"
+			shift
+		done
+		return
+	elif [[ "${shell}" == "tcsh" ]]; then
+		while (( $# > 0 )); do
+			echo "setenv $1 ${!1}"
+			shift
+		done
+		return
+	fi
+}
+
+save_env() {
+	local s=''
+	local tmp
+	while (( $# > 0 )); do
+		tmp="$( typeset -p $1 2> /dev/null)"
+		[[ -n "${tmp}" ]] && s+="${tmp};"
+		shift
+	done
+	declare -g PMODULES_ENV=$( "${PMODULES_HOME}/bin/base64" --wrap=0 <<< "$s" )
+	export_env PMODULES_ENV
+}
+
+trap 'save_env Groups HierarchyDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+
+print_version() {
+	echo "
+Pmodules ${version} using Tcl Environment Modules @MODULES_VERSION@
+Copyright GNU GPL v2
+" 1>&2
+}
+
+usage() {
+	print_version
+	echo "
+USAGE:
+        module [ switches ] [ subcommand ] [subcommand-args ]
+
+SWITCHES:
+        -h|-H|-?|--help         this usage info
+        -V|--version            modules version & configuration options
+
+SUBCOMMANDS:
+        + add|load [switches ]  modulefile [modulefile ...]
+        + rm|unload             modulefile [modulefile ...]
+        + switch|swap           [modulefile1] modulefile2
+        + display|show          modulefile [modulefile ...]
+        + avail [ switches ]    [modulefile [modulefile ...]]
+        + search [ switches ]   [ args ]
+        + use [ switches ]      [dir|group|release ...]
+        + unuse                 dir|group|release [dir|group|release ...]
+        + refresh
+        + purge
+        + list [ switches ]
+        + clear
+        + help                  [modulefile|subcommand]
+        + whatis                [modulefile [modulefile ...]]
+        + apropos|keyword       string
+        + initadd               modulefile [modulefile ...]
+        + initprepend           modulefile [modulefile ...]
+        + initrm                modulefile [modulefile ...]
+        + initswitch            modulefile1 modulefile2
+        + initlist
+        + initclear
+" 1>&2
+	die 1
+}
+
+subcommand_help_add() {
+	echo "
+USAGE:
+        module add     modulefile...
+        module load    modulefile...
+                Load modulefile(s) into the shell environment. Loading a
+		'group-head' will extend the MODULEPATH. E.g.: loading a 
+		compiler makes additional modules like openmpi and libraries
+		compiled with this compiler available.
+" 1>&2
+	die 1
+}
+
+subcommand_help_load() {
+	subcommand_help_add
+}
+
+subcommand_help_rm() {
+	echo "
+USAGE:
+        module rm      modulefile...
+        moudle unload  modulefile...
+                Remove modulefile(s) from the shell environment. Removing
+		a 'group-head' will also unload all modules belonging to
+		this group.
+" 1>&2
+	die 1
+}
+
+subcommand_help_unload() {
+	subcommand_help_rm
+}
+
+subcommand_help_switch() {
+	echo "
+USAGE:
+        module switch  [modulefile1] modulefile2
+        module swap    [modulefile1] modulefile2
+		Switch loaded modulefile1 with modulefile2. If modulefile1
+		is not specified, then it is assumed to be the currently
+		loaded module with the same root name as modulefile2.
+" 1>&2
+	die 1
+}
+
+subcommand_help_swap() {
+	subcommand_help_switch
+}
+
+subcommand_help_display() {
+	echo "
+USAGE:
+        module display modulefile...
+        module show    modulefile...
+		Display information about one or more modulefiles.  The
+		display sub-command will list the full path of the
+		modulefile(s) and all (or most) of the environment changes
+		the modulefile(s) will make if loaded.  It will not display
+		any environment changes found within conditional statements.
+" 1>&2
+	die 1
+}
+
+subcommand_help_show() {
+	subcommand_help_display
+}
+
+subcommand_help_apropos() {
+	echo "
+USAGE:
+        module apropos string
+        module keyword string	Seeks through the 'whatis' informations of all modulefiles for
+		the specified string.  All module-whatis informations matching
+		the string will be displayed.
+		
+" 1>&2
+	die 1
+}
+
+subcommand_help_keyword() {
+	subcommand_help_apropos
+}
+
+
+subcommand_help_avail() {
+	echo "
+USAGE:
+        module avail string
+		List all available modulefiles in the current MODULEPATH. If
+		an argument is given, then each directory in the MODULEPATH
+		is searched for modulefiles whose pathname match the argument.
+
+		This command does *not* display all installed modules on the
+		system. Only *loadable* modules are listed.  The list of 
+		available modules may change either by loading other modules,
+		e.g. a compiler, or with the sub-command 'use'.
+" 1>&2
+	die 1
+}
+
+subcommand_help_search() {
+	echo "
+USAGE:
+        module search [switches] string...
+		Search installed modules. If an argument is given, search
+		for modules whose name match the argument.
+
+SWITCHES: 
+        --no-header
+		Suppress output of a header.
+
+        --release=RELEASE
+		Search for modules within this release. You can specify this
+		switch multiple times.  Without this switch, the used releases
+		will be searched.
+
+        -a|--all-releases
+		Search within all releases.
+		
+        --with=STRING
+		Search for modules compiled with modules matching string. The
+		command
+
+		module search --with=gcc/4.8.3
+
+		lists all modules in the hierarchy compiled with gcc 4.8.3.
+" 1>&2
+	die 1
+}
+
+subcommand_help_use() {
+	echo "
+USAGE:
+        module use [-a|--append|-p|--prepend] [directory|group|release...]
+		Without arguments this sub-command displays information about
+		the module search path, used families and releases. You can
+		use this sub-command to get a list of available families and
+		releases.
+
+		With a directory as argument, this directory will either be
+		prepended or appended to the module search path. The default
+		is to prepend the directory.
+
+		With a group as argument, the modules in this group will 
+		be made available.
+
+		With a release as argument, this modules with this release
+		will be made available.
+
+SWITCHES:
+        -a | --append -p | --prepend )
+                Append/prepend agrument to module search path or list of to be
+                searched releases.
+" 1>&2
+	die 1
+}
+
+subcommand_help_unuse() {
+	echo "
+unuse directory|group|release...
+		Remove the given directory, group or release from the search
+		path.
+" 1>&2
+	die 1
+}
+subcommand_help_update() {
+	echo "
+USAGE:
+        module update
+                Attempt  to  reload  all  loaded  modulefiles.
+" 1>&2
+	die 1
+}
+
+subcommand_help_refresh() {
+	echo "
+USAGE:
+        module refresh
+                Force a refresh of all non-persistent components of currently
+		loaded modules.  This should be used on derived shells where
+		aliases need to be reinitialized but the environment variables
+		have already been set by the currently loaded modules.
+" 1>&2
+	die 1
+}
+
+subcommand_help_purge() {
+	echo "
+USAGE:
+        module purge
+		Unload all loaded modulefiles.
+" 1>&2
+	die 1
+}
+
+subcommand_help_list() {
+	echo "
+USAGE:
+        module list
+		List loaded modules.
+" 1>&2
+	die 1
+}
+
+subcommand_help_clear() {
+	echo "
+USAGE:
+        module clear
+		Force the Modules package to believe that no modules are
+		currently loaded.
+" 1>&2
+	die 1
+}
+
+subcommand_help_whatis() {
+	echo "
+USAGE:
+        module whatis [modulefile...]
+                Display the information set up by the module-whatis commands
+		inside the specified modulefile(s). If no modulefile is
+		specified, all 'whatis' lines will be shown.
+" 1>&2
+	die 1
+}
+
+subcommand_help_initadd() {
+	echo "
+USAGE:
+        module initadd	modulefile...
+		Add modulefile(s) to the shell's initialization file in the
+		user's home directory.  The startup files checked (in order)
+		are:
+
+                    csh -   .modules, .cshrc(.ext), .csh_variables, and
+                            .login(.ext)
+                    tcsh -  .modules, .tcshrc, .cshrc(.ext), .csh_variables,
+                            and .login(.ext)
+                    (k)sh - .modules, .profile(.ext), and .kshenv(.ext)
+                    bash -  .modules, .bash_profile, .bash_login,
+                            .profile(.ext) and .bashrc(.ext)
+                    zsh -   .modules, .zcshrc(.ext), .zshenv(.ext), and
+                            .zlogin(.ext)
+
+                If a 'module load' line is found in any of these files, the
+                modulefile(s) is(are) appended to any existing list of 
+                modulefiles.  The 'module load' line must be located in at
+                least one of the files listed above for any of the 'init'
+                sub-commands to work properly.  If the 'module load' line
+                line is found in multiple shell initialization files, all
+		of the lines are changed.
+" 1>&2
+	die 1
+}
+
+subcommand_help_initprepend() {
+	echo "
+USAGE:
+        module initprepend modulefile...
+		Does the same as initadd but prepends the given modules to
+		the beginning of the list.
+" 1>&2
+	die 1
+}
+
+subcommand_help_initrm() {
+	echo "
+USAGE:
+        module initrm modulefile...
+		Remove modulefile(s) from the shell's initialization files.
+" 1>&2
+	die 1
+}
+
+subcommand_help_initswitch() {
+	echo "
+USAGE:
+        module initswitch modulefile1 modulefile2
+		Switch modulefile1 with modulefile2 in the shell's initialization files.
+" 1>&2
+	die 1
+}
+
+subcommand_help_initlist() {
+	echo "
+USAGE:
+        module initlist
+		List all of the modulefiles loaded from the shell's initialization file.
+" 1>&2
+	die 1
+}
+
+subcommand_help_initclear() {
+	echo "
+USAGE:
+	module initclear
+		Clear all of the modulefiles from the shell's initialization files.
+" 1>&2
+	die 1
+}
+
+#
+# get release of module
+# Note:
+# - the release of a modulefile outside ${PMODULES_ROOT} is 'stable'
+# - the release of a modulefile inside ${PMODULES_ROOT} without a 
+#   coresponding release file is 'unstable'
+#
+# Args:
+# 	$1: absolute modulefile name
+#
+get_release() {
+	local -r modulefile=$1
+
+	# is modulefile outside ${PMODULES_ROOT}?
+	if [[ ! ${modulefile} =~ ${PMODULES_ROOT} ]]; then
+		echo 'stable'
+		return 0
+	fi
+
+	# we are inside ${PMODULES_ROOT}
+	local -r releasefile="${modulefile%/*}/.release-${modulefile##*/}"
+	if [[ -r ${releasefile} ]]; then
+		# read releasefile, remove empty lines, spaces etc
+		local -r data=$( < "${releasefile}" )
+		echo ${data}
+	else	
+		echo 'unstable'
+	fi
+	return 0
+}
+
+: ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
+
+is_release() {
+	[[ ${PMODULES_DEFINED_RELEASES} =~ :$1: ]]
+}
+
+is_used_release() {
+	[[ ":${UsedReleases}:" =~ :$1: ]]
+}
+
+declare used_groups=":${PMODULES_USED_GROUPS}:"
+
+is_group () {
+	[[ -n ${group} ]] && [[ -n ${HierarchyDepths[${group}]} ]]
+}
+
+is_used_group() {
+	[[ ${used_groups} =~ :$1: ]]
+}
+
+module_is_loaded() {
+	[[ :${LOADEDMODULES}: =~ :$1: ]]
+}
+
+#
+# check shebang
+# $1: file name to test
+is_modulefile() {
+	local -r fname=$1
+	local shebang
+	[[ -r ${fname} ]] || return 1
+	read -n 11 shebang < "${fname}"
+	[[ "${shebang}" == "#%Module1.0" ]]
+}
+
+subcommand_generic0() {
+	local -r subcommand=$1
+	shift
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
+	eval set --  "${opts}"
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+				shift
+				;;
+			* )
+				die 3 "${CMD} ${subcommand}: illegal argument -- $1"
+				;;
+		esac
+	done
+	"${modulecmd}" "${shell}" "${subcommand}"
+}
+
+subcommand_generic1() {
+	local -r subcommand=$1
+	shift
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
+	eval set --  "${opts}"
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+					;;
+			* )
+				if (( ${#args[@]} == 0 )); then
+				        args+=( "$1" )
+				else
+					die 3 "${CMD} ${subcommand}: only one argument allowed"
+				fi
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        die 3 "${CMD} ${subcommand}: missing argument"
+	fi
+	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
+}
+
+subcommand_generic1plus() {
+	local -r subcommand=$1
+	shift
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
+	eval set --  "${opts}"
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        die 3 "${CMD} ${subcommand}: missing argument"
+	fi
+	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
+}
+
+subcommand_generic1or2() {
+	local -r subcommand=$1
+	shift
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
+	eval set --  "${opts}"
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+				;;
+			* )
+				if (( ${#args[@]} > 2 )); then
+					die 3 "${CMD} ${subcommand}: only one or two arguments are allowed"
+				fi
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        die 3 "${CMD} ${subcommand}: missing argument"
+	fi
+	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
+}
+
+#
+# load [-fsvw] <module>
+# 
+# $1: module to load
+#
+subcommand_load() {
+	local release='undef'
+	local moduledir=''
+	local m=''
+
+	local saved_IFS=${IFS}; 
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${saved_IFS}
+	local -r saved_MODULEPATH=${MODULEPATH}
+	local -a saved_modulepath=${modulepath}
+	local -r saved_UsedReleases=${UsedReleases}
+
+	#
+	# Test whether a given module can be loaded according to the 
+	# accepted releases.
+	#
+	# Notes:
+	#	The variable 'release' in function 'subcommand_load()' will be set.
+	#	The release of a modulefile outsite our hierarchy is 'stable'.
+	#
+	# $1: absolute name of modulefile
+	#
+	is_loadable() {
+		release=$( get_release "$1" )			
+		[[ :${UsedReleases}: =~ ${release} ]] && return 0
+		return 1
+	}
+
+	#
+	# Test whether a given module is available.
+	# Possible cases:
+	# - absolute file- or link-name in- or outside our hierarchy
+	# - relative file- or link-name in- or outside out hierarchy
+	# - full module name in- or outside our hierarchy
+	# - module name without version in- or outside our hierarchy
+	# - directory in- or outsite our hierarchy (not supported by modulecmd.tcl!)
+	#
+	# arguments:
+	# 	$1: module name or file
+	#
+	# possible return values:
+	# 	0: is a loadable module
+	# 	1: nothing found
+	# 	2: wrong shebang
+	# 	3: has unused release
+	#	4: inside our hierarchy but not loadable
+	#
+	# Notes:
+	#	The variable 'release' in function 'subcommand_load()' will be set.
+	#	The variable 'm' in function 'subcommand_load()' may be set.
+	#
+	is_available() {
+		local  m=$1
+
+		# handle the case of an absolute or relative file- or link-name
+		if [[ -f ${m} ]]; then
+			if [[ "${m:0:1}" != "/" ]]; then
+				# convert to absolte path if relative
+				m=$(std::get_abspath "${m}")
+			fi
+			is_modulefile "${m}" || return 2
+			is_loadable "${m}"   || return 3
+			if [[ "${m}" =~ "${PMODULES_ROOT}" ]]; then
+				for dir in "${modulepath[@]}"; do
+					[[ "${m}" =~ "${dir}" ]] && return 0
+				done
+				return 4
+			fi
+			return 0
+		fi
+
+		# check whether $m is in our modulepath
+		for dir in "${modulepath[@]}"; do
+			if [[ -d ${dir}/$1 ]]; then
+				# module specified without version, like 'hdf5'
+				while read fname; do
+					is_modulefile "${fname}" || return 2
+					if is_loadable "${fname}"; then
+						moduledir="${dir}"
+						return 0
+					fi
+				done < <(find "${dir}/$1" -mindepth 1 -maxdepth 1 -type l -o -type f  \! -name ".*")
+			else
+				# module specified with name/version, like 'hdf5/1.8.14'
+				[[ -f ${dir}/$1 ]] || continue
+ 				[[ -r ${dir}/$1 ]] || continue
+				is_modulefile "${dir}/$1" || return 2
+		        	if is_loadable "${dir}/$1"; then
+					moduledir="${dir}"
+					return 0
+				fi
+			fi
+		done
+		return 1
+	}
+
+	#
+	# output load 'hints'
+	#
+	# Note:
+	#	The variable 'm' from the parent function will be used
+	#	but not changed.
+	#
+	# Args:
+	#	none
+	output_load_hints() {
+		local -ra rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
+		for rel in "${rels[@]}"; do
+			eval $( subcommand_use "${rel}" )
+			if is_available "${m}"; then
+				std::info "${m}: is ${rel}! If you want to load this module, run"
+				std::info "\tmodule use ${rel}"
+				std::info "before running"
+				std::info  "\tmodule load ${m}"
+				exit 42
+			fi
+		done
+		local something_found='no'
+		local -a output=()
+		local -a release=()
+		local -a loadable=()
+		local -i i=0
+		local -i n=0
+		while read -a line; do
+			output[n]="module load ${line[@]:3} ${line[0]}"
+			release[n]=${line[1]}
+			if [[ ":${UsedReleases}:" =~ "${release[n]}" ]]; then
+				loadable[n]='yes'
+			else
+				loadable[n]='no'
+			fi
+			n+=1
+		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
+		std::info "${CMD} load: module unavailable -- ${m}"
+		if (( n > 0 )); then
+			# :FIXME: output group
+			std::info "\nBut the following modules chain(s) are available in the hierarchy:"
+			for ((i=n-1; i >=0; i--)); do
+				if [[ "${loadable[i]}" == "no" ]]; then
+ 				        std::info "${output[i]}\t# ${release[i]}"
+				else
+					std::info "${output[i]}"
+				fi
+			done
+		fi
+	}
+
+	local opts
+	opts=$(pmodules::get_options -o fsvw -l force -l silent -l verbose -l warn -- "$@") || \
+	    subcommand_help_load
+	eval set --  "${opts}"
+	local args=()
+	opts=''
+	while (($# > 0)); do
+		case $1 in
+			-f | --force )
+				opts+=' -f'
+				;;
+			-s | --silent )
+				verbosity_lvl='silent'
+				;;
+			-v | --verbose )
+				verbosity_lvl='verbose'
+				;;
+			-w | --warn )
+				verbosity_lvl='warn'
+				;;
+			-- )
+				;;
+			* )
+				args+=( $1 )
+				;;
+			esac
+			shift
+	done
+	if (( ${#args[@]} == 0 )); then
+		die 2 "${CMD} load: No module specified."
+	fi
+	for m in "${args[@]}"; do
+		# restore original MODULEPATH; it might have been overwritten
+		MODULEPATH=${saved_MODULEPATH}
+		modulepath=${saved_modulepath}
+		UsedReleases=${saved_UsedReleases}
+		if [[ "$m" =~ ":" ]]; then
+
+			# extendet module name is either
+			# - group:name or
+			# - group:name:release or
+			# - release:name or
+			# - release:group:name or
+			# - name:release
+
+			local save_ifs=${IFS}
+			IFS=':'
+			local -a toks=($m)
+			IFS=${save_ifs}
+			local group=''
+			local release=''
+			if is_group "${toks[0]}"; then
+				group=${toks[0]}
+				m=${toks[1]}
+				release=${toks[2]}
+			elif is_release "${toks[0]}"; then
+				release=${toks[0]}
+				if is_group "${toks[1]}"; then
+					group=${toks[1]}
+					m=${toks[2]}
+				else
+					m=${toks[1]}
+					group=${toks[2]}
+				fi
+			else
+				m=${toks[0]}
+				if is_group "${toks[1]}"; then
+					group=${toks[1]}
+					release=${toks[2]}
+				else
+					release=${toks[1]}
+					group=${toks[2]}
+				fi
+			fi
+			if [[ -n ${group} ]]; then
+				is_group "${group}" || die 3 "${CMD} load: illegal group name."
+				local -i depth=${HierarchyDepths[${group}]}
+				(( depth != 0 )) && die 3 "${CMD} load: illegal group name."
+				MODULEPATH="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+				modulepath=( ${MODULEPATH} )
+			fi
+			if [[ -n ${release} ]]; then
+				is_release "${release}" || die 3 "${CMD} load: illegal release name."
+				std::append_path UsedReleases "${release}"
+			fi
+		fi 
+		if is_available "${m}"; then
+		        if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
+			        std::info "Warning: the ${release} module '${m}' has been loaded."
+			fi
+			"${modulecmd}" "${shell}" ${opts} load "${m}"
+		else
+			if [[ ${verbosity_lvl} == 'verbose' ]]; then
+			        output_load_hints
+			else
+				die 3 "${CMD} load: module unavailable -- ${m}"
+			fi
+		fi
+	done
+	# restore original MODULEPATH; it might have been overwritten
+	MODULEPATH=${saved_MODULEPATH}
+	UsedReleases=${saved_UsedReleases}
+}
+
+#
+# unload <module>
+#
+subcommand_unload() {
+	# :FIXME: add dependency tests: don't unload if module is required be
+	#	  another module
+	while (( $# > 0 )); do
+		subcommand_generic1 unload "$1"
+		shift
+	done
+}
+
+#
+# swap <module> [<module>]
+#
+subcommand_swap() {
+	subcommand_generic1or2 swap "$@"
+}
+
+#
+# show <module>
+#
+subcommand_show() {
+	while (( $# > 0 )); do
+		subcommand_generic1 show "$1"
+		shift
+	done
+}
+
+#
+# get all available modules in given directory.
+# return list like
+#	modulename1 release1 modulename2 release2 ...
+#
+get_available_modules() {
+	local -r dir=$1
+	local -r module=$2
+	local -r use_releases=${3:-${UsedReleases}}
+	local -a mods=()
+	while read mod; do
+		local release=$( get_release "${dir}/${mod}" )
+
+		if [[ :${use_releases}: =~ :${release}: ]]; then
+		        mods+=( "${mod}" ${release} )
+		fi
+	done < <(MODULEPATH="${dir}" "${modulecmd}" bash -t avail "${module}" 2>&1 | tail -n +2)
+	echo "${mods[@]}"
+}
+
+#
+# avail [-hlt] [<module-pattern>...]
+#
+subcommand_avail() {
+	# use this variable in the output functions
+	local -a mods=()
+	local dir=''
+	
+	# get number of columns of terminal
+	cols=$(tput cols)
+
+	output_header() {
+		local caption=${dir/${PMODULES_ROOT}\/}
+		local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
+		local caption=${caption/: \//: }
+		let i=($cols-${#caption})/2-2
+		printf -- "%0.s-" $(seq 1 $i) 1>&2
+		printf -- " %s " "${caption}" 1>&2
+		printf -- "%0.s-" $(seq 1 $i) 1>&2
+		printf -- "\n" 1>&2
+	}
+
+	terse_output() {
+		output_header
+		for (( i=0; i<${#mods[@]}; i+=2 )); do
+			local mod=${mods[i]}
+			local release=${mods[i+1]}
+			case $release in
+				stable )
+					out=''
+					;;
+				* )
+					out="${release}"
+					;;
+			esac
+			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
+		done
+		std::info ""
+	}
+
+	#
+	# :FIXME: for the time being, this is the same as terse_output!
+	long_output() {
+		output_header
+		for (( i=0; i<${#mods[@]}; i+=2 )); do
+			local mod=${mods[i]}
+			local release=${mods[i+1]}
+			case $release in
+				stable )
+					out=''
+					;;
+				* )
+					out=${release}
+					;;
+			esac
+			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
+		done
+		std::info ""
+	}
+
+	human_readable_output() {
+		output_header
+
+		local -i column=$cols
+		local -i colsize=16
+		for ((i=0; i<${#mods[@]}; i+=2)); do
+			if [[ ${verbosity_lvl} == 'verbose' ]]; then
+			        local  release=${mods[i+1]}
+			        case ${mods[i+1]} in
+					stable )
+						mod=${mods[i]}
+						;;
+					* )
+						mod="${mods[i]}(${release:0:1})"
+						;;
+				esac
+			else
+				mod=${mods[i]}
+			fi
+			local -i len=${#mod}
+			local -i span=$(( len / 16 + 1 ))
+			local -i colsize=$(( span * 16 ))
+			if (( column+len >= cols )); then
+			        printf -- "\n" 1>&2
+				column=0
+			fi
+			if (( column+colsize < cols )); then
+			        fmt="%-${colsize}s"
+			else
+				fmt="%-s"
+			fi
+			printf "${fmt}" "${mod}" 1>&2
+			column+=colsize
+		done
+		printf -- "\n\n" 1>&2
+	}
+	local opts=''
+	opts=$(pmodules::get_options -o hlt -l human -l long -l terse -- "$@") || subcommand_help_avail
+	eval set --  "${opts}"
+	local pattern=()
+	local output_function=''
+	local opts=''
+	while (($# > 0)); do
+		case $1 in
+			-h | --human )
+				[[ -z ${opts} ]] || \
+				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts=$1
+				output_function='human_readable_output'
+				;;
+			-l | --long )
+				[[ -z ${opts} ]] || \
+				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts=$1
+				output_function='long_output'
+				;;
+			-t | --terse )
+				[[ -z ${opts} ]] || \
+				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts=$1
+				output_function='terse_output'
+				;;
+			-- )
+				;;
+			* )
+				pattern+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	output_function=${output_function:-human_readable_output}
+	if (( ${#pattern[@]} == 0 )); then
+	        pattern+=( '' )
+	fi
+	local saved_IFS=${IFS}; 
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${saved_IFS}
+	for string in "${pattern[@]}"; do
+		for dir in "${modulepath[@]}"; do
+			mods=( $( get_available_modules "${dir}" "${string}" ) )
+			[[ ${#mods[@]} == 0 ]] && continue
+
+			${output_function}
+		done
+	done
+}
+
+# get available groups
+# $1: root of modulefile hierarchy
+#
+get_groups () {
+	local -r root="$1"
+	{
+		cd "${root}" 
+		# for some unknown reason [A-Z]* doesn't work on (some?) SL6 systems
+		for f in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
+			Groups+=( $f )
+		done
+	};
+}
+
+#
+# $1: root of modulefile hierarchy
+get_hierarchy_depth () {
+	local -r root="$1"
+	{
+		cd "${root}"
+		local _group
+		for _group in "${Groups[@]}"; do
+			local  tmp=$(find "${_group}/${PMODULES_MODULEFILES_DIR}" -depth -type f -o -type l | head -1)
+			local -a tmp2=( ${tmp//\// } )
+			local depth=${#tmp2[@]}
+			let depth-=4
+			HierarchyDepths[$_group]=${depth} 
+		done
+	};
+}
+
+#
+# use [-a|--append|-p|--prepend] [directory|group|release...]
+#
+subcommand_use() {
+	if (( ${#Groups[@]} == 0 )); then
+	        get_groups "${PMODULES_ROOT}"
+		get_hierarchy_depth "${PMODULES_ROOT}"
+	fi
+	local saved_IFS=${IFS}; 
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${saved_IFS}
+
+	print_info() {
+		local f
+		local r
+		std::info "Used groups:"
+		for f in ${used_groups//:/ }; do
+			std::info "\t${f}"
+		done
+		std::info "\nUnused groups:"
+		local _group
+		for _group in "${Groups[@]}"; do
+			local -i depth=${HierarchyDepths[${_group}]}
+			if ! is_used_group "${_group}" && (( depth == 0 )); then
+			    std::info "\t${_group}"
+			fi
+		done
+		
+		std::info "\nUsed releases:"
+		for r in ${UsedReleases//:/ }; do
+			std::info "\t${r}"
+		done
+		std::info "\nUnused releases:"
+		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
+			if ! is_used_release $r; then
+				std::info "\t${r}"
+			fi
+		done
+
+		std::info "\nAdditonal directories in MODULEPATH:"
+		let n=0
+		for (( i=0; i<${#modulepath[@]}; i++)); do
+			if [[ ! ${modulepath[i]} =~ ${PMODULES_ROOT} ]]; then
+			        std::info "\t${modulepath[i]}"
+			        let n+=1
+			fi
+		done
+		if (( n == 0 )); then
+		        std::info "\tnone"
+		fi
+		std::info "\n"
+	}
+
+	use () {
+		
+		local dirs_to_add=()
+		local subcommand_switches=''
+		while (( $# > 0)); do
+			arg=$1
+			# if is release
+			# ...
+			# elif is group
+			# ...
+			# elif matches modulepath root
+			# ...
+			# elif is directory
+			# ...
+			local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
+			if [[ ${arg} == -a ]] || [[ ${arg} == --append ]]; then
+			        subcommand_switches='--append'
+			elif [[ ${arg} == -p ]] || [[ ${arg} == --prepend ]]; then
+			        subcommand_switches=''
+			elif is_release "${arg}"; then
+			        # releases are always *appended*
+			        std::append_path UsedReleases "${arg}"
+			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
+				if (( ${HierarchyDepths[$arg]} != 0 )); then
+					die 3 "${CMD} ${0##_}: cannot add group ${arg} to module path"
+				fi
+				std::append_path PMODULES_USED_GROUPS "${arg}"
+			       	dirs_to_add+=( ${modulefiles_dir} )
+			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
+				die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
+			elif [[ -d ${arg} ]]; then
+			        local normalized_dir=$(cd "${arg}" && pwd)
+				dirs_to_add+=( ${normalized_dir} )
+			elif [[ ${arg} =~ "-*" ]]; then
+				die 3 "${CMD} ${0##_}: illegal switch: ${arg}"
+			else
+				die 3 "${CMD} ${0##_}: neither a directory, release or group: ${arg}"
+			fi
+			shift
+		done
+		#echo "export PMODULES_USED_GROUPS=${PMODULES_USED_GROUPS}"
+		declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
+		export_env PMODULES_USED_GROUPS
+		[[ ${#dirs_to_add[@]} == 0 ]] && return
+
+		for dir in "${dirs_to_add[@]}"; do
+			subcommand_generic1 use ${subcommand_switches} "${dir}"
+		done
+	}
+	
+	if [[ $# == 0 ]]; then
+	        std::print_info
+	else
+		use "$@"
+	fi
+}
+
+#
+# unuse directory|group|release...
+#
+subcommand_unuse() {
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_unuse
+	eval set --  "${opts}"
+	local dirs_to_remove=()
+	while (( $# > 0)); do
+		if [[ "$1" == "--" ]]; then
+		        shift
+			continue
+		fi
+		arg=$1
+		# if is release
+		# ...
+		# elif is group
+		# ...
+		# elif matches modulepath root
+		# ...
+		# elif is directory
+		# ...
+		local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
+		if is_release "${arg}"; then
+			std::remove_path UsedReleases "${arg}"
+		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
+			if (( ${HierarchyDepths[$arg]} != 0 )); then
+				die 3 "${CMD} ${0##_}: cannot remove group ${arg} from module path"
+			fi
+			std::remove_path PMODULES_USED_GROUPS "${arg}"
+			dirs_to_remove+=( ${modulefiles_dir} )
+		elif [[ -d ${arg} ]]; then
+			local normalized_dir=$(cd "${arg}" && pwd)
+			dirs_to_remove+=( ${normalized_dir} )
+		elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
+			die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
+		elif [[ ${arg} =~ "-*" ]]; then
+		        die 3 "${CMD} ${0##*_}: illegal option: ${arg}"
+		else
+			die 3 "${CMD} ${0##*_}: not a directory: ${arg}"
+		fi
+		shift
+	done
+	#echo "export PMODULES_USED_GROUPS=${PMODULES_USED_GROUPS}"
+	declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
+	export_env PMODULES_USED_GROUPS
+	[[ ${#dirs_to_remove[@]} == 0 ]] && return
+	for dir in "${dirs_to_remove[@]}"; do
+		subcommand_generic1 unuse "${dir}"
+	done
+}
+
+#
+# update
+#
+# :FIXME: either compile Modules with --enable-beginenv or remove the sub-command
+#
+subcommand_update() {
+	subcommand_generic0 update "$@"
+}
+
+#
+# refresh
+#
+subcommand_refresh() {
+	subcommand_generic0 refresh "$@"
+}
+
+#
+# purge
+#
+subcommand_purge() {
+	subcommand_generic0 purge "$@"
+}
+
+#
+# list [-hlt]
+#
+subcommand_list() {
+	local opts=''
+	opts=$(pmodules::get_options -o hlt -l human -l long -l terse -- "$@") || subcommand_help_list
+	eval set --  "${opts}"
+	local opts=''
+	while (( $# > 0 )); do
+		case $1 in
+			-h | --human )
+				[[ -z ${opts} ]] || \
+				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts='-h'
+				;;
+			-l | --long )
+				[[ -z ${opts} ]] || \
+				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts='-l'
+				;;
+			-t | --terse )
+				[[ -z ${opts} ]] || \
+				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts='-t'
+				;;
+			-- )
+				;;
+			* )
+				die 1 "${CMD} list: invalid argument -- $1"
+				;;
+		esac
+		shift
+	done
+	"${modulecmd}" "${shell}" list "${opts}"
+}
+
+pmodules_init() {
+	declare -g PMODULES_DEFAULT_GROUPS=''
+	declare -g PMODULES_DEFAULT_RELEASES=''
+
+	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/environment.bash"
+
+	declare -g LOADEDMODULES=''
+	declare -g PMODULES_USED_GROUPS=''
+	declare -g MODULEPATH=''
+	declare -g _LMFILES_=''
+
+	for group in ${PMODULES_DEFAULT_GROUPS}; do
+		std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+		std::append_path PMODULES_USED_GROUPS "${group}"
+	done
+	declare -ag Groups='()'
+	declare -Ag HierarchyDepths='()'
+	declare -g  UsedReleases=''
+	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
+		std::append_path UsedReleases "${r}"
+	done
+
+}
+
+#
+# clear
+#
+subcommand_clear() {
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
+	eval set --  "${opts}"
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+				shift
+				;;
+			* )
+				die 3 "${CMD} ${subcommand}: illegal argument -- $1"
+				;;
+		esac
+	done
+	pmodules_init
+	export_env LOADEDMODULES PMODULES_USED_GROUPS MODULEPATH _LMFILES_
+}
+
+#
+# search [switches] [STRING...]
+#
+subcommand_search() {
+	local modules=()
+	local with_modules='//'
+	local src_prefix=''
+	local _print_header='yes'
+	local _print_modulefiles='no'
+	local use_releases=':'
+	local -r fmt="%-20s %-10s %-12s %-s\n"
+
+	# no args
+	print_header() {
+		printf '\n' 1>&1
+		printf "${fmt}" "Module" "Release" "Group" "Requires" 1>&2
+		printf -- '-%.0s' {1..60} 1>&2
+		printf '\n' 1>&2
+	}
+
+	# args:
+	# $1: module name pattern
+	search () {
+		local -r module=$1
+		# we must write temporary results to a file for sorting
+		local -r tmpfile=$( mktemp /tmp/$(basename $0).XXXXXX ) \
+		    || die 1 "Oops: unable to create tmp file!"
+		local _group
+		# loop over all groups
+		for _group in "${Groups[@]}"; do
+			local depth=${HierarchyDepths[${_group}]}
+			# get all potential directories of group with module-files 
+			local mpaths=( $(find \
+					     "${src_prefix}/${_group}/modulefiles" \
+					     -type d \
+					     -mindepth ${depth} -maxdepth ${depth} \
+					     2>/dev/null))
+			local mpath
+			for mpath in "${mpaths[@]}"; do
+				# get dependencies encoded in directory name
+				local p="${mpath/${src_prefix}}"
+				p=( ${p//\// } )
+				local deps=()
+				local -i i
+				for ((i=2; i < ${#p[@]}; i+=2)); do
+					deps+=( ${p[i]}/${p[i+1]} )
+				done
+				local requires=${deps[@]}
+
+				# get and print all available modules in $mpath
+				# with respect to the requested releases
+				local mods=( $( get_available_modules \
+						    "${mpath}" \
+						    "${module}" \
+						    "${use_releases}" ) )
+				[[ ${#mods[@]} == 0 ]] && continue
+				for (( i=0; i<${#mods[@]}; i+=2 )); do
+					printf "${fmt}" ${mods[i]} "${mods[i+1]}" \
+					       ${_group} "${requires}" >> "${tmpfile}"
+				done
+			done
+		done
+		if [[ "${_print_modulefiles}" == "no" ]]; then
+			sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
+		else
+			while read -a line; do
+				# group first
+				local out="${line[2]}/"
+				# add directory of modulefiles
+				out+="${PMODULES_MODULEFILES_DIR}/"
+				for d in "${line[@]:3}"; do
+					out+="$d/"
+				done
+				out+="${line[0]}"
+				std::info "${out}"
+			done < <(sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+		fi
+		rm -f "${tmpfile}"
+	}
+
+	opts=$(pmodules::get_options -o 'ahH?' \
+			   -l help \
+			   -l no-header \
+			   -l print-modulefiles \
+			   -l release: \
+			   -l with: \
+			   -l all-releases \
+			   -l src: \
+			   --  "$@") || subcommand_help_${0##*_}
+	eval set --  "${opts}"
+	
+	while (( $# > 0 )); do
+		case $1 in
+			--no-header )
+				_print_header='no'
+				;;
+			--print-modulefiles )
+				_print_modulefiles='yes'
+				_print_header='no'
+				;;
+			--release )
+				is_release "$2" || \
+				    die 1 "${CMD} search: illegal release name -- $2"
+				use_releases+="$2:"
+				shift
+				;;
+			--with )
+				if [[ -z $2 ]] || [[ "$2" =~ "-*" ]]; then
+				        die 1 "${CMD} search: with what?"
+				fi
+				with_modules+=" && / ${2//\//\\/}/"
+				shift
+				;;
+			-a | --all-releases )
+				use_releases="${PMODULES_DEFINED_RELEASES}"
+				;;
+			--src )
+				src_prefix=$2
+				pmodules::check_directories "${src_prefix}"
+				
+				shift
+				;;
+			-\? | -h | -H | --help )
+				usage
+				;;
+			-- )
+				;;
+			* )
+				modules+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if [[ -z "${src_prefix}" ]]; then
+	        src_prefix="${PMODULES_ROOT}"
+	fi
+	
+	if [[ "${use_releases}" == ":" ]]; then
+                use_releases=":${UsedReleases}:"
+	fi
+	
+	[[ "${_print_header}" == "yes" ]] && print_header
+	if [[ ${#modules[@]} == 0 ]]; then
+		modules+=( '' )
+	fi
+
+	if (( ${#Groups[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
+	        get_groups "${src_prefix}"
+		get_hierarchy_depth "${src_prefix}"
+	fi
+	
+	for module in "${modules[@]}"; do
+		search "${module}"
+	done
+}
+
+#
+# help [module|sub-command]
+#
+subcommand_help() {
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || usage
+	eval set --  "${opts}"
+	local arg=''
+	
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+				:
+				;;
+			* )
+				[[ -z ${arg} ]] || \
+				    die 1 "${CMD} help: only one argument allowed."
+				arg="$1"
+				;;
+		esac
+		shift
+	done
+	if [[ -z ${arg} ]]; then
+	        usage
+	elif typeset -F subcommand_help_${arg} > /dev/null 2>&1 ; then
+	        # help for sub-command
+		subcommand_help_${arg}
+	else
+		# :FIXME: print help of newest *available* module
+		# (respecting UsedReleases)
+		subcommand_generic1plus help "${arg}"
+	fi
+}
+
+#
+# whatis [module]
+#
+subcommand_whatis() {
+	if (( $# == 0 )); then
+	        subcommand_generic0 whatis
+	else
+		subcommand_generic1plus whatis "$@"
+	fi
+}
+
+#
+# apropos string
+#
+subcommand_apropos() {
+	subcommand_generic1 apropos "$@"
+}
+
+#
+# initadd module...
+#
+subcommand_initadd() {
+	subcommand_generic1plus initadd "$@"
+}
+
+#
+# initprepend module...
+#
+subcommand_initprepend() {
+	subcommand_generic1plus initprepend "$@"
+}
+
+#
+# initrm module...
+#
+subcommand_initrm() {
+	subcommand_generic1plus initrm "$@"
+}
+
+#
+# initswitch module1 module2
+#
+subcommand_initswitch() {
+	subcommand_generic1or2 initswitch "$@"
+}
+
+#
+# initlist
+#
+subcommand_initlist() {
+	subcommand_generic0 initlist "$@"
+}
+
+#
+# initclear
+#
+subcommand_initclear() {
+	subcommand_generic0 initclear "$@"
+}
+
+if [[ -n ${PMODULES_ENV} ]]; then
+	eval "$("${PMODULES_HOME}/bin/base64" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+else
+	pmodules_init
+fi
+
+case $1 in
+	bash )
+		declare shell="$1"
+		;;
+	tcsh )
+		declare shell="$1"
+		;;
+	* )
+		die 1 "${CMD}: unsupported shell -- $1"
+		;;
+esac
+shift
+
+declare -a opts=()
+while (( $# > 0 )); do
+	case $1 in
+		-H | -\? | --help | -help )
+			usage
+			;;
+		-V | --version )
+			print_version
+			die 1
+			;;
+		-* )
+			opts+=( "$1" )
+			;;
+		add|load )
+			subcommand='subcommand_load'
+			shift
+			opts+=( "$@" )
+			shift $#
+			;;
+		rm|unload )
+			subcommand='subcommand_unload'
+			shift
+			opts+=( "$@" )
+			shift $#
+			;;
+		switch|swap )
+			subcommand='subcommand_swap'
+			shift
+			opts+=( "$@" )
+			shift $#
+			;;
+		display|show )
+			subcommand='subcommand_show'
+			shift
+			opts+=( "$@" )
+			shift $#
+			;;
+		apropos|keyword )
+			subcommand='subcommand_apropos'
+			shift
+			opts+=( "$@" )
+			shift $#
+			;;
+		avail|search|use|unuse|update|refresh|purge|list|clear|whatis|help )
+			subcommand=subcommand_$1
+			shift
+			if (( $# > 0 )); then
+			    opts+=( "$@" )
+			    shift $#
+			fi
+			;;
+		initadd|initprepend|initrm|initswitch|initlist|initclear )
+			subcommand=subcommand_$1
+			shift
+			opts=( "$@" )
+			shift $#
+			;;
+		* )
+			die 1 "${CMD}: unknown sub-command -- $1"
+			;;
+	esac
+	shift
+done
+
+if (( ${#Groups[@]} == 0 )); then
+        get_groups "${PMODULES_ROOT}"
+	get_hierarchy_depth "${PMODULES_ROOT}"
+fi
+
+$subcommand "${opts[@]}"
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
