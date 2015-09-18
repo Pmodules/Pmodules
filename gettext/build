@@ -1,6 +1,6 @@
-#!/usr/bin/env pbuild
+#!/usr/bin/env modbuild
 
-pmodules.configure() {
+pbuild::configure() {
     "${MODULE_SRCDIR}"/configure \
 		      --prefix="${PREFIX}" \
 		      --disable-java \
@@ -18,5 +18,5 @@ pmodules.configure() {
 	|| exit 1
 }
 
-pmodules.add_to_group 'Tools'
-pmodules.make_all
+pbuild::add_to_group 'Tools'
+pbuild::make_all

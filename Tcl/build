@@ -1,6 +1,6 @@
-#!/usr/bin/env pbuild
+#!/usr/bin/env modbuild
 
-pmodules.configure() {
+pbuild::configure() {
 	case ${OS} in
 	Linux )
 		srcdir="${MODULE_SRCDIR}/unix"
@@ -15,10 +15,10 @@ pmodules.configure() {
 		|| exit 1
 }
 
-pmodules.post_install() {
+pbuild::post_install() {
 	{ cd "${PREFIX}"/bin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
 }
 
-pmodules.add_to_group 'Tools'
-pmodules.set_docfiles 'license.terms' 'README'
-pmodules.make_all
+pbuild::add_to_group 'Tools'
+pbuild::set_docfiles 'license.terms' 'README'
+pbuild::make_all

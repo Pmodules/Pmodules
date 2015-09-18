@@ -1,0 +1,105 @@
+#!/bin/bash
+
+set -x
+
+declare -r mydir=$(dirname "$0")
+declare -r libpbuild='libpbuild.bash'
+declare -r libstd='libstd.bash'
+declare -r pmodule_environment='environment.bash'
+
+# source BASH library with standard functions
+if [[ -r ${mydir}/${libstd} ]]; then
+        source "${mydir}/${libstd}"
+elif [[ -r ${mydir}/../lib/${libstd} ]]; then
+	source "${mydir}/../lib/${libstd}"
+else
+	echo "Oops: required BASH library '${libstd}' not found" 1>&2
+	exit 1
+fi
+
+declare -rx BUILD_BLOCK=$(std::get_abspath "$1")
+declare -rx BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
+shift 1
+
+# source Pmodule environment configuration
+if [[ -r ${mydir}/../config/${pmodule_environment} ]]; then
+	# we are bootstrapping
+        source "${mydir}/../config/${pmodule_environment}"
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${mydir}/..")
+	bootstrap='yes'
+	
+elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
+     [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
+	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../../..")
+	bootstrap='no'
+
+fi
+
+#
+# We need GNU versions of the following utilities. This code works
+# well on Linux and Mac OS X with MacPorts.
+# :FIXME: implement a smarter, portable solution.
+#
+shopt -s expand_aliases
+unalias -a
+
+__path=$(which gdate 2>/dev/null)
+if [[ $__path ]]; then
+	alias date=$__path
+else
+	alias date=$(which date 2>/dev/null)
+fi
+
+__path=$(which ginstall 2>/dev/null)
+if [[ $__path ]]; then
+	alias install=$__path
+else
+	alias install=$(which install 2>/dev/null)
+fi
+
+__path=$(which greadlink 2>/dev/null)
+if [[ $__path ]]; then
+	alias readlink=$__path
+else
+	alias readlink=$(which readlink 2>/dev/null)
+fi
+
+__path=$(which gsed 2>/dev/null)
+if [[ $__path ]]; then
+	alias sed=$__path
+else
+	alias sed=$(which sed 2>/dev/null)
+fi
+
+#
+# set an error handler. If a function _exit() exists, it will be called
+# with the passed exit code.
+#
+# $1	exit code
+#
+set -o errexit
+
+trap "std::error_handler" ERR
+
+std::error_handler() {
+	local -i ec=$?
+
+	typeset -F _exit 1>/dev/null 2>&1 && _exit "${ec}"
+	exit ${ec}
+}
+
+#
+# run build
+#
+
+if [[ -r ${mydir}/${libpbuild} ]]; then
+        source "${mydir}/${libpbuild}"
+elif [[ -r ${mydir}/../lib/${libpbuild} ]]; then
+	source "${mydir}/../lib/${libpbuild}"
+else
+	echo "Oops: required BASH library '${libpbuild}' not found" 1>&2
+	exit 1
+fi
+
+source "${BUILD_BLOCK}"

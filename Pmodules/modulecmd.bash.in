@@ -14,6 +14,7 @@ declare -r  bindir="${prefix}/bin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
+source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
 PATH="${bindir}:${PATH}"

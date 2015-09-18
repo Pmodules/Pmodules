@@ -1,10 +1,10 @@
-#!/usr/bin/env pbuild
+#!/usr/bin/env modbuild
 
 TCL_DIR="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
 
 PATH="${TCL_DIR}/bin:${PATH}"
 
-pmodules.configure() {
+pbuild::configure() {
 	case ${OS} in
 		Linux )
 			declare -x LIBS="-lz -lpthread"
@@ -23,7 +23,7 @@ pmodules.configure() {
 		|| exit 1
 }
 
-pmodules.post_install() {
+pbuild::post_install() {
 	rm -v    ${PREFIX}/Modules/bin/add.modules
 	rm -v    ${PREFIX}/Modules/bin/mkroot
 	rm -rfv  ${PREFIX}/Modules/modulefiles
@@ -45,8 +45,8 @@ module() {
 # use system gcc to compile
 declare -rx CC=gcc
 
-pmodules.add_to_group 'Tools'
-pmodules.make_all
+pbuild::add_to_group 'Tools'
+pbuild::make_all
 
 # Local Variables:
 # mode: sh

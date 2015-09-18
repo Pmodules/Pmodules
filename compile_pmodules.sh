@@ -1,15 +1,14 @@
 #!/bin/bash
 
-declare -r BASE_DIR=$(cd "$(dirname $0)/.." && pwd)
-declare -r BOOTSTRAP_DIR="${BASE_DIR}/Bootstrap"
-
-source "${BASE_DIR}/lib/lib.bash"
+declare -r BOOTSTRAP_DIR=$(dirname "$0")
 
 unset PMODULES_HOME
 unset PMODULES_VERSION
 
-read_versions "${BOOTSTRAP_DIR}/Pmodules_version.conf"
-source "/opt/psi/config/environment.bash"
+source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash"
+source "${BOOTSTRAP_DIR}/config/environment.bash"
+
+std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
 
 #if [[ -n ${PMODULES_DIR} ]] && [[ "${PMODULES_DIR}" != "/" ]] && [[ -d "${PMODULES_DIR}" ]]; then
 #	rm -rf "${PMODULES_DIR}"
@@ -19,7 +18,7 @@ build () {
 	local -r name="$1"
 	local -r version="$2"
 
-	"${BOOTSTRAP_DIR}/${name}/build" --bootstrap --disable-cleanup "${version}" || \
+	"${BOOTSTRAP_DIR}/Pmodules/modbuild" "${BOOTSTRAP_DIR}/${name}/build" --disable-cleanup "${version}" || \
 		std::die 3 "Compiling '${name}' failed!"
 }
 

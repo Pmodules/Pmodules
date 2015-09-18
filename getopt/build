@@ -1,10 +1,10 @@
-#!/usr/bin/env pbuild
+#!/usr/bin/env modbuild
 
-pmodules.configure() {
+pbuild::configure() {
 	:
 }
 
-pmodules.build() {
+pbuild::build() {
 	case ${OS} in
 		Linux )
 			declare -x LDFLAGS="-lintl"
@@ -18,20 +18,20 @@ pmodules.build() {
 	make -e
 }
 
-pmodules.install() {
+pbuild::install() {
 	cd "${MODULE_SRCDIR}"
 	declare -x DESTDIR="${PREFIX}"
 	declare -x prefix=''
 	make -e install
 }
 
-pmodules.cleanup_build() {
+pbuild::cleanup_build() {
 	cd "${MODULE_SRCDIR}"
 	make -e realclean
 }
 
-pmodules.add_to_group 'Tools'
-pmodules.make_all
+pbuild::add_to_group 'Tools'
+pbuild::make_all
 
 # Local Variables:
 # mode: sh
