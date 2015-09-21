@@ -2,76 +2,7 @@
 
 set -x
 
-declare -r mydir=$(dirname "$0")
-declare -r libpbuild='libpbuild.bash'
-declare -r libstd='libstd.bash'
-declare -r pmodule_environment='environment.bash'
-
-# source BASH library with standard functions
-if [[ -r ${mydir}/${libstd} ]]; then
-        source "${mydir}/${libstd}"
-elif [[ -r ${mydir}/../lib/${libstd} ]]; then
-	source "${mydir}/../lib/${libstd}"
-else
-	echo "Oops: required BASH library '${libstd}' not found" 1>&2
-	exit 1
-fi
-
-declare -rx BUILD_BLOCK=$(std::get_abspath "$1")
-declare -rx BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
-shift 1
-
-# source Pmodule environment configuration
-if [[ -r ${mydir}/../config/${pmodule_environment} ]]; then
-	# we are bootstrapping
-        source "${mydir}/../config/${pmodule_environment}"
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${mydir}/..")
-	bootstrap='yes'
-	
-elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
-     [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
-	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../../..")
-	bootstrap='no'
-
-fi
-
-#
-# We need GNU versions of the following utilities. This code works
-# well on Linux and Mac OS X with MacPorts.
-# :FIXME: implement a smarter, portable solution.
-#
-shopt -s expand_aliases
-unalias -a
-
-__path=$(which gdate 2>/dev/null)
-if [[ $__path ]]; then
-	alias date=$__path
-else
-	alias date=$(which date 2>/dev/null)
-fi
-
-__path=$(which ginstall 2>/dev/null)
-if [[ $__path ]]; then
-	alias install=$__path
-else
-	alias install=$(which install 2>/dev/null)
-fi
-
-__path=$(which greadlink 2>/dev/null)
-if [[ $__path ]]; then
-	alias readlink=$__path
-else
-	alias readlink=$(which readlink 2>/dev/null)
-fi
-
-__path=$(which gsed 2>/dev/null)
-if [[ $__path ]]; then
-	alias sed=$__path
-else
-	alias sed=$(which sed 2>/dev/null)
-fi
-
+##############################################################################
 #
 # set an error handler. If a function _exit() exists, it will be called
 # with the passed exit code.
@@ -82,24 +13,302 @@ set -o errexit
 
 trap "std::error_handler" ERR
 
+_exit() {
+	:
+}
+
 std::error_handler() {
 	local -i ec=$?
 
-	typeset -F _exit 1>/dev/null 2>&1 && _exit "${ec}"
+	_exit ${ec}
 	exit ${ec}
 }
+
+##############################################################################
+#
+usage() {
+	error "
+Usage: $0 [OPTIONS..] [VERSION] [ENV=VALUE...]
+
+VERSION
+        Version of module to compile.
+
+ENV=VALUE
+        Set environment variable ENV to VALUE. This can be used to
+        overwrite default versions.
+
+-? | -h | --help
+        Print usage
+
+-v | --verbose )
+        Verbose output
+
+-j N | --jobs=N
+        Run N parallel make jobs
+
+-f | --force-rebuild
+        Force rebuild of module.
+
+-b | --bootstrap 
+	Bootstrap Pmodules
+
+--with=P/V
+        Preload module P with version V. To preload multiple modules,
+        use this option per module. Nete that order may matter.
+
+--release=stable|unstable|deprecated
+
+"
+	exit 1
+}
+
+
+
+# disable auto-echo feature of 'cd'
+unset CDPATH
+
+shopt -s expand_aliases
+
+
+PATH='/usr/bin:/bin:/usr/sbin:/sbin'
+
+declare -r OS=$(uname -s)
+if [[ "${OS}" == "Darwin" ]]; then
+	# :FIXME: why do we need this?
+	[[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin'
+fi
+
+declare -r mydir=$(dirname "$0")
+PATH+="${mydir}"
+
+declare -r libpbuild='libpbuild.bash'
+declare -r libstd='libstd.bash'
+declare -r pmodule_environment='environment.bash'
+
+declare -ra bash_libpath=("${mydir}" "${mydir}/../lib")
+declare	    ok=1
+
+
+# source BASH library with standard functions
+for dir in "${bash_libpath[@]}"; do
+        if [[ -r ${dir}/${libstd} ]]; then
+		source "${dir}/${libstd}"
+		ok=0
+		break
+	fi
+done
+if (( ok != 0 )); then
+	echo "Oops: required BASH library '${libstd}' not found" 1>&2
+	exit 1
+fi
+
+# 
+declare -rx BUILD_BLOCK=$(std::get_abspath "$1")
+declare -rx BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
+shift 1
+declare -rx ARGS="$@"
+
+# source Pmodule environment configuration
+if [[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]]; then
+	# we are bootstrapping
+        source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
+	bootstrap='yes'
+	
+elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
+     [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
+	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../../..")
+	bootstrap='no'
+
+else
+	std::die 3 "Build environment not setup properbly!"
+fi
+
+declare -xr BUILD_CONFIGDIR="${BUILD_BASEDIR}/config"
+declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
+declare -xr BUILD_TMPDIR="${BUILD_BASEDIR}/tmp"
+declare -xr BUILD_DOWNLOADSDIR="${BUILD_BASEDIR}/Downloads"
+declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/versions.conf"
+
+#
+# We need GNU versions of the following utilities. This code works
+# well on Linux and Mac OS X with MacPorts.
+# :FIXME: implement a smarter, portable solution.
+#
+shopt -s expand_aliases
+unalias -a
+
+__path=$(which gdate 2>/dev/null || : )
+if [[ $__path ]]; then
+	alias date=$__path
+else
+	alias date=$(which date 2>/dev/null)
+fi
+
+__path=$(which ginstall 2>/dev/null || : )
+if [[ $__path ]]; then
+	alias install=$__path
+else
+	alias install=$(which install 2>/dev/null)
+fi
+
+__path=$(which greadlink 2>/dev/null || : )
+if [[ $__path ]]; then
+	alias readlink=$__path
+else
+	alias readlink=$(which readlink 2>/dev/null)
+fi
+
+__path=$(which gsed 2>/dev/null || : )
+if [[ $__path ]]; then
+	alias sed=$__path
+else
+	alias sed=$(which sed 2>/dev/null)
+fi
+
+
+# source BASH library with standard functions
+for dir in "${bash_libpath[@]}"; do
+        if [[ -r ${dir}/${libpbuild} ]]; then
+		source "${dir}/${libpbuild}"
+		ok=0
+		break
+	fi
+done
+(( ok == 0 )) || die 3 "Oops: required BASH library '${libpbuild}' not found"
+
+##############################################################################
+#
+debug_on='no'
+force_rebuild='no'
+dry_run='no'
+enable_cleanup_build='yes'
+enable_cleanup_src='no'
+
+target='all'
+
+pbuild::cleanup_env
+
+# array collecting all modules specified on the command line via '--with=module'
+with_modules=()
+
+while (( $# > 0 )); do
+	case $1 in
+	-j )
+		JOBS=$2
+		shift
+		;;
+	--jobs=[0-9]* )
+		JOBS=${1/--jobs=}
+		;;
+	-v | --verbose)
+		debug_on='yes'
+		;;
+	-f | --force-rebuild )
+		force_rebuild='yes'
+		;;
+	-b | --bootstrap )
+		bootstrap='yes'
+		force_rebuild='yes'
+		;;
+	-? | -h | --help )
+		usage
+		;;
+	--disable-cleanup )
+		enable_cleanup_build='no'
+		enable_cleanup_src='no'
+		;;
+	--enable-cleanup-build )
+		enable_cleanup_build='yes'
+		;;
+	--disable-cleanup-build )
+		enable_cleanup_build='no'
+		;;
+	--enable-cleanup-src )
+		enable_cleanup_src='yes'
+		;;
+	--disable-cleanup-src )
+		enable_cleanup_src='no'
+		;;
+	--dry-run )
+		dry_run='yes'
+		;;
+	--release=* )
+		MODULE_RELEASE=${1/--release=}
+		;;
+	--with=*/* )
+		with_modules+=( ${1/--with=} )
+		;;
+	prep | configure | compile | install | all )
+		target=$1
+		;;
+	[0-9]* )
+		V=$1
+		;;
+	* )
+		usage
+		;;
+	esac
+	shift
+done
+
+if [[ ${debug_on} == yes ]]; then
+	trap 'echo "$BASH_COMMAND"' DEBUG
+fi
+
+# load all modules passed with the '--with' argument
+if [[ ${bootstrap} == no ]]; then
+	# we aren't bootstraping
+	if [[ -r "${BUILD_BLOCK_DIR}/with_modules-$V" ]]; then
+		with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules-$V") )
+	elif [[ -r "${BUILD_BLOCK_DIR}/with_modules" ]]; then
+		with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules") )
+	fi
+
+        source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
+	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
+	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
+	module purge
+	module use unstable
+	# :FIXME: this is a hack!!!
+	module use Libraries
+	for m in "${with_modules[@]}"; do
+		if pbuild::module_is_available "$m"; then
+			echo "Loading module: ${m}"
+			module load "${m}"
+		else
+			std::die 44 "$m: module not available!"
+		fi
+	done
+else
+	#  the module command is not yet available...
+	unset PMODULES_HOME
+	unset PMODULES_VERSION
+	std::read_versions "${BUILD_BASEDIR}/config/versions.conf"
+fi
+
+P=$(basename $(dirname "${BUILD_BLOCK}"))
+P=${P%.*}
+_P=$(echo $P | tr [:lower:] [:upper:])
+_P=${_P//-/_}
+_V=${_P}_VERSION
+
+if [[ -n ${PMODULES_DEFINED_RELEASES} ]]; then
+        declare -r releases="${PMODULES_DEFINED_RELEASES}"
+else
+	# set defaults, if file doesn't exist or isn't readable
+	declare -r releases=":unstable:stable:deprecated:"
+fi
+
 
 #
 # run build
 #
-
-if [[ -r ${mydir}/${libpbuild} ]]; then
-        source "${mydir}/${libpbuild}"
-elif [[ -r ${mydir}/../lib/${libpbuild} ]]; then
-	source "${mydir}/../lib/${libpbuild}"
-else
-	echo "Oops: required BASH library '${libpbuild}' not found" 1>&2
-	exit 1
-fi
-
 source "${BUILD_BLOCK}"
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
