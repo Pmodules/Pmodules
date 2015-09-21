@@ -1156,9 +1156,13 @@ subcommand_use() {
 			subcommand_generic1 use ${subcommand_switches} "${dir}"
 		done
 	}
+
+	local opts=''
+	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_unuse
+	eval set --  "${opts}"
 	
-	if [[ $# == 0 ]]; then
-	        std::print_info
+	if [[ $# == 1 ]]; then
+	        print_info
 	else
 		use "$@"
 	fi
