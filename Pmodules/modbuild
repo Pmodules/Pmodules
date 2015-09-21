@@ -11,23 +11,24 @@ set -x
 #
 set -o errexit
 
-trap "std::error_handler" ERR
-
 _exit() {
 	:
 }
 
-std::error_handler() {
+error_handler() {
 	local -i ec=$?
 
 	_exit ${ec}
 	exit ${ec}
 }
 
+trap "error_handler" ERR
+
+
 ##############################################################################
 #
 usage() {
-	error "
+	std::error "
 Usage: $0 [OPTIONS..] [VERSION] [ENV=VALUE...]
 
 VERSION
@@ -176,7 +177,7 @@ for dir in "${bash_libpath[@]}"; do
 		break
 	fi
 done
-(( ok == 0 )) || die 3 "Oops: required BASH library '${libpbuild}' not found"
+(( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
 ##############################################################################
 #

@@ -58,23 +58,23 @@ get_options() {
             delete=true
         else
             usage > /dev/fd/2
-            die "Unknown option: $1"
+            std::die "Unknown option: $1"
         fi
         shift
     done
 
-    is_module_prefix "$src_dir" || { die "<$src_dir> is not a Pmodules installation"; }
-    is_module_prefix "$dst_dir" || { die "<$dst_dir> is not a Pmodules installation"; }
+    is_module_prefix "$src_dir" || { std::die "<$src_dir> is not a Pmodules installation"; }
+    is_module_prefix "$dst_dir" || { std::die "<$dst_dir> is not a Pmodules installation"; }
     src_dir=$( cd "$src_dir"; pwd -P )
     dst_dir=$( cd "$dst_dir"; pwd -P )
-    [[ "$src_dir" == "$dst_dir" ]] && { die "same source and destination installations"; }
+    [[ "$src_dir" == "$dst_dir" ]] && { std::die "same source and destination installations"; }
     local modbin=$( cd "$PMODULES_HOME"; pwd -P )
     local prefix=$( cd "$PMODULES_PREFIX"; pwd -P )
     modbin=${modbin#"$prefix/"}/bin/modulecmd
     local -r file_type_src=$( file -b "$src_dir/$modbin" 2>&1 || echo err1 )
     local -r file_type_dst=$( file -b "$dst_dir/$modbin" 2>&1 || echo err2 )
     [[ ! "${file_type_src}" == "${file_type_dst}" ]] || {
-        die "The file signatures in the source and destination installation do not match!"
+        std::die "The file signatures in the source and destination installation do not match!"
     }
     echo "$src_dir" "$dst_dir" "$dryrun" "$delete"
 }
@@ -112,7 +112,7 @@ delete_module() {
     fi
     local modpath=$( get_modpath "$2" )
     [[ -z "$modpath" ]] && {
-	die "Unable to retrieve module file and installation paths";
+	std::die "Unable to retrieve module file and installation paths";
     }
     echo "rm -v \"$3/$PMODULES_MODULEFILES_DIR/$2\""
     echo "rm -v \"$3/$PMODULES_MODULEFILES_DIR/$( get_release_path $2 )\""
@@ -132,7 +132,7 @@ copy_module() {
         return 0
     fi
     local modpath=$( get_modpath "$2" )
-    [[ -z "$modpath" ]] && { die "Unable to retrieve module file and installation paths"; }
+    [[ -z "$modpath" ]] && { std::die "Unable to retrieve module file and installation paths"; }
     install -d $( dirname "$3/$PMODULES_MODULEFILES_DIR/$2" )
     (
         cd $3
@@ -158,15 +158,15 @@ sync_modules() {
 
     local profile_script="$src_dir/$PMODULES_CONFIG_DIR/profile.bash"
     [[ -r "$profile_script" ]] || {
-	die "Unable to find profile script of installation $profile_script";
+	std::die "Unable to find profile script of installation $profile_script";
     }
     local search_script="$src_dir/Tools/Pmodules/${PMODULES_VERSION}/bin/modulecmd"
     [[ -x "$search_script" ]] || {
-	die "Unable to find search script of installation $search_script";
+	std::die "Unable to find search script of installation $search_script";
     }
     local dialog_script="$src_dir/Tools/Pmodules/${PMODULES_VERSION}/bin/dialog.bash"
     [[ -r "$dialog_script" ]] || {
-	die "Unable to find dialog script of installation $dialog_script";
+	std::die "Unable to find dialog script of installation $dialog_script";
     }
 
     . "$profile_script"    # set variables for the source installation

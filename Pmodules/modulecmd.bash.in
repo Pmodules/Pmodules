@@ -104,7 +104,7 @@ SUBCOMMANDS:
         + initlist
         + initclear
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_add() {
@@ -117,7 +117,7 @@ USAGE:
 		compiler makes additional modules like openmpi and libraries
 		compiled with this compiler available.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_load() {
@@ -133,7 +133,7 @@ USAGE:
 		a 'group-head' will also unload all modules belonging to
 		this group.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_unload() {
@@ -149,7 +149,7 @@ USAGE:
 		is not specified, then it is assumed to be the currently
 		loaded module with the same root name as modulefile2.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_swap() {
@@ -167,7 +167,7 @@ USAGE:
 		the modulefile(s) will make if loaded.  It will not display
 		any environment changes found within conditional statements.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_show() {
@@ -183,7 +183,7 @@ USAGE:
 		the string will be displayed.
 		
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_keyword() {
@@ -204,7 +204,7 @@ USAGE:
 		available modules may change either by loading other modules,
 		e.g. a compiler, or with the sub-command 'use'.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_search() {
@@ -234,7 +234,7 @@ SWITCHES:
 
 		lists all modules in the hierarchy compiled with gcc 4.8.3.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_use() {
@@ -261,7 +261,7 @@ SWITCHES:
                 Append/prepend agrument to module search path or list of to be
                 searched releases.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_unuse() {
@@ -270,7 +270,7 @@ unuse directory|group|release...
 		Remove the given directory, group or release from the search
 		path.
 " 1>&2
-	die 1
+	std::die 1
 }
 subcommand_help_update() {
 	echo "
@@ -278,7 +278,7 @@ USAGE:
         module update
                 Attempt  to  reload  all  loaded  modulefiles.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_refresh() {
@@ -290,7 +290,7 @@ USAGE:
 		aliases need to be reinitialized but the environment variables
 		have already been set by the currently loaded modules.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_purge() {
@@ -299,7 +299,7 @@ USAGE:
         module purge
 		Unload all loaded modulefiles.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_list() {
@@ -308,7 +308,7 @@ USAGE:
         module list
 		List loaded modules.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_clear() {
@@ -318,7 +318,7 @@ USAGE:
 		Force the Modules package to believe that no modules are
 		currently loaded.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_whatis() {
@@ -329,7 +329,7 @@ USAGE:
 		inside the specified modulefile(s). If no modulefile is
 		specified, all 'whatis' lines will be shown.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_initadd() {
@@ -358,7 +358,7 @@ USAGE:
                 line is found in multiple shell initialization files, all
 		of the lines are changed.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_initprepend() {
@@ -368,7 +368,7 @@ USAGE:
 		Does the same as initadd but prepends the given modules to
 		the beginning of the list.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_initrm() {
@@ -377,7 +377,7 @@ USAGE:
         module initrm modulefile...
 		Remove modulefile(s) from the shell's initialization files.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_initswitch() {
@@ -386,7 +386,7 @@ USAGE:
         module initswitch modulefile1 modulefile2
 		Switch modulefile1 with modulefile2 in the shell's initialization files.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_initlist() {
@@ -395,7 +395,7 @@ USAGE:
         module initlist
 		List all of the modulefiles loaded from the shell's initialization file.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 subcommand_help_initclear() {
@@ -404,7 +404,7 @@ USAGE:
 	module initclear
 		Clear all of the modulefiles from the shell's initialization files.
 " 1>&2
-	die 1
+	std::die 1
 }
 
 #
@@ -485,7 +485,7 @@ subcommand_generic0() {
 				shift
 				;;
 			* )
-				die 3 "${CMD} ${subcommand}: illegal argument -- $1"
+				std::die 3 "${CMD} ${subcommand}: illegal argument -- $1"
 				;;
 		esac
 	done
@@ -507,14 +507,14 @@ subcommand_generic1() {
 				if (( ${#args[@]} == 0 )); then
 				        args+=( "$1" )
 				else
-					die 3 "${CMD} ${subcommand}: only one argument allowed"
+					std::die 3 "${CMD} ${subcommand}: only one argument allowed"
 				fi
 				;;
 		esac
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        die 3 "${CMD} ${subcommand}: missing argument"
+	        std::die 3 "${CMD} ${subcommand}: missing argument"
 	fi
 	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
 }
@@ -537,7 +537,7 @@ subcommand_generic1plus() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        die 3 "${CMD} ${subcommand}: missing argument"
+	        std::die 3 "${CMD} ${subcommand}: missing argument"
 	fi
 	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
 }
@@ -555,7 +555,7 @@ subcommand_generic1or2() {
 				;;
 			* )
 				if (( ${#args[@]} > 2 )); then
-					die 3 "${CMD} ${subcommand}: only one or two arguments are allowed"
+					std::die 3 "${CMD} ${subcommand}: only one or two arguments are allowed"
 				fi
 				args+=( "$1" )
 				;;
@@ -563,7 +563,7 @@ subcommand_generic1or2() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        die 3 "${CMD} ${subcommand}: missing argument"
+	        std::die 3 "${CMD} ${subcommand}: missing argument"
 	fi
 	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
 }
@@ -750,7 +750,7 @@ subcommand_load() {
 			shift
 	done
 	if (( ${#args[@]} == 0 )); then
-		die 2 "${CMD} load: No module specified."
+		std::die 2 "${CMD} load: No module specified."
 	fi
 	for m in "${args[@]}"; do
 		# restore original MODULEPATH; it might have been overwritten
@@ -796,14 +796,14 @@ subcommand_load() {
 				fi
 			fi
 			if [[ -n ${group} ]]; then
-				is_group "${group}" || die 3 "${CMD} load: illegal group name."
+				is_group "${group}" || std::die 3 "${CMD} load: illegal group name."
 				local -i depth=${HierarchyDepths[${group}]}
-				(( depth != 0 )) && die 3 "${CMD} load: illegal group name."
+				(( depth != 0 )) && std::die 3 "${CMD} load: illegal group name."
 				MODULEPATH="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
 				modulepath=( ${MODULEPATH} )
 			fi
 			if [[ -n ${release} ]]; then
-				is_release "${release}" || die 3 "${CMD} load: illegal release name."
+				is_release "${release}" || std::die 3 "${CMD} load: illegal release name."
 				std::append_path UsedReleases "${release}"
 			fi
 		fi 
@@ -816,7 +816,7 @@ subcommand_load() {
 			if [[ ${verbosity_lvl} == 'verbose' ]]; then
 			        output_load_hints
 			else
-				die 3 "${CMD} load: module unavailable -- ${m}"
+				std::die 3 "${CMD} load: module unavailable -- ${m}"
 			fi
 		fi
 	done
@@ -980,19 +980,19 @@ subcommand_avail() {
 		case $1 in
 			-h | --human )
 				[[ -z ${opts} ]] || \
-				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts=$1
 				output_function='human_readable_output'
 				;;
 			-l | --long )
 				[[ -z ${opts} ]] || \
-				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts=$1
 				output_function='long_output'
 				;;
 			-t | --terse )
 				[[ -z ${opts} ]] || \
-				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts=$1
 				output_function='terse_output'
 				;;
@@ -1131,19 +1131,19 @@ subcommand_use() {
 			        std::append_path UsedReleases "${arg}"
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
 				if (( ${HierarchyDepths[$arg]} != 0 )); then
-					die 3 "${CMD} ${0##_}: cannot add group ${arg} to module path"
+					std::die 3 "${CMD} ${0##_}: cannot add group ${arg} to module path"
 				fi
 				std::append_path PMODULES_USED_GROUPS "${arg}"
 			       	dirs_to_add+=( ${modulefiles_dir} )
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
-				die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
+				std::die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
 			elif [[ -d ${arg} ]]; then
 			        local normalized_dir=$(cd "${arg}" && pwd)
 				dirs_to_add+=( ${normalized_dir} )
 			elif [[ ${arg} =~ "-*" ]]; then
-				die 3 "${CMD} ${0##_}: illegal switch: ${arg}"
+				std::die 3 "${CMD} ${0##_}: illegal switch: ${arg}"
 			else
-				die 3 "${CMD} ${0##_}: neither a directory, release or group: ${arg}"
+				std::die 3 "${CMD} ${0##_}: neither a directory, release or group: ${arg}"
 			fi
 			shift
 		done
@@ -1191,7 +1191,7 @@ subcommand_unuse() {
 			std::remove_path UsedReleases "${arg}"
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
 			if (( ${HierarchyDepths[$arg]} != 0 )); then
-				die 3 "${CMD} ${0##_}: cannot remove group ${arg} from module path"
+				std::die 3 "${CMD} ${0##_}: cannot remove group ${arg} from module path"
 			fi
 			std::remove_path PMODULES_USED_GROUPS "${arg}"
 			dirs_to_remove+=( ${modulefiles_dir} )
@@ -1199,11 +1199,11 @@ subcommand_unuse() {
 			local normalized_dir=$(cd "${arg}" && pwd)
 			dirs_to_remove+=( ${normalized_dir} )
 		elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
-			die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
+			std::die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
 		elif [[ ${arg} =~ "-*" ]]; then
-		        die 3 "${CMD} ${0##*_}: illegal option: ${arg}"
+		        std::die 3 "${CMD} ${0##*_}: illegal option: ${arg}"
 		else
-			die 3 "${CMD} ${0##*_}: not a directory: ${arg}"
+			std::die 3 "${CMD} ${0##*_}: not a directory: ${arg}"
 		fi
 		shift
 	done
@@ -1251,23 +1251,23 @@ subcommand_list() {
 		case $1 in
 			-h | --human )
 				[[ -z ${opts} ]] || \
-				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts='-h'
 				;;
 			-l | --long )
 				[[ -z ${opts} ]] || \
-				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts='-l'
 				;;
 			-t | --terse )
 				[[ -z ${opts} ]] || \
-				    die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts='-t'
 				;;
 			-- )
 				;;
 			* )
-				die 1 "${CMD} list: invalid argument -- $1"
+				std::die 1 "${CMD} list: invalid argument -- $1"
 				;;
 		esac
 		shift
@@ -1312,7 +1312,7 @@ subcommand_clear() {
 				shift
 				;;
 			* )
-				die 3 "${CMD} ${subcommand}: illegal argument -- $1"
+				std::die 3 "${CMD} ${subcommand}: illegal argument -- $1"
 				;;
 		esac
 	done
@@ -1346,7 +1346,7 @@ subcommand_search() {
 		local -r module=$1
 		# we must write temporary results to a file for sorting
 		local -r tmpfile=$( mktemp /tmp/$(basename $0).XXXXXX ) \
-		    || die 1 "Oops: unable to create tmp file!"
+		    || std::die 1 "Oops: unable to create tmp file!"
 		local _group
 		# loop over all groups
 		for _group in "${Groups[@]}"; do
@@ -1422,13 +1422,13 @@ subcommand_search() {
 				;;
 			--release )
 				is_release "$2" || \
-				    die 1 "${CMD} search: illegal release name -- $2"
+				    std::die 1 "${CMD} search: illegal release name -- $2"
 				use_releases+="$2:"
 				shift
 				;;
 			--with )
 				if [[ -z $2 ]] || [[ "$2" =~ "-*" ]]; then
-				        die 1 "${CMD} search: with what?"
+				        std::die 1 "${CMD} search: with what?"
 				fi
 				with_modules+=" && / ${2//\//\\/}/"
 				shift
@@ -1492,7 +1492,7 @@ subcommand_help() {
 				;;
 			* )
 				[[ -z ${arg} ]] || \
-				    die 1 "${CMD} help: only one argument allowed."
+				    std::die 1 "${CMD} help: only one argument allowed."
 				arg="$1"
 				;;
 		esac
@@ -1584,7 +1584,7 @@ case $1 in
 		declare shell="$1"
 		;;
 	* )
-		die 1 "${CMD}: unsupported shell -- $1"
+		std::die 1 "${CMD}: unsupported shell -- $1"
 		;;
 esac
 shift
@@ -1597,7 +1597,7 @@ while (( $# > 0 )); do
 			;;
 		-V | --version )
 			print_version
-			die 1
+			std::die 1
 			;;
 		-* )
 			opts+=( "$1" )
@@ -1647,7 +1647,7 @@ while (( $# > 0 )); do
 			shift $#
 			;;
 		* )
-			die 1 "${CMD}: unknown sub-command -- $1"
+			std::die 1 "${CMD}: unknown sub-command -- $1"
 			;;
 	esac
 	shift
