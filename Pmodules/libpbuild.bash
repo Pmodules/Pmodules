@@ -1,9 +1,7 @@
 #!/bin/bash
 
-
 # number of parallel make jobs
 declare -i  JOBS=3
-
 
 declare -x  PREFIX=''
 declare -x  DOCDIR=''
@@ -27,16 +25,6 @@ declare -x  CPP_INCLUDE_PATH
 declare -x  LIBRARY_PATH
 declare -x  LD_LIBRARY_PATH
 declare -x  DYLD_LIBRARY_PATH
-
-##############################################################################
-#
-# test whether a the string passed in $1 is a valid release name
-#
-# $1: string to be tested
-#
-is_release () {
-	[[ ${releases} =~ :$1: ]]
-}
 
 ##############################################################################
 #
@@ -658,7 +646,8 @@ pbuild::make_all() {
 				local x
 				IFS='/' x=( ${dir_name/${PMODULES_ROOT}\/${MODULE_GROUP}\/} )
 				local n=${#x[@]}
-				local -r _target="../"$(eval printf "../%.s" {1..${n}})${PMODULES_TEMPLATES_DIR##*/}/"${MODULE_GROUP}/${P}/modulefile"
+				local -r _target="../"$(eval printf "../%.s" \
+							     {1..${n}})${PMODULES_TEMPLATES_DIR##*/}/"${MODULE_GROUP}/${P}/modulefile"
 				ln -fs "${_target}" "${MODULE_NAME##*/}"
 			)
 		fi
@@ -682,19 +671,21 @@ pbuild::make_all() {
 		check_and_setup_env_bootstrap
 	fi
 
-	if [[ ! -d "${PREFIX}" ]] || [[ ${force_rebuild} == 'yes' ]] || [[ ${bootstrap} == 'yes' ]]; then
+	if [[ ! -d "${PREFIX}" ]] || \
+	       [[ ${force_rebuild} == 'yes' ]] || \
+	       [[ ${bootstrap} == 'yes' ]]; then
 		building='yes'
  		echo "Building $P/$V ..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 		check_compiler
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]]; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || [[ ${force_rebuild} == 'yes' ]] ; then
 			prep
 			touch "${MODULE_BUILDDIR}/.prep"
 		fi
 		[[ "${target}" == "prep" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]]; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]] || [[ ${force_rebuild} == 'yes' ]]; then
 			cd "${MODULE_SRCDIR}"
 			pbuild::pre_configure
 			cd "${MODULE_BUILDDIR}"
@@ -703,14 +694,14 @@ pbuild::make_all() {
 		fi
 		[[ "${target}" == "configure" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.compile" ]]; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.compile" ]]  || [[ ${force_rebuild} == 'yes' ]]; then
 			cd "${MODULE_BUILDDIR}"
 			pbuild::build
 			touch "${MODULE_BUILDDIR}/.compile"
 		fi
 		[[ "${target}" == "compile" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.install" ]]; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.install" ]] || [[ ${force_rebuild} == 'yes' ]]; then
 			cd "${MODULE_BUILDDIR}"
 			pbuild::install
 			pbuild::post_install
