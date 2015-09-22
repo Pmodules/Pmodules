@@ -1,6 +1,16 @@
 #!/bin/bash
 
-set -x
+#set -x
+
+# we need the directory where the programm is installed
+declare -r  mydir=$(dirname "$0")
+
+
+declare -r  libpbuild='libpbuild.bash'
+declare -r  libstd='libstd.bash'
+declare -r  pmodule_environment='environment.bash'
+declare -ra bash_libpath=("${mydir}" "${mydir}/../lib")
+
 
 ##############################################################################
 #
@@ -24,19 +34,17 @@ error_handler() {
 
 trap "error_handler" ERR
 
+# disable auto-echo feature of 'cd'
+unset CDPATH
 
 ##############################################################################
 #
 usage() {
 	std::error "
-Usage: $0 [OPTIONS..] [VERSION] [ENV=VALUE...]
+Usage: $0 [OPTIONS..] [BUILD_BLOCK] [VERSION]
 
 VERSION
         Version of module to compile.
-
-ENV=VALUE
-        Set environment variable ENV to VALUE. This can be used to
-        overwrite default versions.
 
 -? | -h | --help
         Print usage
@@ -50,9 +58,6 @@ ENV=VALUE
 -f | --force-rebuild
         Force rebuild of module.
 
--b | --bootstrap 
-	Bootstrap Pmodules
-
 --with=P/V
         Preload module P with version V. To preload multiple modules,
         use this option per module. Nete that order may matter.
@@ -63,14 +68,7 @@ ENV=VALUE
 	exit 1
 }
 
-
-
-# disable auto-echo feature of 'cd'
-unset CDPATH
-
-shopt -s expand_aliases
-
-
+# setup PATH
 PATH='/usr/bin:/bin:/usr/sbin:/sbin'
 
 declare -r OS=$(uname -s)
@@ -79,58 +77,8 @@ if [[ "${OS}" == "Darwin" ]]; then
 	[[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin'
 fi
 
-declare -r mydir=$(dirname "$0")
 PATH+="${mydir}"
 
-declare -r libpbuild='libpbuild.bash'
-declare -r libstd='libstd.bash'
-declare -r pmodule_environment='environment.bash'
-
-declare -ra bash_libpath=("${mydir}" "${mydir}/../lib")
-declare	    ok=1
-
-
-# source BASH library with standard functions
-for dir in "${bash_libpath[@]}"; do
-        if [[ -r ${dir}/${libstd} ]]; then
-		source "${dir}/${libstd}"
-		ok=0
-		break
-	fi
-done
-if (( ok != 0 )); then
-	echo "Oops: required BASH library '${libstd}' not found" 1>&2
-	exit 1
-fi
-
-# 
-declare -rx BUILD_BLOCK=$(std::get_abspath "$1")
-declare -rx BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
-shift 1
-declare -rx ARGS="$@"
-
-# source Pmodule environment configuration
-if [[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]]; then
-	# we are bootstrapping
-        source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
-	bootstrap='yes'
-	
-elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
-     [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
-	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../../..")
-	bootstrap='no'
-
-else
-	std::die 3 "Build environment not setup properbly!"
-fi
-
-declare -xr BUILD_CONFIGDIR="${BUILD_BASEDIR}/config"
-declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
-declare -xr BUILD_TMPDIR="${BUILD_BASEDIR}/tmp"
-declare -xr BUILD_DOWNLOADSDIR="${BUILD_BASEDIR}/Downloads"
-declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/versions.conf"
 
 #
 # We need GNU versions of the following utilities. This code works
@@ -169,17 +117,25 @@ else
 fi
 
 
+declare	    ok=1
+
+##############################################################################
 # source BASH library with standard functions
 for dir in "${bash_libpath[@]}"; do
-        if [[ -r ${dir}/${libpbuild} ]]; then
-		source "${dir}/${libpbuild}"
+        if [[ -r ${dir}/${libstd} ]]; then
+		source "${dir}/${libstd}"
 		ok=0
 		break
 	fi
 done
-(( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
+if (( ok != 0 )); then
+	echo "Oops: required BASH library '${libstd}' not found" 1>&2
+	exit 1
+fi
 
 ##############################################################################
+#
+# parse arguments
 #
 debug_on='no'
 force_rebuild='no'
@@ -189,11 +145,13 @@ enable_cleanup_src='no'
 
 target='all'
 
-pbuild::cleanup_env
-
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
 
+# save arguments for building dependencies
+declare -rx ARGS="$@"
+
+# 
 while (( $# > 0 )); do
 	case $1 in
 	-j )
@@ -203,7 +161,7 @@ while (( $# > 0 )); do
 	--jobs=[0-9]* )
 		JOBS=${1/--jobs=}
 		;;
-	-v | --verbose)
+	-v | --verbose | --debug )
 		debug_on='yes'
 		;;
 	-f | --force-rebuild )
@@ -213,7 +171,7 @@ while (( $# > 0 )); do
 		bootstrap='yes'
 		force_rebuild='yes'
 		;;
-	-? | -h | --help )
+	-\? | -h | --help )
 		usage
 		;;
 	--disable-cleanup )
@@ -248,7 +206,8 @@ while (( $# > 0 )); do
 		V=$1
 		;;
 	* )
-		usage
+	        declare -rx BUILD_BLOCK=$(std::get_abspath "$1")
+		declare -rx BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
 		;;
 	esac
 	shift
@@ -257,6 +216,50 @@ done
 if [[ ${debug_on} == yes ]]; then
 	trap 'echo "$BASH_COMMAND"' DEBUG
 fi
+
+[[ -n ${BUILD_BLOCK} ]] || std::die 1 "No build-block specified!"
+[[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
+
+
+
+# source Pmodule environment configuration
+if [[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]]; then
+	# we are bootstrapping
+        source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
+	bootstrap='yes'
+	
+elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
+     [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
+	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../../..")
+	bootstrap='no'
+
+else
+	std::die 3 "Build environment not setup properbly!"
+fi
+
+declare -xr BUILD_CONFIGDIR="${BUILD_BASEDIR}/config"
+declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
+declare -xr BUILD_TMPDIR="${BUILD_BASEDIR}/tmp"
+declare -xr BUILD_DOWNLOADSDIR="${BUILD_BASEDIR}/Downloads"
+declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/versions.conf"
+
+
+# source BASH library with standard functions
+((ok=1))
+for dir in "${bash_libpath[@]}"; do
+        if [[ -r ${dir}/${libpbuild} ]]; then
+		source "${dir}/${libpbuild}"
+		ok=0
+		break
+	fi
+done
+(( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
+
+# Unset all PATH's and FLAGS's which might be used by a compiler.
+# This includes C_INCLUDE_PATH, CFLAGS etc.
+pbuild::cleanup_env
 
 # load all modules passed with the '--with' argument
 if [[ ${bootstrap} == no ]]; then
