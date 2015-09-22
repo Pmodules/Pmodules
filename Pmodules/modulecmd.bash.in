@@ -1112,6 +1112,10 @@ subcommand_use() {
 		local dirs_to_add=()
 		local subcommand_switches=''
 		while (( $# > 0)); do
+			if [[ "$1" == "--" ]]; then
+				shift
+			        continue
+			fi
 			arg=$1
 			# if is release
 			# ...
@@ -1131,23 +1135,21 @@ subcommand_use() {
 			        std::append_path UsedReleases "${arg}"
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
 				if (( ${HierarchyDepths[$arg]} != 0 )); then
-					std::die 3 "${CMD} ${0##_}: cannot add group ${arg} to module path"
+					std::die 3 "${CMD} ${FUNCNAME[0]##*_}: cannot add group ${arg} to module path"
 				fi
 				std::append_path PMODULES_USED_GROUPS "${arg}"
 			       	dirs_to_add+=( ${modulefiles_dir} )
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
-				std::die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
+				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: illegal directory: ${arg}"
 			elif [[ -d ${arg} ]]; then
 			        local normalized_dir=$(cd "${arg}" && pwd)
 				dirs_to_add+=( ${normalized_dir} )
-			elif [[ ${arg} =~ "-*" ]]; then
-				std::die 3 "${CMD} ${0##_}: illegal switch: ${arg}"
 			else
-				std::die 3 "${CMD} ${0##_}: neither a directory, release or group: ${arg}"
+				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: neither a directory, release or group: ${arg}"
 			fi
 			shift
 		done
-		#echo "export PMODULES_USED_GROUPS=${PMODULES_USED_GROUPS}"
+
 		declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
 		export_env PMODULES_USED_GROUPS
 		[[ ${#dirs_to_add[@]} == 0 ]] && return
@@ -1158,7 +1160,7 @@ subcommand_use() {
 	}
 
 	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_unuse
+	opts=$(pmodules::get_options -o 'ap' -l 'append' -l 'prepend' -- "$@") || subcommand_help_use
 	eval set --  "${opts}"
 	
 	if [[ $# == 1 ]]; then
@@ -1173,7 +1175,7 @@ subcommand_use() {
 #
 subcommand_unuse() {
 	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_unuse
+	opts=$(pmodules::get_options -o '' -- "$@") || subcommand_help_unuse
 	eval set --  "${opts}"
 	local dirs_to_remove=()
 	while (( $# > 0)); do
@@ -1195,7 +1197,7 @@ subcommand_unuse() {
 			std::remove_path UsedReleases "${arg}"
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
 			if (( ${HierarchyDepths[$arg]} != 0 )); then
-				std::die 3 "${CMD} ${0##_}: cannot remove group ${arg} from module path"
+				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: cannot remove group ${arg} from module path"
 			fi
 			std::remove_path PMODULES_USED_GROUPS "${arg}"
 			dirs_to_remove+=( ${modulefiles_dir} )
@@ -1203,11 +1205,9 @@ subcommand_unuse() {
 			local normalized_dir=$(cd "${arg}" && pwd)
 			dirs_to_remove+=( ${normalized_dir} )
 		elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
-			std::die 3 "${CMD} ${0##_}: illegal directory: ${arg}"
-		elif [[ ${arg} =~ "-*" ]]; then
-		        std::die 3 "${CMD} ${0##*_}: illegal option: ${arg}"
+			std::die 3 "${CMD} ${FUNCNAME[0]##*_}: illegal directory: ${arg}"
 		else
-			std::die 3 "${CMD} ${0##*_}: not a directory: ${arg}"
+			std::die 3 "${CMD} ${FUNCNAME[0]##*_}: not a directory: ${arg}"
 		fi
 		shift
 	done
