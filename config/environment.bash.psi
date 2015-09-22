@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+
+declare -x PMODULES_ROOT='/opt/psi'
+declare -x PMODULES_CONFIG_DIR='config'
+declare -x PMODULES_MODULEFILES_DIR='modulefiles'
+declare -x PMODULES_TEMPLATES_DIR='templates'
+
+declare -x PMODULES_VERSION="0.99.5"
+
+declare -x PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
+
+declare -x PMODULES_DEFAULT_GROUPS='Tools Programming'
+declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
+declare -x PMODULES_DEFAULT_RELEASES='stable'
+
+
