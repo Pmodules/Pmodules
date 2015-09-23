@@ -2,7 +2,8 @@
 
 #set -x
 
-# we need the directory where the programm is installed
+# The directory where the programm is installed will be added to PATH and
+# to the search path of BASH libraries.
 declare -r  mydir=$(dirname "$0")
 
 
@@ -58,12 +59,45 @@ VERSION
 -f | --force-rebuild
         Force rebuild of module.
 
+--dry-run
+	Dry run.
+
+--enable-cleanup-build
+	Cleanup files in the build directory (default).
+
+--enable-cleanup-src
+	Cleanup files in the source directory.
+
+--disable-cleanup
+	Keep files in build and source directory
+
+--disable-cleanup-build
+	Keep files in build directory.
+
+--disable-cleanup-src
+	Keep files in source directory (default).
+
 --with=P/V
         Preload module P with version V. To preload multiple modules,
         use this option per module. Nete that order may matter.
 
 --release=stable|unstable|deprecated
 
+--prep
+	Unpack sources only.
+
+--configure
+	Unpack sources and configure build.
+
+--compile
+	Unpack sources, configure build and compile software
+
+--install
+	Unpack sources, configure build, compile software and install.
+
+--all
+	Do everything, this step includes cleanup files and setting 
+	the symbolic link to the modulefile.
 "
 	exit 1
 }
@@ -167,10 +201,6 @@ while (( $# > 0 )); do
 	-f | --force-rebuild )
 		force_rebuild='yes'
 		;;
-	-b | --bootstrap )
-		bootstrap='yes'
-		force_rebuild='yes'
-		;;
 	-\? | -h | --help )
 		usage
 		;;
@@ -199,7 +229,7 @@ while (( $# > 0 )); do
 	--with=*/* )
 		with_modules+=( ${1/--with=} )
 		;;
-	prep | configure | compile | install | all )
+	--prep | --configure | --compile | --install | --all )
 		target=$1
 		;;
 	[0-9]* )
