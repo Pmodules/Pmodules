@@ -24,7 +24,6 @@ pmodules::check_directories() {
 
 	[[ -d "${src_prefix}" ]] &&
 	    [[ -d "${src_prefix}/${PMODULES_CONFIG_DIR}" ]] &&
-	    [[ -d "${src_prefix}/${PMODULES_TEMPLATES_DIR}" ]] &&
 	    [[ -d "${src_prefix}/Tools/Pmodules/${PMODULES_VERSION}" ]] || std::die 1 "
 Error: the module environment '${src_prefix}' has not been initialized properly!"
 }

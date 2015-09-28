@@ -184,6 +184,21 @@ sync_module() {
 	        $DRY rsync --links --perms --recursive \
 		     "${src_releasefile}" "${target_releasefile}" 2>/dev/null|| return $?
 	fi
+
+	# copy modulefile template
+	local -a rel_modulefile_splitted
+	std::split_fname rel_modulefile_splitted "${rel_modulefile}"
+	local -r module_group="${rel_modulefile_splitted[0]}"
+	local -r module_name="${rel_modulefile_splitted[-2]}"
+
+	local -r template="${module_group}/${PMODULES_TEMPLATES_DIR}/${module_name}/"
+	local -r src_template="${src_prefix}/${template}"
+	local -r target_template="${target_prefix}/${template}"
+	if [[ -e "${src_template}" ]]; then
+		$DRY mkdir -p "${target_template}"
+		$DRY rsync --links --perms --recursive \
+		     "${src_template}" "${target_template}" 2>/dev/null|| return $?
+	fi
 }
 
 #
@@ -198,12 +213,6 @@ sync_config() {
 	$DRY rsync --recursive --links --perms --delete \
 		"${src}" "${dst}" 2>/dev/null || return $?
 	sed -i.bak "s/PMODULES_VERSION=\(.*\)/PMODULES_VERSION=${PMODULES_VERSION}/" "${dst}/environment.bash"
-	echo
-
-	src="$1/${PMODULES_TEMPLATES_DIR}/"
-	dst="$2/${PMODULES_TEMPLATES_DIR}/"
-	$DRY rsync --recursive --links --perms --delete --exclude="${src}/.git*" \
-		"${src}" "${dst}" 2>/dev/null || return $?
 	echo
 }
 

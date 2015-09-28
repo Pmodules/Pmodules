@@ -49,9 +49,6 @@ pbuild::add_to_group() {
 	if [[ -z ${1} ]]; then
 		std::die 42 "${FUNCNAME}: Missing group argument."
 	fi
-	if [[ ! -d ${PMODULES_ROOT}/${PMODULES_TEMPLATES_DIR}/${1} ]]; then
-		std::die 43 "${1}: group does not exist."
-	fi
 	MODULE_GROUP=$1
 }
 
@@ -645,9 +642,9 @@ pbuild::make_all() {
 				cd "${dir_name}"
 				local x
 				IFS='/' x=( ${dir_name/${PMODULES_ROOT}\/${MODULE_GROUP}\/} )
-				local n=${#x[@]}
-				local -r _target="../"$(eval printf "../%.s" \
-							     {1..${n}})${PMODULES_TEMPLATES_DIR##*/}/"${MODULE_GROUP}/${P}/modulefile"
+				local -i n=${#x[@]}
+				local _target=$(eval printf "../%.s" {1..${n}})
+				_target+="${PMODULES_TEMPLATES_DIR}/${P}/modulefile"
 				ln -fs "${_target}" "${MODULE_NAME##*/}"
 			)
 		fi
@@ -655,6 +652,15 @@ pbuild::make_all() {
 		echo "${MODULE_RELEASE}" > "${release_file}"
 	}
 
+	##############################################################################
+	install_modulefile() {
+		local -r src="${BUILD_BLOCK_DIR}/modulefile"
+		local -r dst="${PMODULES_ROOT}/${MODULE_GROUP}/${PMODULES_TEMPLATES_DIR}/${P}"
+
+		std::info "${MODULE_NAME}: installing modulefile in '${dst}'"
+		install -m 0444 "${src}" "${dst}"
+	}
+	
 	##############################################################################
 	#
 	# here we really start with make_all()
@@ -729,6 +735,7 @@ pbuild::make_all() {
 			set_legacy_link
 		fi
 		set_link
+		install_modulefile
 	fi
 	return 0
 }
