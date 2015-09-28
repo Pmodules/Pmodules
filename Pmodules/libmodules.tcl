@@ -27,7 +27,7 @@ proc module-addgroup { group } {
 	global name
 	global version
 
-	debug $group
+	debug "called with arg $group"
 	set Implementation [file join {*}$::implementation]
 
 	set	GROUP [string toupper $group]
@@ -46,25 +46,28 @@ proc module-addgroup { group } {
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
 		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
 	} elseif { [module-info mode remove] } {
-		# remove orphan modules
-		debug "remove orphan modules"
 		set GROUP [string toupper $group]
+		debug "remove hierarchical group '${GROUP}'"
+		
 		if { [info exists env(PMODULES_LOADED_${GROUP})] } {
+			debug "unloading orphan modules"
 			set modules [split $env(PMODULES_LOADED_${GROUP}) ":"]
 			foreach m ${modules} {
 				if { ${m} == "--APPMARKER--" } {
 					continue
 				}
 				if { [is-loaded ${module_name}] } {
-					debug "unloading module: $m"
+					debug "unloading: $m"
 					module unload ${m}
 				}
 			}
+		} else {
+			debug "no orphan modules to unload"
 		}
-		remove-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
-		remove-path PMODULES_USED_GROUPS $group
 		debug "mode=remove: $env(MODULEPATH)"
+		remove-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
 		debug "mode=remove: $env(PMODULES_USED_GROUPS)"
+		remove-path PMODULES_USED_GROUPS $group
 	}
 	if { [module-info mode switch2] } {
 		debug "mode=switch2"
