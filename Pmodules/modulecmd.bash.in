@@ -1485,12 +1485,19 @@ subcommand_search() {
 #
 subcommand_help() {
 	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || usage
+	opts=$(pmodules::get_options -o HV\? -l version -l help -- "$@") || usage
 	eval set --  "${opts}"
 	local arg=''
 	
 	while (( $# > 0 )); do
 		case $1 in
+			-[hH] | -\? | --help )
+				usage
+				;;
+			-V | --version )
+				print_version
+				std::die 1
+				;;
 			-- )
 				:
 				;;

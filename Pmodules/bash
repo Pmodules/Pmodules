@@ -32,6 +32,8 @@ module() {
 	[[ ${#args[@]} == 0 ]] && args+=( 'help' )
 	[[ ${#args[@]} == 1 ]] && args+=( '--' )
 
+	# we have to eval here, otherwise we cannot do something like
+	# $ module load gcc/5.2.0 openmpi/1.8.8 hdf5/1.8.15
 	local -i i=1
 	for (( i=1; i < ${#args[@]}; i++ )); do
 		eval $( "${modulecmd}" bash "${args[0]}" "${switches[@]}" "${args[i]}" )
