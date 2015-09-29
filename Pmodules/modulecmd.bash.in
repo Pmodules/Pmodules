@@ -82,17 +82,17 @@ SWITCHES:
         -V|--version            modules version & configuration options
 
 SUBCOMMANDS:
-        + add|load [switches ]  modulefile [modulefile ...]
+        + add|load [switches]   modulefile [modulefile ...]
         + rm|unload             modulefile [modulefile ...]
         + switch|swap           [modulefile1] modulefile2
         + display|show          modulefile [modulefile ...]
-        + avail [ switches ]    [modulefile [modulefile ...]]
-        + search [ switches ]   [ args ]
-        + use [ switches ]      [dir|group|release ...]
+        + avail [switches]      [modulefile [modulefile ...]]
+        + search [switches]     [args]
+        + use [switches]        [dir|group|release ...]
         + unuse                 dir|group|release [dir|group|release ...]
         + refresh
         + purge
-        + list [ switches ]
+        + list [switches]
         + clear
         + help                  [modulefile|subcommand]
         + whatis                [modulefile [modulefile ...]]
