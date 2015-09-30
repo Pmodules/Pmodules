@@ -176,8 +176,8 @@ force_rebuild='no'
 dry_run='no'
 enable_cleanup_build='yes'
 enable_cleanup_src='no'
-
 target='all'
+module_release=''
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
@@ -224,7 +224,7 @@ while (( $# > 0 )); do
 		dry_run='yes'
 		;;
 	--release=* )
-		MODULE_RELEASE=${1/--release=}
+		module_release=${1/--release=}
 		;;
 	--with=*/* )
 		with_modules+=( ${1/--with=} )
@@ -328,13 +328,15 @@ _P=$(echo $P | tr [:lower:] [:upper:])
 _P=${_P//-/_}
 _V=${_P}_VERSION
 
+# :FIXME: do we need this? Can we get rid of 'releases'?
 if [[ -n ${PMODULES_DEFINED_RELEASES} ]]; then
         declare -r releases="${PMODULES_DEFINED_RELEASES}"
 else
-	# set defaults, if file doesn't exist or isn't readable
+	# set defaults
 	declare -r releases=":unstable:stable:deprecated:"
 fi
 
+[[ -n ${module_release} ]] && pbuild::set_release "${module_release}"
 
 #
 # run build

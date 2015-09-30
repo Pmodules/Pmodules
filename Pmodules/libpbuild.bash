@@ -26,6 +26,15 @@ declare -x  LIBRARY_PATH
 declare -x  LD_LIBRARY_PATH
 declare -x  DYLD_LIBRARY_PATH
 
+is_release() {
+	[[ :${releases}: =~ :$1: ]] && return 0
+	std::die 1 "${P}: '$1' is not a valid release name."
+}
+
+pbuild::set_release() {
+	is_release "$1" && MODULE_RELEASE="$1"
+}
+
 ##############################################################################
 #
 # set supported OS
@@ -36,7 +45,7 @@ pbuild::supported_os() {
 	for os in "$@"; do
 		[[ ${os} == ${OS} ]] && return 0
 	done
-	std::die 0 "${P}: Not available for ${OS}."
+	std::die 1 "${P}: Not available for ${OS}."
 }
 
 ##############################################################################
