@@ -204,6 +204,9 @@ while (( $# > 0 )); do
 	-\? | -h | --help )
 		usage
 		;;
+	--dry-run )
+		dry_run='yes'
+		;;
 	--disable-cleanup )
 		enable_cleanup_build='no'
 		enable_cleanup_src='no'
@@ -220,11 +223,30 @@ while (( $# > 0 )); do
 	--disable-cleanup-src )
 		enable_cleanup_src='no'
 		;;
-	--dry-run )
-		dry_run='yes'
+	--distdir )
+		PMODULES_DISTDIR=$2
+		shift
+		;;
+	--distdir=* )
+		PMODULES_DISTDIR=${1/--distdir=}
+		;;
+	--tmpdir )
+		PMODULES_TMPDIR=$2
+		shift
+		;;
+	--tmpdir=* )
+		PMODULES_TMPDIR=${1/--tmpdir=}
+		;;
+	--release )
+		module_release=$2
+		shift
 		;;
 	--release=* )
 		module_release=${1/--release=}
+		;;
+	--with )
+		with_modules+=( "$2" )
+		shift
 		;;
 	--with=*/* )
 		with_modules+=( ${1/--with=} )
@@ -269,12 +291,14 @@ else
 	std::die 3 "Build environment not setup properbly!"
 fi
 
-declare -xr BUILD_CONFIGDIR="${BUILD_BASEDIR}/config"
-declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
-declare -xr BUILD_TMPDIR="${BUILD_BASEDIR}/tmp"
-declare -xr BUILD_DOWNLOADSDIR="${BUILD_BASEDIR}/Downloads"
-declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/versions.conf"
+: ${PMODULES_TMPDIR:="${BUILD_BASEDIR}/tmp"}
+: ${PMODULES_DISTDIR:="${BUILD_BASEDIR}/Downloads"}
 
+declare -xr PMODULES_TMPDIR=
+declare -xr PMODULES_DISTDIR="${BUILD_BASEDIR}/Downloads"
+
+declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
+declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/config/versions.conf"
 
 # source BASH library with standard functions
 ((ok=1))

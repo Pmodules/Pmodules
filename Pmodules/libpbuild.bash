@@ -340,7 +340,7 @@ pbuild::make_all() {
 	#	P		    module name
 	#	_P		    module name in upper case
 	#	MODULEPATH	    module path
-	#	BUILD_DOWNLOADSDIR  directory where all the tar-balls are stored
+	#	PMODULES_DISTDIR    directory where all the tar-balls are stored
 	#
 	# The following variables might already be set
 	#	V		    module version, if not set ${_P}_VERSION must
@@ -373,8 +373,8 @@ pbuild::make_all() {
 		if [[ -z $V ]]; then
 			std::die 1 "$P: Missing version."
 		fi
-		MODULE_SRCDIR="${BUILD_TMPDIR}/src/${P/_serial}-$V"
-		MODULE_BUILDDIR="${BUILD_TMPDIR}/build/$P-$V"
+		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
+		MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
 
 		# build module name
 		# :FIXME: the MODULE_PREFIX should be derived from MODULE_NAME
@@ -503,7 +503,7 @@ pbuild::make_all() {
 		DOCDIR="${PREFIX}/share/doc/$P"
 
 		# set tar-ball and flags for tar
-		find_tarball "${BUILD_DOWNLOADSDIR}" "${P/_serial}" "${V}"
+		find_tarball "${PMODULES_DISTDIR}" "${P/_serial}" "${V}"
 
 	}
 
@@ -521,8 +521,8 @@ pbuild::make_all() {
 		if [[ -z $V ]]; then
 			std::die 1 "$P: Missing version."
 		fi
-		MODULE_SRCDIR="${BUILD_TMPDIR}/src/${P/_serial}-$V"
-		MODULE_BUILDDIR="${BUILD_TMPDIR}/build/$P-$V"
+		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
+		MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
 		MODULE_GROUP='Tools'
 		MODULE_NAME="Pmodules/${PMODULES_VERSION}"
 		# set PREFIX of module
@@ -535,7 +535,7 @@ pbuild::make_all() {
 		DOCDIR="${PREFIX}/share/doc/$P"
 
 		# set tar-ball and flags for tar
-		find_tarball "${BUILD_DOWNLOADSDIR}" "${P/_serial}" "${V}"
+		find_tarball "${PMODULES_DISTDIR}" "${P/_serial}" "${V}"
 
 		C_INCLUDE_PATH="${PREFIX}/include"
 		CPLUS_INCLUDE_PATH="${PREFIX}/include"
@@ -562,8 +562,8 @@ pbuild::make_all() {
 	prep() {
 		# untar sources
 		if [[ ! -d ${MODULE_SRCDIR} ]]; then
-			mkdir -p "${BUILD_TMPDIR}/src"
-			(cd "${BUILD_TMPDIR}/src" && tar xvf "${TARBALL}")
+			mkdir -p "${PMODULES_TMPDIR}/src"
+			(cd "${PMODULES_TMPDIR}/src" && tar xvf "${TARBALL}")
 		fi
 
 		# create build directory

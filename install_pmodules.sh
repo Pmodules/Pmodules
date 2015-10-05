@@ -13,6 +13,9 @@ echo "Installing to ${PMODULES_HOME} ..."
 sed_cmd="s:@PMODULES_HOME@:${PMODULES_HOME}:g;"
 sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g;"
 sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g"
+sed_cmd+="s:@PMODULES_DISTDIR@:${PMODULES_DISTDIR}:g;"
+sed_cmd+="s:@PMODULES_TMPDIR@:${PMODULES_TMPDIR}:g;"
+
 sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in" > "${SRC_DIR}/modulecmd.bash"
 sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in" > "${SRC_DIR}/modmanage.bash"
 sed "${sed_cmd}" "${SRC_DIR}/environment.bash.in" > "${SRC_DIR}/environment.bash"
@@ -29,8 +32,16 @@ install -m 0755 "${SRC_DIR}/modmanage.bash"	"${PMODULES_HOME}/libexec"
 install -m 0755 "${SRC_DIR}/dialog.bash"	"${PMODULES_HOME}/bin"
 install -m 0755 "${SRC_DIR}/modbuild"		"${PMODULES_HOME}/bin"
 
-install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_HOME}/config/environment.bash.in"
-install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_HOME}/config/profile.bash.in"
+install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_HOME}/config/environment.bash.sample"
+install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_HOME}/config/profile.bash.sample"
+
+if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/environment.bash" ]]; then
+        install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_HOME}/config/environment.bash"
+fi
+
+if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash" ]]; then
+	install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_HOME}/config/profile.bash"
+fi
 
 install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
