@@ -294,8 +294,8 @@ fi
 : ${PMODULES_TMPDIR:="${BUILD_BASEDIR}/tmp"}
 : ${PMODULES_DISTDIR:="${BUILD_BASEDIR}/Downloads"}
 
-declare -xr PMODULES_TMPDIR=
-declare -xr PMODULES_DISTDIR="${BUILD_BASEDIR}/Downloads"
+declare -xr PMODULES_TMPDIR
+declare -xr PMODULES_DISTDIR
 
 declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
 declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/config/versions.conf"
