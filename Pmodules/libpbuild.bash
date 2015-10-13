@@ -124,6 +124,12 @@ pbuild::cleanup_env() {
 	CXXFLAGS=''
 	LIBS=''
 	LDFLAGS=''
+
+	unset CC
+	unset CXX
+	unset FC
+	unset F77
+	unset F90
 }
 
 pbuild::pre_configure() {
