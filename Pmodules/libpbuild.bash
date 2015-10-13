@@ -132,6 +132,16 @@ pbuild::cleanup_env() {
 	unset F90
 }
 
+pbuild::set_initial_path() {
+	PATH='/usr/bin:/bin:/usr/sbin:/sbin'
+
+	if [[ "${OS}" == "Darwin" ]]; then
+	        # :FIXME: why do we need this?
+	        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin'
+	fi
+}
+
+
 pbuild::pre_configure() {
 	:
 }
