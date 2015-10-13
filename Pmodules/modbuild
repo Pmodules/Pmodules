@@ -102,18 +102,6 @@ VERSION
 	exit 1
 }
 
-# setup PATH
-PATH='/usr/bin:/bin:/usr/sbin:/sbin'
-
-declare -r OS=$(uname -s)
-if [[ "${OS}" == "Darwin" ]]; then
-	# :FIXME: why do we need this?
-	[[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin'
-fi
-
-PATH+="${mydir}"
-
-
 #
 # We need GNU versions of the following utilities. This code works
 # well on Linux and Mac OS X with MacPorts.
@@ -154,6 +142,7 @@ fi
 declare	    ok=1
 
 ##############################################################################
+#
 # source BASH library with standard functions
 for dir in "${bash_libpath[@]}"; do
         if [[ -r ${dir}/${libstd} ]]; then
@@ -166,6 +155,9 @@ if (( ok != 0 )); then
 	echo "Oops: required BASH library '${libstd}' not found" 1>&2
 	exit 1
 fi
+
+# :FIXME: move to library?
+declare -r OS=$(uname -s)
 
 ##############################################################################
 #
@@ -195,8 +187,11 @@ while (( $# > 0 )); do
 	--jobs=[0-9]* )
 		JOBS=${1/--jobs=}
 		;;
-	-v | --verbose | --debug )
+	-v | --verbose )
 		debug_on='yes'
+		;;
+	--debug )
+		set -x
 		;;
 	-f | --force-rebuild )
 		force_rebuild='yes'
@@ -311,10 +306,6 @@ for dir in "${bash_libpath[@]}"; do
 done
 (( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
-# Unset all PATH's and FLAGS's which might be used by a compiler.
-# This includes C_INCLUDE_PATH, CFLAGS etc.
-pbuild::cleanup_env
-
 # load all modules passed with the '--with' argument
 if [[ ${bootstrap} == no ]]; then
 	# we aren't bootstraping
@@ -327,8 +318,15 @@ if [[ ${bootstrap} == no ]]; then
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
-	module purge
-	module use unstable
+	eval $( "${MODULECMD}" bash purge )
+	
+	# Unset all PATH's and FLAGS's which might be used by a compiler.
+	# This includes C_INCLUDE_PATH, CFLAGS etc.
+	pbuild::cleanup_env
+	pbuild::set_initial_path
+	PATH+="${mydir}"
+
+	eval $( "${MODULECMD}" bash use unstable )
 	# :FIXME: this is a hack!!!
 	module use Libraries
 	for m in "${with_modules[@]}"; do
@@ -341,10 +339,14 @@ if [[ ${bootstrap} == no ]]; then
 	done
 else
 	#  the module command is not yet available...
+	pbuild::cleanup_env
+	pbuild::set_initial_path
+	PATH+="${mydir}"
 	unset PMODULES_HOME
 	unset PMODULES_VERSION
 	std::read_versions "${BUILD_BASEDIR}/config/versions.conf"
 fi
+
 
 P=$(basename $(dirname "${BUILD_BLOCK}"))
 P=${P%.*}
