@@ -13,7 +13,7 @@ echo "Installing to ${PMODULES_HOME} ..."
 sed_cmd="s:@PMODULES_HOME@:${PMODULES_HOME}:g;"
 sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g;"
 sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
-sed_cmd+="s:@PMODULES_DISTDIR@:${PMODULES_DISTDIR}:g;"
+sed_cmd+="s:@PMODULES_DISTFILESDIR@:${PMODULES_DISTFILESDIR}:g;"
 sed_cmd+="s:@PMODULES_TMPDIR@:${PMODULES_TMPDIR}:g;"
 
 sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in" > "${SRC_DIR}/modulecmd.bash"

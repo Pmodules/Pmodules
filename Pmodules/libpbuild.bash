@@ -356,7 +356,7 @@ pbuild::make_all() {
 	#	P		    module name
 	#	_P		    module name in upper case
 	#	MODULEPATH	    module path
-	#	PMODULES_DISTDIR    directory where all the tar-balls are stored
+	#	PMODULES_DISTFILESDIR directory where all the tar-balls are stored
 	#
 	# The following variables might already be set
 	#	V		    module version, if not set ${_P}_VERSION must
@@ -519,7 +519,7 @@ pbuild::make_all() {
 		DOCDIR="${PREFIX}/share/doc/$P"
 
 		# set tar-ball and flags for tar
-		find_tarball "${PMODULES_DISTDIR}" "${P/_serial}" "${V}"
+		find_tarball "${PMODULES_DISTFILESDIR}" "${P/_serial}" "${V}"
 
 	}
 
@@ -551,7 +551,7 @@ pbuild::make_all() {
 		DOCDIR="${PREFIX}/share/doc/$P"
 
 		# set tar-ball and flags for tar
-		find_tarball "${PMODULES_DISTDIR}" "${P/_serial}" "${V}"
+		find_tarball "${PMODULES_DISTFILESDIR}" "${P/_serial}" "${V}"
 
 		C_INCLUDE_PATH="${PREFIX}/include"
 		CPLUS_INCLUDE_PATH="${PREFIX}/include"

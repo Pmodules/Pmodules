@@ -14,6 +14,6 @@ declare -x PMODULES_DEFAULT_GROUPS='Tools Programming'
 declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
 declare -x PMODULES_DEFAULT_RELEASES='stable'
 
-declare -x PMODULES_DISTDIR='/afs/psi.ch/software/Pmodules/distfiles'
+declare -x PMODULES_DISTFILESDIR='/afs/psi.ch/software/Pmodules/distfiles'
 declare -x PMODULES_TMPDIR='/var/tmp/Pmodules'
 
