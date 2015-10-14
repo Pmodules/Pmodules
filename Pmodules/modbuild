@@ -279,7 +279,7 @@ if [[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]]; then
 elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
      [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
 	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../../..")
+	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
 	bootstrap='no'
 
 else
@@ -293,7 +293,7 @@ declare -x  PMODULES_TMPDIR
 declare -x  PMODULES_DISTFILESDIR
 
 declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
-declare -xr BUILD_VERSIONSFILE="${BUILD_CONFIGDIR}/config/versions.conf"
+declare -xr BUILD_VERSIONSFILE="${BUILD_BASEDIR}/config/versions.conf"
 
 # source BASH library with standard functions
 ((ok=1))
