@@ -84,6 +84,27 @@ install <module>... [--with=<dep>...] [--release=<release>...] [--src=<src>]
 " 1>&2
 }
 
+subcommand_help_search() {
+	echo "
+USAGE:
+        module search [switches] string...
+		Search available modules. If an argument is given, search
+		for modules whose name match the argument.
+
+SWITCHES: 
+        --no-header
+		Suppress output of a header.
+
+        --with=STRING
+		Search for modules compiled with modules matching string. The
+		command
+
+		module search --with=gcc/4.8.3
+
+		lists all modules in the hierarchy compiled with gcc 4.8.3.
+" 1>&2
+}
+
 subcommand_help_sync() {
 	echo "
 sync [--delete] [--dst=<dst>] <src>
@@ -608,6 +629,45 @@ subcommand_cleanup() {
 	:
 }
 
+#
+# search modules in source
+#
+subcommand_search() {
+	local	    src_prefix="${PMODULES_INSTALL_SOURCE}"
+	local -r    target_prefix="${PMODULES_ROOT}"
+	local -A    modules_found
+
+	print_modules_found() {
+		std::info "The following modules are available:"
+		for modulefile in "${!modules_found[@]}"; do
+			std::info "    ${modulefile/\/${PMODULES_MODULEFILES_DIR}\//: }"
+		done 2>&1 | sort
+	}
+	
+	[[ -n ${src_prefix} ]] \
+		|| std::die 3 "Oops: no installation source given."
+	[[ -d ${src_prefix} ]] \
+		|| std::die 3 "Oops: '${src_prefix}' is not a valid installation source."
+
+	# scan available groups and their depth
+	get_groups "${src_prefix}"
+	get_hierarchy_depth "${src_prefix}"
+
+	local -i n=0
+	while read modulefile; do
+		modules_found["${modulefile}"]+='.'
+		let n+=1
+	done < <(${PMODULES_HOME}/bin/modulecmd bash search \
+				 -a \
+				 --no-header --print-modulefiles \
+				 --src="${src_prefix}" \
+				 "$@" \
+				 2>&1 1>/dev/null)
+	(( n == 0 )) && \
+		std::die 0 "No matching modules found ..."
+	print_modules_found
+}
+
 subcommand_sync() {
 	local delete=false
 	local opts=''
@@ -749,6 +809,9 @@ while (($# > 0)); do
 		-f | --force )
 			force='yes'
 			;;
+		--debug )
+			set -x
+			;;
 		--dry-run )
 			dry_run='yes'
 			DRY='echo'
@@ -757,7 +820,7 @@ while (($# > 0)); do
 			echo "$1: unknown switch.\n" 1>&2
 			exit 1
 			;;
-		init|install|sync|help )
+		init|install|sync|search|help )
 			subcommand="subcommand_$1"
 			shift
 			sargs=( $* )
