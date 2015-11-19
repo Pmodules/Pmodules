@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# number of parallel make jobs
-declare -i  JOBS=3
-
 declare -x  PREFIX=''
 declare -x  DOCDIR=''
 declare -x  MODULE_GROUP=''
 declare	-x  MODULE_RELEASE=''
 declare     cur_module_release=''
+declare	    compile_in_sourcetree='no'
 
 declare     DEPEND_RELEASE=''
 declare -x  MODULE_NAME=''
@@ -33,6 +31,14 @@ is_release() {
 
 pbuild::set_release() {
 	is_release "$1" && MODULE_RELEASE="$1"
+}
+
+##############################################################################
+#
+# set supported OS
+#
+pbuild::compile_in_sourcetree() {
+	compile_in_sourcetree='yes'
 }
 
 ##############################################################################
@@ -170,6 +176,7 @@ pbuild::install_doc() {
 }
 
 pbuild::cleanup_build() {
+	[[ "${MODULE_BUILDDIR}" == "${MODULE_SRCDIR}" ]] && return
 	[[ -n "${MODULE_BUILDDIR}" ]]     \
 		|| std::die 1 "Oops: internal error: MODULE_BUILDDIR is set to empty string..."
 	[[ "${MODULE_BUILDDIR}" == "/" ]] \
@@ -323,23 +330,26 @@ pbuild::make_all() {
 	# $3: version
 	#
 	find_tarball() {
-		local -r dir=$1
+		local -a dirs=( "${BUILD_BLOCK_DIR}" )
+		dirs+=( "$1" )
 		local -r name=$2
 		local -r version=$3
 
 		TARBALL=""
 		local ext
-		for ext in tar tar.gz tgz tar.bz2 tar.xz; do
-			local fname="${dir}/${name}-${OS}-${version}.${ext}"
-			if [[ -r "${fname}" ]]; then
-				TARBALL="${fname}"
-				break
-			fi
-			local fname="${dir}/${name}-${version}.${ext}"
-			if [[ -r "${fname}" ]]; then
-				TARBALL="${fname}"
-				break
-			fi
+		for dir in "${dirs[@]}"; do
+			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
+				local fname="${dir}/${name}-${OS}-${version}.${ext}"
+				if [[ -r "${fname}" ]]; then
+					TARBALL="${fname}"
+					break 2
+				fi
+				local fname="${dir}/${name}-${version}.${ext}"
+				if [[ -r "${fname}" ]]; then
+					TARBALL="${fname}"
+					break 2
+				fi
+			done
 		done
 		if [[ -z ${TARBALL} ]]; then
 			std::error "tar-ball for $P/$V not found."
@@ -390,7 +400,11 @@ pbuild::make_all() {
 			std::die 1 "$P: Missing version."
 		fi
 		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
-		MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
+		if [[ "${compile_in_sourcetree}" == "yes" ]]; then
+			MODULE_BUILDDIR="${MODULE_SRCDIR}"
+		else
+			MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
+		fi
 
 		# build module name
 		# :FIXME: the MODULE_PREFIX should be derived from MODULE_NAME
