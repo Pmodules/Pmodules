@@ -2,7 +2,7 @@
 
 #set -x
 
-# The directory where the programm is installed will be added to PATH and
+# The directory where this programm is installed will be added to PATH and
 # to the search path of BASH libraries.
 declare -r  mydir=$(dirname "$0")
 
@@ -163,6 +163,10 @@ declare -r OS=$(uname -s)
 #
 # parse arguments
 #
+
+# number of parallel make jobs
+declare -i  JOBS=3
+
 debug_on='no'
 force_rebuild='no'
 dry_run='no'
