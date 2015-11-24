@@ -1,7 +1,5 @@
 #!/bin/bash
 
-#set -x
-
 # The directory where this programm is installed will be added to PATH and
 # to the search path of BASH libraries.
 declare -r  mydir=$(dirname "$0")
@@ -351,12 +349,18 @@ else
 	std::read_versions "${BUILD_BASEDIR}/config/versions.conf"
 fi
 
-
 P=$(basename $(dirname "${BUILD_BLOCK}"))
 P=${P%.*}
-_P=$(echo $P | tr [:lower:] [:upper:])
-_P=${_P//-/_}
-_V=${_P}_VERSION
+
+if [[ -z ${V} ]]; then
+	_P=$(echo $P | tr [:lower:] [:upper:])
+	_P=${_P//-/_}
+	_V=${_P}_VERSION
+	V=${!_V}
+fi
+
+[[ -z ${V} ]] && std::die 1 "Module version must be specified on command line!"
+
 
 # :FIXME: do we need this? Can we get rid of 'releases'?
 if [[ -n ${PMODULES_DEFINED_RELEASES} ]]; then
@@ -372,6 +376,8 @@ fi
 # run build
 #
 source "${BUILD_BLOCK}"
+
+std::info "${P}/${V}: Done ..."
 
 # Local Variables:
 # mode: sh

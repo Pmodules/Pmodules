@@ -170,7 +170,7 @@ pbuild::post_install() {
 }
 
 pbuild::install_doc() {
-	std::info "Installing documentation to ${DOCDIR}"
+	std::info "${P}/${V}: Installing documentation to ${DOCDIR}"
 	install -m 0755 -d "${DOCDIR}"
 	install -m0444 "${MODULE_DOCFILES[@]/#/${MODULE_SRCDIR}/}" "${BUILD_BLOCK}" "${DOCDIR}"
 }
@@ -352,7 +352,7 @@ pbuild::make_all() {
 			done
 		done
 		if [[ -z ${TARBALL} ]]; then
-			std::error "tar-ball for $P/$V not found."
+			std::error "${P}/${V}: source not found."
 			exit 43
 		fi
 	}
@@ -364,13 +364,11 @@ pbuild::make_all() {
 	# The following variables must already be set:
 	#	MODULE_GROUP	    module group
 	#	P		    module name
-	#	_P		    module name in upper case
+	#	V		    module version
 	#	MODULEPATH	    module path
 	#	PMODULES_DISTFILESDIR directory where all the tar-balls are stored
 	#
 	# The following variables might already be set
-	#	V		    module version, if not set ${_P}_VERSION must
-	#			    evaluate to a version
 	#	${_P}_VERSION	    module version
 	#	MODULE_RELEASE	    module release, one of 'unstable', 'stable',
 	#			    'deprecated'
@@ -386,18 +384,7 @@ pbuild::make_all() {
 	#
 	check_and_setup_env() {
 		if [[ -z ${MODULE_GROUP} ]]; then
-			std::die 1 "$P: group not set."
-		fi
-
-		# this allows us to specify the version as PKGNAME_VERSION=1.2.3 on
-		# the cmd-line
-		if [[ -z $V ]]; then
-			V=$(eval echo \$${_P}_VERSION)
-		fi
-
-		# oops, we need a version
-		if [[ -z $V ]]; then
-			std::die 1 "$P: Missing version."
+			std::die 1 "${P}/${V}: group not set."
 		fi
 		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
 		if [[ "${compile_in_sourcetree}" == "yes" ]]; then
@@ -474,7 +461,7 @@ pbuild::make_all() {
 			MODULE_NAME+="${P}/${V}"
 			;;
 		* )
-			std::die 1 "$P: oops: unknown group: ${MODULE_GROUP}"
+			std::die 1 "${P}/${V}: oops: unknown group: ${MODULE_GROUP}"
 			;;
 		esac
 
@@ -491,7 +478,7 @@ pbuild::make_all() {
 			eval $("${MODULECMD}" bash use ${rel})
 			if pbuild::module_is_available "${P}/${V}"; then
 				cur_module_release=${rel}
-				std::info "${P}/${V}: already available and released as \"${rel}\""
+				std::info "${P}/${V}: already exists and released as \"${rel}\""
 				break
 			fi
 		done
@@ -540,17 +527,9 @@ pbuild::make_all() {
 	# redefine function for bootstrapping
 	check_and_setup_env_bootstrap() {
 		if [[ -z ${MODULE_GROUP} ]]; then
-			std::die 1 "$P: group not set."
+			std::die 1 "${P}/${V}: group not set."
 		fi
 
-		if [[ -z $V ]]; then
-			V=$(eval echo \$${_P}_VERSION)
-		fi
-
-		# oops, we need a version
-		if [[ -z $V ]]; then
-			std::die 1 "$P: Missing version."
-		fi
 		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
 		MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
 		MODULE_GROUP='Tools'
@@ -559,7 +538,7 @@ pbuild::make_all() {
 		PREFIX="${PMODULES_ROOT}/${MODULE_GROUP}/${MODULE_NAME}"
 		
 		MODULE_RELEASE='unstable'
-		std::info "${MODULE_NAME}: will be released as \"${MODULE_RELEASE}\""
+		std::info "${P}/${V}: will be released as \"${MODULE_RELEASE}\""
 
 		# directory for README's, license files etc
 		DOCDIR="${PREFIX}/share/doc/$P"
@@ -585,7 +564,7 @@ pbuild::make_all() {
 				return 0
 			fi
 		done
-		std::die 0 "Package cannot be build with ${COMPILER}/${COMPILER_VERSION}."
+		std::die 1 "${P}/${V}: cannot be build with ${COMPILER}/${COMPILER_VERSION}."
 	}
 
 	##############################################################################
@@ -610,23 +589,26 @@ pbuild::make_all() {
 			return 0
 		}
 
-		std::info "Run post-installation for ${OS} ..."
+		std::info "${P}/${V}: running post-installation for ${OS} ..."
 		[[ "${OS}" == "Linux" ]] && post_install_linux
-		std::info "Post-installation done ..."
 		return 0
 	}
 
 	##############################################################################
+	# This function requires that
+	# run-time dependencies are either specified with name and version (like gcc/4.8.3)
+	# or we can derive missing versions from the load build dependencies. 
 	write_runtime_dependencies() {
 		local -r fname="${PREFIX}/.dependencies"
-		std::info "Writing run-time dependencies to ${fname}"
+		std::info "${P}/${V}: writing run-time dependencies to ${fname} ..."
 		local dep
 		echo -n "" > "${fname}"
 		for dep in "${MODULE_DEPENDENCIES[@]}"; do
 			[[ -z $dep ]] && continue
 			if [[ ! $dep =~ .*/.* ]]; then
-				local _V=$(echo -n $dep | tr [:lower:] [:upper:] )_VERSION
-				dep=$dep/${!_V}
+				# no version given: derive the version from the currently
+				# loaded modules
+				dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep "${dep}/" )
 			fi
 			echo "${dep}" >> "${fname}"
 		done
@@ -635,17 +617,8 @@ pbuild::make_all() {
 	##############################################################################
 	write_build_dependencies() {
 		local -r fname="${PREFIX}/.build_dependencies"
-		std::info "Writing build dependencies to ${fname}"
-		local dep
-		echo -n "" > "${fname}"
-		for dep in "${MODULE_BUILD_DEPENDENCIES[@]}"; do
-			[[ -z $dep ]] && continue
-			if [[ ! $dep =~ "*/*" ]]; then
-				local _V=$(echo -n $dep | tr [:lower:] [:upper:] )_VERSION
-				dep=$dep/${!_V}
-			fi
-			echo "${dep}" >> "${fname}"
-		done
+		std::info "${P}/${V}: writing build dependencies to ${fname} ..."
+		"${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep -v "Currently Loaded" > "${fname}"
 	}
 
 	##############################################################################
@@ -655,7 +628,7 @@ pbuild::make_all() {
 		local -r release_file="${dir_name}/.release-${MODULE_NAME##*/}"
 		if [[ ! -e "${_path}" ]]; then
 			(
-				std::info "Setting new sym-link \"${link_name}\" ..."
+				std::info "${P}/${V}: setting new sym-link '${link_name}' ..."
 				mkdir -p "${dir_name}"
 				cd "${dir_name}"
 				local x
@@ -665,7 +638,7 @@ pbuild::make_all() {
 				ln -fs "${_target}" "${MODULE_NAME##*/}"
 			)
 		fi
-		std::info "${MODULE_NAME}: set release to '${MODULE_RELEASE}'"
+		std::info "${P}/${V}: setting release to '${MODULE_RELEASE}' ..."
 		echo "${MODULE_RELEASE}" > "${release_file}"
 	}
 
@@ -676,7 +649,7 @@ pbuild::make_all() {
 		local -r release_file="${dir_name}/.release-${MODULE_NAME##*/}"
 		if [[ ! -e "${_path}" ]]; then
 			(
-				std::info "Setting new sym-link \"${link_name}\" ..."
+				std::info "${P}/${V}: setting new sym-link '${link_name}' ..."
 				mkdir -p "${dir_name}"
 				cd "${dir_name}"
 				local x
@@ -687,16 +660,20 @@ pbuild::make_all() {
 				ln -fs "${_target}" "${MODULE_NAME##*/}"
 			)
 		fi
-		std::info "${MODULE_NAME}: set release to '${MODULE_RELEASE}'"
+		std::info "${P}/${V}: setting release to '${MODULE_RELEASE}' ..."
 		echo "${MODULE_RELEASE}" > "${release_file}"
 	}
 
 	##############################################################################
 	install_modulefile() {
 		local -r src="${BUILD_BLOCK_DIR}/modulefile"
+		if [[ ! -r "${src}" ]]; then
+			std::info "${P}/${V}: skipping modulefile installation ..."
+			return
+		fi
 		local -r dst="${PMODULES_ROOT}/${MODULE_GROUP}/${PMODULES_TEMPLATES_DIR}/${P}"
 
-		std::info "${MODULE_NAME}: installing modulefile in '${dst}'"
+		std::info "${P}/${V}: installing modulefile in '${dst}' ..."
 		install -m 0444 "${src}" "${dst}"
 	}
 	
@@ -767,7 +744,7 @@ pbuild::make_all() {
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
 		
 	else
- 		echo "Not rebuilding $P/$V ..."
+ 		std::info "${P}/${V}: already exists, not rebuilding ..."
 	fi
 	if [[ ${bootstrap} == 'no' ]]; then
 		if [[ -d "${PMODULES_ROOT}/${PMODULES_MODULEFILES_DIR}" ]]; then
