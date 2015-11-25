@@ -604,22 +604,31 @@ subcommand_load() {
 
 	#
 	# Test whether a given module is available.
-	# Possible cases:
-	# - absolute file- or link-name in- or outside our hierarchy
-	# - relative file- or link-name in- or outside out hierarchy
-	# - full module name in- or outside our hierarchy
-	# - module name without version in- or outside our hierarchy
-	# - directory in- or outsite our hierarchy (not supported by modulecmd.tcl!)
+	# The passed module-name can be
+	#
+	# - an absolute file- or link-name.
+	#   The module can be either in- or outside our hierarchy.
+	#
+	# - a relative file- or link-name.
+	#   The module can be either in- or outside out hierarchy.
+	#
+	# - specified with name and version (like gcc/5.2.0).
+	#   The module can be either in- or outside our hierarchy.
+	#
+	# - specified with name only (without version, like gcc).
+	#   The module can be either in- or outside our hierarchy.
+	#
+	# - ?directory in- or outsite our hierarchy (not supported by modulecmd.tcl!)
 	#
 	# arguments:
 	# 	$1: module name or file
 	#
 	# possible return values:
-	# 	0: is a loadable module
+	# 	0: module is loadable
 	# 	1: nothing found
-	# 	2: wrong shebang
-	# 	3: has unused release
-	#	4: inside our hierarchy but not loadable
+	# 	2: wrong shebang in file found
+	# 	3: the release of the module is not in use
+	#	4: inside our hierarchy but not a loadable module-file
 	#
 	# Notes:
 	#	The variable 'release' in function 'subcommand_load()' will be set.
@@ -628,10 +637,10 @@ subcommand_load() {
 	is_available() {
 		local  m=$1
 
-		# handle the case of an absolute or relative file- or link-name
 		if [[ -f ${m} ]]; then
+			# the passed argument is an existing file
 			if [[ "${m:0:1}" != "/" ]]; then
-				# convert to absolte path if relative
+				# file-name is relative
 				m=$(std::get_abspath "${m}")
 			fi
 			is_modulefile "${m}" || return 2
