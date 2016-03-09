@@ -165,13 +165,14 @@ declare -r OS=$(uname -s)
 # number of parallel make jobs
 declare -i  JOBS=3
 
-debug_on='no'
-force_rebuild='no'
-dry_run='no'
-enable_cleanup_build='yes'
-enable_cleanup_src='no'
-target='all'
-module_release=''
+declare debug_on='no'
+declare force_rebuild='no'
+declare dry_run='no'
+declare enable_cleanup_build='yes'
+declare enable_cleanup_src='no'
+declare target='all'
+declare module_release=''
+declare bootstrap='no'
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
@@ -258,6 +259,9 @@ while (( $# > 0 )); do
 	--version= )
 		V=${1/--version=}
 		;;
+	--bootstrap )
+		bootstrap='yes'
+		;;
 	[0-9]* )
 		V=$1
 		;;
@@ -277,19 +281,17 @@ fi
 [[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
 
 
-
 # source Pmodule environment configuration
-if [[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]]; then
-	# we are bootstrapping
+if [[ "${bootstrap}" == "yes" ]]; then
+	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]] || i\
+		std::die 1 "Cannot read configuration file!"
         source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
 	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
-	bootstrap='yes'
 	
 elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
      [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
 	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
 	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
-	bootstrap='no'
 
 else
 	std::die 3 "Build environment not setup properbly!"
