@@ -34,8 +34,9 @@ std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
 build () {
 	local -r name="$1"
 	local -r version="$2"
+	shift 2
 
-	"${BOOTSTRAP_DIR}/Pmodules/modbuild" "${BOOTSTRAP_DIR}/${name}/build" --disable-cleanup "${version}" || \
+	"${BOOTSTRAP_DIR}/Pmodules/modbuild" "${BOOTSTRAP_DIR}/${name}/build" --bootstrap --disable-cleanup "$@" "${version}" || \
 		std::die 3 "Compiling '${name}' failed!"
 }
 
@@ -63,8 +64,8 @@ if [[ ! -e "${PMODULES_HOME}/bin/tclsh" ]] || [[ ${force} == 'yes' ]]; then
 	build Tcl "${TCL_VERSION}"
 fi
 
-if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.tcl" ]] || [[ ${force} == 'yes' ]]; then
-	build Modules "${MODULES_VERSION}" && \
-	mv -v "${PMODULES_HOME}/bin/modulecmd" "${PMODULES_HOME}/libexec/modulecmd.tcl"
+if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${force} == 'yes' ]]; then
+	build Modules "${MODULES_VERSION}" --compile && \
+	cp -v "${PMODULES_TMPDIR}/build/Modules-${MODULES_VERSION}/modulecmd" "${PMODULES_HOME}/libexec/modulecmd.bin"
 fi
 echo "Done..."
