@@ -1,5 +1,6 @@
 environment.bash
 modulecmd.bash
+modulecmd.tcl
 modmanage.bash
 Downloads
 tmp
