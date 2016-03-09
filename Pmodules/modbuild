@@ -251,6 +251,13 @@ while (( $# > 0 )); do
 	--prep | --configure | --compile | --install | --all )
 		target=$1
 		;;
+	--version | -V )
+		V=$2
+		shift
+		;;
+	--version= )
+		V=${1/--version=}
+		;;
 	[0-9]* )
 		V=$1
 		;;
