@@ -20,7 +20,12 @@ source "${libdir}/libpmodules.bash"
 PATH="${bindir}:${PATH}"
 
 declare -r  version='@PMODULES_VERSION@'
-declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
+
+if [[ ${PMODULES_PURETCL} == yes ]]; then
+	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
+else
+	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
+fi
 
 declare -rx TCL_LIBRARY="${libdir}/tcl8.6"
 
@@ -32,6 +37,7 @@ declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 shopt -s nullglob
 declare -a Groups='()'
 declare -A HierarchyDepths='()'
+declare current_modulefile=''
 
 export_env() {
 	local s=''
@@ -626,7 +632,7 @@ subcommand_load() {
 	# possible return values:
 	# 	0: module is loadable
 	# 	1: nothing found
-	# 	2: wrong shebang in file found
+	# 	2: not a modulefile (shebang is wrong)
 	# 	3: the release of the module is not in use
 	#	4: inside our hierarchy but not a loadable module-file
 	#
@@ -638,22 +644,26 @@ subcommand_load() {
 		local  m=$1
 
 		if [[ -f ${m} ]]; then
-			# the passed argument is an existing file
+			# the passed argument is a modulefile
 			if [[ "${m:0:1}" != "/" ]]; then
 				# file-name is relative
 				m=$(std::get_abspath "${m}")
 			fi
+			# from here on we have an absolute file name
 			is_modulefile "${m}" || return 2
 			is_loadable "${m}"   || return 3
 			if [[ "${m}" =~ "${PMODULES_ROOT}" ]]; then
 				for dir in "${modulepath[@]}"; do
 					[[ "${m}" =~ "${dir}" ]] && return 0
 				done
+				# inside hierarchy, but not loadable
 				return 4
 			fi
+			current_modulefile="${m}"
 			return 0
 		fi
 
+		# the argument is a module name
 		# check whether $m is in our modulepath
 		for dir in "${modulepath[@]}"; do
 			if [[ -d ${dir}/$1 ]]; then
@@ -662,6 +672,7 @@ subcommand_load() {
 					is_modulefile "${fname}" || return 2
 					if is_loadable "${fname}"; then
 						moduledir="${dir}"
+						current_modulefile="${fname}"
 						return 0
 					fi
 				done < <(find "${dir}/$1" -mindepth 1 -maxdepth 1 -type l -o -type f  \! -name ".*")
@@ -672,6 +683,7 @@ subcommand_load() {
 				is_modulefile "${dir}/$1" || return 2
 		        	if is_loadable "${dir}/$1"; then
 					moduledir="${dir}"
+					current_modulefile="${dir}/$1"
 					return 0
 				fi
 			fi
@@ -716,10 +728,13 @@ subcommand_load() {
 			fi
 			n+=1
 		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
-		std::info "${CMD} load: module unavailable -- ${m}"
-		if (( n > 0 )); then
+		if (( n == 0 )); then
+		        std::info "${CMD} load: module unavailable -- ${m}"
+		else
 			# :FIXME: output group
-			std::info "\nBut the following modules chain(s) are available in the hierarchy:"
+			std::info "\nThe module '${m}' is not available with the  " \
+				  "currently loaded modules!" \
+				  "You may try: "
 			for ((i=n-1; i >=0; i--)); do
 				if [[ "${loadable[i]}" == "no" ]]; then
  				        std::info "${output[i]}\t# ${release[i]}"
@@ -728,6 +743,18 @@ subcommand_load() {
 				fi
 			done
 		fi
+	}
+
+	load_dependencies() {
+		local -r fname="$1"
+		echo "loading dependencies from $fname" 1>&2
+		while read dep; do
+			[[ -z ${dep} ]] && continue
+			[[ ${dep:0:1} == \# ]] && continue
+			local output=$( subcommand_load "${dep}")
+			echo ${output}
+			eval ${output}
+		done < "${fname}"
 	}
 
 	local opts
@@ -812,21 +839,42 @@ subcommand_load() {
 				modulepath=( ${MODULEPATH} )
 			fi
 			if [[ -n ${release} ]]; then
-				is_release "${release}" || std::die 3 "${CMD} load: illegal release name."
+			        is_release "${release}" || \
+				    std::die 3 "${CMD} load: illegal release name."
 				std::append_path UsedReleases "${release}"
 			fi
 		fi 
-		if is_available "${m}"; then
-		        if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
-			        std::info "Warning: the ${release} module '${m}' has been loaded."
-			fi
-			"${modulecmd}" "${shell}" ${opts} load "${m}"
-		else
+		if ! is_available "${m}"; then
 			if [[ ${verbosity_lvl} == 'verbose' ]]; then
 			        output_load_hints
 			else
 				std::die 3 "${CMD} load: module unavailable -- ${m}"
 			fi
+			continue
+		fi
+		if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]]; then
+			# modulefile is in our hierarchy:
+			# compute installation prefix
+			local tmp=${current_modulefile#${PMODULES_ROOT}/}
+			tmp=${tmp/${PMODULES_MODULEFILES_DIR}\/}
+			local save_IFS="${IFS}"
+			IFS='/'
+			local -a toks=( ${tmp} )
+			IFS="${save_IFS}"
+			# reverse remaining path items pairwise
+			local p=""
+			for ((i=1; i<${#toks[@]}; i+=2)); do
+				p="/${toks[i]}/${toks[i+1]}${p}"
+			done
+			local dependencies="${PMODULES_ROOT}/${toks[0]}${p}/.dependencies"
+			if [[ -r ${dependency_info} ]]; then
+				echo $dependencies 1>&2
+				load_dependencies "${dependencies}"
+			fi
+		fi
+		"${modulecmd}" "${shell}" ${opts} load "${m}"
+		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
+			std::info "Warning: the ${release} module '${m}' has been loaded."
 		fi
 	done
 	# restore original MODULEPATH; it might have been overwritten
