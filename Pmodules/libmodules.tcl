@@ -334,7 +334,6 @@ conflict	$name
 if { [module-info mode load] } {
 	debug "${name}/${version}: loading ... "
 	_pmodules_output_message "${PREFIX}/.info"
-	_pmodules_load_dependencies "${PREFIX}/.dependencies"
 }
 
 _pmodules_setenv ${PREFIX} ${name} ${version}
