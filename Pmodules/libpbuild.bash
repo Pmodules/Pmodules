@@ -461,7 +461,9 @@ pbuild::make_all() {
 			MODULE_NAME+="${P}/${V}"
 			;;
 		* )
-			std::die 1 "${P}/${V}: oops: unknown group: ${MODULE_GROUP}"
+			MODULE_RPREFIX="${P}/${V}"
+			MODULE_NAME="${P}/${V}"
+			#std::die 1 "${P}/${V}: oops: unknown group: ${MODULE_GROUP}"
 			;;
 		esac
 
