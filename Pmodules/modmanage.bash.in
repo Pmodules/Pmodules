@@ -837,8 +837,8 @@ if [[ -z ${subcommand} ]]; then
         usage
 	exit 1
 fi
-[[ -z "${PMODULES_ROOT}" ]] && \
-        std::die 1 "Error: No current module environment is configured!"
+[[ "${subcommand}" != "subcommand_init" ]] && [[ -z "${PMODULES_ROOT}" ]] && \
+        std::die 1 "Error: No current module environment configured!"
 $subcommand "${sargs[@]}"
 
 # Local Variables:
