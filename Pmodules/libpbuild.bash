@@ -676,6 +676,7 @@ pbuild::make_all() {
 		local -r dst="${PMODULES_ROOT}/${MODULE_GROUP}/${PMODULES_TEMPLATES_DIR}/${P}"
 
 		std::info "${P}/${V}: installing modulefile in '${dst}' ..."
+		mkdir -p "${dst}"
 		install -m 0444 "${src}" "${dst}"
 	}
 	
