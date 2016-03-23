@@ -29,8 +29,13 @@ is_release() {
 	std::die 1 "${P}: '$1' is not a valid release name."
 }
 
+##############################################################################
+#
+# set release
+#
 pbuild::set_release() {
-	is_release "$1" && MODULE_RELEASE="$1"
+	is_release "$1" || std::die 1 "${P}: specified release '$1' is not valid!"
+	MODULE_RELEASE="$1"
 }
 
 ##############################################################################
