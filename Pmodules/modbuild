@@ -345,7 +345,7 @@ if [[ ${bootstrap} == no ]]; then
 	fi
 	if [[ -n "${variants}" ]]; then
 	        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" |
-					 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}" | tail -1) )
+			 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}" | tail -1) )
 	else
 		if [[ -r "${BUILD_BLOCK_DIR}/with_modules-$V" ]]; then
 			with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules-$V") )
