@@ -625,7 +625,7 @@ pbuild::make_all() {
 	write_build_dependencies() {
 		local -r fname="${PREFIX}/.build_dependencies"
 		std::info "${P}/${V}: writing build dependencies to ${fname} ..."
-		"${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep -v "Currently Loaded" || : > "${fname}"
+		"${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep -v "Currently Loaded" > "${fname}" || :
 	}
 
 	##############################################################################
