@@ -176,6 +176,7 @@ declare bootstrap='no'
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
+with_modules_awk_pattern='//'
 
 # save arguments for building dependencies
 declare -rx ARGS="$@"
@@ -244,10 +245,13 @@ while (( $# > 0 )); do
 		;;
 	--with )
 		with_modules+=( "$2" )
+		with_modules_awk_pattern+=" && /${2//\//\\/}/"
 		shift
 		;;
 	--with=*/* )
-		with_modules+=( ${1/--with=} )
+		m="${1/--with=}"
+		with_modules+=( ${m} )
+		with_modules_awk_pattern+=" && /${m//\//\\/}/"
 		;;
 	--prep | --configure | --compile | --install | --all )
 		target=$1
@@ -317,13 +321,37 @@ for dir in "${bash_libpath[@]}"; do
 done
 (( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
-# load all modules passed with the '--with' argument
+# load all modules passed via the '--with' argument or specified in a
+# configuration file.
+# :FIXME:
+#	It should be possible to overwrite dependencies given in the
+#	configuration file(s) via the '--with=something' argument. For
+#	the time being we do not check anything - we just try to load
+#	everything, even if a module of different version has already
+#	been load.
+# :FIXME:
+#	Specifying dependencies via 'with_modules' is deprecated and
+#	should be removed.
 if [[ ${bootstrap} == no ]]; then
 	# we aren't bootstraping
-	if [[ -r "${BUILD_BLOCK_DIR}/with_modules-$V" ]]; then
-		with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules-$V") )
-	elif [[ -r "${BUILD_BLOCK_DIR}/with_modules" ]]; then
-		with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules") )
+
+	declare variants=''
+	if [[ -r "${BUILD_BLOCK_DIR}/${V}/variants" ]]; then
+		variants="${BUILD_BLOCK_DIR}/${V}/variants"
+	elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*}/variants" ]]; then
+		variants="${BUILD_BLOCK_DIR}/${V%.*}/variants"
+	elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*.*}/variants" ]]; then
+		variants="${BUILD_BLOCK_DIR}/${V%.*.*}/variants"
+	fi
+	if [[ -n "${variants}" ]]; then
+	        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" |
+					 awk "${with_modules_awk_pattern} {for (i=4; i<NF; i++) printf \$i \" \"; print \$NF}" | tail -1) )
+	else
+		if [[ -r "${BUILD_BLOCK_DIR}/with_modules-$V" ]]; then
+			with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules-$V") )
+		elif [[ -r "${BUILD_BLOCK_DIR}/with_modules" ]]; then
+			with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules") )
+		fi
 	fi
 
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
@@ -331,15 +359,16 @@ if [[ ${bootstrap} == no ]]; then
 	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
 	eval $( "${MODULECMD}" bash purge )
 	
+	# Cleanup environment:
 	# Unset all PATH's and FLAGS's which might be used by a compiler.
 	# This includes C_INCLUDE_PATH, CFLAGS etc.
 	pbuild::cleanup_env
 	pbuild::set_initial_path
 	PATH+="${mydir}"
 
-	eval $( "${MODULECMD}" bash use unstable )
 	# :FIXME: this is a hack!!!
-	module use Libraries
+	eval $( "${MODULECMD}" bash use unstable )
+	eval $( "${MODULECMD}" bash use Libraries )
 	for m in "${with_modules[@]}"; do
 		if pbuild::module_is_available "$m"; then
 			echo "Loading module: ${m}"
