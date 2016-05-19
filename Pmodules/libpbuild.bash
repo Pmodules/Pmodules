@@ -79,7 +79,7 @@ pbuild::add_to_group() {
 # $@: dependencies
 #
 pbuild::set_build_dependencies() {
-	MODULE_BUILD_DEPENDENCIES=("$@")
+	MODULE_BUILD_DEPENDENCIES+=("$@")
 }
 
 pbuild::set_runtime_dependencies() {
@@ -163,7 +163,19 @@ pbuild::configure() {
 }
 
 pbuild::build() {
-	make -j${JOBS}
+	# :FIXME:
+	# the clang based assembler in Xcode 7 is broken:
+	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66509
+	# for the time being we have to use some bin's from MacPorts 
+	case ${OS} in
+	Darwin )
+		#PATH="/opt/local/bin:$PATH"
+		make -j${JOBS}
+		;;
+	* )
+		make -j${JOBS}
+		;;
+	esac
 }
 
 pbuild::install() {
@@ -246,17 +258,28 @@ pbuild::make_all() {
 
 	##############################################################################
 	#
+	# build dependencies can be defined
+	# - on the command line via '--with=MODULE/VERSION'
+	# - in a 'variants' file
+	# - in the build block
+	#
 	load_build_dependencies() {
-		for m in "${MODULE_BUILD_DEPENDENCIES[@]}"; do
+		
+		declare variants=''
+		if [[ -r "${BUILD_BLOCK_DIR}/${V}/variants" ]]; then
+			variants="${BUILD_BLOCK_DIR}/${V}/variants"
+		elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*}/variants" ]]; then
+			variants="${BUILD_BLOCK_DIR}/${V%.*}/variants"
+		elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*.*}/variants" ]]; then
+			variants="${BUILD_BLOCK_DIR}/${V%.*.*}/variants"
+		fi
+		if [[ -n "${variants}" ]]; then
+		        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" | tail -1 |
+				 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}") )
+		fi
+
+		for m in "${with_modules[@]}" "${MODULE_BUILD_DEPENDENCIES[@]}"; do
 			[[ -z $m ]] && continue
-			if [[ ! $m =~ "*/*" ]]; then
-				local _V=$(echo -n $m | tr [:lower:] [:upper:] )_VERSION
-				if [[ -n ${!_V} ]]; then
-		    			m=$m/${!_V}
-				else
-					echo "$m: warning: No version set, loading default ..."
-				fi
-			fi
 			is_loaded "$m" && continue
 			if ! pbuild::module_is_available "$m"; then
 				std::debug "${m}: module not available"
@@ -304,22 +327,20 @@ pbuild::make_all() {
 					std::die 1 "$m: oops: build failed..."
 				fi
 			fi
-			# :FIXME: this doesn't work any more!
-			local modulepath_root="${PMODULES_ROOT}/${PMODULES_MODULEFILES_DIR}"
-			local tmp=$( module display "${m}" 2>&1 | grep -m1 -- "${modulepath_root}" )
-			tmp=${tmp/${modulepath_root}\/}
-			tmp=${tmp%%/*}
-			local _family=( ${tmp//./ } )
-			if [[ ${_family[1]} == deprecated ]]; then
+
+			local mod_name=''
+			local mod_release=''
+			read mod_name mod_release < <("${MODULECMD}" bash avail -a -m $m 2>&1 1>/dev/null | tail -1)
+
+			if [[ ${mod_release} == deprecated ]]; then
 				# set module release to 'deprecated' if a build dependency
 				# is deprecated
 				DEPEND_RELEASE='deprecated'
-			elif [[ ${_family[1]} == unstable ]] && [[ -z ${DEPEND_RELEASE} ]]; then
+			elif [[ ${mod_release} == unstable ]] && [[ -z ${DEPEND_RELEASE} ]]; then
 				# set module release to 'unstable' if a build dependency is
 				# unstable and release not yet set
 				DEPEND_RELEASE='unstable'
 			fi
-
 			
 			echo "Loading module: ${m}"
 			module load "${m}"
@@ -475,7 +496,7 @@ pbuild::make_all() {
 		# set PREFIX of module
 		PREFIX="${PMODULES_ROOT}/${MODULE_GROUP}/${MODULE_RPREFIX}"
 
-		# get module release if already installed
+		# get module release if already available
 		local saved_modulepath=${MODULEPATH}
 		rels=( ${releases//:/ } )
 		for rel in "${rels[@]}"; do
@@ -496,7 +517,7 @@ pbuild::make_all() {
 		#   - if a build-dependency is deprecated or 
 		#   - the module already exists and is deprecated or
 		#   - is forced to be deprecated by setting this on the command line
-		if [[ "${depend_release}" == 'deprecated' ]] || \
+		if [[ "${DEPEND_RELEASE}" == 'deprecated' ]] || \
 		       [[ "${cur_module_release}" == 'deprecated' ]] \
 		       || [[ "${MODULE_RELEASE}" == 'deprecated' ]]; then
 			MODULE_RELEASE='deprecated'
@@ -507,7 +528,7 @@ pbuild::make_all() {
 			#   - the module already exists and is stable
 			#   - an unstable release of the module exists and the release is
 			#     changed to stable on the command line
-		elif [[ "${depend_release}" == 'stable' ]] \
+		elif [[ "${DEPEND_RELEASE}" == 'stable' ]] \
 			 || [[ "${cur_module_release}" == 'stable' ]] \
 			 || [[ "${MODULE_RELEASE}" == 'stable' ]]; then
 			MODULE_RELEASE='stable'
