@@ -200,7 +200,7 @@ subcommand_help_keyword() {
 subcommand_help_avail() {
 	echo "
 USAGE:
-        module avail string
+        module avail [switches] string
 		List all available modulefiles in the current MODULEPATH. If
 		an argument is given, then each directory in the MODULEPATH
 		is searched for modulefiles whose pathname match the argument.
@@ -209,6 +209,21 @@ USAGE:
 		system. Only *loadable* modules are listed.  The list of 
 		available modules may change either by loading other modules,
 		e.g. a compiler, or with the sub-command 'use'.
+
+SWITCHES:
+        -a|--all||--all-releases
+		List all available modules independend of the release.
+		
+	-t|--terse
+		Output in short format.
+
+	-l|--long
+		Output in long format.
+
+	-h|--human
+		Output in human readable format.
+	-m|--machine
+		Output in machine readable format
 " 1>&2
 	std::die 1
 }
@@ -971,6 +986,12 @@ subcommand_avail() {
 		std::info ""
 	}
 
+	machine_output() {
+		for (( i=0; i<${#mods[@]}; i+=2 )); do
+			printf "%-20s\t%s\n" "${mods[i]}" "${mods[i+1]}" 1>&2
+		done
+	}
+
 	#
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
@@ -1028,13 +1049,19 @@ subcommand_avail() {
 		printf -- "\n\n" 1>&2
 	}
 	local opts=''
-	opts=$(pmodules::get_options -o hlt -l human -l long -l terse -- "$@") || subcommand_help_avail
+	opts=$(pmodules::get_options -o ahlmt \
+			-l all -l all-releases \
+			-l human -l long -l machine -l terse -- "$@") || subcommand_help_avail
 	eval set --  "${opts}"
 	local pattern=()
 	local output_function=''
 	local opts=''
+	local use_releases="${UsedReleases}"
 	while (($# > 0)); do
 		case $1 in
+			-a | --all | --all-releases )
+				use_releases="${PMODULES_DEFINED_RELEASES}"
+				;;
 			-h | --human )
 				[[ -z ${opts} ]] || \
 				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
@@ -1052,6 +1079,12 @@ subcommand_avail() {
 				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
 				opts=$1
 				output_function='terse_output'
+				;;
+			-m | --machine )
+				[[ -z ${opts} ]] || \
+				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
+				opts=$1
+				output_function='machine_output'
 				;;
 			-- )
 				;;
@@ -1071,7 +1104,7 @@ subcommand_avail() {
 	IFS=${saved_IFS}
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules "${dir}" "${string}" ) )
+			mods=( $( get_available_modules "${dir}" "${string}" "${use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 
 			${output_function}

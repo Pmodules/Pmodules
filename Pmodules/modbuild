@@ -154,9 +154,6 @@ if (( ok != 0 )); then
 	exit 1
 fi
 
-# :FIXME: move to library?
-declare -r OS=$(uname -s)
-
 ##############################################################################
 #
 # parse arguments
@@ -284,6 +281,15 @@ fi
 [[ -n ${BUILD_BLOCK} ]] || std::die 1 "No build-block specified!"
 [[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
 
+# :FIXME: move to library?
+declare -r OS=$(uname -s)
+case ${OS} in
+Darwin )
+	declare -rx MACOSX_DEPLOYMENT_TARGET='10.9'
+	#declare -rx SDKROOT='macosx10.9'
+	;;
+esac
+
 
 # source Pmodule environment configuration
 if [[ "${bootstrap}" == "yes" ]]; then
@@ -321,38 +327,21 @@ for dir in "${bash_libpath[@]}"; do
 done
 (( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
-# load all modules passed via the '--with' argument or specified in a
-# configuration file.
-# :FIXME:
-#	It should be possible to overwrite dependencies given in the
-#	configuration file(s) via the '--with=something' argument. For
-#	the time being we do not check anything - we just try to load
-#	everything, even if a module of different version has already
-#	been load.
-# :FIXME:
-#	Specifying dependencies via 'with_modules' is deprecated and
-#	should be removed.
 if [[ ${bootstrap} == no ]]; then
 	# we aren't bootstraping
 
-	declare variants=''
-	if [[ -r "${BUILD_BLOCK_DIR}/${V}/variants" ]]; then
-		variants="${BUILD_BLOCK_DIR}/${V}/variants"
-	elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*}/variants" ]]; then
-		variants="${BUILD_BLOCK_DIR}/${V%.*}/variants"
-	elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*.*}/variants" ]]; then
-		variants="${BUILD_BLOCK_DIR}/${V%.*.*}/variants"
-	fi
-	if [[ -n "${variants}" ]]; then
-	        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" |
-			 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}" | tail -1) )
-	else
-		if [[ -r "${BUILD_BLOCK_DIR}/with_modules-$V" ]]; then
-			with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules-$V") )
-		elif [[ -r "${BUILD_BLOCK_DIR}/with_modules" ]]; then
-			with_modules+=( $(cat "${BUILD_BLOCK_DIR}/with_modules") )
-		fi
-	fi
+	#declare variants=''
+	#if [[ -r "${BUILD_BLOCK_DIR}/${V}/variants" ]]; then
+	#	variants="${BUILD_BLOCK_DIR}/${V}/variants"
+	#elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*}/variants" ]]; then
+	#	variants="${BUILD_BLOCK_DIR}/${V%.*}/variants"
+	#elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*.*}/variants" ]]; then
+	#	variants="${BUILD_BLOCK_DIR}/${V%.*.*}/variants"
+	#fi
+	#if [[ -n "${variants}" ]]; then
+	#        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" | tail -1 |
+	#		 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}") )
+	#fi
 
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
@@ -369,14 +358,6 @@ if [[ ${bootstrap} == no ]]; then
 	eval $( "${MODULECMD}" bash use unstable )
 	eval $( "${MODULECMD}" bash use deprecated )
 	eval $( "${MODULECMD}" bash use Libraries )
-	for m in "${with_modules[@]}"; do
-		if pbuild::module_is_available "$m"; then
-			echo "Loading module: ${m}"
-			module load "${m}"
-		else
-			std::die 44 "$m: module not available!"
-		fi
-	done
 else
 	#  the module command is not yet available...
 	pbuild::cleanup_env
