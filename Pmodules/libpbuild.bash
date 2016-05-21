@@ -147,8 +147,9 @@ pbuild::set_initial_path() {
 	PATH='/usr/bin:/bin:/usr/sbin:/sbin'
 
 	if [[ "${OS}" == "Darwin" ]]; then
-	        # :FIXME: why do we need this?
-	        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin'
+	        # :FIXME: do we really need this?
+	        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin' || \
+			std::info "Xquarz is not installed in '/opt/X11'"
 	fi
 }
 
