@@ -108,26 +108,26 @@ VERSION
 shopt -s expand_aliases
 unalias -a
 
-__path=$(which gdate 2>/dev/null || : )
-if [[ $__path ]]; then
-	alias date=$__path
-else
-	alias date=$(which date 2>/dev/null)
-fi
+#__path=$(which gdate 2>/dev/null || : )
+#if [[ $__path ]]; then
+#	alias date=$__path
+#else
+#	alias date=$(which date 2>/dev/null)
+#fi
 
-__path=$(which ginstall 2>/dev/null || : )
-if [[ $__path ]]; then
-	alias install=$__path
-else
-	alias install=$(which install 2>/dev/null)
-fi
+#__path=$(which ginstall 2>/dev/null || : )
+#if [[ $__path ]]; then
+#	alias install=$__path
+#else
+#	alias install=$(which install 2>/dev/null)
+#fi
 
-__path=$(which greadlink 2>/dev/null || : )
-if [[ $__path ]]; then
-	alias readlink=$__path
-else
-	alias readlink=$(which readlink 2>/dev/null)
-fi
+#__path=$(which greadlink 2>/dev/null || : )
+#if [[ $__path ]]; then
+#	alias readlink=$__path
+#else
+#	alias readlink=$(which readlink 2>/dev/null)
+#fi
 
 __path=$(which gsed 2>/dev/null || : )
 if [[ $__path ]]; then
@@ -136,12 +136,10 @@ else
 	alias sed=$(which sed 2>/dev/null)
 fi
 
-
-declare	    ok=1
-
 ##############################################################################
 #
 # source BASH library with standard functions
+declare	    ok=1
 for dir in "${bash_libpath[@]}"; do
         if [[ -r ${dir}/${libstd} ]]; then
 		source "${dir}/${libstd}"
@@ -173,10 +171,9 @@ declare bootstrap='no'
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
-with_modules_awk_pattern='//'
 
-# save arguments for building dependencies
-declare -rx ARGS="$@"
+# save arguments, we might need later again
+declare -r ARGS="$@"
 
 # 
 while (( $# > 0 )); do
@@ -242,13 +239,11 @@ while (( $# > 0 )); do
 		;;
 	--with )
 		with_modules+=( "$2" )
-		with_modules_awk_pattern+=" && /${2//\//\\/}/"
 		shift
 		;;
 	--with=*/* )
 		m="${1/--with=}"
 		with_modules+=( ${m} )
-		with_modules_awk_pattern+=" && /${m//\//\\/}/"
 		;;
 	--prep | --configure | --compile | --install | --all )
 		target=$1
@@ -267,8 +262,8 @@ while (( $# > 0 )); do
 		V=$1
 		;;
 	* )
-	        declare -rx BUILD_BLOCK=$(std::get_abspath "$1")
-		declare -rx BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
+	        declare -r BUILD_BLOCK=$(std::get_abspath "$1")
+		declare -r BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
 		;;
 	esac
 	shift
@@ -285,7 +280,7 @@ fi
 declare -r OS=$(uname -s)
 case ${OS} in
 Darwin )
-	declare -rx MACOSX_DEPLOYMENT_TARGET='10.9'
+	declare -x MACOSX_DEPLOYMENT_TARGET='10.9'
 	#declare -rx SDKROOT='macosx10.9'
 	;;
 esac
@@ -296,12 +291,12 @@ if [[ "${bootstrap}" == "yes" ]]; then
 	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]] || i\
 		std::die 1 "Cannot read configuration file!"
         source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
+	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
 	
 elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
      [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
 	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
-	declare -rx BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
+	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
 
 else
 	std::die 3 "Build environment not setup properbly!"
@@ -313,8 +308,8 @@ fi
 declare -x  PMODULES_TMPDIR
 declare -x  PMODULES_DISTFILESDIR
 
-declare -xr BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
-declare -xr BUILD_VERSIONSFILE="${BUILD_BASEDIR}/config/versions.conf"
+declare -r BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
+declare -r BUILD_VERSIONSFILE="${BUILD_BASEDIR}/config/versions.conf"
 
 # source BASH library with standard functions
 ((ok=1))
@@ -330,19 +325,6 @@ done
 if [[ ${bootstrap} == no ]]; then
 	# we aren't bootstraping
 
-	#declare variants=''
-	#if [[ -r "${BUILD_BLOCK_DIR}/${V}/variants" ]]; then
-	#	variants="${BUILD_BLOCK_DIR}/${V}/variants"
-	#elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*}/variants" ]]; then
-	#	variants="${BUILD_BLOCK_DIR}/${V%.*}/variants"
-	#elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*.*}/variants" ]]; then
-	#	variants="${BUILD_BLOCK_DIR}/${V%.*.*}/variants"
-	#fi
-	#if [[ -n "${variants}" ]]; then
-	#        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" | tail -1 |
-	#		 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}") )
-	#fi
-
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
@@ -354,9 +336,11 @@ if [[ ${bootstrap} == no ]]; then
 	pbuild::cleanup_env
 	pbuild::set_initial_path
 
+	# Use all releases
 	# :FIXME: this is a hack!!!
 	eval $( "${MODULECMD}" bash use unstable )
 	eval $( "${MODULECMD}" bash use deprecated )
+	# 
 	eval $( "${MODULECMD}" bash use Libraries )
 else
 	#  the module command is not yet available...
@@ -365,20 +349,21 @@ else
 	unset PMODULES_HOME
 	unset PMODULES_VERSION
 	std::read_versions "${BUILD_BASEDIR}/config/versions.conf"
+	if [[ -z ${V} ]]; then
+		_P=$(echo $P | tr [:lower:] [:upper:])
+		_P=${_P//-/_}
+		_V=${_P}_VERSION
+		V=${!_V}
+	fi
 fi
 
 P=$(basename $(dirname "${BUILD_BLOCK}"))
 P=${P%.*}
 
-if [[ -z ${V} ]]; then
-	_P=$(echo $P | tr [:lower:] [:upper:])
-	_P=${_P//-/_}
-	_V=${_P}_VERSION
-	V=${!_V}
-fi
-
 [[ -z ${V} ]] && std::die 1 "Module version must be specified on command line!"
-
+declare -r V_MAJOR=${V%%.*}
+declare    tmpvar=${V#*.}
+declare -r V_MINOR=${tmpvar%%.*}
 
 # :FIXME: do we need this? Can we get rid of 'releases'?
 if [[ -n ${PMODULES_DEFINED_RELEASES} ]]; then
