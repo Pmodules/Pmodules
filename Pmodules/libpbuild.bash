@@ -24,6 +24,10 @@ declare -x  LIBRARY_PATH
 declare -x  LD_LIBRARY_PATH
 declare -x  DYLD_LIBRARY_PATH
 
+##############################################################################
+#
+# test whether the given argument is a valid release name
+#
 is_release() {
 	[[ :${releases}: =~ :$1: ]] && return 0
 	std::die 1 "${P}: '$1' is not a valid release name."
@@ -153,6 +157,63 @@ pbuild::set_initial_path() {
 	fi
 }
 
+##############################################################################
+#
+# extract sources. For the time being only tar-files are supported.
+#
+pbuild::prep() {
+	##############################################################################
+	#
+	# find tarball 
+	# $1: download directory
+	# $2: name without version
+	# $3: version
+	#
+	find_tarball() {
+		local -a dirs=( "${BUILD_BLOCK_DIR}" )
+		dirs+=( "$1" )
+		local -r name=$2
+		local -r version=$3
+
+		TARBALL=""
+		local ext
+		for dir in "${dirs[@]}"; do
+			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
+				local fname="${dir}/${name}-${OS}-${version}.${ext}"
+				if [[ -r "${fname}" ]]; then
+					TARBALL="${fname}"
+					break 2
+				fi
+				local fname="${dir}/${name}-${version}.${ext}"
+				if [[ -r "${fname}" ]]; then
+					TARBALL="${fname}"
+					break 2
+				fi
+			done
+		done
+		if [[ -z ${TARBALL} ]]; then
+			std::error "${P}/${V}: source not found."
+			exit 43
+		fi
+	}
+
+	find_tarball "${PMODULES_DISTFILESDIR}" "${P/_serial}" "${V}"
+
+	# untar sources
+	if [[ ! -d ${MODULE_SRCDIR} ]]; then
+		mkdir -p "${PMODULES_TMPDIR}/src"
+		(cd "${PMODULES_TMPDIR}/src" && tar xvf "${TARBALL}")
+	fi
+
+	# create build directory
+	mkdir -p "${MODULE_BUILDDIR}"
+}
+
+eval "pbuild::patch_sources_${OS}() { :; }"
+
+pbuild::patch_sources() {
+	pbuild::patch_sources_${OS}
+}
 
 pbuild::pre_configure() {
 	:
@@ -164,19 +225,7 @@ pbuild::configure() {
 }
 
 pbuild::build() {
-	# :FIXME:
-	# the clang based assembler in Xcode 7 is broken:
-	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66509
-	# for the time being we have to use some bin's from MacPorts 
-	case ${OS} in
-	Darwin )
-		#PATH="/opt/local/bin:$PATH"
-		make -j${JOBS}
-		;;
-	* )
-		make -j${JOBS}
-		;;
-	esac
+	make -j${JOBS}
 }
 
 pbuild::install() {
@@ -257,6 +306,55 @@ pbuild::make_all() {
 		[[ :${LOADEDMODULES}: =~ :$1: ]]
 	}
 
+ 	##############################################################################
+	#
+	# build a dependency
+	#
+	# $1: name of module to build
+	#
+	# :FIXME: needs testing
+	#
+	build_dependency() {
+		local -r m=$1
+		std::debug "${m}: module not available"
+		local rels=( ${releases//:/ } )
+		[[ ${dry_run} == yes ]] && \
+			std::die 1 "${m}: module does not exist, cannot continue with dry run..."
+
+		echo "$m: module does not exist, trying to build it..."
+		local args=( '' )
+		set -- ${ARGS[@]}
+		while (( $# > 0 )); do
+			case $1 in
+				-j )
+					args+=( "-j $2" )
+					shift
+					;;
+				--jobs=[0-9]* )
+					args+=( $1 )
+					;;
+				-v | --verbose)
+					args+=( $1 )
+					;;
+				--release=* )
+					args+=( $1 )
+					;;
+				--with=*/* )
+					args+=( $1 )
+					;;
+				*=* )
+					args+=( $1 )
+					;;
+			esac
+			shift
+		done
+
+		local buildscript=$( std::get_abspath "${BUILD_BLOCK_DIR}"/../../*/${m/\/*}/build )
+		[[ -x "${buildscript}" ]] || std::die 1 "$m: build-block not found!"
+		"${buildscript}" "${m#*/}" ${args[@]}
+		[[ -n $(module avail "$m" 2>&1) ]] || std::die 1 "$m: oops: build failed..."
+	}
+	
 	##############################################################################
 	#
 	# build dependencies can be defined
@@ -265,68 +363,57 @@ pbuild::make_all() {
 	# - in the build block
 	#
 	load_build_dependencies() {
+		local -a eligible_variants_files=()
+		eligible_variants_files+=( "${V}/variants" )
+		eligible_variants_files+=( "${V}/variants.${OS}" )
+		eligible_variants_files+=( "${V%.*}/variants" )
+		eligible_variants_files+=( "${V%.*}/variants.${OS}" )
+		eligible_variants_files+=( "${V%.*.*}/variants" )
+		eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
+		local found='no'
+		local variants_file=''
+		for variants_file in "${eligible_variants_files[@]}"; do
+			    if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
+				    found='yes'
+				    variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
+				    break
+			    fi
+		done
 		
-		declare variants=''
-		if [[ -r "${BUILD_BLOCK_DIR}/${V}/variants" ]]; then
-			variants="${BUILD_BLOCK_DIR}/${V}/variants"
-		elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*}/variants" ]]; then
-			variants="${BUILD_BLOCK_DIR}/${V%.*}/variants"
-		elif [[ -r "${BUILD_BLOCK_DIR}/${V%.*.*}/variants" ]]; then
-			variants="${BUILD_BLOCK_DIR}/${V%.*.*}/variants"
-		fi
-		if [[ -n "${variants}" ]]; then
-		        with_modules+=( $(egrep "$V\s.*${OS}" "${variants}" | tail -1 |
-				 awk "${with_modules_awk_pattern} {for (i=4; i<=NF; i++) printf \$i \" \"}") )
+		local m
+		if [[ "${found}" == "yes" ]]; then
+		        # :FIXME:
+			# handle conflicts in modules specified via command-line
+			# argument and variants file
+		        local pattern="/^$P\/$V[[:blank:]]/"
+			for m in "${with_modules[@]}"; do 
+				pattern+=" && /${m//\//\\/}/"
+			done
+		        with_modules+=( $(awk "${pattern} {for (i=3; i<=NF; i++) printf \$i \" \"}" "${variants_file}" | tail -1) )
 		fi
 
 		for m in "${with_modules[@]}" "${MODULE_BUILD_DEPENDENCIES[@]}"; do
+			# :FIXME:
+			# this check shouldn't be requiered here
 			[[ -z $m ]] && continue
+
+			# module name prefixes in dependency declarations:
+			# 'b:' this is a build dependency
+			# 'r:' this a run-time dependency, *not* required for building
+			# without prefix: this is a build and run-time dependency
+			if [[ $m =~ b:* ]]; then
+				m=${m#*:}
+				MODULE_BUILD_DEPENDENCIES+=( "$m" )
+			elif [[ $m =~ r:* ]]; then
+				m=${m#*:}
+				MODULE_DEPENDENCIES+=( "$m" )
+			else
+				MODULE_BUILD_DEPENDENCIES+=( "$m" )
+				MODULE_DEPENDENCIES+=( "$m" )
+			fi
 			is_loaded "$m" && continue
 			if ! pbuild::module_is_available "$m"; then
-				std::debug "${m}: module not available"
-				local rels=( ${releases//:/ } )
-				for rel in "${rels[@]}"; do
-					std::debug "${m}: check release \"${rel}\""
-					eval $("${MODULECMD}" bash use ${rel})
-					if pbuild::module_is_available "${m}"; then
-						std::die 1 "${m}: module available with release \"${rel}\", add this release with \"module use ${rel}\" and re-run build script."
-					fi
-				done
-				[[ ${dry_run} == yes ]] && {
-					std::die 1 "${m}: module does not exist, cannot continue with dry run..."
-				}
-
-				echo "$m: module does not exist, trying to build it..."
-				local args=( '' )
-				set -- ${ARGS[@]}
-				while (( $# > 0 )); do
-					case $1 in
-					-j )
-						args+=( "-j $2" )
-						shift
-						;;
-					--jobs=[0-9]* )
-						args+=( $1 )
-						;;
-					-v | --verbose)
-						args+=( $1 )
-						;;
-					--release=* )
-						args+=( $1 )
-						;;
-					--with=*/* )
-						args+=( $1 )
-						;;
-					*=* )
-						args+=( $1 )
-						;;
-					esac
-					shift
-				done
-				"${BUILD_SCRIPTSDIR}"/*/"${m/\/*}/build" ${args[@]}
-				if [[ -z $(module avail "$m" 2>&1) ]]; then
-					std::die 1 "$m: oops: build failed..."
-				fi
+			        build_dependency "$m"
 			fi
 
 			local mod_name=''
@@ -346,42 +433,6 @@ pbuild::make_all() {
 			echo "Loading module: ${m}"
 			module load "${m}"
 		done
-	}
-
-	
-	##############################################################################
-	#
-	# find tarball 
-	# $1: download directory
-	# $2: name without version
-	# $3: version
-	#
-	find_tarball() {
-		local -a dirs=( "${BUILD_BLOCK_DIR}" )
-		dirs+=( "$1" )
-		local -r name=$2
-		local -r version=$3
-
-		TARBALL=""
-		local ext
-		for dir in "${dirs[@]}"; do
-			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
-				local fname="${dir}/${name}-${OS}-${version}.${ext}"
-				if [[ -r "${fname}" ]]; then
-					TARBALL="${fname}"
-					break 2
-				fi
-				local fname="${dir}/${name}-${version}.${ext}"
-				if [[ -r "${fname}" ]]; then
-					TARBALL="${fname}"
-					break 2
-				fi
-			done
-		done
-		if [[ -z ${TARBALL} ]]; then
-			std::error "${P}/${V}: source not found."
-			exit 43
-		fi
 	}
 
 	##############################################################################
@@ -548,9 +599,6 @@ pbuild::make_all() {
 		# directory for README's, license files etc
 		DOCDIR="${PREFIX}/share/doc/$P"
 
-		# set tar-ball and flags for tar
-		find_tarball "${PMODULES_DISTFILESDIR}" "${P/_serial}" "${V}"
-
 	}
 
 	# redefine function for bootstrapping
@@ -594,18 +642,6 @@ pbuild::make_all() {
 			fi
 		done
 		std::die 1 "${P}/${V}: cannot be build with ${COMPILER}/${COMPILER_VERSION}."
-	}
-
-	##############################################################################
-	prep() {
-		# untar sources
-		if [[ ! -d ${MODULE_SRCDIR} ]]; then
-			mkdir -p "${PMODULES_TMPDIR}/src"
-			(cd "${PMODULES_TMPDIR}/src" && tar xvf "${TARBALL}")
-		fi
-
-		# create build directory
-		mkdir -p "${MODULE_BUILDDIR}"
 	}
 
 	##############################################################################
@@ -713,7 +749,7 @@ pbuild::make_all() {
 	#
 	local building='no'
 	echo "${P}:"
-	set_default_versions "${BUILD_VERSIONSFILE}"
+	#set_default_versions "${BUILD_VERSIONSFILE}"
 
 	# setup module specific environment
 	if [[ ${bootstrap} == no ]]; then
@@ -732,7 +768,9 @@ pbuild::make_all() {
 		check_compiler
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || [[ ${force_rebuild} == 'yes' ]] ; then
-			prep
+			pbuild::prep
+			cd "${MODULE_SRCDIR}"
+			pbuild::patch_sources
 			touch "${MODULE_BUILDDIR}/.prep"
 		fi
 		[[ "${target}" == "prep" ]] && return 0
