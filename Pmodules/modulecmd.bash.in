@@ -9,7 +9,7 @@ unset CDPATH
 declare -r  CMD='module'
 
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
-declare -r  prefix=$(dirname "${mydir}")
+declare     prefix=$(dirname "${mydir}")
 declare -r  bindir="${prefix}/bin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
@@ -1056,11 +1056,11 @@ subcommand_avail() {
 	local pattern=()
 	local output_function=''
 	local opts=''
-	local use_releases="${UsedReleases}"
+	local opt_use_releases="${UsedReleases}"
 	while (($# > 0)); do
 		case $1 in
 			-a | --all | --all-releases )
-				use_releases="${PMODULES_DEFINED_RELEASES}"
+				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			-h | --human )
 				[[ -z ${opts} ]] || \
@@ -1104,7 +1104,7 @@ subcommand_avail() {
 	IFS=${saved_IFS}
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules "${dir}" "${string}" "${use_releases}" ) )
+			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 
 			${output_function}
@@ -1421,9 +1421,10 @@ subcommand_search() {
 	local modules=()
 	local with_modules='//'
 	local src_prefix=''
-	local _print_header='yes'
-	local _print_modulefiles='no'
-	local use_releases=':'
+	local opt_print_header='yes'
+	local opt_print_modulefiles='no'
+	local opt_print_variants='no'
+	local opt_use_releases=':'
 	local -r fmt="%-20s %-10s %-12s %-s\n"
 
 	# no args
@@ -1434,18 +1435,97 @@ subcommand_search() {
 		printf '\n' 1>&2
 	}
 
-	# args:
-	# $1: module name pattern
+	#
+	# output result of search
+	# Args:
+	#   $1: tmp file
+	#
+	# variables used from enclosing function:
+	#   opt_print_header
+	#   opt_print_modulefiles
+	#   opt_print_variants
+	#   with_modules
+	#
+	print_result() {
+		local -r tmpfile=$1
+		[[ "${opt_print_header}" == "yes" ]] && print_header
+		if [[ "${opt_print_modulefiles}" == "yes" ]]; then
+			while read -a line; do
+				# group first
+				local out="${line[2]}/"
+				# add directory of modulefiles
+				out+="${PMODULES_MODULEFILES_DIR}/"
+				for d in "${line[@]:3}"; do
+					out+="$d/"
+				done
+				out+="${line[0]}"
+				std::info "${out}"
+			done < <(sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+		elif [[ "${opt_print_variants}" == "yes" ]]; then
+			while read -a toks; do
+				unset deps
+
+				# build prefix for this module
+				local prefix="${PMODULES_ROOT}/${toks[2]}/${toks[0]}/"
+				for ((i=${#toks[@]}-1; i>=3; i--)); do
+					prefix+="${toks[i]}/"
+				done
+				# read dependencies
+				local -a ordered_deps=()
+				local d
+				local -A deps
+				if [[ -r "${prefix}/.build_dependencies" ]]; then
+					readarray -t ordered_deps < "${prefix}/.build_dependencies"
+					for d in "${ordered_deps[@]}"; do
+						[[ -z $d ]] && continue
+						deps[$d]='b:'
+					done
+				fi
+				if [[ -r "${prefix}/.dependencies" ]]; then
+					local -a rdeps
+					readarray -t rdeps < "${prefix}/.dependencies"
+					for d in "${rdeps[@]}"; do
+						[[ -z $d ]] && continue
+						if [[ ${deps[$d]+isset} ]]; then
+							# is a build- and run-time dependency
+							deps[$d]=''
+						else
+							# is a run-time dependency only
+							ordered_deps+=( "$d" )
+							deps[$d]='r:'
+						fi
+					done
+				fi
+				local dependecies=''
+				for d in "${ordered_deps[@]}"; do
+					[[ -z $d ]] && continue
+					dependecies+="${deps[$d]}$d "
+				done
+				printf "%-20s %-10s %-s\n" "${toks[0]}" "${toks[1]}" "${dependecies}" 1>&2
+			done < <(sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+		else
+			sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
+		fi
+	}
+	#
+	# search modules
+	# Args:
+	#   $1: module name pattern
+	#
+	# Variables used from enclosing function
+	#   :FIXME:
+	#
 	search () {
 		local -r module=$1
-		# we must write temporary results to a file for sorting
+		# write results to a temporary file for later processing
 		local -r tmpfile=$( mktemp /tmp/$(basename $0).XXXXXX ) \
 		    || std::die 1 "Oops: unable to create tmp file!"
 		local _group
 		# loop over all groups
 		for _group in "${Groups[@]}"; do
+			# loop over all directories which can be added to
+			# MODULEPATH inside current group
 			local depth=${HierarchyDepths[${_group}]}
-			# get all potential directories of group with module-files 
 			local mpaths=( $(find \
 					     "${src_prefix}/${_group}/modulefiles" \
 					     -type d \
@@ -1468,7 +1548,7 @@ subcommand_search() {
 				local mods=( $( get_available_modules \
 						    "${mpath}" \
 						    "${module}" \
-						    "${use_releases}" ) )
+						    "${opt_use_releases}" ) )
 				[[ ${#mods[@]} == 0 ]] && continue
 				for (( i=0; i<${#mods[@]}; i+=2 )); do
 					printf "${fmt}" ${mods[i]} "${mods[i+1]}" \
@@ -1476,21 +1556,7 @@ subcommand_search() {
 				done
 			done
 		done
-		if [[ "${_print_modulefiles}" == "no" ]]; then
-			sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
-		else
-			while read -a line; do
-				# group first
-				local out="${line[2]}/"
-				# add directory of modulefiles
-				out+="${PMODULES_MODULEFILES_DIR}/"
-				for d in "${line[@]:3}"; do
-					out+="$d/"
-				done
-				out+="${line[0]}"
-				std::info "${out}"
-			done < <(sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
-		fi
+		print_result "${tmpfile}"
 		rm -f "${tmpfile}"
 	}
 
@@ -1502,22 +1568,23 @@ subcommand_search() {
 			   -l with: \
 			   -l all-releases \
 			   -l src: \
+			   -l print-variants \
 			   --  "$@") || subcommand_help_${0##*_}
 	eval set --  "${opts}"
 	
 	while (( $# > 0 )); do
 		case $1 in
 			--no-header )
-				_print_header='no'
+				opt_print_header='no'
 				;;
 			--print-modulefiles )
-				_print_modulefiles='yes'
-				_print_header='no'
+				opt_print_modulefiles='yes'
+				opt_print_header='no'
 				;;
 			--release )
 				is_release "$2" || \
 				    std::die 1 "${CMD} search: illegal release name -- $2"
-				use_releases+="$2:"
+				opt_use_releases+="$2:"
 				shift
 				;;
 			--with )
@@ -1528,13 +1595,18 @@ subcommand_search() {
 				shift
 				;;
 			-a | --all-releases )
-				use_releases="${PMODULES_DEFINED_RELEASES}"
+				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			--src )
 				src_prefix=$2
 				pmodules::check_directories "${src_prefix}"
-				
 				shift
+				;;
+			--print-variants )
+				opt_print_variants='yes'
+				opt_print_header='no'
+				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
+				:
 				;;
 			-\? | -h | -H | --help )
 				usage
@@ -1551,11 +1623,10 @@ subcommand_search() {
 	        src_prefix="${PMODULES_ROOT}"
 	fi
 	
-	if [[ "${use_releases}" == ":" ]]; then
-                use_releases=":${UsedReleases}:"
+	if [[ "${opt_use_releases}" == ":" ]]; then
+                opt_use_releases=":${UsedReleases}:"
 	fi
 	
-	[[ "${_print_header}" == "yes" ]] && print_header
 	if [[ ${#modules[@]} == 0 ]]; then
 		modules+=( '' )
 	fi
@@ -1699,6 +1770,9 @@ while (( $# > 0 )); do
 		-V | --version )
 			print_version
 			std::die 1
+			;;
+		--debug )
+			set -x
 			;;
 		-* )
 			opts+=( "$1" )
