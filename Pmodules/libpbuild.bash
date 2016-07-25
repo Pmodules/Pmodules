@@ -203,6 +203,7 @@ pbuild::prep() {
 	if [[ ! -d ${MODULE_SRCDIR} ]]; then
 		mkdir -p "${PMODULES_TMPDIR}/src"
 		(cd "${PMODULES_TMPDIR}/src" && tar xvf "${TARBALL}")
+		(cd "${MODULE_SRCDIR}" && pbuild::patch_sources)
 	fi
 
 	# create build directory
@@ -769,8 +770,6 @@ pbuild::make_all() {
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || [[ ${force_rebuild} == 'yes' ]] ; then
 			pbuild::prep
-			cd "${MODULE_SRCDIR}"
-			pbuild::patch_sources
 			touch "${MODULE_BUILDDIR}/.prep"
 		fi
 		[[ "${target}" == "prep" ]] && return 0
