@@ -35,28 +35,37 @@ declare -rx PSI_LIBMODULES="${TCL_LIBRARY}/libmodules.tcl"
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 shopt -s nullglob
+
 declare -a Groups='()'
 declare -A HierarchyDepths='()'
 declare current_modulefile=''
+declare g_shell=''
 
-export_env() {
-	local s=''
-	if [[ "${shell}" == "bash" ]]; then
-		while (( $# > 0 )); do
-			echo -n "export $1=\"${!1}\";"
-			shift
-		done
-		return
-	elif [[ "${shell}" == "tcsh" ]]; then
-		while (( $# > 0 )); do
-			echo "setenv $1 ${!1}"
-			shift
-		done
-		return
-	fi
+pbuild::export_env() {
+	local -r shell=$1
+	shift
+	case ${shell} in
+	bash )
+		local -r fmt="export %s=\"%s\""
+		;;
+	tcsh )
+		local -r fmt="setenv %s \"%s\""
+		;;
+	* )
+		std::die 1 "${shell} is an unsupported shell"
+		;;
+	esac
+	
+
+	while (( $# > 0 )); do
+		printf "${fmt}" "$1" "${!1}"
+		shift
+	done
 }
 
-save_env() {
+pbuild::save_env() {
+	local -r shell=$1
+	shift
 	local s=''
 	local tmp
 	while (( $# > 0 )); do
@@ -65,10 +74,10 @@ save_env() {
 		shift
 	done
 	declare -g PMODULES_ENV=$( "${PMODULES_HOME}/bin/base64" --wrap=0 <<< "$s" )
-	export_env PMODULES_ENV
+	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'save_env Groups HierarchyDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'pbuild::save_env ${g_shell} Groups HierarchyDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 print_version() {
 	echo "
@@ -510,7 +519,7 @@ subcommand_generic0() {
 				;;
 		esac
 	done
-	"${modulecmd}" "${shell}" "${subcommand}"
+	"${modulecmd}" "${g_shell}" "${subcommand}"
 }
 
 subcommand_generic1() {
@@ -537,7 +546,7 @@ subcommand_generic1() {
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "${CMD} ${subcommand}: missing argument"
 	fi
-	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
 
 subcommand_generic1plus() {
@@ -560,7 +569,7 @@ subcommand_generic1plus() {
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "${CMD} ${subcommand}: missing argument"
 	fi
-	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
 
 subcommand_generic1or2() {
@@ -586,7 +595,7 @@ subcommand_generic1or2() {
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "${CMD} ${subcommand}: missing argument"
 	fi
-	"${modulecmd}" "${shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
 
 #
@@ -887,7 +896,7 @@ subcommand_load() {
 				load_dependencies "${dependencies}"
 			fi
 		fi
-		"${modulecmd}" "${shell}" ${opts} load "${m}"
+		"${modulecmd}" "${g_shell}" ${opts} load "${m}"
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded."
 		fi
@@ -1241,7 +1250,7 @@ subcommand_use() {
 		done
 
 		declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
-		export_env PMODULES_USED_GROUPS
+		pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
 		[[ ${#dirs_to_add[@]} == 0 ]] && return
 
 		for dir in "${dirs_to_add[@]}"; do
@@ -1303,7 +1312,7 @@ subcommand_unuse() {
 	done
 	#echo "export PMODULES_USED_GROUPS=${PMODULES_USED_GROUPS}"
 	declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
-	export_env PMODULES_USED_GROUPS
+	pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
 	[[ ${#dirs_to_remove[@]} == 0 ]] && return
 	for dir in "${dirs_to_remove[@]}"; do
 		subcommand_generic1 unuse "${dir}"
@@ -1366,7 +1375,7 @@ subcommand_list() {
 		esac
 		shift
 	done
-	"${modulecmd}" "${shell}" list "${opts}"
+	"${modulecmd}" "${g_shell}" list "${opts}"
 }
 
 pmodules_init() {
@@ -1411,7 +1420,7 @@ subcommand_clear() {
 		esac
 	done
 	pmodules_init
-	export_env LOADEDMODULES PMODULES_USED_GROUPS MODULEPATH _LMFILES_
+	pbuild::export_env ${g_shell} LOADEDMODULES PMODULES_USED_GROUPS MODULEPATH _LMFILES_
 }
 
 #
@@ -1750,10 +1759,10 @@ fi
 
 case $1 in
 	bash )
-		declare shell="$1"
+		declare g_shell="$1"
 		;;
 	tcsh )
-		declare shell="$1"
+		declare g_shell="$1"
 		;;
 	* )
 		std::die 1 "${CMD}: unsupported shell -- $1"
