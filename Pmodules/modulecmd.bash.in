@@ -46,7 +46,7 @@ pbuild::export_env() {
 	shift
 	case ${shell} in
 	bash )
-		local -r fmt="export %s=\"%s\""
+		local -r fmt="export %s=\"%s\"; "
 		;;
 	tcsh )
 		local -r fmt="setenv %s \"%s\""
