@@ -271,6 +271,8 @@ pbuild::cleanup_src() {
 # The 'do it all' function.
 #
 pbuild::make_all() {
+	local variant=''
+	local variant_release=''
 	#
 	# helper functions
 	#
@@ -390,7 +392,13 @@ pbuild::make_all() {
 			for m in "${with_modules[@]}"; do 
 				pattern+=" && /${m//\//\\/}/"
 			done
-		        with_modules+=( $(awk "${pattern} {for (i=3; i<=NF; i++) printf \$i \" \"}" "${variants_file}" | tail -1) )
+			variant=$(awk "${pattern}" "${variants_file}" | tail -1)
+			variant_release=$(awk '{printf $2}' <<< "${variant}")
+			if [[ -n "${variant_release}" ]]; then
+				MODULE_RELEASE="${variant_release}"
+			fi
+			with_modules+=( $(awk "{for (i=3; i<=NF; i++) printf \$i \" \"}" <<< "${variant}" ) )
+		        #with_modules+=( $(awk "${pattern} {for (i=3; i<=NF; i++) printf \$i \" \"}" "${variants_file}" | tail -1) )
 		fi
 
 		for m in "${with_modules[@]}" "${MODULE_BUILD_DEPENDENCIES[@]}"; do
@@ -566,40 +574,37 @@ pbuild::make_all() {
 		MODULEPATH=${saved_modulepath}
 
 		# set release of module
-		# release is deprecated
-		#   - if a build-dependency is deprecated or 
-		#   - the module already exists and is deprecated or
-		#   - is forced to be deprecated by setting this on the command line
 		if [[ "${DEPEND_RELEASE}" == 'deprecated' ]] || \
+		       # release is deprecated
+		       #   - if a build-dependency is deprecated or 
+		       #   - the module already exists and is deprecated or
+		       #   - is forced to be deprecated by setting this on the command line
 		       [[ "${cur_module_release}" == 'deprecated' ]] \
 		       || [[ "${MODULE_RELEASE}" == 'deprecated' ]]; then
 			MODULE_RELEASE='deprecated'
 			std::info "${P}/${V}: will be released as \"deprecated\""
-			#
-			# release is stable
-			#   - if all build-dependency are stable or
-			#   - the module already exists and is stable
-			#   - an unstable release of the module exists and the release is
-			#     changed to stable on the command line
 		elif [[ "${DEPEND_RELEASE}" == 'stable' ]] \
 			 || [[ "${cur_module_release}" == 'stable' ]] \
 			 || [[ "${MODULE_RELEASE}" == 'stable' ]]; then
+ 			 # release is stable
+			 #   - if all build-dependency are stable or
+			 #   - the module already exists and is stable
+			 #   - an unstable release of the module exists and the release is
+			 #     changed to stable on the command line
 			MODULE_RELEASE='stable'
 			std::info "${P}/${V}: will be released as \"stable\""
-			#
+		else
 			# release is unstable
 			#   - if a build-dependency is unstable or 
 			#   - if the module does not exists and no other release-type is
 			#     given on the command line
 			#   - and all the cases I didn't think of
-		else
 			MODULE_RELEASE='unstable'
 			std::info "${P}/${V}: will be released as \"unstable\""
 		fi
 
 		# directory for README's, license files etc
 		DOCDIR="${PREFIX}/share/doc/$P"
-
 	}
 
 	# redefine function for bootstrapping
@@ -689,7 +694,8 @@ pbuild::make_all() {
 
 	##############################################################################
 	set_legacy_link() {
-		local -r link_name="${PMODULES_ROOT}/${PMODULES_MODULEFILES_DIR}/${MODULE_GROUP}/${MODULE_NAME}"
+		local link_name="${PMODULES_ROOT}/${PMODULES_MODULEFILES_DIR}/"
+		link_name+="${MODULE_GROUP}/${MODULE_NAME}"
 		local -r dir_name=${link_name%/*}
 		local -r release_file="${dir_name}/.release-${MODULE_NAME##*/}"
 		if [[ ! -e "${_path}" ]]; then
@@ -750,7 +756,6 @@ pbuild::make_all() {
 	#
 	local building='no'
 	echo "${P}:"
-	#set_default_versions "${BUILD_VERSIONSFILE}"
 
 	# setup module specific environment
 	if [[ ${bootstrap} == no ]]; then
