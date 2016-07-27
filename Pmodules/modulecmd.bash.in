@@ -77,7 +77,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Groups HierarchyDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'pbuild::save_env ${g_shell} Groups HierarchyDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES PMODULES_USED_GROUPS' EXIT
 
 print_version() {
 	echo "
