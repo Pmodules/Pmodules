@@ -1,60 +1,124 @@
 #!/bin/bash
 
+###############################################################################
+#
+# initialize lib
+#
+
+# unset environment variables used for compiling
+unset	C_INCLUDE_PATH
+unset	CPLUS_INCLUDE_PATH
+unset	CPP_INCLUDE_PATH
+unset	LIBRARY_PATH
+unset	LD_LIBRARY_PATH
+unset	DYLD_LIBRARY_PATH
+
+unset	CFLAGS
+unset	CPPFLAGS
+unset	CXXFLAGS
+unset	LIBS
+unset	LDFLAGS
+
+unset	CC
+unset	CXX
+unset	FC
+unset	F77
+unset	F90
+
+# assemble default path
+PATH='/usr/bin:/bin:/usr/sbin:/sbin'
+
+if [[ "${OS}" == "Darwin" ]]; then
+        # :FIXME: do we really need this?
+	# if required we should do this in the build-block
+        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin' || \
+		std::info "Xquarz is not installed in '/opt/X11'"
+fi
+
+#..............................................................................
+# global variables used in the library
+
+# module name including path in hierarchy and version
+# (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
+declare -x  ModuleName=''
+
+# group this module is in (ex: 'Programming')
+declare -x  ModuleGroup=''
+
+# release of module (ex: 'stable')
+declare	-x  ModuleRelease=''
+
+# relative path of documentation
+# abs. path is "${PREFIX}/${_docdir}/$P"
+declare -r  _DOCDIR='share/doc'
+
+
+
+# set default for the defined releases
+if [[ -z ${PMODULES_DEFINED_RELEASES} ]]; then
+	declare -r PMODULES_DEFINED_RELEASES=":unstable:stable:deprecated:"
+fi
+
+# flag: build in source or separate build directory
+declare	    CompileInSource='no'
+
+#..............................................................................
+#
+# The following variables are available in build-blocks and set read-only
+# :FIXME: do we have to export them?
+#
+
+# install prefix of module.
+# i.e:: ${PMODULES_ROOT}/${ModuleGroup)/${ModuleName}
 declare -x  PREFIX=''
-declare -x  DOCDIR=''
-declare -x  MODULE_GROUP=''
-declare	-x  MODULE_RELEASE=''
-declare     cur_module_release=''
-declare	    compile_in_sourcetree='no'
 
-declare     DEPEND_RELEASE=''
-declare -x  MODULE_NAME=''
-
-# these directories are module dependend
+# Source directory for module.
+# This is "${PMODULES_TMPDIR}/src/$P-$V"
 declare -x  MODULE_SRCDIR=''
+
+# Build directory for module
+# This is either "${PMODULES_TMPDIR}/build/$P-$V"
+# or "${PMODULES_TMPDIR}/build/$P-$V"
 declare -x  MODULE_BUILDDIR=''
 
-declare -x  MODULE_BUILD_DEPENDENCIES
-declare -x  MODULE_DEPENDENCIES
-
-declare -x  C_INCLUDE_PATH
-declare -x  CPLUS_INCLUDE_PATH
-declare -x  CPP_INCLUDE_PATH
-declare -x  LIBRARY_PATH
-declare -x  LD_LIBRARY_PATH
-declare -x  DYLD_LIBRARY_PATH
-
 ##############################################################################
 #
-# test whether the given argument is a valid release name
+# Set release of module. Exit script, if given release name is invalid.
 #
-is_release() {
-	[[ :${releases}: =~ :$1: ]] && return 0
-	std::die 1 "${P}: '$1' is not a valid release name."
-}
-
-##############################################################################
-#
-# set release
+# Arguments:
+#   $1: release name
 #
 pbuild::set_release() {
+	#.....................................................................
+	#
+	# test whether the given argument is a valid release name
+	#
+	is_release() {
+		[[ :${PMODULES_DEFINED_RELEASES}: =~ :$1: ]] && return 0
+		std::die 1 "${P}: '$1' is not a valid release name."
+	}
+
 	is_release "$1" || std::die 1 "${P}: specified release '$1' is not valid!"
-	MODULE_RELEASE="$1"
+	ModuleRelease="$1"
 }
 
 ##############################################################################
 #
-# set supported OS
+# Set flag to build module in source tree.
+#
+# Arguments:
+#   none
 #
 pbuild::compile_in_sourcetree() {
-	compile_in_sourcetree='yes'
+	CompileInSource='yes'
 }
 
 ##############################################################################
 #
-# set supported OS
+# Check whether the script is running on a supported OS.
 #
-# $1: OS (as printed by 'uname -s')
+# Arguments:
+#   $@: supported opertating systems (as printed by 'uname -s')
 #
 pbuild::supported_os() {
 	for os in "$@"; do
@@ -65,36 +129,24 @@ pbuild::supported_os() {
 
 ##############################################################################
 #
-# install module in given group
+# Install module in given group.
 #
-# $1: group
+# Arguments:
+#   $1: group
 #
 pbuild::add_to_group() {
 	if [[ -z ${1} ]]; then
 		std::die 42 "${FUNCNAME}: Missing group argument."
 	fi
-	MODULE_GROUP=$1
+	ModuleGroup=$1
 }
 
 ##############################################################################
 #
-# set build-/runtime dependencies
+# Set documentation file to be installed.
 #
-# $@: dependencies
-#
-pbuild::set_build_dependencies() {
-	MODULE_BUILD_DEPENDENCIES+=("$@")
-}
-
-pbuild::set_runtime_dependencies() {
-	MODULE_DEPENDENCIES=("$@")
-}
-
-##############################################################################
-#
-# set documentation file to be installed
-#
-# $@: documentation files relative to source
+# Arguments:
+#   $@: documentation files relative to source
 #
 pbuild::set_docfiles() {
 	MODULE_DOCFILES=("$@")
@@ -102,9 +154,10 @@ pbuild::set_docfiles() {
 
 ##############################################################################
 #
-# set supported compilers
+# Set supported compilers.
 #
-# $@: compilers
+# Arguments:
+#   $@: compilers
 #
 pbuild::set_supported_compilers() {
 	MODULE_SUPPORTED_COMPILERS=("$@")
@@ -112,97 +165,76 @@ pbuild::set_supported_compilers() {
 
 ##############################################################################
 #
-# test availablity of a module
+# Test whether a module with the given name already exists.
 #
-# $@: module
+# Arguments:
+#   $@: module name
+#
+# Notes:
+#   The passed module name should be NAME/VERSION
 #
 pbuild::module_is_available() {
 	[[ -n $("${MODULECMD}" bash avail "$1" 2>&1 1>/dev/null) ]]
 }
 
-
-##############################################################################
-# 
-# cleanup environment
-#
-pbuild::cleanup_env() {
-
-	C_INCLUDE_PATH=''
-	CPLUS_INCLUDE_PATH=''
-	CPP_INCLUDE_PATH=''
-	LIBRARY_PATH=''
-	LD_LIBRARY_PATH=''
-	DYLD_LIBRARY_PATH=''
-
-	CFLAGS=''
-	CPPFLAGS=''
-	CXXFLAGS=''
-	LIBS=''
-	LDFLAGS=''
-
-	unset CC
-	unset CXX
-	unset FC
-	unset F77
-	unset F90
-}
-
-pbuild::set_initial_path() {
-	PATH='/usr/bin:/bin:/usr/sbin:/sbin'
-
-	if [[ "${OS}" == "Darwin" ]]; then
-	        # :FIXME: do we really need this?
-	        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin' || \
-			std::info "Xquarz is not installed in '/opt/X11'"
-	fi
-}
-
-##############################################################################
+###############################################################################
 #
 # extract sources. For the time being only tar-files are supported.
 #
 pbuild::prep() {
-	##############################################################################
+	#......................................................................
 	#
-	# find tarball 
-	# $1: download directory
-	# $2: name without version
-	# $3: version
+	# Find tarball for given module.
+	# Sets global variable TARBALL if found or exit with error message.
+	#
+	# Arguments:
+	#   $1:	    name
+	#   $2:	    version
+	#   $3...:  download directories
+	#
+	# Used global variables:
+	#   BUILD_BLOCK_DIR [in]
+	#   TARBALL [out]
 	#
 	find_tarball() {
+		local -r name="$1"
+		local    version="$2"
+		shift 2
 		local -a dirs=( "${BUILD_BLOCK_DIR}" )
-		dirs+=( "$1" )
-		local -r name=$2
-		local -r version=$3
+		dirs+=( "$@" )
 
-		TARBALL=""
+		local release="${version##*-}"
+		version=${version%-*}
 		local ext
 		for dir in "${dirs[@]}"; do
 			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
-				local fname="${dir}/${name}-${OS}-${version}.${ext}"
-				if [[ -r "${fname}" ]]; then
-					TARBALL="${fname}"
-					break 2
-				fi
-				local fname="${dir}/${name}-${version}.${ext}"
-				if [[ -r "${fname}" ]]; then
-					TARBALL="${fname}"
-					break 2
-				fi
+				local fname
+				local -a fnames
+				fnames+=( "${dir}/${name}-${OS}-${version}-${release}.${ext}" )
+				fnames+=( "${dir}/${name}-${OS}-${version}.${ext}" )
+				fnames+=( "${dir}/${name}-${version}-${release}.${ext}" )
+				fnames+=( "${dir}/${name}-${version}.${ext}" )
+				for fname in "${fnames[@]}"; do
+					if [[ -r "${fname}" ]]; then
+					    echo "${fname}"
+					    return
+					fi
+				done
 			done
 		done
-		if [[ -z ${TARBALL} ]]; then
-			std::error "${P}/${V}: source not found."
-			exit 43
-		fi
+		std::error "${name}/${version}: source not found."
+		exit 43
 	}
 
-	find_tarball "${PMODULES_DISTFILESDIR}" "${P/_serial}" "${V}"
+	TARBALL=$( find_tarball "${P/_serial}" "${V}" "${PMODULES_DISTFILESDIR}" )
 
 	# untar sources
 	if [[ ! -d ${MODULE_SRCDIR} ]]; then
-		mkdir -p "${PMODULES_TMPDIR}/src"
-		(cd "${PMODULES_TMPDIR}/src" && tar xvf "${TARBALL}")
+		mkdir -p "${PMODULES_TMPDIR}/src/$P-$V"
+		(
+			cd "${PMODULES_TMPDIR}/src/$P-$V"
+			tar -xv --strip-components 1 -f "${TARBALL}"
+		)
 		(cd "${MODULE_SRCDIR}" && pbuild::patch_sources)
 	fi
 
@@ -210,6 +242,11 @@ pbuild::prep() {
 	mkdir -p "${MODULE_BUILDDIR}"
 }
 
+###############################################################################
+#
+# create an OS specific stub. If OS is 'Darwin' this creates a function named
+# 'pbuild::patch_sources_Darwin()'
+#
 eval "pbuild::patch_sources_${OS}() { :; }"
 
 pbuild::patch_sources() {
@@ -238,19 +275,28 @@ pbuild::post_install() {
 }
 
 pbuild::install_doc() {
-	std::info "${P}/${V}: Installing documentation to ${DOCDIR}"
-	install -m 0755 -d "${DOCDIR}"
-	install -m0444 "${MODULE_DOCFILES[@]/#/${MODULE_SRCDIR}/}" "${BUILD_BLOCK}" "${DOCDIR}"
+	local -r docdir="${PREFIX}/${_DOCDIR}/$P"
+
+	std::info "${P}/${V}: Installing documentation to ${docdir}"
+	install -m 0755 -d "${docdir}"
+	install -m0444 "${MODULE_DOCFILES[@]/#/${MODULE_SRCDIR}/}" "${BUILD_BLOCK}" "${docdir}"
 }
 
 pbuild::cleanup_build() {
 	[[ "${MODULE_BUILDDIR}" == "${MODULE_SRCDIR}" ]] && return
-	[[ -n "${MODULE_BUILDDIR}" ]]     \
-		|| std::die 1 "Oops: internal error: MODULE_BUILDDIR is set to empty string..."
-	[[ "${MODULE_BUILDDIR}" == "/" ]] \
-		&& std::die 1 "Oops: internal error: MODULE_BUILDDIR is set to '/'..."
-	[[ -d "/${MODULE_BUILDDIR}" ]]    \
-		|| std::die 1 "Oops: internal error: MODULE_BUILDDIR=${MODULE_BUILDDIR} is not a directory..."
+	
+	if [[ -z "${MODULE_BUILDDIR}" ]]; then
+	        std::die 1 "Oops: internal error: %s is %s..." \
+			 MODULE_BUILDDIR 'set to empty string'
+	fi
+	if [[ "${MODULE_BUILDDIR}" == "/" ]]; then
+	        std::die 1 "Oops: internal error: %s is %s..." \
+		     	 MODULE_BUILDDIR "set to '/'"
+	fi
+	if [[ ! -d "/${MODULE_BUILDDIR}" ]]; then
+		std::die 1 "Oops: internal error: %s is %s..." \
+			 MODULE_BUILDDIR=${MODULE_BUILDDIR} "not a directory"
+	fi
 	echo "Cleaning up '/${MODULE_BUILDDIR}'..."
 	rm -rf  "/${MODULE_BUILDDIR}"
 }
@@ -272,12 +318,13 @@ pbuild::cleanup_src() {
 #
 pbuild::make_all() {
 	local variant=''
-	local variant_release=''
+	local depend_release=''
+	local -a runtime_dependencies=()
 	#
 	# helper functions
 	#
 
-	##############################################################################
+	#......................................................................
 	#
 	# load default versions
 	#
@@ -299,7 +346,7 @@ pbuild::make_all() {
 
 	}
 
-	##############################################################################
+	#......................................................................
 	#
 	# test whether a module is loaded or not
 	#
@@ -309,7 +356,7 @@ pbuild::make_all() {
 		[[ :${LOADEDMODULES}: =~ :$1: ]]
 	}
 
- 	##############################################################################
+ 	#......................................................................
 	#
 	# build a dependency
 	#
@@ -320,7 +367,7 @@ pbuild::make_all() {
 	build_dependency() {
 		local -r m=$1
 		std::debug "${m}: module not available"
-		local rels=( ${releases//:/ } )
+		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
 		[[ ${dry_run} == yes ]] && \
 			std::die 1 "${m}: module does not exist, cannot continue with dry run..."
 
@@ -358,12 +405,20 @@ pbuild::make_all() {
 		[[ -n $(module avail "$m" 2>&1) ]] || std::die 1 "$m: oops: build failed..."
 	}
 	
-	##############################################################################
+	#......................................................................
 	#
 	# build dependencies can be defined
 	# - on the command line via '--with=MODULE/VERSION'
 	# - in a 'variants' file
 	# - in the build block
+	#
+	# Arguments:
+	#   none
+	#
+	# Variables
+	#   ModuleRelease	    set if defined in a variants file
+	#   runtime_dependencies    runtime dependencies from variants added
+	#   depend_release	    set if a dependency is 'unstable' or 'deprecated'
 	#
 	load_build_dependencies() {
 		local -a eligible_variants_files=()
@@ -393,15 +448,14 @@ pbuild::make_all() {
 				pattern+=" && /${m//\//\\/}/"
 			done
 			variant=$(awk "${pattern}" "${variants_file}" | tail -1)
-			variant_release=$(awk '{printf $2}' <<< "${variant}")
+			local variant_release=$(awk '{printf $2}' <<< "${variant}")
 			if [[ -n "${variant_release}" ]]; then
-				MODULE_RELEASE="${variant_release}"
+				ModuleRelease="${variant_release}"
 			fi
 			with_modules+=( $(awk "{for (i=3; i<=NF; i++) printf \$i \" \"}" <<< "${variant}" ) )
-		        #with_modules+=( $(awk "${pattern} {for (i=3; i<=NF; i++) printf \$i \" \"}" "${variants_file}" | tail -1) )
 		fi
 
-		for m in "${with_modules[@]}" "${MODULE_BUILD_DEPENDENCIES[@]}"; do
+		for m in "${with_modules[@]}"; do
 			# :FIXME:
 			# this check shouldn't be requiered here
 			[[ -z $m ]] && continue
@@ -411,14 +465,12 @@ pbuild::make_all() {
 			# 'r:' this a run-time dependency, *not* required for building
 			# without prefix: this is a build and run-time dependency
 			if [[ $m =~ b:* ]]; then
-				m=${m#*:}
-				MODULE_BUILD_DEPENDENCIES+=( "$m" )
+				m=${m#*:}   # remove 'b:'
 			elif [[ $m =~ r:* ]]; then
-				m=${m#*:}
-				MODULE_DEPENDENCIES+=( "$m" )
+				m=${m#*:}   # remove 'r:'
+				runtime_dependencies+=( "$m" )
 			else
-				MODULE_BUILD_DEPENDENCIES+=( "$m" )
-				MODULE_DEPENDENCIES+=( "$m" )
+				runtime_dependencies+=( "$m" )
 			fi
 			is_loaded "$m" && continue
 			if ! pbuild::module_is_available "$m"; then
@@ -432,11 +484,11 @@ pbuild::make_all() {
 			if [[ ${mod_release} == deprecated ]]; then
 				# set module release to 'deprecated' if a build dependency
 				# is deprecated
-				DEPEND_RELEASE='deprecated'
-			elif [[ ${mod_release} == unstable ]] && [[ -z ${DEPEND_RELEASE} ]]; then
+				depend_release='deprecated'
+			elif [[ ${mod_release} == unstable ]] && [[ -z ${depend_release} ]]; then
 				# set module release to 'unstable' if a build dependency is
 				# unstable and release not yet set
-				DEPEND_RELEASE='unstable'
+				depend_release='unstable'
 			fi
 			
 			echo "Loading module: ${m}"
@@ -444,12 +496,12 @@ pbuild::make_all() {
 		done
 	}
 
-	##############################################################################
+	#......................................................................
 	#
 	# check and setup module specific environment.
 	#
 	# The following variables must already be set:
-	#	MODULE_GROUP	    module group
+	#	ModuleGroup	    module group
 	#	P		    module name
 	#	V		    module version
 	#	MODULEPATH	    module path
@@ -457,109 +509,110 @@ pbuild::make_all() {
 	#
 	# The following variables might already be set
 	#	${_P}_VERSION	    module version
-	#	MODULE_RELEASE	    module release, one of 'unstable', 'stable',
+	#	ModuleRelease	    module release, one of 'unstable', 'stable',
 	#			    'deprecated'
 	#
 	# The following variables are set in this function
 	#	MODULE_SRCDIR
 	#	MODULE_BUILDDIR
-	#	MODULE_RPREFIX
-	#	MODULE_NAME
-	#	MODULE_RELEASE
+	#	ModuleName
+	#	ModuleRelease
 	#	PREFIX
-	#	DOCDIR
 	#
 	check_and_setup_env() {
-		if [[ -z ${MODULE_GROUP} ]]; then
+		local FullModuleName=''
+		
+		if [[ -z ${ModuleGroup} ]]; then
 			std::die 1 "${P}/${V}: group not set."
 		fi
-		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
-		if [[ "${compile_in_sourcetree}" == "yes" ]]; then
-			MODULE_BUILDDIR="${MODULE_SRCDIR}"
+		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/$P-$V"
+		if [[ "${CompileInSource}" == "yes" ]]; then
+		        MODULE_BUILDDIR="${MODULE_SRCDIR}"
 		else
 			MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
 		fi
 
 		# build module name
-		# :FIXME: the MODULE_PREFIX should be derived from MODULE_NAME
+		# :FIXME: the MODULE_PREFIX should be derived from ModuleName
 		# :FIXME: this should be read from a configuration file
-		case ${MODULE_GROUP} in
+		case ${ModuleGroup} in
 		Tools )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_NAME="${P}/${V}"
+			FullModuleName="${P}/${V}"
+			ModuleName="${P}/${V}"
 			;;
 		Programming )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_NAME="${P}/${V}"
+			FullModuleName="${P}/${V}"
+			ModuleName="${P}/${V}"
 			;;
 		Libraries )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_NAME="${P}/${V}"
+			FullModuleName="${P}/${V}"
+			ModuleName="${P}/${V}"
 			;;
 		System )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_NAME="${P}/${V}"
+			FullModuleName="${P}/${V}"
+			ModuleName="${P}/${V}"
 			;;
 		Compiler )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_RPREFIX+="/${COMPILER}/${COMPILER_VERSION}"
+			FullModuleName="${P}/${V}"
+			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
 			
-			MODULE_NAME="${COMPILER}/${COMPILER_VERSION}/"
-			MODULE_NAME+="${P}/${V}"
+			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
+			ModuleName+="${P}/${V}"
 			;;
 		MPI )
-			MODULE_RPREFIX="${P}/${V}/"
-			MODULE_RPREFIX+="${MPI}/${MPI_VERSION}/"
-			MODULE_RPREFIX+="${COMPILER}/${COMPILER_VERSION}"
+			FullModuleName="${P}/${V}/"
+			FullModuleName+="${MPI}/${MPI_VERSION}/"
+			FullModuleName+="${COMPILER}/${COMPILER_VERSION}"
 			
-			MODULE_NAME="${COMPILER}/${COMPILER_VERSION}/"
-			MODULE_NAME+="${MPI}/${MPI_VERSION}/"
-			MODULE_NAME+="${P}/${V}"
+			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
+			ModuleName+="${MPI}/${MPI_VERSION}/"
+			ModuleName+="${P}/${V}"
 			;;
 		HDF5 )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_RPREFIX+="/${HDF5}/${HDF5_VERSION}"
-			MODULE_RPREFIX+="/${MPI}/${MPI_VERSION}"
-			MODULE_RPREFIX+="/${COMPILER}/${COMPILER_VERSION}"
+			FullModuleName="${P}/${V}"
+			FullModuleName+="/${HDF5}/${HDF5_VERSION}"
+			FullModuleName+="/${MPI}/${MPI_VERSION}"
+			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
 			
-			MODULE_NAME="${COMPILER}/${COMPILER_VERSION}/"
-			MODULE_NAME+="${MPI}/${MPI_VERSION}/"
-			MODULE_NAME+="${HDF5}/${HDF5_VERSION}/"
-			MODULE_NAME+="${P}/${V}"
+			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
+			ModuleName+="${MPI}/${MPI_VERSION}/"
+			ModuleName+="${HDF5}/${HDF5_VERSION}/"
+			ModuleName+="${P}/${V}"
 			;;
 		OPAL )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_RPREFIX+="/${OPAL}/${OPAL_VERSION}"
-			MODULE_RPREFIX+="/${MPI}/${MPI_VERSION}"
-			MODULE_RPREFIX+="/${COMPILER}/${COMPILER_VERSION}"
+			FullModuleName="${P}/${V}"
+			FullModuleName+="/${OPAL}/${OPAL_VERSION}"
+			FullModuleName+="/${MPI}/${MPI_VERSION}"
+			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
 			
-			MODULE_NAME="${COMPILER}/${COMPILER_VERSION}/"
-			MODULE_NAME+="${MPI}/${MPI_VERSION}/"
-			MODULE_NAME+="${OPAL}/${OPAL_VERSION}/"
-			MODULE_NAME+="${P}/${V}"
+			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
+			ModuleName+="${MPI}/${MPI_VERSION}/"
+			ModuleName+="${OPAL}/${OPAL_VERSION}/"
+			ModuleName+="${P}/${V}"
 			;;
 		HDF5_serial )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_RPREFIX+="/hdf5_serial/${HDF5_SERIAL_VERSION}"
-			MODULE_RPREFIX+="/${COMPILER}/${COMPILER_VERSION}"
+			FullModuleName="${P}/${V}"
+			FullModuleName+="/hdf5_serial/${HDF5_SERIAL_VERSION}"
+			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
 			
-			MODULE_NAME="${COMPILER}/${COMPILER_VERSION}/"
-			MODULE_NAME+="hdf5_serial/${HDF5_SERIAL_VERSION}/"
-			MODULE_NAME+="${P}/${V}"
+			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
+			ModuleName+="hdf5_serial/${HDF5_SERIAL_VERSION}/"
+			ModuleName+="${P}/${V}"
 			;;
 		* )
-			MODULE_RPREFIX="${P}/${V}"
-			MODULE_NAME="${P}/${V}"
-			#std::die 1 "${P}/${V}: oops: unknown group: ${MODULE_GROUP}"
+			FullModuleName="${P}/${V}"
+			ModuleName="${P}/${V}"
+			#std::die 1 "${P}/${V}: oops: unknown group: ${ModuleGroup}"
 			;;
 		esac
 
 		# set PREFIX of module
-		PREFIX="${PMODULES_ROOT}/${MODULE_GROUP}/${MODULE_RPREFIX}"
+		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${FullModuleName}"
 
 		# get module release if already available
+		local cur_module_release=''
 		local saved_modulepath=${MODULEPATH}
-		rels=( ${releases//:/ } )
+		rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
 		for rel in "${rels[@]}"; do
 			eval $("${MODULECMD}" bash unuse ${rel})
 		done
@@ -574,24 +627,24 @@ pbuild::make_all() {
 		MODULEPATH=${saved_modulepath}
 
 		# set release of module
-		if [[ "${DEPEND_RELEASE}" == 'deprecated' ]] || \
+		if [[ "${depend_release}" == 'deprecated' ]] || \
 		       # release is deprecated
 		       #   - if a build-dependency is deprecated or 
 		       #   - the module already exists and is deprecated or
 		       #   - is forced to be deprecated by setting this on the command line
 		       [[ "${cur_module_release}" == 'deprecated' ]] \
-		       || [[ "${MODULE_RELEASE}" == 'deprecated' ]]; then
-			MODULE_RELEASE='deprecated'
+		       || [[ "${ModuleRelease}" == 'deprecated' ]]; then
+			ModuleRelease='deprecated'
 			std::info "${P}/${V}: will be released as \"deprecated\""
-		elif [[ "${DEPEND_RELEASE}" == 'stable' ]] \
+		elif [[ "${depend_release}" == 'stable' ]] \
 			 || [[ "${cur_module_release}" == 'stable' ]] \
-			 || [[ "${MODULE_RELEASE}" == 'stable' ]]; then
+			 || [[ "${ModuleRelease}" == 'stable' ]]; then
  			 # release is stable
 			 #   - if all build-dependency are stable or
 			 #   - the module already exists and is stable
 			 #   - an unstable release of the module exists and the release is
 			 #     changed to stable on the command line
-			MODULE_RELEASE='stable'
+			ModuleRelease='stable'
 			std::info "${P}/${V}: will be released as \"stable\""
 		else
 			# release is unstable
@@ -599,35 +652,33 @@ pbuild::make_all() {
 			#   - if the module does not exists and no other release-type is
 			#     given on the command line
 			#   - and all the cases I didn't think of
-			MODULE_RELEASE='unstable'
+			ModuleRelease='unstable'
 			std::info "${P}/${V}: will be released as \"unstable\""
 		fi
 
 		# directory for README's, license files etc
-		DOCDIR="${PREFIX}/share/doc/$P"
 	}
 
-	# redefine function for bootstrapping
+	#......................................................................
+	# setup environment for bootstrapping
+	#
 	check_and_setup_env_bootstrap() {
-		if [[ -z ${MODULE_GROUP} ]]; then
+		if [[ -z ${ModuleGroup} ]]; then
 			std::die 1 "${P}/${V}: group not set."
 		fi
 
-		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/${P/_serial}-$V"
+		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/$P-$V"
 		MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
-		MODULE_GROUP='Tools'
-		MODULE_NAME="Pmodules/${PMODULES_VERSION}"
+		ModuleGroup='Tools'
+		ModuleName="Pmodules/${PMODULES_VERSION}"
 		# set PREFIX of module
-		PREFIX="${PMODULES_ROOT}/${MODULE_GROUP}/${MODULE_NAME}"
+		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${ModuleName}"
 		
-		MODULE_RELEASE='unstable'
-		std::info "${P}/${V}: will be released as \"${MODULE_RELEASE}\""
-
-		# directory for README's, license files etc
-		DOCDIR="${PREFIX}/share/doc/$P"
+		ModuleRelease='unstable'
+		std::info "${P}/${V}: will be released as \"${ModuleRelease}\""
 
 		# set tar-ball and flags for tar
-		find_tarball "${PMODULES_DISTFILESDIR}" "${P/_serial}" "${V}"
+		TARBALL=$( find_tarball "${P/_serial}" "${V}" "${PMODULES_DISTFILESDIR}" )
 
 		C_INCLUDE_PATH="${PREFIX}/include"
 		CPLUS_INCLUDE_PATH="${PREFIX}/include"
@@ -639,7 +690,8 @@ pbuild::make_all() {
 		PATH+=":${PREFIX}/bin"
 	}
 
-	##############################################################################	
+	#......................................................................
+	# test whether the module can be compiled with loaded compiler
 	check_compiler() {
 		test -z ${MODULE_SUPPORTED_COMPILERS} && return 0
 		for cc in ${MODULE_SUPPORTED_COMPILERS[@]}; do
@@ -650,7 +702,8 @@ pbuild::make_all() {
 		std::die 1 "${P}/${V}: cannot be build with ${COMPILER}/${COMPILER_VERSION}."
 	}
 
-	##############################################################################
+	#......................................................................
+	# non-redefinable post-install
 	post_install() {
 		# unfortunatelly sometime we need an OS depended post-install
 		post_install_linux() {
@@ -665,16 +718,14 @@ pbuild::make_all() {
 		return 0
 	}
 
-	##############################################################################
-	# This function requires that
-	# run-time dependencies are either specified with name and version (like gcc/4.8.3)
-	# or we can derive missing versions from the load build dependencies. 
+	#......................................................................
+	# write run time dependencies to file
 	write_runtime_dependencies() {
 		local -r fname="${PREFIX}/.dependencies"
 		std::info "${P}/${V}: writing run-time dependencies to ${fname} ..."
 		local dep
 		echo -n "" > "${fname}"
-		for dep in "${MODULE_DEPENDENCIES[@]}"; do
+		for dep in "${runtime_dependencies[@]}"; do
 			[[ -z $dep ]] && continue
 			if [[ ! $dep =~ .*/.* ]]; then
 				# no version given: derive the version from the currently
@@ -685,65 +736,49 @@ pbuild::make_all() {
 		done
 	}
 
-	##############################################################################
+	#......................................................................
+	# Write all loaded modules as build dependencies to file.
 	write_build_dependencies() {
 		local -r fname="${PREFIX}/.build_dependencies"
 		std::info "${P}/${V}: writing build dependencies to ${fname} ..."
 		"${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep -v "Currently Loaded" > "${fname}" || :
 	}
-
-	##############################################################################
-	set_legacy_link() {
-		local link_name="${PMODULES_ROOT}/${PMODULES_MODULEFILES_DIR}/"
-		link_name+="${MODULE_GROUP}/${MODULE_NAME}"
-		local -r dir_name=${link_name%/*}
-		local -r release_file="${dir_name}/.release-${MODULE_NAME##*/}"
-		if [[ ! -e "${_path}" ]]; then
-			(
-				std::info "${P}/${V}: setting new sym-link '${link_name}' ..."
-				mkdir -p "${dir_name}"
-				cd "${dir_name}"
-				local x
-				IFS='/' x=( ${dir_name/${PMODULES_ROOT}\/${PMODULES_MODULEFILES_DIR}\/} )
-				local n=${#x[@]}
-				local -r _target="../"$(eval printf "../%.s" {1..${n}})${PMODULES_TEMPLATES_DIR##*/}/"${MODULE_GROUP}/${P}/modulefile"
-				ln -fs "${_target}" "${MODULE_NAME##*/}"
-			)
-		fi
-		std::info "${P}/${V}: setting release to '${MODULE_RELEASE}' ..."
-		echo "${MODULE_RELEASE}" > "${release_file}"
-	}
-
-	##############################################################################
+	
+	#......................................................................
+	# Set sym-link to modulefile and write release file
 	set_link() {
-		local -r link_name="${PMODULES_ROOT}/${MODULE_GROUP}/${PMODULES_MODULEFILES_DIR}/${MODULE_NAME}"
+		local  link_name="${PMODULES_ROOT}/"
+		link_name+="${ModuleGroup}/"
+		link_name+="${PMODULES_MODULEFILES_DIR}/"
+		link_name+="${ModuleName}"
 		local -r dir_name=${link_name%/*}
-		local -r release_file="${dir_name}/.release-${MODULE_NAME##*/}"
-		if [[ ! -e "${_path}" ]]; then
+		if [[ ! -e "${link_name}" ]]; then
 			(
 				std::info "${P}/${V}: setting new sym-link '${link_name}' ..."
 				mkdir -p "${dir_name}"
 				cd "${dir_name}"
 				local x
-				IFS='/' x=( ${dir_name/${PMODULES_ROOT}\/${MODULE_GROUP}\/} )
+				IFS='/' x=( ${dir_name/${PMODULES_ROOT}\/${ModuleGroup}\/} )
 				local -i n=${#x[@]}
 				local _target=$(eval printf "../%.s" {1..${n}})
 				_target+="${PMODULES_TEMPLATES_DIR}/${P}/modulefile"
-				ln -fs "${_target}" "${MODULE_NAME##*/}"
+				ln -fs "${_target}" "${ModuleName##*/}"
 			)
 		fi
-		std::info "${P}/${V}: setting release to '${MODULE_RELEASE}' ..."
-		echo "${MODULE_RELEASE}" > "${release_file}"
+		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
+		local -r release_file="${dir_name}/.release-${ModuleName##*/}"
+		echo "${ModuleRelease}" > "${release_file}"
 	}
 
-	##############################################################################
+ 	#......................................................................
+	# Install modulefile to template directory
 	install_modulefile() {
 		local -r src="${BUILD_BLOCK_DIR}/modulefile"
 		if [[ ! -r "${src}" ]]; then
 			std::info "${P}/${V}: skipping modulefile installation ..."
 			return
 		fi
-		local -r dst="${PMODULES_ROOT}/${MODULE_GROUP}/${PMODULES_TEMPLATES_DIR}/${P}"
+		local -r dst="${PMODULES_ROOT}/${ModuleGroup}/${PMODULES_TEMPLATES_DIR}/${P}"
 
 		std::info "${P}/${V}: installing modulefile in '${dst}' ..."
 		mkdir -p "${dst}"
@@ -779,8 +814,9 @@ pbuild::make_all() {
 		fi
 		[[ "${target}" == "prep" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]] || [[ ${force_rebuild} == 'yes' ]]; then
-			cd "${MODULE_SRCDIR}"
+		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]] || \
+		   [[ ${force_rebuild} == 'yes' ]]; then
+		        cd "${MODULE_SRCDIR}"
 			pbuild::pre_configure
 			cd "${MODULE_BUILDDIR}"
 			pbuild::configure
@@ -819,9 +855,6 @@ pbuild::make_all() {
  		std::info "${P}/${V}: already exists, not rebuilding ..."
 	fi
 	if [[ ${bootstrap} == 'no' ]]; then
-		if [[ -d "${PMODULES_ROOT}/${PMODULES_MODULEFILES_DIR}" ]]; then
-			set_legacy_link
-		fi
 		set_link
 		install_modulefile
 	fi

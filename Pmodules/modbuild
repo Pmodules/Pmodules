@@ -10,7 +10,6 @@ declare -r  libstd='libstd.bash'
 declare -r  pmodule_environment='environment.bash'
 declare -ra bash_libpath=("${mydir}" "${mydir}/../lib")
 
-
 ##############################################################################
 #
 # set an error handler. If a function _exit() exists, it will be called
@@ -77,7 +76,7 @@ VERSION
 
 --with=P/V
         Preload module P with version V. To preload multiple modules,
-        use this option per module. Nete that order may matter.
+        use this option per module. Order may matter!
 
 --release=stable|unstable|deprecated
 
@@ -107,27 +106,6 @@ VERSION
 #
 shopt -s expand_aliases
 unalias -a
-
-#__path=$(which gdate 2>/dev/null || : )
-#if [[ $__path ]]; then
-#	alias date=$__path
-#else
-#	alias date=$(which date 2>/dev/null)
-#fi
-
-#__path=$(which ginstall 2>/dev/null || : )
-#if [[ $__path ]]; then
-#	alias install=$__path
-#else
-#	alias install=$(which install 2>/dev/null)
-#fi
-
-#__path=$(which greadlink 2>/dev/null || : )
-#if [[ $__path ]]; then
-#	alias readlink=$__path
-#else
-#	alias readlink=$(which readlink 2>/dev/null)
-#fi
 
 __path=$(which gsed 2>/dev/null || : )
 if [[ $__path ]]; then
@@ -166,7 +144,6 @@ declare dry_run='no'
 declare enable_cleanup_build='yes'
 declare enable_cleanup_src='no'
 declare target='all'
-declare module_release=''
 declare bootstrap='no'
 
 # array collecting all modules specified on the command line via '--with=module'
@@ -230,13 +207,6 @@ while (( $# > 0 )); do
 	--tmpdir=* )
 		PMODULES_TMPDIR=${1/--tmpdir=}
 		;;
-	--release )
-		module_release=$2
-		shift
-		;;
-	--release=* )
-		module_release=${1/--release=}
-		;;
 	--with )
 		with_modules+=( "$2" )
 		shift
@@ -285,7 +255,6 @@ Darwin )
 	;;
 esac
 
-
 # source Pmodule environment configuration
 if [[ "${bootstrap}" == "yes" ]]; then
 	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]] || i\
@@ -323,29 +292,18 @@ done
 (( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
 if [[ ${bootstrap} == no ]]; then
-	# we aren't bootstraping
-
+        # initialize module environment
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
-	
-	# Cleanup environment:
-	# Unset all PATH's and FLAGS's which might be used by a compiler.
-	# This includes C_INCLUDE_PATH, CFLAGS etc.
-	eval $( "${MODULECMD}" bash purge )
-	pbuild::cleanup_env
-	pbuild::set_initial_path
 
-	# Use all releases
-	# :FIXME: this is a hack!!!
+	eval $( "${MODULECMD}" bash purge )
 	eval $( "${MODULECMD}" bash use unstable )
 	eval $( "${MODULECMD}" bash use deprecated )
-	# 
+
+	# :FIXME: this is a hack!!!
 	eval $( "${MODULECMD}" bash use Libraries )
 else
-	#  the module command is not yet available...
-	pbuild::cleanup_env
-	pbuild::set_initial_path
 	unset PMODULES_HOME
 	unset PMODULES_VERSION
 	std::read_versions "${BUILD_BASEDIR}/config/versions.conf"
@@ -357,23 +315,16 @@ else
 	fi
 fi
 
+declare V_MAJOR=${V%%.*}
+declare tmp=${V#*.}
+declare V_MINOR=${tmp%%.*}
+tmp=${tmp#*.}
+declare V_PATCHLVL=${tmp%%-*}
+declare V_RELEASE=${tmp#*-}
+
 P=$(basename $(dirname "${BUILD_BLOCK}"))
-P=${P%.*}
 
 [[ -z ${V} ]] && std::die 1 "Module version must be specified on command line!"
-declare -r V_MAJOR=${V%%.*}
-declare    tmpvar=${V#*.}
-declare -r V_MINOR=${tmpvar%%.*}
-
-# :FIXME: do we need this? Can we get rid of 'releases'?
-if [[ -n ${PMODULES_DEFINED_RELEASES} ]]; then
-        declare -r releases="${PMODULES_DEFINED_RELEASES}"
-else
-	# set defaults
-	declare -r releases=":unstable:stable:deprecated:"
-fi
-
-[[ -n ${module_release} ]] && pbuild::set_release "${module_release}"
 
 #
 # run build
