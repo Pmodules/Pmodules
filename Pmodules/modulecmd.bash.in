@@ -1335,6 +1335,7 @@ subcommand_refresh() {
 	subcommand_generic0 refresh "$@"
 }
 
+##############################################################################
 #
 # purge
 #
@@ -1342,6 +1343,7 @@ subcommand_purge() {
 	subcommand_generic0 purge "$@"
 }
 
+##############################################################################
 #
 # list [-hlt]
 #
@@ -1378,6 +1380,7 @@ subcommand_list() {
 	"${modulecmd}" "${g_shell}" list "${opts}"
 }
 
+##############################################################################
 pmodules_init() {
 	declare -g PMODULES_DEFAULT_GROUPS=''
 	declare -g PMODULES_DEFAULT_RELEASES=''
@@ -1402,10 +1405,12 @@ pmodules_init() {
 
 }
 
+##############################################################################
 #
 # clear
 #
 subcommand_clear() {
+	local -r subcommand="${FUNCNAME##*_}"
 	local opts=''
 	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
 	eval set --  "${opts}"
@@ -1423,10 +1428,12 @@ subcommand_clear() {
 	pbuild::export_env ${g_shell} LOADEDMODULES PMODULES_USED_GROUPS MODULEPATH _LMFILES_
 }
 
+##############################################################################
 #
 # search [switches] [STRING...]
 #
 subcommand_search() {
+	local -r subcommand="${FUNCNAME##*_}"
 	local modules=()
 	local with_modules='//'
 	local src_prefix=''
@@ -1444,6 +1451,7 @@ subcommand_search() {
 		printf '\n' 1>&2
 	}
 
+	#.....................................................................
 	#
 	# output result of search
 	# Args:
@@ -1516,6 +1524,7 @@ subcommand_search() {
 			sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
 		fi
 	}
+	#.....................................................................
 	#
 	# search modules
 	# Args:
@@ -1578,7 +1587,7 @@ subcommand_search() {
 			   -l all-releases \
 			   -l src: \
 			   -l print-variants \
-			   --  "$@") || subcommand_help_${0##*_}
+			   --  "$@") || subcommand_help_${subcommand}
 	eval set --  "${opts}"
 	
 	while (( $# > 0 )); do
