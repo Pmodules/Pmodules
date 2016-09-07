@@ -33,6 +33,13 @@ trap '_err' ERR
 # make sure that everything is used from this version
 declare PMODULES_VERSION='@PMODULES_VERSION@'
 
+##############################################################################
+#
+# print version of program
+#
+# Arguments:
+#	none
+# 
 print_version() {
 	echo "
 Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
@@ -40,6 +47,13 @@ Copyright GNU GPL v2
 " 1>&2
 }
 
+##############################################################################
+#
+# print usage
+#
+# Arguments:
+#	none
+# 
 usage() {
 	local -r prog=$(basename $0)
 	print_version
@@ -68,6 +82,13 @@ declare DRY=''
 declare subcommand=''
 declare sargs=()
 
+##############################################################################
+#
+# help for subcommand 'init'
+#
+# Arguments:
+#	none
+# 
 subcommand_help_init() {
 	echo "
 init [--src=<src>] [--user=<user>] [--version=<version>] <dst>
@@ -77,6 +98,13 @@ init [--src=<src>] [--user=<user>] [--version=<version>] <dst>
 " 1>&2
 }
 
+##############################################################################
+#
+# help for subcommand 'install'
+#
+# Arguments:
+#	none
+# 
 subcommand_help_install() {
 	echo "
 install <module>... [--with=<dep>...] [--release=<release>...] [--src=<src>]
@@ -84,6 +112,13 @@ install <module>... [--with=<dep>...] [--release=<release>...] [--src=<src>]
 " 1>&2
 }
 
+##############################################################################
+#
+# help for subcommand 'search'
+#
+# Arguments:
+#	none
+# 
 subcommand_help_search() {
 	echo "
 USAGE:
@@ -105,6 +140,13 @@ SWITCHES:
 " 1>&2
 }
 
+##############################################################################
+#
+# help for subcommand 'sync'
+#
+# Arguments:
+#	none
+# 
 subcommand_help_sync() {
 	echo "
 sync [--delete] [--dst=<dst>] <src>
@@ -117,6 +159,13 @@ sync [--delete] [--dst=<dst>] <src>
 " 1>&2
 }
 
+##############################################################################
+#
+# print usage or help text for given sub-command
+#
+# Arguments:
+#	none or sub-command
+# 
 subcommand_help() {
 	if [[ $# == 0 ]]; then
 	        usage
@@ -128,11 +177,13 @@ subcommand_help() {
 	fi
 }
 
+##############################################################################
 #
 # Derive the relative module installation path
 # from the relative modulefile path
 #
-# $1: relative module file path
+# Arguments:
+#	$1: relative module file path
 #
 get_module_prefix() {
 	local -a comp=( ${1//\// } )    # split rel.path into components
@@ -144,16 +195,19 @@ get_module_prefix() {
 	echo "${path}"
 }
 
+##############################################################################
 #
 # Derive the relative module release file path
 # from the relative module file path
 #
-# $1: relative module file path
+# Arguments:
+#	$1: relative module file path
 #
 get_releasefile_name() {
 	echo "$(dirname "$1")/.release-$(basename "$1")"
 }
 
+##############################################################################
 #
 # Sync a module from one Pmodules environment to another:
 # - sync module installation
@@ -164,9 +218,10 @@ get_releasefile_name() {
 #   We do not take care of files in $PMODULES_ROOT/$PMODULES_TEMPLATES_DIR. If
 #   the modulefile is a sym-link it is expected that the target exists.
 #
-# $1: relative modulefile path (something like: Tools/gnuplot/5.0.0)
-# $2: source prefix of Pmodule environment
-# $3: target prefix of Pmodule environment
+# Arguments:
+#	$1: relative modulefile path (something like: Tools/gnuplot/5.0.0)
+#	$2: source prefix of Pmodule environment
+#	$3: target prefix of Pmodule environment
 #
 sync_module() {
 	local -r rel_modulefile=$1
@@ -222,11 +277,13 @@ sync_module() {
 	fi
 }
 
+##############################################################################
 #
 # Sync the Pmodules configuration and templates
 #
-# $1: source prefix of Pmodule environment
-# $2: target prefix of Pmodule environment
+# Arguments:
+#	$1: source prefix of Pmodule environment
+#	$2: target prefix of Pmodule environment
 #
 sync_config() {
 	src="$1/${PMODULES_CONFIG_DIR}/"
@@ -237,16 +294,35 @@ sync_config() {
 	echo
 }
 
+##############################################################################
 #
 # Delete a module
 #
-# $1: relative modulefile path
-# $2: target prefix of Pmodule environment
+# Arguments:
+#	$1: relative modulefile path
+#	$2: target prefix of Pmodule environment
 #
 delete_module() {
         echo "Not implemented yet!"
 }
 
+##############################################################################
+#
+# initialize a new module environment
+#
+# Arguments:
+#	[--src <SRCDIR>]
+#		Module environment we are going to sync from. If not
+#		specified, the module environment this script is in
+#		will be used.
+#	[--user <USER>]
+#		If this scripts runs with root privileges, a user name
+#		ore ID must be specified.
+#	[--version <VERSION>]
+#		Set PMODULES_VERSION to <version>
+#	TARGET_DIR
+#		Initialize a new module environment in this directory-
+# 		
 subcommand_init() {
 	local src=''
 	local target_prefixes=()
@@ -318,6 +394,12 @@ Attempting to create a minimal module environment from the
 environment at '${PMODULES_ROOT}'
 "
 
+	#.....................................................................
+	# initialize new module environment in given directory
+	#
+	# Arguments:
+	#	$1	target directory
+	#
 	init_pmodules_environment() {
 		local -r src_prefix="${PMODULES_ROOT}"
 		local -r target_prefix=$1
@@ -375,42 +457,84 @@ environment at '${PMODULES_ROOT}'
 }
 
 declare -a Groups=()
-declare -A HierarchyDepths
+declare -A GroupDepths
 
+##############################################################################
+#
+# Get available module groups. Found groups are added to the global array
+# 'Groups'. 
+# 
+# Arguments:
+#	$1: root of module environment
+#	$2: relative directory with module files
+#
 get_groups () {
 	local -r root="$1"
+	local -r modulefiles_dir="$2"
 	{
 		cd "${root}" 
 		# for some unknown reason [A-Z]* doesn't work on (some?) SL6 systems
 		for f in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
-			[[  -d ${f}/${PMODULES_MODULEFILES_DIR} ]] || continue
+			[[  -d ${f}/${modulefiles_dir} ]] || continue
 			Groups+=( $f )
 		done
 	};
 }
 
+##############################################################################
 #
-# $1: root of modulefile hierarchy
-get_hierarchy_depth () {
+# Compute hierarchy depth of all groups. Stores result in global array
+# 'GroupDepths'. 
+# 
+# Arguments:
+#	$1: root of module environment
+#	$2: relative directory with module files
+#
+get_group_depths () {
 	local -r root="$1"
-	local -a modulefiles_dir
-	std::split_fname modulefiles_dir "${PMODULES_MODULEFILES_DIR}"
-	local -ir off=$(( ${#modulefiles_dir[@]} + 3 ))
+	local -r modulefiles_dir="$2"
+	local -a dirs
+	std::split_fname dirs "${root}"
+	# offset: do not count the subdirectories in the groups modulepath
+	# (e.g.: /opt/psi/Tools/modulefiles => off=4)
+	local -ir off=$(( ${#dirs[@]} + 2 ))
 	{
 		cd "${root}"
 		local group
 		for group in "${Groups[@]}"; do
-			local  fname=$(find "${group}/${PMODULES_MODULEFILES_DIR}" \
+			local  fname=$(find "${group}/${modulefiles_dir}" \
 					    -depth \( -type f -o -type l \) -print -quit)
 			[[ -n ${fname} ]] || continue
-			#local -a tmp2=( ${fname//\// } )
 			local -a tmp
 			std::split_fname tmp "${fname}"
-			(( HierarchyDepths[$group]=${#tmp[@]}-off ))
+			(( GroupDepths[$group]=${#tmp[@]}-off ))
 		done
 	};
 }
 
+##############################################################################
+#
+# sub-command 'install'
+# 
+# Arguments:
+#	[--dry-run]
+#		Dry run
+#
+#	[--force] | -f ]
+#		Install module even it already exists
+#
+#	[--release <rel>]
+#		Set release of module to <rel>
+#
+#	[--src <src>]
+#		Install from module environment in <src>
+#
+#	[--with <module>]
+#		Install module(s) in this sub-group only
+#
+#	<module_pattern>
+#		Install modules matching given pattern
+#
 subcommand_install() {
 	local	    opts=''
 	local -a    with=()
@@ -424,11 +548,13 @@ subcommand_install() {
 	local -A    map_to_family
 	local -a    initial_modulepath=()
 
+	#......................................................................
 	#
 	# Resolve dependencies to given module
 	#
-	# $1: modulefile relativ to src prefix. Something like:
-	#     MPI/modulefiles/gcc/4.9.2/openmpi/1.8.4/hdf5/1.8.14
+	# Arguments:
+	#   $1	modulefile relativ to src prefix. Something like:
+	#	MPI/modulefiles/gcc/4.9.2/openmpi/1.8.4/hdf5/1.8.14
 	#
 	# Notes:
 	#   The variables
@@ -473,6 +599,20 @@ subcommand_install() {
 			fi
 		done < "${fname_dependencies}"
 	}
+
+	#......................................................................
+	#
+	# Print list of modules which will be installed and ask user wheter
+	# he wants to continue or abort.
+	#
+	# Arguments:
+	#   none
+	#
+	# Notes:
+	#   The following variables of the enclosing function are used:
+	#	modules_to_install (read-only)
+	#	target_prefix (read-only)
+	#	dependencies_to_install (read-only)
 
 	print_modules_to_install() {
 		local modulefile
@@ -551,13 +691,13 @@ subcommand_install() {
 		|| std::die 3 "Oops: '${src_prefix}' is not a valid installation source."
 
 	# scan available groups and their depth
-	get_groups "${src_prefix}"
-	get_hierarchy_depth "${src_prefix}"
+	get_groups "${src_prefix}" "${PMODULES_MODULEFILES_DIR}"
+	get_group_depths "${src_prefix}" "${PMODULES_MODULEFILES_DIR}"
 
 	# set initial modulepath
 	local group
-	for  group in "${!HierarchyDepths[@]}"; do
-		if (( ${HierarchyDepths[${group}]} == 0 )); then
+	for  group in "${!GroupDepths[@]}"; do
+		if (( ${GroupDepths[${group}]} == 0 )); then
 			initial_modulepath+=( "${src_prefix}/${group}/${PMODULES_MODULEFILES_DIR}" )
 		fi
 	done
@@ -615,6 +755,7 @@ subcommand_install() {
 	std::info "\nDone!\n"
 }
 
+###############################################################################
 #
 # delete specified module(s)
 #
@@ -622,6 +763,7 @@ subcommand_delete() {
 	:
 }
 
+###############################################################################
 #
 # remove modules which have been removed in our source
 #
@@ -629,8 +771,10 @@ subcommand_cleanup() {
 	:
 }
 
+###############################################################################
 #
 # search modules in source
+# :FIXME: this is still crap
 #
 subcommand_search() {
 	local	    src_prefix="${PMODULES_INSTALL_SOURCE}"
@@ -650,8 +794,8 @@ subcommand_search() {
 		|| std::die 3 "Oops: '${src_prefix}' is not a valid installation source."
 
 	# scan available groups and their depth
-	get_groups "${src_prefix}"
-	get_hierarchy_depth "${src_prefix}"
+	get_groups "${src_prefix}" "${PMODULES_MODULEFILES_DIR}"
+	get_group_depths "${src_prefix}" "${PMODULES_MODULEFILES_DIR}"
 
 	local -i n=0
 	while read modulefile; do
@@ -668,6 +812,10 @@ subcommand_search() {
 	print_modules_found
 }
 
+###############################################################################
+#
+# sub-command 'sync'
+#
 subcommand_sync() {
 	local delete=false
 	local opts=''
