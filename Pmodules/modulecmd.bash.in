@@ -37,7 +37,7 @@ declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 shopt -s nullglob
 
 declare -a Groups='()'
-declare -A HierarchyDepths='()'
+declare -A GroupDepths='()'
 declare current_modulefile=''
 declare g_shell=''
 
@@ -77,7 +77,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Groups HierarchyDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES PMODULES_USED_GROUPS' EXIT
+trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES PMODULES_USED_GROUPS' EXIT
 
 print_version() {
 	echo "
@@ -481,7 +481,7 @@ is_used_release() {
 declare used_groups=":${PMODULES_USED_GROUPS}:"
 
 is_group () {
-	[[ -n ${group} ]] && [[ -n ${HierarchyDepths[${group}]} ]]
+	[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]]
 }
 
 is_used_group() {
@@ -857,7 +857,7 @@ subcommand_load() {
 			fi
 			if [[ -n ${group} ]]; then
 				is_group "${group}" || std::die 3 "${CMD} load: illegal group name."
-				local -i depth=${HierarchyDepths[${group}]}
+				local -i depth=${GroupDepths[${group}]}
 				(( depth != 0 )) && std::die 3 "${CMD} load: illegal group name."
 				MODULEPATH="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
 				modulepath=( ${MODULEPATH} )
@@ -1147,7 +1147,7 @@ get_hierarchy_depth () {
 			local -a tmp2=( ${tmp//\// } )
 			local depth=${#tmp2[@]}
 			let depth-=4
-			HierarchyDepths[$_group]=${depth} 
+			GroupDepths[$_group]=${depth} 
 		done
 	};
 }
@@ -1175,7 +1175,7 @@ subcommand_use() {
 		std::info "\nUnused groups:"
 		local _group
 		for _group in "${Groups[@]}"; do
-			local -i depth=${HierarchyDepths[${_group}]}
+			local -i depth=${GroupDepths[${_group}]}
 			if ! is_used_group "${_group}" && (( depth == 0 )); then
 			    std::info "\t${_group}"
 			fi
@@ -1233,7 +1233,7 @@ subcommand_use() {
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
-				if (( ${HierarchyDepths[$arg]} != 0 )); then
+				if (( ${GroupDepths[$arg]} != 0 )); then
 					std::die 3 "${CMD} ${FUNCNAME[0]##*_}: cannot add group ${arg} to module path"
 				fi
 				std::append_path PMODULES_USED_GROUPS "${arg}"
@@ -1295,7 +1295,7 @@ subcommand_unuse() {
 		if is_release "${arg}"; then
 			std::remove_path UsedReleases "${arg}"
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
-			if (( ${HierarchyDepths[$arg]} != 0 )); then
+			if (( ${GroupDepths[$arg]} != 0 )); then
 				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: cannot remove group ${arg} from module path"
 			fi
 			std::remove_path PMODULES_USED_GROUPS "${arg}"
@@ -1397,7 +1397,7 @@ pmodules_init() {
 		std::append_path PMODULES_USED_GROUPS "${group}"
 	done
 	declare -ag Groups='()'
-	declare -Ag HierarchyDepths='()'
+	declare -Ag GroupDepths='()'
 	declare -g  UsedReleases=''
 	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
 		std::append_path UsedReleases "${r}"
@@ -1543,7 +1543,7 @@ subcommand_search() {
 		for _group in "${Groups[@]}"; do
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
-			local depth=${HierarchyDepths[${_group}]}
+			local depth=${GroupDepths[${_group}]}
 			local mpaths=( $(find \
 					     "${src_prefix}/${_group}/modulefiles" \
 					     -type d \
