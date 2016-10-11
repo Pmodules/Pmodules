@@ -177,54 +177,55 @@ pbuild::module_is_available() {
 	[[ -n $("${MODULECMD}" bash avail "$1" 2>&1 1>/dev/null) ]]
 }
 
+#......................................................................
+#
+# Find tarball for given module.
+# Sets global variable TARBALL if found or exit with error message.
+#
+# Arguments:
+#   $1:	    name
+#   $2:	    version
+#   $3...:  download directories
+#
+# Used global variables:
+#   BUILD_BLOCK_DIR [in]
+#   TARBALL [out]
+#
+find_tarball() {
+	local -r name="$1"
+	local    version="$2"
+	shift 2
+	local -a dirs=( "${BUILD_BLOCK_DIR}" )
+	dirs+=( "$@" )
+
+	local release="${version##*-}"
+	version=${version%-*}
+	local ext
+	for dir in "${dirs[@]}"; do
+		for ext in tar tar.gz tgz tar.bz2 tar.xz; do
+			local fname
+			local -a fnames
+			fnames+=( "${dir}/${name}-${OS}-${version}-${release}.${ext}" )
+			fnames+=( "${dir}/${name}-${OS}-${version}.${ext}" )
+			fnames+=( "${dir}/${name}-${version}-${release}.${ext}" )
+			fnames+=( "${dir}/${name}-${version}.${ext}" )
+			for fname in "${fnames[@]}"; do
+				if [[ -r "${fname}" ]]; then
+				    echo "${fname}"
+				    return
+				fi
+			done
+		done
+	done
+	std::error "${name}/${version}: source not found."
+	exit 43
+}
+
 ###############################################################################
 #
 # extract sources. For the time being only tar-files are supported.
 #
 pbuild::prep() {
-	#......................................................................
-	#
-	# Find tarball for given module.
-	# Sets global variable TARBALL if found or exit with error message.
-	#
-	# Arguments:
-	#   $1:	    name
-	#   $2:	    version
-	#   $3...:  download directories
-	#
-	# Used global variables:
-	#   BUILD_BLOCK_DIR [in]
-	#   TARBALL [out]
-	#
-	find_tarball() {
-		local -r name="$1"
-		local    version="$2"
-		shift 2
-		local -a dirs=( "${BUILD_BLOCK_DIR}" )
-		dirs+=( "$@" )
-
-		local release="${version##*-}"
-		version=${version%-*}
-		local ext
-		for dir in "${dirs[@]}"; do
-			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
-				local fname
-				local -a fnames
-				fnames+=( "${dir}/${name}-${OS}-${version}-${release}.${ext}" )
-				fnames+=( "${dir}/${name}-${OS}-${version}.${ext}" )
-				fnames+=( "${dir}/${name}-${version}-${release}.${ext}" )
-				fnames+=( "${dir}/${name}-${version}.${ext}" )
-				for fname in "${fnames[@]}"; do
-					if [[ -r "${fname}" ]]; then
-					    echo "${fname}"
-					    return
-					fi
-				done
-			done
-		done
-		std::error "${name}/${version}: source not found."
-		exit 43
-	}
 
 	TARBALL=$( find_tarball "${P/_serial}" "${V}" "${PMODULES_DISTFILESDIR}" )
 
