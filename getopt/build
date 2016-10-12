@@ -1,10 +1,13 @@
 #!/usr/bin/env modbuild
 
+
 pbuild::configure() {
 	:
 }
 
 pbuild::build() {
+	declare -x C_INCLUDE_PATH="${PREFIX}/include"
+	declare -x LIBRARY_PATH="${PREFIX}/lib"
 	case ${OS} in
 		Linux )
 			declare -x LDFLAGS="-lintl"
