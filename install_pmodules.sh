@@ -37,13 +37,19 @@ install -m 0755 "${SRC_DIR}/modbuild"		"${PMODULES_HOME}/bin"
 install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_HOME}/config/environment.bash.sample"
 install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_HOME}/config/profile.bash.sample"
 
+if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" ]]; then
+	mkdir -p "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}"
+fi
+
 if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/environment.bash" ]]; then
-        install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_HOME}/config/environment.bash"
+        install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/environment.bash"
 fi
 
 if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash" ]]; then
-	install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_HOME}/config/profile.bash"
+	install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 fi
+
+mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
 
 install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
