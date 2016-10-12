@@ -481,7 +481,16 @@ is_used_release() {
 declare used_groups=":${PMODULES_USED_GROUPS}:"
 
 is_group () {
-	[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]]
+	local -r group="$1"
+	# arg isn't emtpy and group already in cache
+	[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]] && return 0
+
+	# not yet cached or not a group
+	if [[ -d "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}" ]]; then
+		Groups+=( "${group}" )
+		get_group_depths "${PMODULES_ROOT}" "${group}"
+	fi
+	return 1
 }
 
 is_used_group() {
@@ -1135,9 +1144,25 @@ get_groups () {
 	};
 }
 
+# compute depths or passed group
+# $1: root of Pmodules installation
+# $2: group
+get_group_depth () {
+	local -r root="$1"
+	local -r group="$2"
+	{
+		cd "${root}"
+		local  tmp=$(find "${group}/${PMODULES_MODULEFILES_DIR}" -depth -type f -o -type l | head -1)
+		local -a tmp2=( ${tmp//\// } )
+		local depth=${#tmp2[@]}
+		(( depth-=4 ))
+		GroupDepths[$group]=${depth} 
+	}
+}
+
 #
 # $1: root of modulefile hierarchy
-get_hierarchy_depth () {
+get_group_depths () {
 	local -r root="$1"
 	{
 		cd "${root}"
@@ -1158,7 +1183,7 @@ get_hierarchy_depth () {
 subcommand_use() {
 	if (( ${#Groups[@]} == 0 )); then
 	        get_groups "${PMODULES_ROOT}"
-		get_hierarchy_depth "${PMODULES_ROOT}"
+		get_group_depths "${PMODULES_ROOT}"
 	fi
 	local saved_IFS=${IFS}; 
 	IFS=':'
@@ -1233,6 +1258,11 @@ subcommand_use() {
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
+				if [[ -z "${GroupDepths[$arg]}" ]]; then
+					# not yet cached group
+					Groups+=( "${arg}" )
+					get_group_depth "${PMODULES_ROOT}" "${arg}"
+				fi
 				if (( ${GroupDepths[$arg]} != 0 )); then
 					std::die 3 "${CMD} ${FUNCNAME[0]##*_}: cannot add group ${arg} to module path"
 				fi
@@ -1651,7 +1681,7 @@ subcommand_search() {
 
 	if (( ${#Groups[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
 	        get_groups "${src_prefix}"
-		get_hierarchy_depth "${src_prefix}"
+		get_group_depths "${src_prefix}"
 	fi
 	
 	for module in "${modules[@]}"; do
@@ -1848,7 +1878,7 @@ done
 
 if (( ${#Groups[@]} == 0 )); then
         get_groups "${PMODULES_ROOT}"
-	get_hierarchy_depth "${PMODULES_ROOT}"
+	get_group_depths "${PMODULES_ROOT}"
 fi
 
 $subcommand "${opts[@]}"
