@@ -1074,10 +1074,15 @@ subcommand_avail() {
 	local pattern=()
 	local output_function=''
 	local opts=''
+	local opt_all_groups='no'
 	local opt_use_releases="${UsedReleases}"
 	while (($# > 0)); do
 		case $1 in
-			-a | --all | --all-releases )
+			-a | --all )
+				opt_all_groups='yes'
+				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
+				;;
+			--all-releases )
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			-h | --human )
@@ -1113,6 +1118,9 @@ subcommand_avail() {
 		shift
 	done
 	output_function=${output_function:-human_readable_output}
+	if [[ "${opt_all_groups}" = 'yes' ]]; then
+		rescan_groups
+	fi
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
@@ -1145,34 +1153,63 @@ get_groups () {
 }
 
 # compute depths or passed group
-# $1: root of Pmodules installation
+# Note: cwd must be Pmodules root directory
+# $1: group
+#
+get_group_depth2 () {
+	local -r group="$1"
+	local  tmp=$(find "${group}/${PMODULES_MODULEFILES_DIR}" -depth -type f -o -type l | head -1)
+	local -a tmp2=( ${tmp//\// } )
+	local depth=${#tmp2[@]}
+	(( depth-=4 ))
+	GroupDepths[$group]=${depth} 
+}
+
+# compute depths or passed group
+# $1: root
 # $2: group
-get_group_depth () {
+#
+get_group_depth2 () {
 	local -r root="$1"
 	local -r group="$2"
+
 	{
 		cd "${root}"
-		local  tmp=$(find "${group}/${PMODULES_MODULEFILES_DIR}" -depth -type f -o -type l | head -1)
-		local -a tmp2=( ${tmp//\// } )
-		local depth=${#tmp2[@]}
-		(( depth-=4 ))
-		GroupDepths[$group]=${depth} 
+		get_group_depth2 "${group}"
 	}
 }
 
 #
+# Compute depth for all known groups
 # $1: root of modulefile hierarchy
 get_group_depths () {
 	local -r root="$1"
 	{
 		cd "${root}"
-		local _group
-		for _group in "${Groups[@]}"; do
-			local  tmp=$(find "${_group}/${PMODULES_MODULEFILES_DIR}" -depth -type f -o -type l | head -1)
-			local -a tmp2=( ${tmp//\// } )
-			local depth=${#tmp2[@]}
-			let depth-=4
-			GroupDepths[$_group]=${depth} 
+		local group
+		for group in "${Groups[@]}"; do
+			get_group_depth2 "${group}"
+		done
+	};
+}
+
+# re-scan available groups.
+#
+# Note:
+# Removing groups is not supported for the time being. Be aware, that 
+# a user might have a module loaded from this group. This cannot be checked.
+#
+# $1: root of modulefile hierarchy
+rescan_groups() {
+	local -r root="$1"
+	{
+		cd "${root}" 
+		# for some unknown reason [A-Z]* doesn't work with some bash versions
+		for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
+			if [[ -z "${GroupDepths[${group}]}" ]]; then
+				Groups+=( "${group}" )
+				get_group_depth2 "${group}"
+			fi
 		done
 	};
 }
