@@ -387,13 +387,7 @@ pbuild::make_all() {
 				-v | --verbose)
 					args+=( $1 )
 					;;
-				--release=* )
-					args+=( $1 )
-					;;
 				--with=*/* )
-					args+=( $1 )
-					;;
-				*=* )
 					args+=( $1 )
 					;;
 			esac
