@@ -1119,7 +1119,7 @@ subcommand_avail() {
 	done
 	output_function=${output_function:-human_readable_output}
 	if [[ "${opt_all_groups}" = 'yes' ]]; then
-		rescan_groups
+		rescan_groups "${PMODULES_ROOT}"
 	fi
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
@@ -1162,6 +1162,10 @@ get_group_depth2 () {
 	local -a tmp2=( ${tmp//\// } )
 	local depth=${#tmp2[@]}
 	(( depth-=4 ))
+	# if a group doesn't contain a module yet, depth would be -4
+	# instead of 0
+	# :FIXME: better solution?
+	(( depth == -4 )) && (( depth = 0 ))
 	GroupDepths[$group]=${depth} 
 }
 
@@ -1169,7 +1173,7 @@ get_group_depth2 () {
 # $1: root
 # $2: group
 #
-get_group_depth2 () {
+get_group_depth () {
 	local -r root="$1"
 	local -r group="$2"
 
