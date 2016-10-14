@@ -10,8 +10,12 @@ source "${BOOTSTRAP_DIR}/config/environment.bash"
 
 declare force='no'
 
+declare opts='--bootstrap'
 while (( $# > 0 )); do
 	case $1 in
+		--disable-cleanup )
+			opts+=" $1"
+			;;
 		-f | --force )
 			force='yes'
 			;;
@@ -36,7 +40,7 @@ build () {
 	local -r version="$2"
 	shift 2
 
-	"${BOOTSTRAP_DIR}/Pmodules/modbuild" "${BOOTSTRAP_DIR}/${name}/build" --bootstrap --disable-cleanup "$@" "${version}" || \
+	"${BOOTSTRAP_DIR}/Pmodules/modbuild" "${BOOTSTRAP_DIR}/${name}/build" ${opts} "$@" "${version}" || \
 		std::die 3 "Compiling '${name}' failed!"
 }
 
@@ -65,7 +69,6 @@ if [[ ! -e "${PMODULES_HOME}/bin/tclsh" ]] || [[ ${force} == 'yes' ]]; then
 fi
 
 if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${force} == 'yes' ]]; then
-	build Modules "${MODULES_VERSION}" --compile && \
-	cp -v "${PMODULES_TMPDIR}/build/Modules-${MODULES_VERSION}/modulecmd" "${PMODULES_HOME}/libexec/modulecmd.bin"
+	build Modules "${MODULES_VERSION}" --compile
 fi
 echo "Done..."
