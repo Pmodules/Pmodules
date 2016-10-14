@@ -35,6 +35,7 @@ pbuild::post_install() {
 	rmdir    ${PREFIX}/Modules/share/man
 	rmdir    ${PREFIX}/Modules/share
 	rmdir    ${PREFIX}/Modules
+	cp -v    "${MODULE_BUILDDIR}/modulecmd" "${PREFIX}/libexec/modulecmd.bin" || exit 1
 }
 	
 # fake module command
