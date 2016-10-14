@@ -50,6 +50,7 @@ if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash" ]]; then
 fi
 
 mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
+mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
 
 install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
