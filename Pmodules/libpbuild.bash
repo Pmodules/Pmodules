@@ -173,8 +173,8 @@ pbuild::set_supported_compilers() {
 # Notes:
 #   The passed module name should be NAME/VERSION
 #
-pbuild::module_is_available() {
-	[[ -n $("${MODULECMD}" bash avail "$1" 2>&1 1>/dev/null) ]]
+pbuild::module_exists() {
+	[[ -n $("${MODULECMD}" bash search -a --no-header "$1" 2>&1 1>/dev/null) ]]
 }
 
 #......................................................................
@@ -397,7 +397,7 @@ pbuild::make_all() {
 		local buildscript=$( std::get_abspath "${BUILD_BLOCK_DIR}"/../../*/${m/\/*}/build )
 		[[ -x "${buildscript}" ]] || std::die 1 "$m: build-block not found!"
 		"${buildscript}" "${m#*/}" ${args[@]}
-		[[ -n $(module avail "$m" 2>&1) ]] || std::die 1 "$m: oops: build failed..."
+		pbuild::module_exists "$m" || std::die 1 "$m: oops: build failed..."
 	}
 	
 	#......................................................................
@@ -468,7 +468,7 @@ pbuild::make_all() {
 				runtime_dependencies+=( "$m" )
 			fi
 			is_loaded "$m" && continue
-			if ! pbuild::module_is_available "$m"; then
+			if ! pbuild::module_exists "$m"; then
 			        build_dependency "$m"
 			fi
 
@@ -613,7 +613,7 @@ pbuild::make_all() {
 		done
 		for rel in "${rels[@]}"; do
 			eval $("${MODULECMD}" bash use ${rel})
-			if pbuild::module_is_available "${P}/${V}"; then
+			if pbuild::module_exists "${P}/${V}"; then
 				cur_module_release=${rel}
 				std::info "${P}/${V}: already exists and released as \"${rel}\""
 				break
