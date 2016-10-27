@@ -1,5 +1,7 @@
 #!/usr/bin/env modbuild
 
+SOURCE_URL="http://ftp.gnu.org/gnu/coreutils/$P-$V.tar.xz"
+
 pbuild::configure() {
     "${MODULE_SRCDIR}"/configure \
 		      --prefix="${PREFIX}" \
