@@ -1,5 +1,10 @@
 #!/usr/bin/env modbuild
 
+SOURCE_URL="http://frodo.looijaard.name/system/files/software/getopt/getopt-1.1.6.tar.gz"
+
+pbuild::patch_sources_Linux() {
+	patch -p1 < "${BUILD_BLOCK_DIR}/Makefile.patch"
+}
 
 pbuild::configure() {
 	:
@@ -10,7 +15,7 @@ pbuild::build() {
 	declare -x LIBRARY_PATH="${PREFIX}/lib"
 	case ${OS} in
 		Linux )
-			declare -x LDFLAGS="-lintl"
+			declare -x LDFLAGS="-lintl -L${PREFIX}/lib"
 			;;
 		Darwin )
 			declare -x LDFLAGS="-lintl -liconv -framework CoreFoundation"
