@@ -16,6 +16,9 @@ while (( $# > 0 )); do
 		--disable-cleanup )
 			opts+=" $1"
 			;;
+		--debug )
+			opts+=" $1"
+			;;
 		-f | --force )
 			force='yes'
 			;;
