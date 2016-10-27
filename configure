@@ -4,7 +4,15 @@ declare prefix='/opt/psi'
 declare distfiles='/afs/psi.ch/software/Pmodules/distfiles'
 
 print_usage() {
-	echo "${0##*/} [OPTS]" 1>&2
+	echo "${0##*/} [OPTS]
+
+OPTS
+--prefix=PREFIX
+	Installation prefix
+
+--distfiles=DISTFILES
+	Directory with sources
+" 1>&2
 	exit 1
 }
 
@@ -14,7 +22,7 @@ while (( $# > 0 )); do
 		prefix=${1#*=}
 		;;
 	--distfiles=* )
-		distfile=${1#*=}
+		distfiles=${1#*=}
 		;;
 	--help | -h | -\? )
 		print_usage
