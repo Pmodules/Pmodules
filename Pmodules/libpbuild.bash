@@ -217,8 +217,16 @@ find_tarball() {
 			done
 		done
 	done
-	std::error "${name}/${version}: source not found."
-	exit 43
+	if [[ -z "${SOURCE_URL}" ]]; then
+		std::error "${name}/${version}: source not found."
+		exit 43
+	fi
+	wget --directory-prefix="${PMODULES_DISTFILESDIR}" "${SOURCE_URL}"
+	if (( $? != 0 )); then
+		std::error "${name}/${version}: cannot download source."
+		exit 43
+	fi
+	echo "${PMODULES_DISTFILESDIR}/${SOURCE_URL##*/}"
 }
 
 ###############################################################################
