@@ -1,0 +1,15 @@
+diff -u getopt-1.1.6.orig//Makefile getopt-1.1.6/Makefile
+--- getopt-1.1.6.orig//Makefile	2014-11-24 04:33:39.000000000 -0800
++++ getopt-1.1.6/Makefile	2016-10-27 08:27:52.000000000 -0700
+@@ -61,7 +61,7 @@
+ 	-$(RM) $(objects) $(binaries) 
+ 
+ getopt: $(objects)
+-	$(CC) $(LDFLAGS) -o $@ $(objects)
++	$(CC) -o $@ $(objects) $(LDFLAGS)
+ 
+ install: getopt install_po
+ 	$(INSTALL) -m 755 -d $(DESTDIR)$(bindir) $(DESTDIR)$(man1dir)
+Common subdirectories: getopt-1.1.6.orig//gnu and getopt-1.1.6/gnu
+Common subdirectories: getopt-1.1.6.orig//po and getopt-1.1.6/po
+Common subdirectories: getopt-1.1.6.orig//tests and getopt-1.1.6/tests
