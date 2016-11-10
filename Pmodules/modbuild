@@ -74,6 +74,9 @@ VERSION
 --disable-cleanup-src
 	Keep files in source directory (default).
 
+--variants-file
+        Specify which variants file to use
+
 --with=P/V
         Preload module P with version V. To preload multiple modules,
         use this option per module. Order may matter!
@@ -145,12 +148,16 @@ declare enable_cleanup_build='yes'
 declare enable_cleanup_src='no'
 declare target='all'
 declare bootstrap='no'
+declare opt_variants_file=''
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
 
 # save arguments, we might need later again
 declare -r ARGS="$@"
+
+# OS/system default
+declare    OS=$(uname -s)
 
 # 
 while (( $# > 0 )); do
@@ -207,6 +214,13 @@ while (( $# > 0 )); do
 	--tmpdir=* )
 		PMODULES_TMPDIR=${1/--tmpdir=}
 		;;
+	--variants-file )
+		opt_variants_file="$2"
+		shift
+		;;
+	--variants-file=* )
+		opt_variants_file="${1/--variants-file=}"
+		;;
 	--with )
 		with_modules+=( "$2" )
 		shift
@@ -217,6 +231,13 @@ while (( $# > 0 )); do
 		;;
 	--prep | --configure | --compile | --install | --all )
 		target=$1
+		;;
+	--system )
+		OS="$2"
+		shift
+		;;
+	--system=* )
+		OS="${1/--system=}"
 		;;
 	--version | -V )
 		V=$2
@@ -246,8 +267,16 @@ fi
 [[ -n ${BUILD_BLOCK} ]] || std::die 1 "No build-block specified!"
 [[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
 
+if [[ -n "${opt_variants_file}" ]]; then
+	if [[ ! -r "${opt_variants_file}" ]]; then
+		std::die 1 "${opt_variants_file}: variants file does not exist or is not readable!"
+	fi
+fi
+
 # :FIXME: move to library?
-declare -r OS=$(uname -s)
+# :FIXME: implement this with OS/system dependend plugins 
+
+declare -r OS
 case ${OS} in
 Darwin )
 	declare -x MACOSX_DEPLOYMENT_TARGET='10.9'
