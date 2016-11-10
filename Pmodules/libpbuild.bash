@@ -221,7 +221,7 @@ find_tarball() {
 		std::error "${name}/${version}: source not found."
 		exit 43
 	fi
-	wget --directory-prefix="${PMODULES_DISTFILESDIR}" "${SOURCE_URL}"
+	wget --no-check-certificate --directory-prefix="${PMODULES_DISTFILESDIR}" "${SOURCE_URL}"
 	if (( $? != 0 )); then
 		std::error "${name}/${version}: cannot download source."
 		exit 43
@@ -425,22 +425,21 @@ pbuild::make_all() {
 	#
 	load_build_dependencies() {
 		local -a eligible_variants_files=()
-		eligible_variants_files+=( "${V}/variants" )
 		eligible_variants_files+=( "${V}/variants.${OS}" )
-		eligible_variants_files+=( "${V%.*}/variants" )
+		eligible_variants_files+=( "${V}/variants" )
 		eligible_variants_files+=( "${V%.*}/variants.${OS}" )
-		eligible_variants_files+=( "${V%.*.*}/variants" )
+		eligible_variants_files+=( "${V%.*}/variants" )
 		eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
+		eligible_variants_files+=( "${V%.*.*}/variants" )
 		local found='no'
 		local variants_file=''
 		for variants_file in "${eligible_variants_files[@]}"; do
-			    if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
-				    found='yes'
-				    variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
-				    break
-			    fi
+			if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
+				found='yes'
+				variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
+			    	break
+		    	fi
 		done
-		
 		local m
 		if [[ "${found}" == "yes" ]]; then
 		        # :FIXME:
