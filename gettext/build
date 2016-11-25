@@ -1,6 +1,6 @@
 #!/usr/bin/env modbuild
 
-SOURCE_URL="https://ftp.gnu.org/pub/gnu/$P/$P-$V.tar.xz"
+SOURCE_URL="https://ftp.gnu.org/pub/gnu/$P/$P-$V.tar.gz"
 
 pbuild::configure() {
     "${MODULE_SRCDIR}"/configure \
