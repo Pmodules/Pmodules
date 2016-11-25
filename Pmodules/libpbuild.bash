@@ -189,7 +189,6 @@ pbuild::module_exists() {
 #
 # Used global variables:
 #   BUILD_BLOCK_DIR [in]
-#   TARBALL [out]
 #
 find_tarball() {
 	local -r name="$1"
@@ -197,36 +196,43 @@ find_tarball() {
 	shift 2
 	local -a dirs=( "${BUILD_BLOCK_DIR}" )
 	dirs+=( "$@" )
-
-	local release="${version##*-}"
-	version=${version%-*}
-	local ext
-	for dir in "${dirs[@]}"; do
-		for ext in tar tar.gz tgz tar.bz2 tar.xz; do
-			local fname
-			local -a fnames
-			fnames+=( "${dir}/${name}-${OS}-${version}-${release}.${ext}" )
-			fnames+=( "${dir}/${name}-${OS}-${version}.${ext}" )
-			fnames+=( "${dir}/${name}-${version}-${release}.${ext}" )
-			fnames+=( "${dir}/${name}-${version}.${ext}" )
-			for fname in "${fnames[@]}"; do
-				if [[ -r "${fname}" ]]; then
-				    echo "${fname}"
-				    return
-				fi
+	local -a fnames=()
+	if [[ -n "${SOURCE_URL}" ]]; then
+		basename="${SOURCE_URL##*/}"
+		for dir in "${dirs[@]}"; do
+			fnames+=( "${dir}/${basename}" )
+		done
+	else
+		local release="${version##*-}"
+		version=${version%-*}
+		local ext
+		for dir in "${dirs[@]}"; do
+			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
+				local fname
+				local -a fnames
+				fnames+=( "${dir}/${name}-${OS}-${version}-${release}.${ext}" )
+				fnames+=( "${dir}/${name}-${OS}-${version}.${ext}" )
+				fnames+=( "${dir}/${name}-${version}-${release}.${ext}" )
+				fnames+=( "${dir}/${name}-${version}.${ext}" )
 			done
 		done
+	fi
+	fnames+=( "not found" )
+	for fname in "${fnames[@]}"; do
+		[[ -r "${fname}" ]] && break
 	done
-	if [[ -z "${SOURCE_URL}" ]]; then
-		std::error "${name}/${version}: source not found."
-		exit 43
+	if [[ "${fname}" == 'not found' ]] && [[ -n "${SOURCE_URL}" ]]; then
+		wget --no-check-certificate \
+			--directory-prefix="${PMODULES_DISTFILESDIR}" \
+			"${SOURCE_URL}" ||
+			std::info "Downloading sources from '${SOURCE_URL}' failed."
+		fname= "${PMODULES_DISTFILESDIR}/${basename}"
 	fi
-	wget --no-check-certificate --directory-prefix="${PMODULES_DISTFILESDIR}" "${SOURCE_URL}"
-	if (( $? != 0 )); then
-		std::error "${name}/${version}: cannot download source."
-		exit 43
+	if [[ -r "${fname}" ]]; then
+		echo "${fname}"
+	else
+		std::die 4 "Sources for '${name}/${version}' not found."
 	fi
-	echo "${PMODULES_DISTFILESDIR}/${SOURCE_URL##*/}"
 }
 
 ###############################################################################
