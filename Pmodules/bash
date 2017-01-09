@@ -12,6 +12,7 @@ fi
 # implement module comand as function
 #
 module() {
+	unset BASH_ENV
 	local -r modulecmd="${PMODULES_HOME}/bin/modulecmd"
 
 	local -a args=()
