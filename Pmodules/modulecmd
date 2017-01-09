@@ -2,5 +2,5 @@
 
 unset BASH_ENV
 
-bindir=$( cd $(dirname "$0") && pwd -P )
+bindir=$( cd $(dirname "$0")/../sbin && pwd -P )
 "${bindir}/bash" --noprofile --norc "${bindir}/../libexec/modulecmd.bash" "$@"

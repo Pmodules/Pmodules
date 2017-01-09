@@ -1,6 +1,6 @@
-#!/bin/bash --noprofile
+#!/bin/sh
 
 unset BASH_ENV
 
-declare -r bindir=$( cd $(dirname $0) && pwd -P )
+bindir=$( cd $(dirname "$0")/../sbin && pwd -P )
 "${bindir}/bash" --noprofile --norc "${bindir}/../libexec/modmanage.bash" "$@"

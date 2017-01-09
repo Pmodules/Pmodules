@@ -6,7 +6,6 @@ unset PMODULES_HOME
 unset PMODULES_VERSION
 
 source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash"
-source "${BOOTSTRAP_DIR}/config/environment.bash"
 
 declare force='no'
 
@@ -33,6 +32,10 @@ while (( $# > 0 )); do
 done
 
 std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
+source "${BOOTSTRAP_DIR}/config/environment.bash"
+PMODULES_VERSION=''
+declare -x PMODULES_VERSION
+echo $PMODULES_VERSION
 
 #if [[ -n ${PMODULES_DIR} ]] && [[ "${PMODULES_DIR}" != "/" ]] && [[ -d "${PMODULES_DIR}" ]]; then
 #	rm -rf "${PMODULES_DIR}"
@@ -47,11 +50,11 @@ build () {
 		std::die 3 "Compiling '${name}' failed!"
 }
 
-if [[ ! -f "${PMODULES_HOME}/bin/base64" ]] || [[ ${force} == 'yes' ]]; then
+if [[ ! -f "${PMODULES_HOME}/sbin/base64" ]] || [[ ${force} == 'yes' ]]; then
 	build coreutils "${COREUTILS_VERSION}"
 fi
 
-if [[ ! -f "${PMODULES_HOME}/bin/xgettext" ]] || [[ ${force} == 'yes' ]]; then
+if [[ ! -f "${PMODULES_HOME}/sbin/xgettext" ]] || [[ ${force} == 'yes' ]]; then
 	build gettext "${GETTEXT_VERSION}"
 fi
 
@@ -59,15 +62,15 @@ if [[ ! -f "${PMODULES_HOME}/bin/getopt" ]] || [[ ${force} == 'yes' ]]; then
 	build getopt "${GETOPT_VERSION}"
 fi
 
-if [[ ! -f "${PMODULES_HOME}/bin/dialog" ]] || [[ ${force} == 'yes' ]]; then
+if [[ ! -f "${PMODULES_HOME}/sbin/dialog" ]] || [[ ${force} == 'yes' ]]; then
 	build dialog "${DIALOG_VERSION}"
 fi
 
-if [[ ! -f "${PMODULES_HOME}/bin/bash" ]] || [[ ${force} == 'yes' ]]; then
+if [[ ! -f "${PMODULES_HOME}/sbin/bash" ]] || [[ ${force} == 'yes' ]]; then
 	build bash "4.3.30"
 fi
 
-if [[ ! -e "${PMODULES_HOME}/bin/tclsh" ]] || [[ ${force} == 'yes' ]]; then
+if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${force} == 'yes' ]]; then
 	build Tcl "${TCL_VERSION}"
 fi
 

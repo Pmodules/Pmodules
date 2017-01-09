@@ -1,4 +1,4 @@
-#!@PMODULES_HOME@/bin/bash --noprofile
+#!@PMODULES_HOME@/sbin/bash --noprofile
 #
 
 #set -o nounset
@@ -11,13 +11,14 @@ declare -r  CMD='module'
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare     prefix=$(dirname "${mydir}")
 declare -r  bindir="${prefix}/bin"
+declare -r  sbindir="${prefix}/sbin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
-PATH="${bindir}:${PATH}"
+PATH="${sbindir}:${bindir}:${PATH}"
 
 declare -r  version='@PMODULES_VERSION@'
 
@@ -73,7 +74,7 @@ pbuild::save_env() {
 		[[ -n "${tmp}" ]] && s+="${tmp};"
 		shift
 	done
-	declare -g PMODULES_ENV=$( "${PMODULES_HOME}/bin/base64" --wrap=0 <<< "$s" )
+	declare -g PMODULES_ENV=$( "${PMODULES_HOME}/sbin/base64" --wrap=0 <<< "$s" )
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
@@ -1832,7 +1833,7 @@ subcommand_initclear() {
 }
 
 if [[ -n ${PMODULES_ENV} ]]; then
-	eval "$("${PMODULES_HOME}/bin/base64" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+	eval "$("${PMODULES_HOME}/sbin/base64" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 else
 	pmodules_init
 fi

@@ -5,6 +5,7 @@ SOURCE_URL="https://ftp.gnu.org/pub/gnu/$P/$P-$V.tar.gz"
 pbuild::configure() {
     "${MODULE_SRCDIR}"/configure \
 		      --prefix="${PREFIX}" \
+		      --bindir="${PREFIX}/sbin" \
 		      --disable-java \
 		      --disable-threads \
 		      --disable-shared \

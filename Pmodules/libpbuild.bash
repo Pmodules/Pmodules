@@ -222,10 +222,15 @@ find_tarball() {
 		[[ -r "${fname}" ]] && break
 	done
 	if [[ "${fname}" == 'not found' ]] && [[ -n "${SOURCE_URL}" ]]; then
-		wget --no-check-certificate \
-			--directory-prefix="${PMODULES_DISTFILESDIR}" \
+		curl --insecure \
+			--output "${PMODULES_DISTFILESDIR}/${basename}" \
 			"${SOURCE_URL}" ||
 			std::info "Downloading sources from '${SOURCE_URL}' failed."
+		sleep 2
+		#wget --no-check-certificate \
+		#	--directory-prefix="${PMODULES_DISTFILESDIR}" \
+		#	"${SOURCE_URL}" ||
+		#	std::info "Downloading sources from '${SOURCE_URL}' failed."
 		fname= "${PMODULES_DISTFILESDIR}/${basename}"
 	fi
 	if [[ -r "${fname}" ]]; then
@@ -696,6 +701,7 @@ pbuild::make_all() {
 		DYLD_LIBRARY_PATH="${PREFIX}/lib"
 
 		PATH+=":${PREFIX}/bin"
+		PATH+=":${PREFIX}/sbin"
 	}
 
 	#......................................................................

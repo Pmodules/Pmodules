@@ -5,6 +5,7 @@ SOURCE_URL="ftp://invisible-island.net/$P/$P-$V.tgz"
 pbuild::configure() {
 	"${MODULE_SRCDIR}"/configure \
 		--prefix="${PREFIX}" \
+		--bindir="${PREFIX}/sbin" \
 		|| exit 1
 }
 

@@ -12,12 +12,13 @@ pbuild::configure() {
 	esac
 	"${srcdir}"/configure \
 		--prefix="${PREFIX}" \
+		--bindir="${PREFIX}/sbin" \
 		--enable-shared=no \
 		|| exit 1
 }
 
 pbuild::post_install() {
-	{ cd "${PREFIX}"/bin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
+	{ cd "${PREFIX}"/sbin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
 }
 
 pbuild::add_to_group 'Tools'

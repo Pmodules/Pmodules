@@ -1,4 +1,4 @@
-#!@PMODULES_HOME@/bin/tclsh
+#!@PMODULES_HOME@/sbin/tclsh
 
 ########################################################################
 # This is a pure TCL implementation of the module command

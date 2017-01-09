@@ -31,6 +31,8 @@ pbuild::install() {
 	declare -x DESTDIR="${PREFIX}"
 	declare -x prefix=''
 	make -e install
+	mkdir -p "${PREFIX}/sbin"
+	mv "${PREFIX}/bin/getopt" "${PREFIX}/sbin"
 }
 
 pbuild::cleanup_build() {

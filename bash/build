@@ -5,6 +5,7 @@ SOURCE_URL="https://ftp.gnu.org/gnu/$P/$P-$V.tar.gz"
 pbuild::configure() {
 	"${MODULE_SRCDIR}"/configure \
 		--prefix="${PREFIX}" \
+		--bindir="${PREFIX}/sbin" \
 		|| exit 1
 }
 

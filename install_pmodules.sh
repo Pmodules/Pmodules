@@ -1,12 +1,16 @@
 #!/bin/bash
 declare    BOOTSTRAP_DIR=$(dirname "$0")
+
+unset PMODULES_HOME
+unset PMODULES_VERSION
+
 source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash"
-source "${BOOTSTRAP_DIR}/config/environment.bash"
 
 declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
 std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
+source "${BOOTSTRAP_DIR}/config/environment.bash"
 
 
 echo "Installing to ${PMODULES_HOME} ..."
