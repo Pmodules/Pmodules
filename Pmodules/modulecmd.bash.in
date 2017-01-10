@@ -10,15 +10,18 @@ declare -r  CMD='module'
 
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare     prefix=$(dirname "${mydir}")
-declare -r  bindir="${prefix}/bin"
 declare -r  sbindir="${prefix}/sbin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
+declare -r base64="${sbindir}/base64"
+declare -r getopt="${sbindir}/getopt"
+declare -r mktemp="${sbindir}/mktemp"
+declare -r sort="${sbindir}/sort"
+declare -r tail="${sbindir}/tail"
+
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
-
-PATH="${sbindir}:${bindir}:${PATH}"
 
 declare -r  version='@PMODULES_VERSION@'
 
@@ -74,7 +77,7 @@ pbuild::save_env() {
 		[[ -n "${tmp}" ]] && s+="${tmp};"
 		shift
 	done
-	declare -g PMODULES_ENV=$( "${PMODULES_HOME}/sbin/base64" --wrap=0 <<< "$s" )
+	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
@@ -961,7 +964,7 @@ get_available_modules() {
 		if [[ :${use_releases}: =~ :${release}: ]]; then
 		        mods+=( "${mod}" ${release} )
 		fi
-	done < <(MODULEPATH="${dir}" "${modulecmd}" bash -t avail "${module}" 2>&1 | tail -n +2)
+	done < <(MODULEPATH="${dir}" "${modulecmd}" bash -t avail "${module}" 2>&1 | "${tail}" -n +2)
 	echo "${mods[@]}"
 }
 
@@ -1549,7 +1552,7 @@ subcommand_search() {
 				done
 				out+="${line[0]}"
 				std::info "${out}"
-			done < <(sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
 		elif [[ "${opt_print_variants}" == "yes" ]]; then
 			while read -a toks; do
 				unset deps
@@ -1591,9 +1594,9 @@ subcommand_search() {
 					dependecies+="${deps[$d]}$d "
 				done
 				printf "%-20s %-10s %-s\n" "${toks[0]}" "${toks[1]}" "${dependecies}" 1>&2
-			done < <(sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
 		else
-			sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
+			"${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
 		fi
 	}
 	#.....................................................................
@@ -1608,7 +1611,7 @@ subcommand_search() {
 	search () {
 		local -r module=$1
 		# write results to a temporary file for later processing
-		local -r tmpfile=$( mktemp /tmp/$(basename $0).XXXXXX ) \
+		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
 		    || std::die 1 "Oops: unable to create tmp file!"
 		local _group
 		# loop over all groups
@@ -1833,7 +1836,7 @@ subcommand_initclear() {
 }
 
 if [[ -n ${PMODULES_ENV} ]]; then
-	eval "$("${PMODULES_HOME}/sbin/base64" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 else
 	pmodules_init
 fi
