@@ -1,9 +1,8 @@
 #!/bin/bash
 
-if [[  -z ${bindir} ]]; then
-        local bindir=$(dirname "${BASH_SOURCE}")
-	bindir=$(cd "${bindir}"/.. && pwd)"/bin"
-	sbindir=$(cd "${bindir}"/.. && pwd)"/sbin"
+if [[  -z ${sbindir} ]]; then
+        local sbindir=$(dirname "${BASH_SOURCE}")
+	sbindir=$(cd "${sbindir}"/.. && pwd)"/sbin"
 fi
 
 pmodules::get_options() {
