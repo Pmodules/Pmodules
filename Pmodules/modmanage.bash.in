@@ -9,13 +9,14 @@ declare -r  CMD=$(basename "$0")
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare -r  prefix=$(dirname "${mydir}")
 declare -r  bindir="${prefix}/bin"
+declare -r  sbindir="${prefix}/sbin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
-PATH="${bindir}:${PATH}"
+PATH="${sbindir}:${bindir}:${PATH}"
 
 _exit () {
 	std::die 1 "Interrupted..."
