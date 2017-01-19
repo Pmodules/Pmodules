@@ -3,7 +3,7 @@
 SOURCE_URL="http://frodo.looijaard.name/system/files/software/getopt/getopt-1.1.6.tar.gz"
 
 pbuild::patch_sources_Linux() {
-	patch -p1 < "${BUILD_BLOCK_DIR}/Makefile.patch"
+	: patch -p1 < "${BUILD_BLOCK_DIR}/Makefile.patch"
 }
 
 pbuild::configure() {
