@@ -784,10 +784,10 @@ subcommand_load() {
 
 	load_dependencies() {
 		local -r fname="$1"
-		echo "loading dependencies from $fname" 1>&2
 		while read dep; do
 			[[ -z ${dep} ]] && continue
 			[[ ${dep:0:1} == \# ]] && continue
+			module_is_loaded "${dep}" && continue
 			local output=$( subcommand_load "${dep}")
 			echo ${output}
 			eval ${output}
@@ -903,10 +903,9 @@ subcommand_load() {
 			for ((i=1; i<${#toks[@]}; i+=2)); do
 				p="/${toks[i]}/${toks[i+1]}${p}"
 			done
-			local dependencies="${PMODULES_ROOT}/${toks[0]}${p}/.dependencies"
-			if [[ -r ${dependency_info} ]]; then
-				echo $dependencies 1>&2
-				load_dependencies "${dependencies}"
+			local dependency_file="${PMODULES_ROOT}/${toks[0]}${p}/.dependencies"
+			if [[ -r ${dependency_file} ]]; then
+				load_dependencies "${dependency_file}"
 			fi
 		fi
 		"${modulecmd}" "${g_shell}" ${opts} load "${m}"
@@ -1854,6 +1853,35 @@ case $1 in
 esac
 shift
 
+declare -A Subcommands=(\
+	[add]="subcommand_load" \
+	[load]="subcommand_load" \
+	[rm]="subcommand_unload" \
+	[unload]="subcommand_unload" \
+	[switch]="subcommand_swap" \
+	[swap]="subcommand_swap" \
+	[display]="subcommand_show" \
+	[show]="subcommand_show" \
+	[apropos]="subcommand_apropos" \
+	[keyword]="subcommand_apropos" \
+	[avail]="subcommand_avail" \
+	[search]="subcommand_search" \
+	[use]="subcommand_use" \
+	[unuse]="subcommand_unuse" \
+	[update]="subcommand_update" \
+	[refresh]="subcommand_refresh" \
+	[purge]="subcommand_purge" \
+	[list]="subcommand_list" \
+	[clear]="subcommand_clear" \
+	[whatis]="subcommand_whatis" \
+	[initadd]="subcommand_initadd" \
+	[initprepend]="subcommand_initprepend" \
+	[initrm]="subcommand_initrm" \
+	[initswitch]="subcommand_initswitch" \
+	[initlist]="subcommand_initlist" \
+	[initclear]="subcommand_initclear" \
+)
+
 declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
@@ -1870,63 +1898,29 @@ while (( $# > 0 )); do
 		-* )
 			opts+=( "$1" )
 			;;
-		add|load )
-			subcommand='subcommand_load'
-			shift
-			opts+=( "$@" )
-			shift $#
-			;;
-		rm|unload )
-			subcommand='subcommand_unload'
-			shift
-			opts+=( "$@" )
-			shift $#
-			;;
-		switch|swap )
-			subcommand='subcommand_swap'
-			shift
-			opts+=( "$@" )
-			shift $#
-			;;
-		display|show )
-			subcommand='subcommand_show'
-			shift
-			opts+=( "$@" )
-			shift $#
-			;;
-		apropos|keyword )
-			subcommand='subcommand_apropos'
-			shift
-			opts+=( "$@" )
-			shift $#
-			;;
-		avail|search|use|unuse|update|refresh|purge|list|clear|whatis|help )
-			subcommand=subcommand_$1
-			shift
-			if (( $# > 0 )); then
-			    opts+=( "$@" )
-			    shift $#
-			fi
-			;;
-		initadd|initprepend|initrm|initswitch|initlist|initclear )
-			subcommand=subcommand_$1
-			shift
-			opts=( "$@" )
-			shift $#
-			;;
 		* )
-			std::die 1 "${CMD}: unknown sub-command -- $1"
+			subcommand="$1"
+			if [[ -z "${Subcommands[$1]}" ]]; then
+			        std::die 1 "${CMD}: unknown sub-command -- $1"
+			fi
+			shift
+			opts+=( "$@" )
+			shift $#
 			;;
 	esac
 	shift
 done
+
+if [[ -z "${subcommand}" ]]; then
+	std::die 1 "${CMD}: no sub-command specified."
+fi
 
 if (( ${#Groups[@]} == 0 )); then
         get_groups "${PMODULES_ROOT}"
 	get_group_depths "${PMODULES_ROOT}"
 fi
 
-$subcommand "${opts[@]}"
+${Subcommands[$subcommand]} "${opts[@]}"
 
 # Local Variables:
 # mode: sh
