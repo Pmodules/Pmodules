@@ -35,7 +35,6 @@ install -m 0755 "${SRC_DIR}/modulecmd.bash"	"${PMODULES_HOME}/libexec"
 install -m 0755 "${SRC_DIR}/modulecmd.tcl"	"${PMODULES_HOME}/libexec"
 install -m 0755 "${SRC_DIR}/modmanage"		"${PMODULES_HOME}/bin"
 install -m 0755 "${SRC_DIR}/modmanage.bash"	"${PMODULES_HOME}/libexec"
-install -m 0755 "${SRC_DIR}/dialog.bash"	"${PMODULES_HOME}/bin"
 install -m 0755 "${SRC_DIR}/modbuild"		"${PMODULES_HOME}/bin"
 
 install -m 0755 "${SRC_DIR}/environment.bash"	"${PMODULES_HOME}/config/environment.bash.sample"
