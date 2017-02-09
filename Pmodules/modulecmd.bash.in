@@ -81,7 +81,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES PMODULES_USED_GROUPS' EXIT
+trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 print_version() {
 	echo "
@@ -482,8 +482,6 @@ is_used_release() {
 	[[ ":${UsedReleases}:" =~ :$1: ]]
 }
 
-declare used_groups=":${PMODULES_USED_GROUPS}:"
-
 is_group () {
 	local -r group="$1"
 	# arg isn't emtpy and group already in cache
@@ -498,7 +496,7 @@ is_group () {
 }
 
 is_used_group() {
-	[[ ${used_groups} =~ :$1: ]]
+	[[ :${PMODULES_USED_GROUPS}: =~ :$1: ]]
 }
 
 module_is_loaded() {
@@ -1238,7 +1236,7 @@ subcommand_use() {
 		local f
 		local r
 		std::info "Used groups:"
-		for f in ${used_groups//:/ }; do
+		for f in ${PMODULES_USED_GROUPS//:/ }; do
 			std::info "\t${f}"
 		done
 		std::info "\nUnused groups:"
@@ -1323,7 +1321,7 @@ subcommand_use() {
 			shift
 		done
 
-		declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
+		declare -g PMODULES_USED_GROUPS
 		pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
 		[[ ${#dirs_to_add[@]} == 0 ]] && return
 
@@ -1384,8 +1382,8 @@ subcommand_unuse() {
 		fi
 		shift
 	done
-	#echo "export PMODULES_USED_GROUPS=${PMODULES_USED_GROUPS}"
-	declare -g PMODULES_USED_GROUPS="${PMODULES_USED_GROUPS}"
+
+	declare -g PMODULES_USED_GROUPS
 	pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
 	[[ ${#dirs_to_remove[@]} == 0 ]] && return
 	for dir in "${dirs_to_remove[@]}"; do
