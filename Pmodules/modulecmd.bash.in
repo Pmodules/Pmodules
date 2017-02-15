@@ -961,7 +961,7 @@ get_available_modules() {
 		if [[ :${use_releases}: =~ :${release}: ]]; then
 		        mods+=( "${mod}" ${release} )
 		fi
-	done < <(MODULEPATH="${dir}" "${modulecmd}" bash -t avail "${module}" 2>&1 | "${tail}" -n +2)
+	done < <(MODULEPATH="${dir}" "${modulecmd}" bash avail -t "${module}" 2>&1 | "${tail}" -n +2)
 	echo "${mods[@]}"
 }
 
