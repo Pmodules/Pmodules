@@ -286,7 +286,7 @@ esac
 
 # source Pmodule environment configuration
 if [[ "${bootstrap}" == "yes" ]]; then
-	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]] || i\
+	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]] || \
 		std::die 1 "Cannot read configuration file!"
         source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
 	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
