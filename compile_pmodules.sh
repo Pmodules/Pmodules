@@ -62,10 +62,6 @@ if [[ ! -f "${PMODULES_HOME}/bin/getopt" ]] || [[ ${force} == 'yes' ]]; then
 	build getopt "${GETOPT_VERSION}"
 fi
 
-#if [[ ! -f "${PMODULES_HOME}/sbin/dialog" ]] || [[ ${force} == 'yes' ]]; then
-#	build dialog "${DIALOG_VERSION}"
-#fi
-
 if [[ ! -f "${PMODULES_HOME}/sbin/bash" ]] || [[ ${force} == 'yes' ]]; then
 	build bash "4.3.30"
 fi
