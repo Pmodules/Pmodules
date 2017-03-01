@@ -228,20 +228,20 @@ proc _pmodules_setenv { PREFIX name version } {
 	}
 }
 
-proc module-url { _url } {
-	set ::url ${_url}
+proc module-url { url } {
+	set ::g_url ${url}
 }
 
-proc module-license { _license } {
-	set ::license ${_license}
+proc module-license { license } {
+	set ::g_license ${license}
 }
 
-proc module-maintainer { _maintainer } {
-	set ::maintainer ${_maintainer}
+proc module-maintainer { maintainer } {
+	set ::g_maintainer ${maintainer}
 }
 
-proc module-help { _help } {
-	set ::help ${_help}
+proc module-help { help } {
+	set ::g_help ${help}
 }
 
 proc ModulesHelp { } {
@@ -255,17 +255,17 @@ proc ModulesHelp { } {
 	} else {
 		module whatis
 	}
-	if { [info exists ::url] } {
-		puts stderr "Homepage:   ${::url}"
+	if { [info exists ::g_url] } {
+		puts stderr "Homepage:   ${::g_url}"
 	}
-	if { [info exists ::license] } {
-		puts stderr "License:    ${::license}"
+	if { [info exists ::g_license] } {
+		puts stderr "License:    ${::g_license}"
 	}
-	if { [info exists ::maintainer] } {
-		puts stderr "Maintainer: ${::maintainer}"
+	if { [info exists ::g_maintainer] } {
+		puts stderr "Maintainer: ${::g_maintainer}"
 	}
-	if { [info exists ::help] } {
-		puts stderr "${::help}\n"
+	if { [info exists ::g_help] } {
+		puts stderr "${::g_help}\n"
 	}
 }
 
