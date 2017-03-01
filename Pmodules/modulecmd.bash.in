@@ -1878,6 +1878,7 @@ declare -A Subcommands=(\
 	[initswitch]="subcommand_initswitch" \
 	[initlist]="subcommand_initlist" \
 	[initclear]="subcommand_initclear" \
+	[help]="subcommand_help" \
 )
 
 declare -a opts=()
