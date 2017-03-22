@@ -58,7 +58,7 @@ if [[ ! -f "${PMODULES_HOME}/sbin/xgettext" ]] || [[ ${force} == 'yes' ]]; then
 	build gettext "${GETTEXT_VERSION}"
 fi
 
-if [[ ! -f "${PMODULES_HOME}/bin/getopt" ]] || [[ ${force} == 'yes' ]]; then
+if [[ ! -f "${PMODULES_HOME}/sbin/getopt" ]] || [[ ${force} == 'yes' ]]; then
 	build getopt "${GETOPT_VERSION}"
 fi
 
