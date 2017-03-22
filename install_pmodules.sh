@@ -61,9 +61,10 @@ install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
 install -m 0644 "${SRC_DIR}/libpmodules.bash"	"${PMODULES_HOME}/lib"
 install -m 0644 "${SRC_DIR}/libpbuild.bash"	"${PMODULES_HOME}/lib"
 install -m 0644 "${SRC_DIR}/libstd.bash"	"${PMODULES_HOME}/lib"
-install -m 0644 "${SRC_DIR}/libmodules.tcl"	"${PMODULES_HOME}/lib/tcl8.6"
+install -m 0755 -d				"${PMODULES_HOME}/lib/Pmodules"
+install -m 0644 "${SRC_DIR}/libmodules.tcl"	"${PMODULES_HOME}/lib/Pmodules"
 
 {
-	cd "${PMODULES_HOME}/lib/tcl8.6"
+	cd "${PMODULES_HOME}/lib/Pmodules"
 	"${BOOTSTRAP_DIR}/mkindex.tcl"
 }
