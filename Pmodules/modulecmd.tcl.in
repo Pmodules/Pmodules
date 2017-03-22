@@ -10,6 +10,7 @@
 #
 # Some Global Variables.....
 #
+
 regsub {\$[^:]+:\s*(\S+)\s*\$} {$Revision: 1.147 $} {\1}\
 	 MODULES_CURRENT_VERSION
 set g_debug 0 ;# Set to 1 to enable debugging
@@ -19,6 +20,17 @@ set g_force 1 ;# Path element reference counting if == 0
 set CSH_LIMIT 4000 ;# Workaround for commandline limits in csh
 set flag_default_dir 1 ;# Report default directories
 set flag_default_mf 1 ;# Report default modulefiles and version alias
+
+
+set PREFIX ""
+set name ""
+set version ""
+set group ""
+set g_url ""
+set g_license ""
+set g_maintainer ""
+set g_help ""
+set g_whatis ""
 
 # Used to tell if a machine is running Windows or not
 proc isWin {} {
@@ -61,6 +73,314 @@ global g_shell
 set show_oneperline 0 ;# Gets set if you do module list/avail -t
 set show_modtimes 0 ;# Gets set if you do module list/avail -l
 
+########################################################################
+#
+# P m o d u l e s   procedures
+#
+
+#
+# :TODO:
+# switch/swap
+# unload modules if parent removed
+#
+
+if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
+	proc debug {msg} {
+		set level [expr [info level] -2] 
+		set r [catch {info level ${level}} e]
+		if {$r} {
+			set caller ""
+		} else {
+			set caller [lindex [split [info level [expr [info level] - 3]]] 0]
+		}
+		puts -nonewline stderr "${caller}: "
+		puts stderr ${msg}
+	}
+} else {
+	proc debug {msg} {}
+}
+
+proc procExists p {
+	return uplevel 1 [expr {[llength [info procs $p]] > 0}]
+}
+
+proc module-addgroup { group } {
+	global env
+	global name
+	global version
+
+	debug "called with arg $group"
+	set Implementation [file join {*}$::implementation]
+
+	set	GROUP [string toupper $group]
+	regsub -- "-" ${GROUP} "_" GROUP
+	setenv	${GROUP}		$name
+	setenv	${GROUP}_VERSION	$version
+
+	set	::${group}		$name
+	set	::${group}_version	$version
+
+	if { [module-info mode load] } {
+		debug "mode is load"
+
+		set dir $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
+		append-path MODULEPATH $dir
+		append-path PMODULES_USED_GROUPS $group
+		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
+		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
+	} elseif { [module-info mode remove] } {
+		set GROUP [string toupper $group]
+		debug "remove hierarchical group '${GROUP}'"
+		
+		if { [info exists env(PMODULES_LOADED_${GROUP})] } {
+			debug "unloading orphan modules"
+			set modules [split $env(PMODULES_LOADED_${GROUP}) ":"]
+			foreach m ${modules} {
+				if { ${m} == "999999999" } {
+					continue
+				}
+				if { [is-loaded ${module_name}] } {
+					debug "unloading: $m"
+					module unload ${m}
+				}
+			}
+		} else {
+			debug "no orphan modules to unload"
+		}
+		debug "mode=remove: $env(MODULEPATH)"
+		set dir $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
+		remove-path MODULEPATH $dir
+		remove-path PMODULES_USED_GROUPS $group
+	}
+	if { [module-info mode switch2] } {
+		debug "mode=switch2"
+		set dir  $::PmodulesRoot/$group/$::PmodulesModulfilesDir/[module-info name]
+		append-path MODULEPATH $dir
+		append-path PMODULES_USED_GROUPS ${group}
+	}
+}
+
+proc set-family { group } {
+        module-addgroup $group
+}
+
+proc _pmodules_update_loaded_modules { group name version } {
+	if { ${group} == "999999999" } {
+		return
+	}
+	set GROUP [string toupper $group]
+	debug "${GROUP} $name/$version"
+	append-path PMODULES_LOADED_${GROUP} "$name/$version"
+	remove-path PMODULES_LOADED_${GROUP} "999999999"
+}
+
+#
+# load dependencies, but do *not* unload dependencies
+#
+proc _pmodules_load_dependencies { fname } {
+	if { ! [ file exists ${fname} ] } {
+		return
+	}
+	if { ! [module-info mode load] } {
+		return
+	}
+	debug "load dependencies from: ${fname}"
+	#  Slurp up the data file
+	set fp [open ${fname} r]
+	set file_data [read ${fp}]
+	close ${fp}
+	set data [split ${file_data} "\n"]
+	foreach line ${data} {
+		debug "MODULEPATH=$::env(MODULEPATH)"
+		set module_name [string trim $line]
+		if { ${module_name} == "#" || ${module_name} == "" } {
+			continue
+		}
+		if { [is-loaded ${module_name}] } {
+			debug "module already loaded: ${module_name}"
+			continue
+		}
+		debug "module load: ${module_name}"
+		module load ${module_name}
+     }
+}
+
+proc lreverse_n { list n } {
+        set res {}
+        set i [expr [llength $list] - $n]
+        while {$i >= 0} {
+                lappend res {*}[lrange $list $i [expr $i+$n-1]]
+                incr i -$n
+        }
+        set res
+}
+
+#
+# set standard environment variables
+#
+proc _pmodules_setenv { PREFIX name version } {
+	#
+	# Hack for supporting legacy modules
+	if { "${::group}" == "Legacy" } {
+		debug "this is a legacy module..."
+		return
+	}
+
+	set		NAME			[string toupper $name]
+	regsub -- "-" ${NAME} "_" NAME
+
+	if { ! [info exist ::dont-setenv] } {
+		set ::dont-setenv {}
+	}
+
+	if { ${version} != "" } {
+		if { [lsearch ${::dont-setenv} "${NAME}_VERSION"] == -1 } {
+			setenv		${NAME}_VERSION		$version
+		}
+	}
+
+	if { [file isdirectory "$PREFIX"] } {
+		if { [lsearch ${::dont-setenv} "${NAME}_PREFIX"] == -1 } {
+			setenv		${NAME}_PREFIX		$PREFIX
+		}
+		if { [lsearch ${::dont-setenv} "${NAME}_DIR"] == -1 } {
+			setenv		${NAME}_DIR		$PREFIX
+		}
+		if { [lsearch ${::dont-setenv} "${NAME}_HOME"] == -1 } {
+			setenv		${NAME}_HOME		$PREFIX
+		}
+	} else {
+		debug "$PREFIX is not a directory"
+	}
+
+	if { [file isdirectory "$PREFIX/bin"] } {
+		if { [lsearch ${::dont-setenv} "PATH"] == -1 } {
+			prepend-path	PATH			$PREFIX/bin
+		}
+	}
+
+	if { [file isdirectory "$PREFIX/sbin"] } {
+		if { [lsearch ${::dont-setenv} "PATH"] == -1 } {
+			prepend-path	PATH			$PREFIX/sbin
+		}
+	}
+
+	if { [file isdirectory "$PREFIX/share/man"] } {
+		if { [lsearch ${::dont-setenv} "MANPATH"] == -1 } {
+			prepend-path	MANPATH			$PREFIX/share/man
+		}
+	}
+
+	# set various environment variables - as long as they are not blacklisted
+	debug "prepend to include paths"
+	if { [file isdirectory "$PREFIX/include"] } {
+		if { [lsearch ${::dont-setenv} "C_INCLUDE_PATH"] == -1 } {
+			prepend-path	C_INCLUDE_PATH		$PREFIX/include
+		}
+		if { [lsearch ${::dont-setenv} "CPLUS_INCLUDE_PATH"] == -1 } {
+			prepend-path	CPLUS_INCLUDE_PATH	$PREFIX/include
+		}
+		if { [lsearch ${::dont-setenv} "${NAME}_INCLUDE_DIR"] == -1 } {
+			setenv		${NAME}_INCLUDE_DIR	$PREFIX/include
+		}
+	}
+
+	debug "prepend to library paths"
+	if { [file isdirectory "$PREFIX/lib"] } {
+		if { [lsearch ${::dont-setenv} "LIBRARY_PATH"] == -1 } {
+			prepend-path	LIBRARY_PATH		$PREFIX/lib
+		}
+		if { [lsearch ${::dont-setenv} "LD_LIBRARY_PATH"] == -1 } {
+			prepend-path	LD_LIBRARY_PATH		$PREFIX/lib
+		}
+		if { [lsearch ${::dont-setenv} "${NAME}_LIBRARY_DIR"] == -1 } {
+			setenv		${NAME}_LIBRARY_DIR	$PREFIX/lib
+		}
+	}
+
+	debug "prepend to library paths (64bit)"
+	if { [file isdirectory "$PREFIX/lib64"] } {
+		if { [lsearch ${::dont-setenv} "LIBRARY_PATH"] == -1 } {
+			prepend-path	LIBRARY_PATH		$PREFIX/lib64
+		}
+		if { [lsearch ${::dont-setenv} "LD_LIBRARY_PATH"] == -1 } {
+			prepend-path	LD_LIBRARY_PATH		$PREFIX/lib64
+		}
+		if { [lsearch ${::dont-setenv} "${NAME}_LIBRARY_DIR"] == -1 } {
+			setenv		${NAME}_LIBRARY_DIR	$PREFIX/lib64
+		}
+	}
+}
+
+#
+# intialize global vars
+# Modulefile is something like
+#
+#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/name/version
+# or
+#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1/name/version
+# or
+#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1//X2/Y2/name/version
+#
+proc _init_global_vars { } {
+	global	group
+	global  name
+	global  version
+	global	implementation
+	global	PREFIX		# prefix of package
+
+	debug	"$::ModulesCurrentModulefile"
+	set	::PmodulesRoot		$::env(PMODULES_ROOT)
+	set	::PmodulesModulfilesDir	$::env(PMODULES_MODULEFILES_DIR)
+	set	modulefile		[file split $::ModulesCurrentModulefile]
+	set	pmodules_root		[file split $::PmodulesRoot]
+	set	pmodules_root_num_dirs	[llength $pmodules_root]
+
+	set	modulefile_root	[file join {*}[lrange $modulefile 0 [expr $pmodules_root_num_dirs - 1]]]
+	if { $::PmodulesRoot != $modulefile_root } {
+		debug "stop sourcing: ${::PmodulesRoot} != $modulefile_root"
+		return
+	} 
+	debug	"modulefile is inside our root"
+	set	rel_modulefile	[lrange $modulefile [llength $pmodules_root] end]
+	set	group		[lindex $rel_modulefile 0]
+	set	name		[lindex $modulefile end-1]
+	set	version		[lindex $modulefile end]
+	set	implementation	[lrange $rel_modulefile 2 end]
+	set	prefix		"$pmodules_root $group [lreverse_n $implementation 2]"
+	set	PREFIX		[file join {*}$prefix]
+
+	debug "PREFIX=$PREFIX"
+	debug "group of module $name: $group"
+}
+
+proc _pmodules_output_message { fname } {
+	if { [ file exists "${fname}" ] } {
+		set fp [open "${fname}" r]
+		set info_text [read $fp]
+		close $fp
+		puts stderr ${info_text}
+	}
+}
+
+if { [info exists ::whatis] } {
+	module-whatis	"$whatis"
+}
+
+
+#
+# we cannot load another module with the same name
+#
+#conflict	$name
+
+#if { [module-info mode load] } {
+#	debug "${name}/${version}: loading ... "
+#	_pmodules_output_message "${PREFIX}/.info"
+#}
+
+
+
+########################################################################
 #
 # Info, Warnings and Error message handling.
 #
@@ -104,11 +424,22 @@ proc unset-env {var} {
 proc execute-modulefile {modfile {help ""}} {
 	global g_debug
 	global ModulesCurrentModulefile
+	global PREFIX
+	global name
+	global version
+	global group
+	global whatis
+	global g_url
+	global g_license
+	global g_maintainer
+	global g_help
+
 	set ModulesCurrentModulefile $modfile
 
 	if {$g_debug} {
 		report "DEBUG execute-modulefile:  Starting $modfile"
 	}
+	_init_global_vars
 	set slave __[currentModuleName]
 	if {![interp exists $slave]} {
 		interp create $slave
@@ -141,18 +472,42 @@ proc execute-modulefile {modfile {help ""}} {
 		interp eval $slave [list "set" "g_debug" $g_debug]
 		interp eval $slave [list "set" "help" $help]
 
+		interp alias $slave _init_global_vars {} _init_global_vars
+		interp alias $slave _pmodules_setenv {} _pmodules_setenv
+		interp alias $slave _pmodules_update_loaded_modules {} _pmodules_update_loaded_modules
+		interp alias $slave debug {} debug
+		interp alias $slave module-url {} module-url
+		interp alias $slave module-license {} module-license
+		interp alias $slave module-maintainer {} module-maintainer
+		interp alias $slave module-help {} module-help
+		interp alias $slave module-addgroup {} module-addgroup
+		interp alias $slave set-family {} set-family
+		interp alias $slave output-help {} output-help
+		
+		interp eval $slave [list "set" "PREFIX" $PREFIX]
+		interp eval $slave [list "set" "name" $name]
+		interp eval $slave [list "set" "version" $version]
+		interp eval $slave [list "set" "group" $group]
 	}
 	set errorVal [interp eval $slave {
 		if {$g_debug} {
 			report "Sourcing $ModulesCurrentModulefile"
 		}
+		_init_global_vars
+		_pmodules_setenv ${::PREFIX} ${name} ${version}
+		_pmodules_update_loaded_modules ${group} ${name} ${version}
+
+		proc ModulesHelp { } {
+			output-help
+		}
+
+		
 		set sourceFailed [catch {source $ModulesCurrentModulefile} errorMsg]
 		if {$help != ""} {
 			if {[info procs "ModulesHelp"] == "ModulesHelp"} {
 				ModulesHelp
 			} else {
-				reportWarning "Unable to find ModulesHelp in\
-		  $ModulesCurrentModulefile."
+				reportWarning "Unable to find ModulesHelp in $ModulesCurrentModulefile."
 			}
 			set sourceFailed 0
 		}
@@ -179,6 +534,43 @@ proc execute-modulefile {modfile {help ""}} {
 		report "DEBUG Exiting $modfile"
 	}
 	return $errorVal
+}
+
+proc module-url { url } {
+	set ::g_url ${url}
+}
+
+proc module-license { license } {
+	set ::g_license ${license}
+}
+
+proc module-maintainer { maintainer } {
+	set ::g_maintainer ${maintainer}
+}
+
+proc module-help { help } {
+	set ::g_help ${help}
+}
+
+proc output-help { } {
+	if { [info exists ::g_whatis] } {
+		report "${::g_whatis}"
+	}
+	if { [info exists ::version] } {
+		report "Version:    ${::version}"
+	}
+	if { [info exists ::g_url] } {
+		report "Homepage:   ${::g_url}"
+	}
+	if { [info exists ::g_license] } {
+		report "License:    ${::g_license}"
+	}
+	if { [info exists ::g_maintainer] } {
+		report "Maintainer: ${::g_maintainer}"
+	}
+	if { [info exists ::g_help] } {
+		report "${::g_help}\n"
+	}
 }
 
 # Smaller subset than main module load... This function runs modulerc and
@@ -351,7 +743,7 @@ proc module-whatis {message} {
 
 	if {$mode == "display"} {
 		report "module-whatis\t$message"
-	} elseif {$mode == "whatis"} {
+	} else {
 		set g_whatis $message
 	}
 	return {}
@@ -1666,15 +2058,13 @@ proc renderSettings {} {
 				# nothing needed, reserve for future cygwin, MKS, etc
 			}
 			perl {
-				puts stdout "die \"modulefile.tcl: $error_count error(s)\
-		      detected!\\n\""
+				puts stdout "die \"modulefile.tcl: $error_count error(s) detected!\\n\""
 			}
 			python {
 				puts stdout "raise RuntimeError, 'modulefile.tcl: $error_count error(s) detected!'"
 			}
 			lisp {
-				puts stdout "(error \"modulefile.tcl: $error_count error(s)\
-		      detected!\")"
+				puts stdout "(error \"modulefile.tcl: $error_count error(s) detected!\")"
 			}
 		}
 		set nop 0
