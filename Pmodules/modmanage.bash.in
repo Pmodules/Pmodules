@@ -485,7 +485,12 @@ get_groups () {
 ##############################################################################
 #
 # Compute hierarchy depth of all groups. Stores result in global array
-# 'GroupDepths'. 
+# 'GroupDepths'. The group depth is defined as the hierarchy depth times 2.
+#
+# Examples:
+#	group depth of 'Programming' is 0
+#	group depth of 'Compiler' is 2
+#	group depth of 'MPI' is 4
 # 
 # Arguments:
 #	$1: root of module environment
@@ -494,11 +499,7 @@ get_groups () {
 get_group_depths () {
 	local -r root="$1"
 	local -r modulefiles_dir="$2"
-	local -a dirs
-	std::split_fname dirs "${root}"
-	# offset: do not count the subdirectories in the groups modulepath
-	# (e.g.: /opt/psi/Tools/modulefiles => off=4)
-	local -ir off=$(( ${#dirs[@]} + 2 ))
+	local -ir off=4
 	{
 		cd "${root}"
 		local group
@@ -508,7 +509,7 @@ get_group_depths () {
 			[[ -n ${fname} ]] || continue
 			local -a tmp
 			std::split_fname tmp "${fname}"
-			(( GroupDepths[$group]=${#tmp[@]}-off ))
+			(( GroupDepths[$group]=${#tmp[@]}-${off} ))
 		done
 	};
 }
