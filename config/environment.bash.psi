@@ -1,7 +1,14 @@
 #!/bin/bash
 #
 
-declare -x PMODULES_ROOT='/opt/psi'
+#
+# define PMODULES_ROOT only if it has not been passed as argument
+# to build/install scripts
+#
+if [[ -z "${PMODULES_ROOT}" ]]; then
+	declare -x PMODULES_ROOT='/opt/psi'
+fi
+
 declare -x PMODULES_CONFIG_DIR='config'
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
 declare -x PMODULES_TEMPLATES_DIR='templates'
