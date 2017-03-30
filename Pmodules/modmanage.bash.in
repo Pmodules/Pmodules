@@ -420,12 +420,12 @@ environment at '${PMODULES_ROOT}'
 		echo
 
 		echo "Syncing configuration ..."
-		sync_config "${PMODULES_ROOT}" \
+		sync_config "${src_prefix}" \
 		            "${target_prefix}" || \
 		        std::die 1 "Error: configuration synchronization failed!"
 
 		echo "Syncing Pmodules ${PMODULES_VERSION} from '${src_prefix}' to '${target_prefix}'..."
-		sync_module "Tools/Pmodules/${PMODULES_VERSION}" \
+		sync_module "Tools/${PMODULES_MODULEFILES_DIR}/Pmodules/${PMODULES_VERSION}" \
 			    "${src_prefix}" \
 			    "${target_prefix}" || \
 		        std::die 1 "Error: sync Pmodules failed!"
