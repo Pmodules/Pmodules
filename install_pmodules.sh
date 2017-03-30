@@ -10,9 +10,47 @@ declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
 std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
+
+while (( $# > 0 )); do
+	case $1 in
+	--install-root )
+		PMODULES_ROOT="$2"
+		shift 1
+		;;
+	--install-root=* )
+		PMODULES_ROOT="${1#*=}"
+		;;
+	-* )
+		echo "Unknown option: $1" 1>&2
+		exit 1
+		;;
+	* )
+		echo "Invalid argument: $1" 1>&2
+		exit 1
+		;;
+	esac
+	shift 1
+done
+
+if [[ ! -d "${PMODULES_ROOT}" ]]; then
+	read -p "The requested root directory does not exist. Create it? [y|N] " -n 1 ans
+	case ${ans} in 
+	y | Y )
+		mkdir -p "${PMODULES_ROOT}"
+		;;
+	* )
+		echo "Aborting ..." 1>&2
+		exit 2
+		;;
+	esac
+fi
+
 source "${BOOTSTRAP_DIR}/config/environment.bash"
 
-
+###
+#
+# begin installation
+#
 echo "Installing to ${PMODULES_HOME} ..."
 sed_cmd="s:@PMODULES_HOME@:${PMODULES_HOME}:g;"
 sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g;"
