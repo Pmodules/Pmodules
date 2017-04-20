@@ -510,7 +510,7 @@ is_modulefile() {
 	local shebang
 	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
-	[[ "${shebang}" == "#%Module1.0" ]]
+	[[ "${shebang:0:8}" == "#%Module" ]] || [[ "${shebang:0:9}" == "#%Pmodule" ]] || 
 }
 
 subcommand_generic0() {
@@ -1519,6 +1519,7 @@ subcommand_search() {
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
 	local opt_print_variants='no'
+	local opt_print_csv='no'
 	local opt_use_releases=':'
 	local -r fmt="%-20s %-10s %-12s %-s\n"
 
@@ -1599,6 +1600,10 @@ subcommand_search() {
 				done
 				printf "%-20s %-10s %-s\n" "${toks[0]}" "${toks[1]}" "${dependecies}" 1>&2
 			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+		elif [[ "${opt_print_csv}" == "yes" ]]; then
+			while read -a toks; do
+				:
+			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
 		else
 			"${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
 		fi
@@ -1642,6 +1647,7 @@ subcommand_search() {
 
 				# get and print all available modules in $mpath
 				# with respect to the requested releases
+				# tmpfile: module/version release group group-dependencies...
 				local mods=( $( get_available_modules \
 						    "${mpath}" \
 						    "${module}" \
@@ -1666,6 +1672,7 @@ subcommand_search() {
 			   -l all-releases \
 			   -l src: \
 			   -l print-variants \
+			   -l print-csv \
 			   --  "$@") || subcommand_help_${subcommand}
 	eval set --  "${opts}"
 	
@@ -1676,6 +1683,10 @@ subcommand_search() {
 				;;
 			--print-modulefiles )
 				opt_print_modulefiles='yes'
+				opt_print_header='no'
+				;;
+			--print-csv )
+				opt_print_csv='yes'
 				opt_print_header='no'
 				;;
 			--release )
