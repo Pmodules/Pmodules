@@ -510,7 +510,7 @@ is_modulefile() {
 	local shebang
 	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
-	[[ "${shebang:0:8}" == "#%Module" ]] || [[ "${shebang:0:9}" == "#%Pmodule" ]] || 
+	[[ "${shebang:0:8}" == "#%Module" ]] || [[ "${shebang:0:9}" == "#%Pmodule" ]]
 }
 
 subcommand_generic0() {
