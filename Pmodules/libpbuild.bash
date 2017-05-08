@@ -28,12 +28,12 @@ unset	F90
 # assemble default path
 PATH='/usr/bin:/bin:/usr/sbin:/sbin'
 
-if [[ "${OS}" == "Darwin" ]]; then
-        # :FIXME: do we really need this?
-	# if required we should do this in the build-block
-        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin' || \
-		std::info "Xquarz is not installed in '/opt/X11'"
-fi
+#if [[ "${OS}" == "Darwin" ]]; then
+#        # :FIXME: do we really need this?
+#	# if required we should do this in the build-block
+#        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin' || \
+#		std::info "Xquarz is not installed in '/opt/X11'"
+#fi
 
 #..............................................................................
 # global variables used in the library
@@ -87,6 +87,10 @@ declare -x  MODULE_BUILDDIR=''
 #
 # Arguments:
 #   $1: release name
+#
+# :FIXME:
+#   This function is obsolete and should not be used any more!
+#   Releases have to be defined in 'variants' configuration file.
 #
 pbuild::set_release() {
 	#.....................................................................
@@ -179,16 +183,26 @@ pbuild::module_exists() {
 
 #......................................................................
 #
-# Find tarball for given module.
-# Sets global variable TARBALL if found or exit with error message.
+# Find/download tarball for given module.
+# If the source URL is given, we look for the file-name specified in
+# the URL. Otherwise we test for several possible names/extensions.
 #
 # Arguments:
 #   $1:	    name
 #   $2:	    version
 #   $3...:  download directories
 #
-# Used global variables:
-#   BUILD_BLOCK_DIR [in]
+# Returns:
+#   File name via echo
+#
+# Used global variables (readonly):
+#   BUILD_BLOCK_DIR
+#   SOURCE_URL
+#   PMODULES_DISTFILESDIR 
+#
+# :FIXME:
+#   The search with several extensions should be removed, as soon as
+#   the source URL is specified in all build-blocks
 #
 find_tarball() {
 	local -r name="$1"
@@ -222,22 +236,51 @@ find_tarball() {
 		[[ -r "${fname}" ]] && break
 	done
 	if [[ "${fname}" == 'not found' ]] && [[ -n "${SOURCE_URL}" ]]; then
-		curl --insecure \
-			--output "${PMODULES_DISTFILESDIR}/${basename}" \
-			"${SOURCE_URL}" ||
-			std::info "Downloading sources from '${SOURCE_URL}' failed."
-		sleep 2
-		#wget --no-check-certificate \
-		#	--directory-prefix="${PMODULES_DISTFILESDIR}" \
-		#	"${SOURCE_URL}" ||
-		#	std::info "Downloading sources from '${SOURCE_URL}' failed."
-		fname= "${PMODULES_DISTFILESDIR}/${basename}"
+		fname="${PMODULES_DISTFILESDIR}/${basename}"
+		curl \
+			-L \
+			--output "${fname}" \
+			"${SOURCE_URL}"
+		if (( $? != 0 )); then
+			curl \
+				--insecure \
+				--output "${fname}" \
+				"${SOURCE_URL}"
+		fi
 	fi
 	if [[ -r "${fname}" ]]; then
 		echo "${fname}"
 	else
-		std::die 4 "Sources for '${name}/${version}' not found."
+		std::die 4 "${fname}: sources for '${name}/${version}' not found."
 	fi
+}
+
+#
+# Search for variants file to use
+#
+# Arguments:
+#   none
+#
+# Used global variables:
+#   OS
+#   BUILD_BLOCK_DIR
+#   variants_file [out]
+#
+search_variants_file() {
+	local -a eligible_variants_files=()
+	eligible_variants_files+=( "${V}/variants.${OS}" )
+	eligible_variants_files+=( "${V}/variants" )
+	eligible_variants_files+=( "${V%.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*}/variants" )
+	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*.*}/variants" )
+	for variants_file in "${eligible_variants_files[@]}"; do
+		if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
+			variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
+		    	return 0
+	    	fi
+	done
+	return 1
 }
 
 ###############################################################################
