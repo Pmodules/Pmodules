@@ -32,6 +32,8 @@ while (( $# > 0 )); do
 	shift 1
 done
 
+source "${BOOTSTRAP_DIR}/config/environment.bash"
+
 if [[ ! -d "${PMODULES_ROOT}" ]]; then
 	read -p "The requested root directory does not exist. Create it? [y|N] " -n 1 ans
 	case ${ans} in 
@@ -44,8 +46,6 @@ if [[ ! -d "${PMODULES_ROOT}" ]]; then
 		;;
 	esac
 fi
-
-source "${BOOTSTRAP_DIR}/config/environment.bash"
 
 ###
 #
@@ -67,6 +67,8 @@ install -d -m 0755 "${PMODULES_HOME}/bin"
 install -d -m 0755 "${PMODULES_HOME}/config"
 install -d -m 0755 "${PMODULES_HOME}/init"
 install -d -m 0755 "${PMODULES_HOME}/lib"
+install -d -m 0755 "${PMODULES_HOME}/libexec"
+install -d -m 0755 "${PMODULES_HOME}/sbin"
 
 install -m 0755 "${SRC_DIR}/modulecmd"		"${PMODULES_HOME}/bin"
 install -m 0755 "${SRC_DIR}/modulecmd.bash"	"${PMODULES_HOME}/libexec"
