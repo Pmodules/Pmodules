@@ -1,5 +1,7 @@
 #!/usr/bin/env modbuild
 
+SOURCE_URL="https://netix.dl.sourceforge.net/project/modules/Modules/modules-$V/modules-$V.tar.gz"
+
 TCL_DIR="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
 
 PATH="${TCL_DIR}/bin:${PATH}"
