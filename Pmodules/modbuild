@@ -148,7 +148,7 @@ declare enable_cleanup_build='yes'
 declare enable_cleanup_src='no'
 declare target='all'
 declare bootstrap='no'
-declare opt_variants_file=''
+declare variants_file=''
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
@@ -215,11 +215,11 @@ while (( $# > 0 )); do
 		PMODULES_TMPDIR=${1/--tmpdir=}
 		;;
 	--variants-file )
-		opt_variants_file="$2"
+		variants_file="$2"
 		shift
 		;;
 	--variants-file=* )
-		opt_variants_file="${1/--variants-file=}"
+		variants_file="${1/--variants-file=}"
 		;;
 	--with )
 		with_modules+=( "$2" )
@@ -266,12 +266,6 @@ fi
 
 [[ -n ${BUILD_BLOCK} ]] || std::die 1 "No build-block specified!"
 [[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
-
-if [[ -n "${opt_variants_file}" ]]; then
-	if [[ ! -r "${opt_variants_file}" ]]; then
-		std::die 1 "${opt_variants_file}: variants file does not exist or is not readable!"
-	fi
-fi
 
 # :FIXME: move to library?
 # :FIXME: implement this with OS/system dependend plugins 
@@ -320,6 +314,15 @@ for dir in "${bash_libpath[@]}"; do
 done
 (( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
+
+if [[ -n "${variants_file}" ]]; then
+	if [[ ! -r "${variants_file}" ]]; then
+		std::die 1 "${variants_file}: variants file does not exist or is not readable!"
+	fi
+else
+	search_variants_file || std::die 2 "No usable variants file found!"
+fi
+
 if [[ ${bootstrap} == no ]]; then
         # initialize module environment
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
@@ -332,6 +335,12 @@ if [[ ${bootstrap} == no ]]; then
 
 	# :FIXME: this is a hack!!!
 	eval $( "${MODULECMD}" bash use Libraries )
+
+	# if version is not specified, use version from last line of variants file
+	if [[ -z "$V" ]]; then
+		local tmp=$(awk 'END{print $1}' "${variants_file}")
+		V="${tmp#*/}"
+	fi
 else
 	unset PMODULES_HOME
 	unset PMODULES_VERSION
