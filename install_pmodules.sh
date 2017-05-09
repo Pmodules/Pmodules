@@ -92,6 +92,10 @@ if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash" ]]; then
 	install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 fi
 
+if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" ]]; then
+	install -m 0755 "${BOOTSTRAP_DIR}/config/modbuild.conf"	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf"
+fi
+
 mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
 mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
 
