@@ -274,12 +274,14 @@ search_variants_file() {
 	eligible_variants_files+=( "${V%.*}/variants" )
 	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
 	eligible_variants_files+=( "${V%.*.*}/variants" )
+
 	for variants_file in "${eligible_variants_files[@]}"; do
 		if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
 			variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
 		    	return 0
 	    	fi
 	done
+	variants_file=''
 	return 1
 }
 
@@ -478,24 +480,8 @@ pbuild::make_all() {
 	#   depend_release	    set if a dependency is 'unstable' or 'deprecated'
 	#
 	load_build_dependencies() {
-		local -a eligible_variants_files=()
-		eligible_variants_files+=( "${V}/variants.${OS}" )
-		eligible_variants_files+=( "${V}/variants" )
-		eligible_variants_files+=( "${V%.*}/variants.${OS}" )
-		eligible_variants_files+=( "${V%.*}/variants" )
-		eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
-		eligible_variants_files+=( "${V%.*.*}/variants" )
-		local found='no'
-		local variants_file=''
-		for variants_file in "${eligible_variants_files[@]}"; do
-			if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
-				found='yes'
-				variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
-			    	break
-		    	fi
-		done
 		local m
-		if [[ "${found}" == "yes" ]]; then
+		if [[ -n "${variants_file}" ]]; then
 		        # :FIXME:
 			# handle conflicts in modules specified via command-line
 			# argument and variants file
@@ -520,9 +506,9 @@ pbuild::make_all() {
 			# 'b:' this is a build dependency
 			# 'r:' this a run-time dependency, *not* required for building
 			# without prefix: this is a build and run-time dependency
-			if [[ $m =~ b:* ]]; then
+			if [[ "${m:0:2}" == "b:" ]]; then
 				m=${m#*:}   # remove 'b:'
-			elif [[ $m =~ r:* ]]; then
+			elif [[ "${m:0:2}" == "r:" ]]; then
 				m=${m#*:}   # remove 'r:'
 				runtime_dependencies+=( "$m" )
 			else
