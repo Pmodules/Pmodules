@@ -2,12 +2,14 @@
 
 declare -r BOOTSTRAP_DIR=$(dirname "$0")
 
+unset PMODULES_ROOT
 unset PMODULES_HOME
 unset PMODULES_VERSION
 
 source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash"
 
 declare force='no'
+declare config_file="${BOOTSTRAP_DIR}/config/environment.bash"
 
 declare opts='--bootstrap'
 while (( $# > 0 )); do
@@ -17,6 +19,20 @@ while (( $# > 0 )); do
 			;;
 		--debug )
 			opts+=" $1"
+			;;
+		--config )
+			config_file="$2"
+			shift 1
+			;;
+		--config=* )
+			config_file="${1#*=}"
+			;;
+		--install-root )
+			PMODULES_ROOT="$2"
+			shift 1
+			;;
+		--install-root=* )
+			PMODULES_ROOT="${1#*=}"
 			;;
 		-f | --force )
 			force='yes'
@@ -32,7 +48,8 @@ while (( $# > 0 )); do
 done
 
 std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
-source "${BOOTSTRAP_DIR}/config/environment.bash"
+source "${config_file}"
+
 PMODULES_VERSION=''
 declare -x PMODULES_VERSION
 echo $PMODULES_VERSION
