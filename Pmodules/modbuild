@@ -315,15 +315,15 @@ done
 (( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
 
 
-if [[ -n "${variants_file}" ]]; then
-	if [[ ! -r "${variants_file}" ]]; then
-		std::die 1 "${variants_file}: variants file does not exist or is not readable!"
-	fi
-else
-	search_variants_file || std::die 2 "No usable variants file found!"
-fi
-
 if [[ ${bootstrap} == no ]]; then
+	if [[ -n "${variants_file}" ]]; then
+		if [[ ! -r "${variants_file}" ]]; then
+			std::die 1 "${variants_file}: variants file does not exist or is not readable!"
+		fi
+	else
+		search_variants_file || std::die 2 "No usable variants file found!"
+	fi
+
         # initialize module environment
         source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
