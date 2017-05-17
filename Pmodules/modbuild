@@ -267,16 +267,8 @@ fi
 [[ -n ${BUILD_BLOCK} ]] || std::die 1 "No build-block specified!"
 [[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
 
-# :FIXME: move to library?
-# :FIXME: implement this with OS/system dependend plugins 
-
 declare -r OS
-case ${OS} in
-Darwin )
-	declare -x MACOSX_DEPLOYMENT_TARGET='10.9'
-	#declare -rx SDKROOT='macosx10.9'
-	;;
-esac
+
 
 # source Pmodule environment configuration
 if [[ "${bootstrap}" == "yes" ]]; then
@@ -285,10 +277,16 @@ if [[ "${bootstrap}" == "yes" ]]; then
         source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
 	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
 	
+	if [[ -r "${BUILD_BLOCK_DIR}/../config/modbuild.conf" ]]; then
+		source "${BUILD_BLOCK_DIR}/../config/modbuild.conf"
+	fi
 elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
      [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
 	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
 	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
+	if [[ -r "${PMODULES_ROOT}/config/modbuild.conf" ]]; then
+		source "${PMODULES_ROOT}/config/modbuild.conf"
+	fi
 
 else
 	std::die 3 "Build environment not setup properbly!"
