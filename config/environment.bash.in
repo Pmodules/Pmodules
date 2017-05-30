@@ -19,6 +19,13 @@ declare -x PMODULES_DEFAULT_GROUPS='Tools Programming'
 declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
 declare -x PMODULES_DEFAULT_RELEASES='stable'
 
-declare -x PMODULES_DISTFILESDIR='@PMODULES_DISTFILESDIR@'
-declare -x PMODULES_TMPDIR="/var/tmp/${USER}"
+if [[ -z ${PMODULES_DISTFILESDIR} ]]; then
+	PMODULES_DISTFILESDIR='@PMODULES_DISTFILESDIR@'
+fi
+declare -x PMODULES_DISTFILESDIR
+
+if [[ -z ${PMODULES_TMPDIR} ]]; then
+	PMODULES_TMPDIR="/var/tmp/${USER}"
+fi
+declare -x PMODULES_TMPDIR
 
