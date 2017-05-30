@@ -1,7 +1,6 @@
 #!/bin/bash
 declare    BOOTSTRAP_DIR=$(dirname "$0")
 
-unset PMODULES_ROOT
 unset PMODULES_HOME
 unset PMODULES_VERSION
 
