@@ -787,45 +787,22 @@ pbuild::make_all() {
 		"${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep -v "Currently Loaded" > "${fname}" || :
 	}
 	
-	#......................................................................
-	# Set sym-link to modulefile and write release file
-	set_link() {
-		local  link_name="${PMODULES_ROOT}/"
-		link_name+="${ModuleGroup}/"
-		link_name+="${PMODULES_MODULEFILES_DIR}/"
-		link_name+="${ModuleName}"
-		local -r dir_name=${link_name%/*}
-		if [[ ! -e "${link_name}" ]]; then
-			(
-				std::info "${P}/${V}: setting new sym-link '${link_name}' ..."
-				mkdir -p "${dir_name}"
-				cd "${dir_name}"
-				local x
-				IFS='/' x=( ${dir_name/${PMODULES_ROOT}\/${ModuleGroup}\/} )
-				local -i n=${#x[@]}
-				local _target=$(eval printf "../%.s" {1..${n}})
-				_target+="${PMODULES_TEMPLATES_DIR}/${P}/modulefile"
-				ln -fs "${_target}" "${ModuleName##*/}"
-			)
-		fi
-		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
-		local -r release_file="${dir_name}/.release-${ModuleName##*/}"
-		echo "${ModuleRelease}" > "${release_file}"
-	}
-
  	#......................................................................
-	# Install modulefile to template directory
+	# Install module- and release-file
 	install_modulefile() {
 		local -r src="${BUILD_BLOCK_DIR}/modulefile"
 		if [[ ! -r "${src}" ]]; then
 			std::info "${P}/${V}: skipping modulefile installation ..."
 			return
 		fi
-		local -r dst="${PMODULES_ROOT}/${ModuleGroup}/${PMODULES_TEMPLATES_DIR}/${P}"
+		local -r dst="${PMODULES_ROOT}/${ModuleGroup}/${PMODULES_MODULEFILES_DIR}/${P}"
 
 		std::info "${P}/${V}: installing modulefile in '${dst}' ..."
 		mkdir -p "${dst}"
-		install -m 0444 "${src}" "${dst}"
+		install -m 0444 "${src}" "${dst}/$V"
+		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
+		local -r release_file=".release-${ModuleName##*/}"
+		echo "${ModuleRelease}" > "${dst}/${release_file}"
 	}
 	
 	##############################################################################
@@ -897,10 +874,7 @@ pbuild::make_all() {
 	else
  		std::info "${P}/${V}: already exists, not rebuilding ..."
 	fi
-	if [[ ${bootstrap} == 'no' ]]; then
-		set_link
-		install_modulefile
-	fi
+	[[ ${bootstrap} == 'no' ]] && install_modulefile
 	return 0
 }
 
