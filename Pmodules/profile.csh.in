@@ -1,16 +1,20 @@
 #!/bin/tcsh
 
-#############################################################################
-# read Pmodules configuration
-#
-set _init_env_file="/opt/psi/config/environment.bash"
-if ( ! -r "$_init_env_file" ); then
-	echo "Oops: cannot initialize Modules!"
-	echo "$_init_env_file: file does not exist or is not readable."
-	return 1
-fi
-source "$_init_env_file"
-unset _init_env_file
+setenv PMODULES_ROOT "/opt/psi"
+
+if ( ! $?PMODULES_VERSION ) then
+	setenv PMODULES_VERSION "@PMODULES_VERSION@"
+endif
+setenv PMODULES_HOME "$PMODULES_ROOT/Tools/Pmodules/$PMODULES_VERSION"
+setenv PMODULES_DIR "${PMODULES_HOME}"
+
+setenv PMODULES_CONFIG_DIR 'config'
+setenv PMODULES_MODULEFILES_DIR 'modulefiles'
+setenv PMODULES_TEMPLATES_DIR 'templates'
+
+setenv PMODULES_DEFAULT_GROUPS 'Tools Programming'
+setenv PMODULES_DEFINED_RELEASES ':unstable:stable:deprecated:'
+setenv PMODULES_DEFAULT_RELEASES 'stable'
 
 ############################################################################
 # check configuration
