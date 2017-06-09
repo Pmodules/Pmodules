@@ -23,7 +23,7 @@ pbuild::build() {
 	esac
 
 	cd "${MODULE_SRCDIR}"
-	make -e
+	make -e all
 }
 
 pbuild::install() {
