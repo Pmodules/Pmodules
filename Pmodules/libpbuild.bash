@@ -25,16 +25,6 @@ unset	FC
 unset	F77
 unset	F90
 
-# assemble default path
-PATH='/usr/bin:/bin:/usr/sbin:/sbin'
-
-#if [[ "${OS}" == "Darwin" ]]; then
-#        # :FIXME: do we really need this?
-#	# if required we should do this in the build-block
-#        [[ -d "/opt/X11/bin" ]] && PATH+=':/opt/X11/bin' || \
-#		std::info "Xquarz is not installed in '/opt/X11'"
-#fi
-
 #..............................................................................
 # global variables used in the library
 
@@ -51,8 +41,6 @@ declare	-x  ModuleRelease=''
 # relative path of documentation
 # abs. path is "${PREFIX}/${_docdir}/$P"
 declare -r  _DOCDIR='share/doc'
-
-
 
 # set default for the defined releases
 if [[ -z ${PMODULES_DEFINED_RELEASES} ]]; then
@@ -795,14 +783,20 @@ pbuild::make_all() {
 			std::info "${P}/${V}: skipping modulefile installation ..."
 			return
 		fi
-		local -r dst="${PMODULES_ROOT}/${ModuleGroup}/${PMODULES_MODULEFILES_DIR}/${P}"
+		# assemble name of modulefile
+		local dst="${PMODULES_ROOT}/"
+		dst+="${ModuleGroup}/"
+		dst+="${PMODULES_MODULEFILES_DIR}/"
+		dst+="${ModuleName}"
 
-		std::info "${P}/${V}: installing modulefile in '${dst}' ..."
-		mkdir -p "${dst}"
-		install -m 0444 "${src}" "${dst}/$V"
+		# directory where to install module- and release-file
+ 		local -r dstdir=${dst%/*}
+
+		std::info "${P}/${V}: installing modulefile in '${dstdir}' ..."
+		mkdir -p "${dstdir}"
+		install -m 0444 "${src}" "${dst}"
 		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
-		local -r release_file=".release-${ModuleName##*/}"
-		echo "${ModuleRelease}" > "${dst}/${release_file}"
+		echo "${ModuleRelease}" > "${dstdir}/.release-$V"
 	}
 	
 	##############################################################################
@@ -828,14 +822,17 @@ pbuild::make_all() {
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 		check_compiler
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || [[ ${force_rebuild} == 'yes' ]] ; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || \
+		   [[ ${force_rebuild} == 'yes' ]] || \
+		   [[ -z ${target} ]]; then
 			pbuild::prep
 			touch "${MODULE_BUILDDIR}/.prep"
 		fi
 		[[ "${target}" == "prep" ]] && return 0
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]] || \
-		   [[ ${force_rebuild} == 'yes' ]]; then
+		   [[ ${force_rebuild} == 'yes' ]] || \
+		   [[ -z ${target} ]]; then
 		        cd "${MODULE_SRCDIR}"
 			pbuild::pre_configure
 			cd "${MODULE_BUILDDIR}"
@@ -844,14 +841,18 @@ pbuild::make_all() {
 		fi
 		[[ "${target}" == "configure" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.compile" ]]  || [[ ${force_rebuild} == 'yes' ]]; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.compile" ]] || \
+		   [[ ${force_rebuild} == 'yes' ]] || \
+		   [[ -z ${target} ]]; then
 			cd "${MODULE_BUILDDIR}"
 			pbuild::build
 			touch "${MODULE_BUILDDIR}/.compile"
 		fi
 		[[ "${target}" == "compile" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.install" ]] || [[ ${force_rebuild} == 'yes' ]]; then
+		if [[ ! -e "${MODULE_BUILDDIR}/.install" ]] || \
+		   [[ ${force_rebuild} == 'yes' ]] || \
+		   [[ -z ${target} ]]; then
 			cd "${MODULE_BUILDDIR}"
 			pbuild::install
 			pbuild::post_install

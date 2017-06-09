@@ -1464,7 +1464,7 @@ pmodules_init() {
 	declare -g PMODULES_DEFAULT_GROUPS=''
 	declare -g PMODULES_DEFAULT_RELEASES=''
 
-	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/environment.bash"
+	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 
 	declare -g LOADEDMODULES=''
 	declare -g PMODULES_USED_GROUPS=''

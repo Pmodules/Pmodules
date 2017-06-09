@@ -7,17 +7,17 @@
 #	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
 #
 
+declare -x PMODULES_DEFAULT_GROUPS
+declare -x PMODULES_DEFAULT_RELEASES
+declare -x PMODULES_VERSION
+
 : ${PMODULES_DEFAULT_GROUPS:='Tools Programming'}
 : ${PMODULES_DEFAULT_RELEASES:='stable'}
-: ${PMODULES_VERSION:="@PMODULES_VERSION@}"
+: ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
 #############################################################################
 #          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
 #############################################################################
-
-declare -x PMODULES_DEFAULT_GROUPS
-declare -x PMODULES_DEFAULT_RELEASES
-declare -x PMODULES_VERSION
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
 declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
@@ -26,10 +26,6 @@ declare -x PMODULES_ROOT=$(cd $(dirname "${BASH_SOURCE}")/.. && pwd)
 declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${BASH_SOURCE}") && pwd))
 declare -x PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
 declare -x PMODULES_DIR="${PMODULES_HOME}"
-
-declare -x PMODULES_TEMPLATES_DIR='templates'
-declare -x PMODULES_DISTFILESDIR="@PMODULES_DISTFILESDIR@"
-declare -x PMODULES_TMPDIR="@PMODULES_TMPDIR@"
 
 ############################################################################
 # some sanity checks

@@ -11,8 +11,6 @@ pmodules::get_options() {
 
 pmodules::check_env_vars() {
 	[[ -n "${PMODULES_ROOT}" ]] &&
-	    [[ -n "${PMODULES_CONFIG_DIR}" ]] &&
-	    [[ -n "${PMODULES_TEMPLATES_DIR}" ]] &&
 	    [[ -n "${PMODULES_HOME}" ]] &&
 	    [[ -n "${PMODULES_VERSION}" ]] || std::die 1 "
 Error: the module environment you are going to use as source has not been

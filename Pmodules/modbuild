@@ -7,7 +7,7 @@ declare -r  mydir=$(dirname "$0")
 
 declare -r  libpbuild='libpbuild.bash'
 declare -r  libstd='libstd.bash'
-declare -r  pmodule_environment='environment.bash'
+declare -r  pmodules_build_config='modbuild.conf'
 declare -ra bash_libpath=("${mydir}" "${mydir}/../lib")
 
 ##############################################################################
@@ -146,7 +146,7 @@ declare force_rebuild='no'
 declare dry_run='no'
 declare enable_cleanup_build='yes'
 declare enable_cleanup_src='no'
-declare target='all'
+declare target=''
 declare bootstrap='no'
 declare variants_file=''
 
@@ -269,25 +269,20 @@ fi
 
 declare -r OS
 
+# assemble default path. We have to do this here, before
+# including the modbuild configuration file.
+PATH="/usr/bin:/bin:/usr/sbin:/sbin:${PMODULES_DIR}/bin"
 
 # source Pmodule environment configuration
 if [[ "${bootstrap}" == "yes" ]]; then
-	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodule_environment} ]] || \
+	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodules_build_config} ]] || \
 		std::die 1 "Cannot read configuration file!"
-        source "${BUILD_BLOCK_DIR}/../config/${pmodule_environment}"
+        source "${BUILD_BLOCK_DIR}/../config/${pmodules_build_config}"
 	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
-	
-	if [[ -r "${BUILD_BLOCK_DIR}/../config/modbuild.conf" ]]; then
-		source "${BUILD_BLOCK_DIR}/../config/modbuild.conf"
-	fi
-elif [[ -n ${PMODULES_ROOT} ]] && [[ -n ${PMODULES_CONFIG_DIR} ]] && \
-     [[ -r ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment} ]]; then
-	source ${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/${pmodule_environment}
+elif [[ -n "${PMODULES_ROOT}" ]] && [[ -n "${PMODULES_CONFIG_DIR}" ]] && \
+     [[ -r "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" ]]; then
+	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf"
 	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
-	if [[ -r "${PMODULES_ROOT}/config/modbuild.conf" ]]; then
-		source "${PMODULES_ROOT}/config/modbuild.conf"
-	fi
-
 else
 	std::die 3 "Build environment not setup properbly!"
 fi
@@ -323,7 +318,6 @@ if [[ ${bootstrap} == no ]]; then
 	fi
 
         # initialize module environment
-        source	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
 
