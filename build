@@ -2,20 +2,15 @@
 
 declare	BOOTSTRAP_DIR=$(dirname "$0")
 
+unset PMODULES_ROOT
 unset PMODULES_HOME
 unset PMODULES_VERSION
+unset PMODULES_DISTFILESDIR
 
 source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash"
 
 declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
-
-declare config_file="${BOOTSTRAP_DIR}/config/environment.bash"
-
-declare -a build_opts=()
-build_opts+=( '--bootstrap' )
-
-declare subcmd=''
 
 usage() {
 	echo "build [OPTIONS] SUB-COMMAND"
@@ -23,15 +18,17 @@ usage() {
 }
 
 declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
-declare -rx DEFAULT_PMODULES_DISTFILESDIR='/afs/psi.ch/software/Pmodules/distfiles'
-declare -rx DEFAULT_CONFIG_FILE='config/environment.bash'
+declare -rx DEFAULT_PMODULES_DISTFILESDIR="${DEFAULT_PMODULES_ROOT}/var/distfiles"
+declare -rx DEFAULT_CONFIG_FILE='config/modbuild.conf'
+declare -rx DEFAULT_PMODULES_TMPDIR='/var/tmp/${USER}'
 
 #-----------------------------------------------------------------------------
 #
 pmodules::configure() {
-	local PMODULES_ROOT
-	local PMODULES_DISTFILESDIR
-	local config_file
+	local install_root="${DEFAULT_PMODULES_ROOT}"
+	local distfilesdir="${DEFAULT_PMODULES_DISTFILESDIR}"
+	local tmpdir="${DEFAULT_PMODULES_TMPDIR}"
+	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
 
 	while (( $# > 0 )); do
 		case "$1" in
@@ -43,11 +40,25 @@ pmodules::configure() {
 				config_file="${1#*=}"
 				;;
 			--install-root )
-				PMODULES_ROOT="$2"
+				install_root="$2"
 				shift 1
 				;;
 			--install-root=* )
-				PMODULES_ROOT="${1#*=}"
+				install_root="${1#*=}"
+				;;
+			--distfilesdir )
+				distfilesdir="$2"
+				shift 1
+				;;
+			--distfilesdir=* )
+				distfilesdir="${1#*=}"
+				;;
+			--tmpdir )
+				tmpdir="$2"
+				shift 1
+				;;
+			--tmpdir=* )
+				tmpdir="${1#*=}"
 				;;
 			-* )
 				std::die 1 "$1: illegal option"
@@ -59,17 +70,11 @@ pmodules::configure() {
 		shift 1
 	done
 
-	: ${PMODULES_ROOT:=${DEFAULT_PMODULES_ROOT}}
-	: ${PMODULES_DISTFILESDIR:=${DEFAULT_PMODULES_DISTFILESDIR}}
-	: ${config_file:=${DEFAULT_CONFIG_FILE}}
+	sed_cmd="s:@PMODULES_ROOT@:${install_root}:g;"
+	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
+	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
 
-	echo "PMODULES_ROOT=$prefix"
-	echo "PMODULES_DISTFILESDIR=$distfiles"
-
-	sed_cmd="s:@PMODULES_ROOT@:${prefix}:g;"
-	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfiles}:g;"
-
-	sed "${sed_cmd}" "config/environment.bash.in" > "${config_file}"
+	sed "${sed_cmd}" "${DEFAULT_CONFIG_FILE}.in" > "${config_file}"
 }
 
 #-----------------------------------------------------------------------------
@@ -87,7 +92,7 @@ pmodules::compile() {
 	}
 
 	local force='no'
-	local config_file="${BOOTSTRAP_DIR}/config/environment.bash"
+	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
 
 	local opts='--bootstrap'
 	while (( $# > 0 )); do
@@ -158,6 +163,7 @@ pmodules::compile() {
 #
 pmodules::install() {
 	local opt_force='no'
+	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -247,12 +253,16 @@ pmodules::install() {
 	fi
 
 	if [[ ! -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" ]]; then
-		install -m 0755 "${BOOTSTRAP_DIR}/config/modbuild.conf"	"${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf"
+	        local src="${config_file}"
+		local dst="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf"
+		install -m 0755 "${src}" "${dst}"
 	fi
 
 	mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
 	mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
-
+	if [[ ! -e "${PMODULES_DISTFILESDIR}" ]]; then
+		mkdir -p "${PMODULES_DISTFILESDIR}"
+	fi
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
 
@@ -270,12 +280,20 @@ pmodules::install() {
 
 #=============================================================================
 #
+
+declare -a build_opts=()
+build_opts+=( '--bootstrap' )
+
+declare subcmd=''
 declare -a subcmd_args=()
 
 while (( $# > 0 )); do
 	case "$1" in
 		--help | -h | -\? )
 			usage
+			;;
+		--debug )
+			set -x
 			;;
 		-* )
 			std::die 1 "$1: illegal option"
