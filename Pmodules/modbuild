@@ -330,7 +330,7 @@ if [[ ${bootstrap} == no ]]; then
 
 	# if version is not specified, use version from last line of variants file
 	if [[ -z "$V" ]]; then
-		local tmp=$(awk 'END{print $1}' "${variants_file}")
+		declare tmp=$(awk 'END{print $1}' "${variants_file}")
 		V="${tmp#*/}"
 	fi
 else
