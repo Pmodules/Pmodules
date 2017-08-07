@@ -293,6 +293,8 @@ fi
 declare -x  PMODULES_TMPDIR
 declare -x  PMODULES_DISTFILESDIR
 
+mkdir -p "${PMODULES_DISTFILESDIR}"
+
 declare -r BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
 declare -r BUILD_VERSIONSFILE="${BUILD_BASEDIR}/config/versions.conf"
 
