@@ -964,6 +964,23 @@ get_available_modules() {
 	echo "${mods[@]}"
 }
 
+get_available_modules2() {
+	local -r dir=$1
+	local -r module=$2
+	local -r use_releases=${3:-${UsedReleases}}
+	local -a mods=()
+	{
+		cd "${dir}"
+		while read mod; do
+			local release=$( get_release "${dir}/${mod}" )
+
+			if [[ :${use_releases}: =~ :${release}: ]]; then
+			        mods+=( "${mod}" ${release} )
+			fi
+		done < <(find * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
+	}
+	echo "${mods[@]}"
+}
 #
 # avail [-hlt] [<module-pattern>...]
 #
@@ -1130,7 +1147,7 @@ subcommand_avail() {
 	IFS=${saved_IFS}
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
+			mods=( $( get_available_modules2 "${dir}" "${string}" "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 
 			${output_function}
@@ -1648,7 +1665,7 @@ subcommand_search() {
 				# get and print all available modules in $mpath
 				# with respect to the requested releases
 				# tmpfile: module/version release group group-dependencies...
-				local mods=( $( get_available_modules \
+				local mods=( $( get_available_modules2 \
 						    "${mpath}" \
 						    "${module}" \
 						    "${opt_use_releases}" ) )

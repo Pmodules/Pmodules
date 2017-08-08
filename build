@@ -13,8 +13,10 @@ declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
 usage() {
-	echo "build [OPTIONS] SUB-COMMAND"
-	std:die 1 ""
+	echo "
+build [OPTIONS] configure|compile|install
+"
+	std::die 1 ""
 }
 
 declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
@@ -166,6 +168,9 @@ pmodules::install() {
 
 	while (( $# > 0 )); do
 		case $1 in
+			--debug )
+				set -x
+				;;
 			--config )
 				config_file="$2"
 				shift 1
@@ -313,7 +318,7 @@ while (( $# > 0 )); do
 	shift 1
 done
 
-[[ -n "${subcmd}" ]] || std::die 1 "Missing sub-command."
+[[ -n "${subcmd}" ]] || std::die 1 "Missing sub-command.\n\nUse 'build --help' to get some help..."
 
 
 pmodules::${subcmd} "${subcmd_args[@]}"
