@@ -230,7 +230,7 @@ while (( $# > 0 )); do
 		with_modules+=( ${m} )
 		;;
 	--prep | --configure | --compile | --install | --all )
-		target=$1
+		target=${1:2}
 		;;
 	--system )
 		OS="$2"
@@ -351,6 +351,7 @@ declare V_MINOR=${tmp%%.*}
 tmp=${tmp#*.}
 declare V_PATCHLVL=${tmp%%-*}
 declare V_RELEASE=${tmp#*-}
+declare V_PKG="${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}"
 
 P=$(basename $(dirname "${BUILD_BLOCK}"))
 
