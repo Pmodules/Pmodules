@@ -60,13 +60,10 @@ declare	    CompileInSource='no'
 # i.e:: ${PMODULES_ROOT}/${ModuleGroup)/${ModuleName}
 declare -x  PREFIX=''
 
-# Source directory for module.
-# This is "${PMODULES_TMPDIR}/src/$P-$V"
+# Source directory for module. Will be set to "${PMODULES_TMPDIR}/src/$P-$V"
 declare -x  MODULE_SRCDIR=''
 
-# Build directory for module
-# This is either "${PMODULES_TMPDIR}/build/$P-$V"
-# or "${PMODULES_TMPDIR}/build/$P-$V"
+# Build directory for module. Will be set to "${PMODULES_TMPDIR}/build/$P-$V"
 declare -x  MODULE_BUILDDIR=''
 
 ##############################################################################
@@ -176,71 +173,56 @@ pbuild::module_exists() {
 # the URL. Otherwise we test for several possible names/extensions.
 #
 # Arguments:
-#   $1:	    name
-#   $2:	    version
+#   $1:	    store file name with upvar here
+#   $2:	    download URL 
 #   $3...:  download directories
 #
 # Returns:
-#   File name via echo
+#   0 on success otherwise a value > 0
 #
-# Used global variables (readonly):
-#   BUILD_BLOCK_DIR
-#   SOURCE_URL
-#   PMODULES_DISTFILESDIR 
-#
-# :FIXME:
-#   The search with several extensions should be removed, as soon as
-#   the source URL is specified in all build-blocks
-#
-find_tarball() {
-	local -r name="$1"
-	local    version="$2"
+pbuild::get_source() {
+	local "$1"
+	local var="$1"
+	local -r url="$2"
 	shift 2
-	local -a dirs=( "${BUILD_BLOCK_DIR}" )
 	dirs+=( "$@" )
 	local -a fnames=()
-	if [[ -n "${SOURCE_URL}" ]]; then
-		basename="${SOURCE_URL##*/}"
-		for dir in "${dirs[@]}"; do
-			fnames+=( "${dir}/${basename}" )
-		done
-	else
-		local release="${version##*-}"
-		version=${version%-*}
-		local ext
-		for dir in "${dirs[@]}"; do
-			for ext in tar tar.gz tgz tar.bz2 tar.xz; do
-				local fname
-				local -a fnames
-				fnames+=( "${dir}/${name}-${OS}-${version}-${release}.${ext}" )
-				fnames+=( "${dir}/${name}-${OS}-${version}.${ext}" )
-				fnames+=( "${dir}/${name}-${version}-${release}.${ext}" )
-				fnames+=( "${dir}/${name}-${version}.${ext}" )
-			done
-		done
+	local extension=''
+	if [[ "${url}" =~ ".tar." ]]; then
+	        extension+='tar.'
 	fi
-	fnames+=( "not found" )
-	for fname in "${fnames[@]}"; do
-		[[ -r "${fname}" ]] && break
+	extension+="${url##*.}"
+	fname="$P-$V_PKG.${extension}"
+	dirs+=( 'not found' )
+	for dir in "${dirs[@]}"; do
+		[[ -r "${dir}/${fname}" ]] && break
 	done
-	if [[ "${fname}" == 'not found' ]] && [[ -n "${SOURCE_URL}" ]]; then
-		fname="${PMODULES_DISTFILESDIR}/${basename}"
-		curl \
-			-L \
-			--output "${fname}" \
-			"${SOURCE_URL}"
-		if (( $? != 0 )); then
-			curl \
-				--insecure \
-				--output "${fname}" \
-				"${SOURCE_URL}"
-		fi
-	fi
-	if [[ -r "${fname}" ]]; then
-		echo "${fname}"
+	local output_fname
+	if [[ "${dir}" == 'not found' ]]; then
+		local -r output_fname="${dirs[0]}/${fname}"
+		local -r method="${url%:*}"
+		case "${method}" in
+			file )
+				cp "${url/file:}" "output_fname"
+				;;
+			http | https | ftp )
+				curl \
+				    -L \
+				    --output "${output_fname}" \
+				    "${url}"
+				if (( $? != 0 )); then
+					curl \
+					    --insecure \
+					    --output "${output_fname}" \
+					    "${url}"
+				fi
+				;;
+                esac
 	else
-		std::die 4 "${fname}: sources for '${name}/${version}' not found."
+		output_fname="${dir}/${fname}"
 	fi
+	std::upvar "${var}" "${output_fname}"
+	[[ -r "${output_fname}" ]]
 }
 
 #
@@ -273,24 +255,41 @@ search_variants_file() {
 	return 1
 }
 
+
+pbuild::pre_prep() {
+	:
+}
+
+pbuild::post_prep() {
+	:
+}
+
+pbuild::unpack() {
+	local -r file="$1"
+	local -r dir="$2"
+	(
+		if [[ -n "${dir}" ]]; then
+			mkdir -p "${dir}"
+			cd "${dir}"
+		fi
+		tar -xv --strip-components 1 -f "${file}"
+	)
+}
+
 ###############################################################################
 #
 # extract sources. For the time being only tar-files are supported.
 #
 pbuild::prep() {
-
-	TARBALL=$( find_tarball "${P/_serial}" "${V}" "${PMODULES_DISTFILESDIR}" )
-
-	# untar sources
-	if [[ ! -d ${MODULE_SRCDIR} ]]; then
-		mkdir -p "${PMODULES_TMPDIR}/src/$P-$V"
-		(
-			cd "${PMODULES_TMPDIR}/src/$P-$V"
-			tar -xv --strip-components 1 -f "${TARBALL}"
-		)
-		(cd "${MODULE_SRCDIR}" && pbuild::patch_sources)
-	fi
-
+	local source_file=''
+	pbuild::get_source \
+	    source_file \
+	    "${SOURCE_URL}" \
+	    "${PMODULES_DISTFILESDIR}" \
+	    "${BUILD_BLOCK_DIR}" ||
+	        std::die 4 "$P/$V: sources for not found."
+	pbuild::unpack "${source_file}" "${MODULE_SRCDIR}"
+	pbuild::patch_sources
 	# create build directory
 	mkdir -p "${MODULE_BUILDDIR}"
 }
@@ -315,8 +314,24 @@ pbuild::configure() {
 		--prefix="${PREFIX}"
 }
 
+pbuild::post_configure() {
+	:
+}
+
+pbuild::pre_build() {
+	:
+}
+
 pbuild::build() {
 	make -j${JOBS}
+}
+
+pbuild::post_build() {
+	:
+}
+
+pbuild::pre_install() {
+	:
 }
 
 pbuild::install() {
@@ -326,6 +341,8 @@ pbuild::install() {
 pbuild::post_install() {
 	:
 }
+
+eval "pbuild::post_install_${OS}() { :; }"
 
 pbuild::install_doc() {
 	local -r docdir="${PREFIX}/${_DOCDIR}/$P"
@@ -376,28 +393,6 @@ pbuild::make_all() {
 	#
 	# helper functions
 	#
-
-	#......................................................................
-	#
-	# load default versions
-	#
-	set_default_versions() {
-		local -r fname="$1"
-		[[ -r ${fname} ]] || return 0
-		
-		local varname=''
-		while read _name _version; do
-			[[ -z ${_name} ]] && continue
-			[[ -z ${_version} ]] && continue
-			[[ "${_name:0:1}" == '#' ]] && continue
-			var_name=$(echo ${_name} | tr [:lower:] [:upper:])_VERSION
-			# don't set version, if already set
-			if [[ -z ${!var_name} ]]; then
-				eval ${var_name}="${_version}"
-			fi
-		done < "${fname}"
-
-	}
 
 	#......................................................................
 	#
@@ -555,11 +550,11 @@ pbuild::make_all() {
 		if [[ -z ${ModuleGroup} ]]; then
 			std::die 1 "${P}/${V}: group not set."
 		fi
-		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/$P-$V"
+		MODULE_SRCDIR="${PMODULES_TMPDIR}/$P-$V/src"
 		if [[ "${CompileInSource}" == "yes" ]]; then
 		        MODULE_BUILDDIR="${MODULE_SRCDIR}"
 		else
-			MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
+			MODULE_BUILDDIR="${PMODULES_TMPDIR}/$P-$V/build"
 		fi
 
 		# build module name
@@ -707,9 +702,6 @@ pbuild::make_all() {
 		ModuleRelease='unstable'
 		std::info "${P}/${V}: will be released as \"${ModuleRelease}\""
 
-		# set tar-ball and flags for tar
-		TARBALL=$( find_tarball "${P/_serial}" "${V}" "${PMODULES_DISTFILESDIR}" )
-
 		C_INCLUDE_PATH="${PREFIX}/include"
 		CPLUS_INCLUDE_PATH="${PREFIX}/include"
 		CPP_INCLUDE_PATH="${PREFIX}/include"
@@ -798,69 +790,61 @@ pbuild::make_all() {
 		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
 		echo "${ModuleRelease}" > "${dstdir}/.release-$V"
 	}
-	
-	##############################################################################
-	#
-	# here we really start with make_all()
-	#
-	local building='no'
-	echo "${P}:"
 
-	# setup module specific environment
-	if [[ ${bootstrap} == no ]]; then
-		load_build_dependencies
-		check_and_setup_env
-	else
-		check_and_setup_env_bootstrap
-	fi
-
-	if [[ ! -d "${PREFIX}" ]] || \
-	       [[ ${force_rebuild} == 'yes' ]] || \
-	       [[ ${bootstrap} == 'yes' ]]; then
-		building='yes'
+	#......................................................................
+	# build module $P/$V
+	build_module() {
  		echo "Building $P/$V ..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 		check_compiler
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]]; then
-			pbuild::prep
+		   [[ -z ${target} ]] || \
+		   [[ "${target}" == "prep" ]]; then
+			mkdir -p "${MODULE_SRCDIR}"
+			cd "${MODULE_SRCDIR}"
+			( pbuild::pre_prep )
+			( pbuild::prep )
+			( pbuild::post_prep )
 			touch "${MODULE_BUILDDIR}/.prep"
 		fi
 		[[ "${target}" == "prep" ]] && return 0
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]]; then
-		        cd "${MODULE_SRCDIR}"
-			pbuild::pre_configure
-			cd "${MODULE_BUILDDIR}"
-			pbuild::configure
+		   [[ -z ${target} ]] || \
+		   [[ "${target}" == "configure" ]]; then
+		        cd "${MODULE_BUILDDIR}"
+			( pbuild::pre_configure )
+			( pbuild::configure )
+			( pbuild::post_configure )
 			touch "${MODULE_BUILDDIR}/.configure"
 		fi
 		[[ "${target}" == "configure" ]] && return 0
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.compile" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]]; then
+		   [[ -z ${target} ]] || \
+		   [[ "${target}" == "compile" ]]; then
 			cd "${MODULE_BUILDDIR}"
-			pbuild::build
+			( pbuild::pre_build )
+			( pbuild::build )
+			( pbuild::post_build )
 			touch "${MODULE_BUILDDIR}/.compile"
 		fi
 		[[ "${target}" == "compile" ]] && return 0
 
 		if [[ ! -e "${MODULE_BUILDDIR}/.install" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]]; then
+		   [[ -z ${target} ]] || \
+		   [[ "${target}" == "install" ]]; then
 			cd "${MODULE_BUILDDIR}"
-			pbuild::install
-			pbuild::post_install
-			if typeset -F pbuild::post_install_${OS} 1>/dev/null 2>&1; then
-			        pbuild::post_install_${OS} "$@"
-			fi
-			pbuild::install_doc
-			post_install
+			( pbuild::pre_install )
+			( pbuild::install )
+			( pbuild::post_install_${OS} "$@" )
+			( pbuild::post_install )
+			( pbuild::install_doc )
 			if [[ ${bootstrap} == 'no' ]]; then
 				write_runtime_dependencies
 				write_build_dependencies
@@ -868,14 +852,34 @@ pbuild::make_all() {
 			touch "${MODULE_BUILDDIR}/.install"
 		fi
 		[[ "${target}" == "install" ]] && return 0
+
+		install_modulefile
 		
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
-		
+	}
+	
+	##############################################################################
+	#
+	# here we really start with make_all()
+	#
+
+	# setup module specific environment
+	if [[ "${bootstrap}" == 'no' ]]; then
+		load_build_dependencies
+		check_and_setup_env
+		if [[ ! -d "${PREFIX}" ]] || \
+		       [[ "${force_rebuild}" == 'yes' ]] || \
+		       [[ -n "${target}" ]]; then
+			build_module
+		else
+ 			std::info "${P}/${V}: already exists, not rebuilding ..."
+		fi
 	else
- 		std::info "${P}/${V}: already exists, not rebuilding ..."
+		check_and_setup_env_bootstrap
+		build_module
 	fi
-	[[ ${bootstrap} == 'no' ]] && install_modulefile
+
 	return 0
 }
 
