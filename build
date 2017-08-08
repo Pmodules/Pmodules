@@ -94,7 +94,6 @@ pmodules::compile() {
 	local force='no'
 	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
 
-	local opts='--bootstrap'
 	while (( $# > 0 )); do
 		case $1 in
 			--disable-cleanup )
@@ -173,6 +172,9 @@ pmodules::install() {
 				;;
 			--config=* )
 				config_file="${1#*=}"
+				;;
+			--debug )
+				set -x
 				;;
 			--install-root )
 				PMODULES_ROOT="$2"
