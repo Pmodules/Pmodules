@@ -45,7 +45,7 @@ declare current_modulefile=''
 declare g_shell=''
 
 pbuild::export_env() {
-	local -r shell=$1
+	local -r shell="$1"
 	shift
 	case ${shell} in
 	bash )
@@ -67,7 +67,7 @@ pbuild::export_env() {
 }
 
 pbuild::save_env() {
-	local -r shell=$1
+	local -r shell="$1"
 	shift
 	local s=''
 	local tmp
@@ -451,7 +451,7 @@ USAGE:
 # 	$1: absolute modulefile name
 #
 get_release() {
-	local -r modulefile=$1
+	local -r modulefile="$1"
 
 	# is modulefile outside ${PMODULES_ROOT}?
 	if [[ ! ${modulefile} =~ ${PMODULES_ROOT} ]]; then
@@ -506,7 +506,7 @@ module_is_loaded() {
 # check shebang
 # $1: file name to test
 is_modulefile() {
-	local -r fname=$1
+	local -r fname="$1"
 	local shebang
 	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
@@ -514,7 +514,7 @@ is_modulefile() {
 }
 
 subcommand_generic0() {
-	local -r subcommand=$1
+	local -r subcommand="$1"
 	shift
 	local opts=''
 	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
@@ -533,7 +533,7 @@ subcommand_generic0() {
 }
 
 subcommand_generic1() {
-	local -r subcommand=$1
+	local -r subcommand="$1"
 	shift
 	local opts=''
 	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
@@ -560,7 +560,7 @@ subcommand_generic1() {
 }
 
 subcommand_generic1plus() {
-	local -r subcommand=$1
+	local -r subcommand="$1"
 	shift
 	local opts=''
 	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
@@ -583,7 +583,7 @@ subcommand_generic1plus() {
 }
 
 subcommand_generic1or2() {
-	local -r subcommand=$1
+	local -r subcommand="$1"
 	shift
 	local opts=''
 	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
@@ -618,7 +618,7 @@ subcommand_load() {
 	local moduledir=''
 	local m=''
 
-	local saved_IFS=${IFS}; 
+	local saved_IFS="${IFS}"; 
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
@@ -658,7 +658,7 @@ subcommand_load() {
 	# - specified with name only (without version, like gcc).
 	#   The module can be either in- or outside our hierarchy.
 	#
-	# - ?directory in- or outsite our hierarchy (not supported by modulecmd.tcl!)
+	# - directory in- or outsite our hierarchy (not supported by modulecmd.tcl!)
 	#
 	# arguments:
 	# 	$1: module name or file
@@ -950,8 +950,8 @@ subcommand_show() {
 #	modulename1 release1 modulename2 release2 ...
 #
 get_available_modules() {
-	local -r dir=$1
-	local -r module=$2
+	local -r dir="$1"
+	local -r module="$2"
 	local -r use_releases=${3:-${UsedReleases}}
 	local -a mods=()
 	while read mod; do
@@ -965,9 +965,9 @@ get_available_modules() {
 }
 
 get_available_modules2() {
-	local -r dir=$1
-	local -r module=$2
-	local -r use_releases=${3:-${UsedReleases}}
+	local -r dir="$1"
+	local -r module="$2"
+	local -r use_releases="${3:-${UsedReleases}}"
 	local -a mods=()
 	{
 		cd "${dir}"
