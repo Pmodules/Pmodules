@@ -237,7 +237,7 @@ sync_module() {
 		$DRY mkdir -p "${target_prefix}/${rel_module_prefix}" || return $?
 		$DRY rsync --links --perms --recursive --delete \
 		      "${src_prefix}/${rel_module_prefix}/" \
-		      "${target_prefix}/${rel_module_prefix}/" 2>/dev/null || return $?
+		      "${target_prefix}/${rel_module_prefix}/" || exit $?
 	fi
 	local -r src_modulefile="${src_prefix}/${rel_modulefile}"
 	local -r src_releasefile="${src_prefix}/${rel_releasefile}"
@@ -248,18 +248,6 @@ sync_module() {
 	if [[ -e "${src_modulefile}" ]] || [[ -e "${src_releasefile}" ]]; then
 	        local dir=$( dirname "${target_modulefile}" )
 		$DRY mkdir -p "${dir}" || return $?
-	fi
-
-	# copy modulefile
-	if [[ -e "${src_modulefile}" ]]; then
-	        $DRY rsync --links --perms --recursive \
-		     "${src_modulefile}" "${target_modulefile}" 2>/dev/null || return $?
-	fi
-
-	# copy release-file
-	if [[ -e "${src_releasefile}" ]]; then
-	        $DRY rsync --links --perms --recursive \
-		     "${src_releasefile}" "${target_releasefile}" 2>/dev/null|| return $?
 	fi
 
 	# copy modulefile template
@@ -274,8 +262,21 @@ sync_module() {
 	if [[ -e "${src_template}" ]]; then
 		$DRY mkdir -p "${target_template}"
 		$DRY rsync --links --perms --recursive \
-		     "${src_template}" "${target_template}" 2>/dev/null|| return $?
+		     "${src_template}" "${target_template}" || exit $?
 	fi
+
+	# copy modulefile
+	if [[ -e "${src_modulefile}" ]]; then
+	        $DRY rsync --links --perms --recursive \
+		     "${src_modulefile}" "${target_modulefile}" || exit $?
+	fi
+
+	# copy release-file
+	if [[ -e "${src_releasefile}" ]]; then
+	        $DRY rsync --links --perms --recursive \
+		     "${src_releasefile}" "${target_releasefile}" || exit $?
+	fi
+
 }
 
 ##############################################################################
