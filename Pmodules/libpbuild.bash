@@ -660,7 +660,6 @@ pbuild::make_all() {
 		       [[ "${cur_module_release}" == 'deprecated' ]] \
 		       || [[ "${ModuleRelease}" == 'deprecated' ]]; then
 			ModuleRelease='deprecated'
-			std::info "${P}/${V}: will be released as \"deprecated\""
 		elif [[ "${depend_release}" == 'stable' ]] \
 			 || [[ "${cur_module_release}" == 'stable' ]] \
 			 || [[ "${ModuleRelease}" == 'stable' ]]; then
@@ -670,7 +669,6 @@ pbuild::make_all() {
 			 #   - an unstable release of the module exists and the release is
 			 #     changed to stable on the command line
 			ModuleRelease='stable'
-			std::info "${P}/${V}: will be released as \"stable\""
 		else
 			# release is unstable
 			#   - if a build-dependency is unstable or 
@@ -678,10 +676,8 @@ pbuild::make_all() {
 			#     given on the command line
 			#   - and all the cases I didn't think of
 			ModuleRelease='unstable'
-			std::info "${P}/${V}: will be released as \"unstable\""
 		fi
-
-		# directory for README's, license files etc
+		std::info "${P}/${V}: will be released as \"${ModuleRelease}\""
 	}
 
 	#......................................................................
@@ -768,7 +764,7 @@ pbuild::make_all() {
 	}
 	
  	#......................................................................
-	# Install module- and release-file
+	# Install modulefile
 	install_modulefile() {
 		local -r src="${BUILD_BLOCK_DIR}/modulefile"
 		if [[ ! -r "${src}" ]]; then
@@ -779,16 +775,28 @@ pbuild::make_all() {
 		local dst="${PMODULES_ROOT}/"
 		dst+="${ModuleGroup}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${ModuleName}"
+		dst+="${ModuleName}"  # = name/version
 
-		# directory where to install module- and release-file
+		# directory where to install modulefile
  		local -r dstdir=${dst%/*}
 
 		std::info "${P}/${V}: installing modulefile in '${dstdir}' ..."
 		mkdir -p "${dstdir}"
 		install -m 0444 "${src}" "${dst}"
+	}
+
+ 	#......................................................................
+	# Install release-file
+	set_module_release() {
+		# directory where to install module- and release-file
+		local target_dir="${PMODULES_ROOT}/"
+		target_dir+="${ModuleGroup}/"
+		target_dir+="${PMODULES_MODULEFILES_DIR}/"
+		target_dir+="${P}"
+
+		mkdir -p "${target_dir}"
 		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
-		echo "${ModuleRelease}" > "${dstdir}/.release-$V"
+		echo "${ModuleRelease}" > "${target_dir}/.release-$V"
 	}
 
 	#......................................................................
@@ -875,6 +883,7 @@ pbuild::make_all() {
 		else
  			std::info "${P}/${V}: already exists, not rebuilding ..."
 		fi
+		set_module_release
 	else
 		check_and_setup_env_bootstrap
 		build_module
