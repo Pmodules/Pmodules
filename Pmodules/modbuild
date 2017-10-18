@@ -347,14 +347,29 @@ else
 	fi
 fi
 
-declare V_MAJOR=${V%%.*}
-declare tmp=${V#*.}
-declare V_MINOR=${tmp%%.*}
-tmp=${tmp#*.}
-declare V_PATCHLVL=${tmp%%-*}
-declare V_RELEASE=${tmp#*-}
-declare V_PKG="${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}"
+declare V_MAJOR=''
+declare V_MINOR=''
+declare V_PATCHLVL=''
 
+declare V_PKG="${V%%-*}"
+declare V_RELEASE="${V#*-}"
+declare tmp="${V_PKG}"
+
+case "${tmp}" in
+	*.*.* )
+		V_MAJOR="${tmp%%.*}"
+		tmp="${tmp#*.}"
+		V_MINOR="${tmp%%.*}"
+		V_PATCHLVL="${tmp#*.}"
+		;;
+	*.* )
+		V_MAJOR="${tmp%.*}"
+		V_MINOR="${tmp#*.}"
+		;;
+	* )
+		V_MAJOR="${tmp}"
+		;;
+esac
 P=$(basename $(dirname "${BUILD_BLOCK}"))
 
 [[ -z ${V} ]] && std::die 1 "Module version must be specified on command line!"
