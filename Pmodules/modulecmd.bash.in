@@ -47,8 +47,8 @@ declare g_shell=''
 pbuild::export_env() {
 	local -r shell="$1"
 	shift
-	case ${shell} in
-	bash )
+	case "${shell}" in
+	bash | zsh )
 		local -r fmt="export %s=\"%s\"; "
 		;;
 	tcsh )
@@ -58,7 +58,6 @@ pbuild::export_env() {
 		std::die 1 "${shell} is an unsupported shell"
 		;;
 	esac
-	
 
 	while (( $# > 0 )); do
 		printf "${fmt}" "$1" "${!1}"
@@ -1481,7 +1480,7 @@ pmodules_init() {
 	declare -g PMODULES_DEFAULT_GROUPS=''
 	declare -g PMODULES_DEFAULT_RELEASES=''
 
-	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash"
+	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.${g_shell}"
 
 	declare -g LOADEDMODULES=''
 	declare -g PMODULES_USED_GROUPS=''
@@ -1873,11 +1872,8 @@ else
 	pmodules_init
 fi
 
-case $1 in
-	bash )
-		declare g_shell="$1"
-		;;
-	tcsh )
+case "$1" in
+	bash | tcsh | zsh )
 		declare g_shell="$1"
 		;;
 	* )
@@ -1928,6 +1924,8 @@ while (( $# > 0 )); do
 			;;
 		--debug )
 			set -x
+			;;
+		'' )
 			;;
 		-* )
 			opts+=( "$1" )
