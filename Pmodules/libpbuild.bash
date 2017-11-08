@@ -353,33 +353,41 @@ pbuild::install_doc() {
 }
 
 pbuild::cleanup_build() {
-	[[ "${MODULE_BUILDDIR}" == "${MODULE_SRCDIR}" ]] && return
-	
+	[[ "${MODULE_BUILDDIR}" == "${MODULE_SRCDIR}" ]] && return 0
+
+	# the following two checks we should de earlier!	
 	if [[ -z "${MODULE_BUILDDIR}" ]]; then
 	        std::die 1 "Oops: internal error: %s is %s..." \
 			 MODULE_BUILDDIR 'set to empty string'
-	fi
-	if [[ "${MODULE_BUILDDIR}" == "/" ]]; then
-	        std::die 1 "Oops: internal error: %s is %s..." \
-		     	 MODULE_BUILDDIR "set to '/'"
 	fi
 	if [[ ! -d "/${MODULE_BUILDDIR}" ]]; then
 		std::die 1 "Oops: internal error: %s is %s..." \
 			 MODULE_BUILDDIR=${MODULE_BUILDDIR} "not a directory"
 	fi
-	echo "Cleaning up '/${MODULE_BUILDDIR}'..."
-	rm -rf  "/${MODULE_BUILDDIR}"
+
+	{
+		cd "/${MODULE_BUILDDIR}/.."
+		if [[ "$(pwd)" == "/" ]]; then
+		        std::die 1 "Oops: internal error: %s is %s..." \
+			     	 MODULE_BUILDDIR "set to '/'"
+		fi
+		echo "Cleaning up '${MODULE_BUILDDIR}'..."
+		rm -rf "${MODULE_BUILDDIR##*/}"
+	};
+	return 0
 }
 
 pbuild::cleanup_src() {
-    (
 	[[ -d /${MODULE_SRCDIR} ]] || return 0
-	cd "/${MODULE_SRCDIR}/..";
-	if [[ $(pwd) != / ]]; then
-		echo "Cleaning up $(pwd)"
-		rm -rf ${MODULE_SRCDIR##*/}
-	fi
-    );
+    	{
+		cd "/${MODULE_SRCDIR}/..";
+		if [[ $(pwd) == / ]]; then
+		        std::die 1 "Oops: internal error: %s is %s..." \
+			     	 MODULE_SRCDIR "set to '/'"
+		fi
+		echo "Cleaning up '${MODULE_SRCDIR}'..."
+		rm -rf "${MODULE_SRCDIR##*/}"
+   	};
 	return 0
 }
 
@@ -865,6 +873,7 @@ pbuild::make_all() {
 		
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
+		return 0
 	}
 	
 	##############################################################################
