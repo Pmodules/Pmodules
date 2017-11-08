@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# Notes:
+#	- PMODULES_ROOT is derived from the location of this file.
+#	- Some for PMODULES_CONFIG_DIR.
+#	- The Pmodules software must be installed in
+#	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
+#
+
+declare -xa PMODULES_DEFAULT_GROUPS
+declare -xa PMODULES_DEFAULT_RELEASES
+declare -x  PMODULES_VERSION
+
+: ${PMODULES_DEFAULT_GROUPS:=(Tools Programming)}
+: ${PMODULES_DEFAULT_RELEASES:=(stable)}
+: ${PMODULES_VERSION:=@PMODULES_VERSION@}
+
+#############################################################################
+#          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
+#############################################################################
+
+declare -x PMODULES_MODULEFILES_DIR='modulefiles'
+declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
+
+declare -x PMODULES_ROOT=$(cd $(dirname "${(%):-%N}")/.. && pwd)
+declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${(%):-%N}") && pwd))
+declare -x PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
+declare -x PMODULES_DIR="${PMODULES_HOME}"
+
+############################################################################
+# some sanity checks
+#
+if [[ ! -d ${PMODULES_ROOT} ]]; then 
+	echo "Oops: ${PMODULES_ROOT}: Set as Pmodules root, but this is not a directory." 1>&2
+	return 1
+fi
+if [[ ! -d ${PMODULES_HOME} ]]; then
+	echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
+	return 1
+fi
+
+############################################################################
+# inititialize Pmodules for zsh
+#
+test -r "${PMODULES_HOME}/init/zsh" && source "$_"
+if (( $? != 0 )); then
+	echo "Oops: cannot initialize Pmodules environment!"
+	return 1
+fi
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

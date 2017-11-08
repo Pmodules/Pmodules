@@ -1,0 +1,119 @@
+#!/bin/zsh
+
+#############################################################################
+# implement module comand as function
+#
+module() {
+	local -r modulecmd="${PMODULES_HOME}/bin/modulecmd"
+
+	local -a args=()
+	local -a modulecmd_opts=()
+	local -a subcmd_opts=()
+
+	while (( $# > 0 )); do
+		case $1 in
+		-* )
+			modulecmd_opts+=( $1 )
+			shift
+			;;
+		* )
+			break
+			;;
+		esac
+	done
+	local -r subcmd="$1"
+	shift
+	while (( $# > 0 )); do
+		case $1 in
+		-* )
+			subcmd_opts+=( $1 )
+			;;
+		[/~a-zA-Z]* )
+			args+=( $1 )
+			;;
+		esac
+		shift
+	done
+
+	[[ -z ${subcmd} ]] && args+=( 'help' )
+	[[ ${#args[@]} == 0 ]] && args+=( '--' )
+
+	# Loop over all modules to load.
+	# Note: We have to eval here, otherwise we cannot do something like
+	# $ module load gcc/5.2.0 openmpi/1.8.8 hdf5/1.8.15
+	local m
+	for module in ${args[@]}; do
+		eval $( "${modulecmd}" zsh "${modulecmd_opts[@]}" "${subcmd}" \
+				       "${subcmd_opts[@]}" "${module}" )
+	done
+}
+export -f module
+
+#############################################################################
+# helper functions
+#
+save_env() {
+	local s=''
+	while (( $# > 0 )); do
+		s+="$( typeset -p $1 );"
+		shift
+	done
+	echo export PMODULES_ENV=$( "${PMODULES_HOME}/sbin/base64" --wrap=0 <<< "$s" )	
+}
+
+#############################################################################
+# setup environment
+#
+declare -x LOADEDMODULES=''
+declare -x _LMFILES_=''
+
+# build initial MODULEPATH
+declare -x MODULEPATH=''
+typeset -T MODULEPATH modulepath
+for group in ${PMODULES_DEFAULT_GROUPS[@]}; do
+	dir="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+	modulepath=( "${dir}" ${(m)modulepath:#${dir}} )
+done
+
+# build initial list of used releases
+declare -x UsedReleases=''
+typeset -T UsedReleases usedreleases
+for r in ${PMODULES_DEFAULT_RELEASES[@]}; do
+	usedreleases=( "${r}" ${(m)usedreleases:#${r}} )
+done
+
+eval $(save_env UsedReleases PMODULES_DEFAULT_RELEASES PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES)
+
+unset UsedReleases
+unset PMODULES_DEFAULT_RELEASES
+unset PMODULES_DEFAULT_GROUPS
+unset PMODULES_DEFINED_RELEASES
+
+# setup PATH
+dirs_to_remove="${PMODULES_HOME%/*}/*"
+path=( ${(m)path:#${dirs_to_remove}} "${PMODULES_HOME}/bin" )
+
+# initialize MANPATH with output of `man --path` if not set
+[[ -z "${MANPATH}" ]] && manpath=$( man --path )
+
+# add man pages of Pmodules and remove all other Pmodules man pages
+manpath=( "${PMODULES_HOME}/share/man" ${(m)manpath:#${dirs_to_remove}} )
+
+# initialize completion
+test -r "${PMODULES_HOME}/init/zsh_completion" && source "$_"
+
+# cleanup
+unset group dir r dirs_to_remove
+
+#############################################################################
+# legacy...
+#
+unset MODULE_VERSION
+unset MODULE_VERSION_STACK
+unset MODULESHOME
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
