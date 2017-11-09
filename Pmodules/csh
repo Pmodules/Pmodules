@@ -3,7 +3,7 @@ if ($?tcsh) then
 else
 	set modules_shell="csh"
 endif
-set exec_prefix = $PMODULES_HOME/bin'
+set exec_prefix = "${PMODULES_HOME}/bin"
 
 set prefix=""
 set postfix=""
@@ -34,10 +34,14 @@ unset exec_prefix
 unset prefix
 unset postfix
 
-
-if (! $?MODULEPATH ) then
-  setenv MODULEPATH `sed -n 's/[ 	#].*$//; /./H; $ { x; s/^\n//; s/\n/:/g; p; }' ${MODULESHOME}/init/.modulespath`
-endif
+setenv MODULEPATH
+foreach group ( ${PMODULES_DEFAULT_GROUPS} )
+	if ( "${MODULEPATH}" == "" ) then
+		setenv MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+	else
+		setenv MODULEPATH "${MODULEPATH}:${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+	endif
+end
 
 if (! $?LOADEDMODULES ) then
   setenv LOADEDMODULES ""

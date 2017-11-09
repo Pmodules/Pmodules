@@ -51,8 +51,8 @@ pbuild::export_env() {
 	bash | zsh )
 		local -r fmt="export %s=\"%s\"; "
 		;;
-	tcsh )
-		local -r fmt="setenv %s \"%s\""
+	csh | tcsh )
+		local -r fmt="setenv %s \"%s\"; "
 		;;
 	* )
 		std::die 1 "${shell} is an unsupported shell"
@@ -734,47 +734,22 @@ subcommand_load() {
 	# Args:
 	#	none
 	output_load_hints() {
-		local -ra rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
-		for rel in "${rels[@]}"; do
-			eval $( subcommand_use "${rel}" )
-			if is_available "${m}"; then
-				std::info "${m}: is ${rel}! If you want to load this module, run"
-				std::info "\tmodule use ${rel}"
-				std::info "before running"
-				std::info  "\tmodule load ${m}"
-				exit 42
-			fi
-		done
-		local something_found='no'
-		local -a output=()
-		local -a release=()
-		local -a loadable=()
-		local -i i=0
+		local output="The module '${m}' cannot be loaded!\n"
+		output+="Try with one of the following command(s):\n\n"
+		local release=''
 		local -i n=0
 		while read -a line; do
-			output[n]="module load ${line[@]:3} ${line[0]}"
-			release[n]=${line[1]}
-			if [[ ":${UsedReleases}:" =~ "${release[n]}" ]]; then
-				loadable[n]='yes'
-			else
-				loadable[n]='no'
+			release=${line[1]}
+			if [[ ! ":${UsedReleases}:" =~ "${release}" ]]; then
+				output+="module use ${release}; "
 			fi
-			n+=1
+			output+="module load ${line[@]:3} ${line[0]}\n"
+			let n+=1
 		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
 		if (( n == 0 )); then
-		        std::info "${CMD} load: module unavailable -- ${m}"
+		        std::info "The module '${m}' doesn't exist!"
 		else
-			# :FIXME: output group
-			std::info "\nThe module '${m}' is not available with the  " \
-				  "currently loaded modules!" \
-				  "You may try: "
-			for ((i=n-1; i >=0; i--)); do
-				if [[ "${loadable[i]}" == "no" ]]; then
- 				        std::info "${output[i]}\t# ${release[i]}"
-				else
-					std::info "${output[i]}"
-				fi
-			done
+ 			std::info "${output}"
 		fi
 	}
 
@@ -784,18 +759,20 @@ subcommand_load() {
 			[[ -z ${dep} ]] && continue
 			[[ ${dep:0:1} == \# ]] && continue
 			module_is_loaded "${dep}" && continue
-			local output=$( subcommand_load "${dep}")
-			echo ${output}
+			local output=$( subcommand_load --internal "${dep}")
+
+			#echo ${output}
 			eval ${output}
 		done < "${fname}"
 	}
 
 	local opts
-	opts=$(pmodules::get_options -o fsvw -l force -l silent -l verbose -l warn -- "$@") || \
+	opts=$(pmodules::get_options -o fsvwi -l force -l silent -l verbose -l warn -l internal -- "$@") || \
 	    subcommand_help_load
 	eval set --  "${opts}"
 	local args=()
 	opts=''
+	local shell="${g_shell}"
 	while (($# > 0)); do
 		case $1 in
 			-f | --force )
@@ -809,6 +786,9 @@ subcommand_load() {
 				;;
 			-w | --warn )
 				verbosity_lvl='warn'
+				;;
+			-i | --internal )
+				shell='bash'
 				;;
 			-- )
 				;;
@@ -904,7 +884,7 @@ subcommand_load() {
 				load_dependencies "${dependency_file}"
 			fi
 		fi
-		"${modulecmd}" "${g_shell}" ${opts} load "${m}"
+		"${modulecmd}" "${shell}" ${opts} load "${m}"
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded."
 		fi
@@ -1291,27 +1271,21 @@ subcommand_use() {
 	use () {
 		
 		local dirs_to_add=()
-		local subcommand_switches=''
 		while (( $# > 0)); do
-			if [[ "$1" == "--" ]]; then
-				shift
-			        continue
-			fi
-			arg=$1
+			arg="$1"
 			# if is release
-			# ...
+			#	...
 			# elif is group
-			# ...
+			#	...
 			# elif matches modulepath root
-			# ...
+			#	...
 			# elif is directory
-			# ...
+			# 	...
+			# else
+			# 	error
+			#
 			local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
-			if [[ ${arg} == -a ]] || [[ ${arg} == --append ]]; then
-			        subcommand_switches='--append'
-			elif [[ ${arg} == -p ]] || [[ ${arg} == --prepend ]]; then
-			        subcommand_switches=''
-			elif is_release "${arg}"; then
+			if is_release "${arg}"; then
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
@@ -1328,8 +1302,7 @@ subcommand_use() {
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
 				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: illegal directory: ${arg}"
 			elif [[ -d ${arg} ]]; then
-			        local normalized_dir=$(cd "${arg}" && pwd)
-				dirs_to_add+=( ${normalized_dir} )
+			        dirs_to_add+=( "$(cd "${arg}" && pwd)" )
 			else
 				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: neither a directory, release or group: ${arg}"
 			fi
@@ -1338,21 +1311,43 @@ subcommand_use() {
 
 		declare -g PMODULES_USED_GROUPS
 		pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
-		[[ ${#dirs_to_add[@]} == 0 ]] && return
-
 		for dir in "${dirs_to_add[@]}"; do
-			subcommand_generic1 use ${subcommand_switches} "${dir}"
+			if [[ ${opt_append} == yes ]]; then
+				std::append_path MODULEPATH "${dir}"
+			else
+				std::prepend_path MODULEPATH "${dir}"
+			fi
 		done
 	}
 
 	local opts=''
+	local opt_append='no'
+	local -a args=()
+
 	opts=$(pmodules::get_options -o 'ap' -l 'append' -l 'prepend' -- "$@") || subcommand_help_use
 	eval set --  "${opts}"
 	
-	if [[ $# == 1 ]]; then
+	while (( $# > 0)); do
+		case "$1" in
+		-a | --append )
+			opt_append='yes'
+			;;
+		-p | --prepend )
+			opt_append='no'
+			;;
+		-- )
+			;;
+		* )
+			args+=( "$1" )
+			;;
+		esac
+		shift
+	done
+
+	if (( ${#args[@]} == 0 )); then
 	        print_info
 	else
-		use "$@"
+		use "${args[@]}"
 	fi
 }
 
@@ -1477,10 +1472,10 @@ subcommand_list() {
 
 ##############################################################################
 pmodules_init() {
-	declare -g PMODULES_DEFAULT_GROUPS=''
-	declare -g PMODULES_DEFAULT_RELEASES=''
+	#declare -g PMODULES_DEFAULT_GROUPS=''
+	#declare -g PMODULES_DEFAULT_RELEASES=''
 
-	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.${g_shell}"
+	#source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.${g_shell}"
 
 	declare -g LOADEDMODULES=''
 	declare -g PMODULES_USED_GROUPS=''
@@ -1866,21 +1861,24 @@ subcommand_initclear() {
 	subcommand_generic0 initclear "$@"
 }
 
-if [[ -n ${PMODULES_ENV} ]]; then
-	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
-else
-	pmodules_init
-fi
-
 case "$1" in
-	bash | tcsh | zsh )
+	bash | zsh )
 		declare g_shell="$1"
+		;;
+	csh | tcsh )
+		declare g_shell='csh'
 		;;
 	* )
 		std::die 1 "${CMD}: unsupported shell -- $1"
 		;;
 esac
 shift
+if [[ -n ${PMODULES_ENV} ]]; then
+	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+else
+	pmodules_init
+fi
+
 
 declare -A Subcommands=(\
 	[add]="subcommand_load" \

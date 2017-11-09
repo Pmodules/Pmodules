@@ -155,7 +155,7 @@ pmodules::compile() {
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${force} == 'yes' ]]; then
-		build Modules "${MODULES_VERSION}" --compile
+		build Modules "${MODULES_VERSION}"
 	fi
 	echo "Done..."
 }
@@ -258,6 +258,9 @@ pmodules::install() {
 	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash" || \
 		install -m 0755 "${SRC_DIR}/profile.bash"	"$_"
 
+	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.csh" || \
+		install -m 0755 "${SRC_DIR}/profile.csh"	"$_"
+
 	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.zsh" || \
 		install -m 0755 "${SRC_DIR}/profile.zsh"	"$_"
 
@@ -270,6 +273,7 @@ pmodules::install() {
 
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
+	install -m 0644 "${SRC_DIR}/csh"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/zsh"		"${PMODULES_HOME}/init"
 
 	install -m 0644 "${SRC_DIR}/libpmodules.bash"	"${PMODULES_HOME}/lib"
