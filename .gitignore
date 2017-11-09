@@ -4,6 +4,7 @@ modulecmd.tcl
 modmanage.bash
 profile.bash
 profile.csh
+profile.zsh
 Downloads
 tmp
 tclIndex
