@@ -948,6 +948,7 @@ get_available_modules2() {
 	local -r module="$2"
 	local -r use_releases="${3:-${UsedReleases}}"
 	local -a mods=()
+	test -d "${dir}" || return 0
 	{
 		cd "${dir}"
 		while read mod; do
