@@ -49,14 +49,14 @@ proc module-addgroup { group } {
 		set GROUP [string toupper $group]
 		debug "remove hierarchical group '${GROUP}'"
 		
-		if { [info exists env(PMODULES_LOADED_${GROUP})] } {
+		if { [info exists ::env(PMODULES_LOADED_${GROUP})] } {
 			debug "unloading orphan modules"
 			set modules [split $env(PMODULES_LOADED_${GROUP}) ":"]
 			foreach m ${modules} {
 				if { ${m} == "--APPMARKER--" } {
 					continue
 				}
-				if { [is-loaded ${module_name}] } {
+				if { [is-loaded ${m}] } {
 					debug "unloading: $m"
 					module unload ${m}
 				}
