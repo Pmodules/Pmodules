@@ -109,7 +109,7 @@ proc module-addgroup { group } {
 	global name
 	global version
 
-	debug "called with arg $group"
+	debug "called with arg $group, mode is \"[module-info mode]\""
 	set Implementation [file join {*}$::implementation]
 
 	set	GROUP [string toupper $group]
@@ -128,7 +128,7 @@ proc module-addgroup { group } {
 		append-path PMODULES_USED_GROUPS $group
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
 		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
-	} elseif { [module-info mode remove] } {
+	} elseif { [module-info mode unload] } {
 		set GROUP [string toupper $group]
 		debug "remove hierarchical group '${GROUP}'"
 		
@@ -139,7 +139,7 @@ proc module-addgroup { group } {
 				if { ${m} == "999999999" } {
 					continue
 				}
-				if { [is-loaded ${module_name}] } {
+				if { [is-loaded ${m}] } {
 					debug "unloading: $m"
 					module unload ${m}
 				}
