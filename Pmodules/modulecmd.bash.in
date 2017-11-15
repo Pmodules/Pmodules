@@ -1930,13 +1930,22 @@ while (( $# > 0 )); do
 			opts+=( "$1" )
 			;;
 		* )
-			subcommand="$1"
 			if [[ -z "${Subcommands[$1]}" ]]; then
 			        std::die 1 "${CMD}: unknown sub-command -- $1"
 			fi
+			subcommand="$1"
 			shift
-			opts+=( "$@" )
-			shift $#
+			;;
+	esac
+	shift
+done
+
+while (( $# > 0 )); do
+	case "$1" in
+		-- )
+			;;
+		* )
+			opts+=( "$1" )
 			;;
 	esac
 	shift
