@@ -1935,6 +1935,7 @@ while (( $# > 0 )); do
 			fi
 			subcommand="$1"
 			shift
+			break
 			;;
 	esac
 	shift
