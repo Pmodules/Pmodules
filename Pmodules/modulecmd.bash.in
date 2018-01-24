@@ -1270,6 +1270,8 @@ subcommand_use() {
 	}
 
 	use () {
+		declare -g PMODULES_USED_GROUPS
+		declare -g MODULEPATH
 		
 		local dirs_to_add=()
 		while (( $# > 0)); do
@@ -1310,8 +1312,6 @@ subcommand_use() {
 			shift
 		done
 
-		declare -g PMODULES_USED_GROUPS
-		pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
 		for dir in "${dirs_to_add[@]}"; do
 			if [[ ${opt_append} == yes ]]; then
 				std::append_path MODULEPATH "${dir}"
@@ -1319,6 +1319,7 @@ subcommand_use() {
 				std::prepend_path MODULEPATH "${dir}"
 			fi
 		done
+		pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
 	}
 
 	local opts=''
