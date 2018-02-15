@@ -227,7 +227,15 @@ pmodules::install() {
 	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${PMODULES_DISTFILESDIR}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${PMODULES_TMPDIR}:g;"
-
+	sed_cmd+="s:@TCLSHDIR@:${PMODULES_HOME}/sbin:g;"
+	sed_cmd+="s:@pager@::g;"
+	sed_cmd+="s:@pageropts@::g;"
+	sed_cmd+="s:@etcdir@:/opt/psi/config:g;"
+	sed_cmd+="s:@VERSIONING@:#:g;"
+	sed_cmd+="s:@prefix@:${PMODULES_HOME}:g;"
+	sed_cmd+="s:@initdir@:${PMODULES_HOME}/init:g;"
+	sed_cmd+="s:@MODULES_RELEASE@:${PMODULES_VERSION}:g;"
+	
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in"   > "${SRC_DIR}/modulecmd.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${SRC_DIR}/modulecmd.tcl"
 	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${SRC_DIR}/modmanage.bash"
