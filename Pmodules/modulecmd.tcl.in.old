@@ -2673,7 +2673,7 @@ proc cmdModuleSwitch {old {new {}}} {
 
 proc cmdModuleSource {args} {
 	global env tcl_version g_loadedModules g_loadedModulesGeneric
-	gloabl g_force g_debug
+	global g_force g_debug
 
 	if {$g_debug} {
 		report "DEBUG cmdModuleSource: $args"
