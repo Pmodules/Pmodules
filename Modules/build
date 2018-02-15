@@ -1,6 +1,6 @@
 #!/usr/bin/env modbuild
 
-SOURCE_URL="https://netix.dl.sourceforge.net/project/modules/Modules/modules-$V/modules-$V.tar.gz"
+SOURCE_URL="https://netix.dl.sourceforge.net/project/modules/Modules/modules-$V/modules-$V.tar.bz2"
 
 TCL_DIR="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
 
