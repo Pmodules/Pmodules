@@ -186,13 +186,8 @@ pbuild::get_source() {
 	local -r url="$2"
 	shift 2
 	dirs+=( "$@" )
-	local -a fnames=()
-	local extension=''
-	if [[ "${url}" =~ ".tar." ]]; then
-	        extension+='tar.'
-	fi
-	extension+="${url##*.}"
-	fname="$P-$V_PKG.${extension}"
+	
+	fname="${url##*/}"
 	dirs+=( 'not found' )
 	for dir in "${dirs[@]}"; do
 		[[ -r "${dir}/${fname}" ]] && break
