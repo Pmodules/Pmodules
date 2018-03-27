@@ -172,6 +172,9 @@ pbuild::module_exists() {
 # If the source URL is given, we look for the file-name specified in
 # the URL. Otherwise we test for several possible names/extensions.
 #
+# The downloaded file will be stored with the name "$P-$V" and extension
+# derived from URL. The download directory is the first directory passed.
+#
 # Arguments:
 #   $1:	    store file name with upvar here
 #   $2:	    download URL 
@@ -187,37 +190,35 @@ pbuild::get_source() {
 	shift 2
 	dirs+=( "$@" )
 	
-	fname="${url##*/}"
+	local -r fname="$P-$V.${url##*.}"
+	local dir=''
 	dirs+=( 'not found' )
 	for dir in "${dirs[@]}"; do
 		[[ -r "${dir}/${fname}" ]] && break
 	done
-	local output_fname
 	if [[ "${dir}" == 'not found' ]]; then
-		local -r output_fname="${dirs[0]}/${fname}"
+		dir="${dirs[0]}"
 		local -r method="${url%:*}"
 		case "${method}" in
 			file )
-				cp "${url/file:}" "output_fname"
+				cp "${url/file:}" "${dir}/${fname}"
 				;;
 			http | https | ftp )
 				curl \
 				    -L \
-				    --output "${output_fname}" \
+				    --output "${dir}/${fname}" \
 				    "${url}"
 				if (( $? != 0 )); then
 					curl \
 					    --insecure \
-					    --output "${output_fname}" \
+					    --output "${dir}/${fname}" \
 					    "${url}"
 				fi
 				;;
                 esac
-	else
-		output_fname="${dir}/${fname}"
 	fi
-	std::upvar "${var}" "${output_fname}"
-	[[ -r "${output_fname}" ]]
+	std::upvar "${var}" "${dir}/${fname}"
+	[[ -r "${dir}/${fname}" ]]
 }
 
 #
@@ -259,15 +260,26 @@ pbuild::post_prep() {
 	:
 }
 
+#
+# unpack file in given directory
+#
 pbuild::unpack() {
 	local -r file="$1"
 	local -r dir="$2"
 	(
-		if [[ -n "${dir}" ]]; then
-			mkdir -p "${dir}"
-			cd "${dir}"
-		fi
-		tar -xv --strip-components 1 -f "${file}"
+		mkdir -p "${dir}"
+		cd "${dir}"
+		local -r file_extension="${file##*.}"
+		case "${file_extension}" in
+			"zip" )
+				std::die 42 "Zip files are not supported"
+				;;
+			* )
+				# let's hope that tar supports 
+				tar -xv --strip-components 1 -f "${file}" || \
+					std::die 42 "${file}: Cannot untar file, maybe file format is not supported!"
+				;;
+		esac
 	)
 }
 
@@ -778,7 +790,7 @@ pbuild::make_all() {
 		local dst="${PMODULES_ROOT}/"
 		dst+="${ModuleGroup}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${ModuleName}"  # = name/version
+		dst+="${ModuleName}"  # = group hierarchy + name/version
 
 		# directory where to install modulefile
  		local -r dstdir=${dst%/*}
@@ -795,7 +807,7 @@ pbuild::make_all() {
 		local target_dir="${PMODULES_ROOT}/"
 		target_dir+="${ModuleGroup}/"
 		target_dir+="${PMODULES_MODULEFILES_DIR}/"
-		target_dir+="${P}"
+		target_dir+="${ModuleName%/*}"  # = group hierarchy + name
 
 		mkdir -p "${target_dir}"
 		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
