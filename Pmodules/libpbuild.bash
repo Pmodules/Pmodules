@@ -189,8 +189,11 @@ pbuild::get_source() {
 	local -r url="$2"
 	shift 2
 	dirs+=( "$@" )
-	
-	local -r fname="$P-$V.${url##*.}"
+
+	local -r fname_in_url="${url##*/}"
+	local -r extension=$(echo ${fname_in_url} | sed 's/.*\(.tar.bz2\|.tbz2\|tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/')
+	local -r fname="$P-$V.${extension}"
+	echo "fname=\"${fname}\""
 	local dir=''
 	dirs+=( 'not found' )
 	for dir in "${dirs[@]}"; do
@@ -876,8 +879,6 @@ pbuild::make_all() {
 		fi
 		[[ "${target}" == "install" ]] && return 0
 
-		install_modulefile
-		
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
 		return 0
@@ -896,8 +897,12 @@ pbuild::make_all() {
 		       [[ "${force_rebuild}" == 'yes' ]] || \
 		       [[ -n "${target}" ]]; then
 			build_module
+			install_modulefile
 		else
  			std::info "${P}/${V}: already exists, not rebuilding ..."
+			if [[ "${opt_install_modulefile}" == "yes" ]]; then
+				install_modulefile
+			fi
 		fi
 		set_module_release
 	else
