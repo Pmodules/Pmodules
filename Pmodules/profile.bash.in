@@ -1,23 +1,30 @@
 #!/bin/bash
 #
+# The following settings are system defaults. They can be (re-)defined
+# in a system wide profile or in a user's profile.
+
+# set groups which should be available after initialization
+: ${PMODULES_DEFAULT_GROUPS:='Tools Programming'}
+
+# set releases which should be available after initialization
+: ${PMODULES_DEFAULT_RELEASES:='stable'}
+
+# set default version
+: ${PMODULES_VERSION:=@PMODULES_VERSION@}
+
+export     PMODULES_DEFAULT_GROUPS
+export     PMODULES_DEFAULT_RELEASES
+export     PMODULES_VERSION
+
+#############################################################################
+#          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
+#
 # Notes:
 #	- PMODULES_ROOT is derived from the location of this file.
 #	- Some for PMODULES_CONFIG_DIR.
 #	- The Pmodules software must be installed in
 #	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
 #
-
-declare -x PMODULES_DEFAULT_GROUPS
-declare -x PMODULES_DEFAULT_RELEASES
-declare -x PMODULES_VERSION
-
-: ${PMODULES_DEFAULT_GROUPS:='Tools Programming'}
-: ${PMODULES_DEFAULT_RELEASES:='stable'}
-: ${PMODULES_VERSION:=@PMODULES_VERSION@}
-
-#############################################################################
-#          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
-#############################################################################
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
 declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
