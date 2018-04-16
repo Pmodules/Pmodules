@@ -190,9 +190,8 @@ pbuild::get_source() {
 	shift 2
 	dirs+=( "$@" )
 
-	local -r fname_in_url="${url##*/}"
-	local -r extension=$(echo ${fname_in_url} | sed 's/.*\(.tar.bz2\|.tbz2\|.tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/')
-	local -r fname="$P-$V${extension}"
+	local -r fname="${url##*/}"
+	local -r extension=$(echo ${fname} | sed 's/.*\(.tar.bz2\|.tbz2\|.tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/')
 	echo "fname=\"${fname}\""
 	local dir=''
 	dirs+=( 'not found' )
