@@ -331,19 +331,19 @@ pbuild::post_configure() {
 }
 eval "pbuild::post_configure_${OS}() { :; }"
 
-pbuild::pre_build() {
+pbuild::pre_compile() {
 	:
 }
-eval "pbuild::pre_build_${OS}() { :; }"
+eval "pbuild::pre_compile_${OS}() { :; }"
 
-pbuild::build() {
+pbuild::compile() {
 	make -j${JOBS}
 }
 
-pbuild::post_build() {
+pbuild::post_compile() {
 	:
 }
-eval "pbuild::post_build_${OS}() { :; }"
+eval "pbuild::post_compile_${OS}() { :; }"
 
 pbuild::pre_install() {
 	:
@@ -816,84 +816,45 @@ pbuild::make_all() {
 		echo "${ModuleRelease}" > "${target_dir}/.release-$V"
 	}
 
+	build_target() {
+		local dir="$1"
+		local target="$2"
+		if [[ ! -e "${BUILD_DIR}/.${target}" ]] || \
+		   [[ ${force_rebuild} == 'yes' ]]; then
+			# We cd into the dir before every function call -
+			# just in case there was a cd in the called function.
+			# 
+			# Executing the function in a sub-process doesn't
+			# work because in some function global variables 
+			# might to be set.
+			#
+			cd "${dir}" && "pbuild::pre_${target}_${OS}"
+			cd "${dir}" && "pbuild::pre_${target}"
+			cd "${dir}" && "pbuild::${target}"
+			cd "${dir}" && "pbuild::post_${target}_${OS}"
+			cd "${dir}" && "pbuild::post_${target}"
+			touch "${BUILD_DIR}/.i${target}"
+		fi
+	}
+
 	#......................................................................
 	# build module $P/$V
 	build_module() {
  		echo "Building $P/$V ..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 		check_compiler
+		mkdir -p "${SRC_DIR}"
 
-		if [[ ! -e "${BUILD_DIR}/.prep" ]] || \
-		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]] || \
-		   [[ "${target}" == "prep" ]]; then
-			# We cd into the source dir before every function
-			# call - just in case there was another cd call
-			# in the called function.
-			# 
-			# Executing the function in a sub-process doesn't
-			# work because in some function global variables 
-			# have to be set.
-			#
-			mkdir -p "${SRC_DIR}"
-			cd "${SRC_DIR}"
-			pbuild::pre_prep
-			cd "${SRC_DIR}"
-			pbuild::prep
-			cd "${SRC_DIR}"
-			pbuild::post_prep
-			touch "${BUILD_DIR}/.prep"
-		fi
+		build_target "${SRC_DIR}" prep
 		[[ "${target}" == "prep" ]] && return 0
 
-		if [[ ! -e "${BUILD_DIR}/.configure" ]] || \
-		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]] || \
-		   [[ "${target}" == "configure" ]]; then
-		        cd "${BUILD_DIR}"
-			pbuild::pre_configure
-		        cd "${BUILD_DIR}"
-			pbuild::configure
-		        cd "${BUILD_DIR}"
-			pbuild::post_configure
-			touch "${BUILD_DIR}/.configure"
-		fi
+		build_target "${BUILD_DIR}" configure
 		[[ "${target}" == "configure" ]] && return 0
 
-		if [[ ! -e "${BUILD_DIR}/.compile" ]] || \
-		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]] || \
-		   [[ "${target}" == "compile" ]]; then
-			cd "${BUILD_DIR}"
-			pbuild::pre_build
-			cd "${BUILD_DIR}"
-			pbuild::build
-			cd "${BUILD_DIR}"
-			pbuild::post_build
-			touch "${BUILD_DIR}/.compile"
-		fi
+		build_target "${BUILD_DIR}" compile
 		[[ "${target}" == "compile" ]] && return 0
 
-		if [[ ! -e "${BUILD_DIR}/.install" ]] || \
-		   [[ ${force_rebuild} == 'yes' ]] || \
-		   [[ -z ${target} ]] || \
-		   [[ "${target}" == "install" ]]; then
-			cd "${BUILD_DIR}"
-			pbuild::pre_install
-			cd "${BUILD_DIR}"
-			pbuild::install
-			cd "${BUILD_DIR}"
-			pbuild::post_install_${OS} "$@"
-			cd "${BUILD_DIR}"
-			pbuild::post_install
-			cd "${BUILD_DIR}"
-			post_install
-			if [[ ${bootstrap} == 'no' ]]; then
-				write_runtime_dependencies
-				write_build_dependencies
-			fi
-			touch "${BUILD_DIR}/.install"
-		fi
+		build_target "${BUILD_DIR}" install
 		[[ "${target}" == "install" ]] && return 0
 
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
@@ -911,8 +872,7 @@ pbuild::make_all() {
 		load_build_dependencies
 		check_and_setup_env
 		if [[ ! -d "${PREFIX}" ]] || \
-		       [[ "${force_rebuild}" == 'yes' ]] || \
-		       [[ -n "${target}" ]]; then
+		       [[ "${force_rebuild}" == 'yes' ]]; then
 			build_module
 			install_modulefile
 		else
