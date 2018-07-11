@@ -155,7 +155,7 @@ pmodules::compile() {
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${force} == 'yes' ]]; then
-		build Modules "${MODULES_VERSION}"
+		build modules "${MODULES_VERSION}"
 	fi
 	echo "Done..."
 }

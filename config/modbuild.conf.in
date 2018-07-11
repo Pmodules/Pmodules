@@ -17,8 +17,8 @@ declare -x PMODULES_DEFAULT_GROUPS='Tools Programming'
 declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
 declare -x PMODULES_DEFAULT_RELEASES='stable'
 
-declare -x PMODULES_DISTFILESDIR
-declare -x PMODULES_TMPDIR
+export     PMODULES_DISTFILESDIR
+export     PMODULES_TMPDIR
 
 #-----------------------------------------------------------------------------
 # OS specific configuration

@@ -1,4 +1,5 @@
 environment.bash
+modbuild.conf
 modulecmd.bash
 modulecmd.tcl
 modmanage.bash

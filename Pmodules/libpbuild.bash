@@ -191,6 +191,9 @@ pbuild::use_cc() {
 # If the source URL is given, we look for the file-name specified in
 # the URL. Otherwise we test for several possible names/extensions.
 #
+# The downloaded file will be stored with the name "$P-$V" and extension
+# derived from URL. The download directory is the first directory passed.
+#
 # Arguments:
 #   $1:	    store file name with upvar here
 #   $2:	    download URL 
@@ -205,26 +208,28 @@ download_source_file() {
 	local -r url="$2"
 	shift 2
 	dirs+=( "$@" )
-	
-	fname="${url##*/}"
+
+	local -r fname="${url##*/}"
+	local -r extension=$(echo ${fname} | sed 's/.*\(.tar.bz2\|.tbz2\|.tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/')
+	echo "fname=\"${fname}\""
+	local dir=''
 	dirs+=( 'not found' )
 	for dir in "${dirs[@]}"; do
 		[[ -r "${dir}/${fname}" ]] && break
 	done
-	local output_fname
 	if [[ "${dir}" == 'not found' ]]; then
-		local -r output_fname="${dirs[0]}/${fname}"
+		dir="${dirs[0]}"
 		local -r method="${url%:*}"
 		case "${method}" in
 			http | https | ftp )
 				curl \
 				    -L \
-				    --output "${output_fname}" \
+				    --output "${dir}/${fname}" \
 				    "${url}"
 				if (( $? != 0 )); then
 					curl \
 					    --insecure \
-					    --output "${output_fname}" \
+					    --output "${dir}/${fname}" \
 					    "${url}"
 				fi
 				;;
@@ -232,11 +237,9 @@ download_source_file() {
 				std::die 4 "Error in download URL: unknown download method '${method}'!"
 				;;
                 esac
-	else
-		output_fname="${dir}/${fname}"
 	fi
-	std::upvar "${var}" "${output_fname}"
-	[[ -r "${output_fname}" ]]
+	std::upvar "${var}" "${dir}/${fname}"
+	[[ -r "${dir}/${fname}" ]]
 }
 
 pbuild::pre_prep() {
@@ -789,7 +792,7 @@ pbuild::make_all() {
 		local dst="${PMODULES_ROOT}/"
 		dst+="${ModuleGroup}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${ModuleName}"  # = name/version
+		dst+="${ModuleName}"  # = group hierarchy + name/version
 
 		# directory where to install modulefile
  		local -r dstdir=${dst%/*}
@@ -806,7 +809,7 @@ pbuild::make_all() {
 		local target_dir="${PMODULES_ROOT}/"
 		target_dir+="${ModuleGroup}/"
 		target_dir+="${PMODULES_MODULEFILES_DIR}/"
-		target_dir+="${P}"
+		target_dir+="${ModuleName%/*}"  # = group hierarchy + name
 
 		mkdir -p "${target_dir}"
 		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
@@ -893,8 +896,6 @@ pbuild::make_all() {
 		fi
 		[[ "${target}" == "install" ]] && return 0
 
-		install_modulefile
-		
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
 		return 0
@@ -913,8 +914,12 @@ pbuild::make_all() {
 		       [[ "${force_rebuild}" == 'yes' ]] || \
 		       [[ -n "${target}" ]]; then
 			build_module
+			install_modulefile
 		else
  			std::info "${P}/${V}: already exists, not rebuilding ..."
+			if [[ "${opt_install_modulefile}" == "yes" ]]; then
+				install_modulefile
+			fi
 		fi
 		set_module_release
 	else

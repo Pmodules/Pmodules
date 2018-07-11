@@ -149,6 +149,7 @@ declare enable_cleanup_src='no'
 declare target=''
 declare bootstrap='no'
 declare variants_file=''
+declare opt_install_modulefile=''
 
 # array collecting all modules specified on the command line via '--with=module'
 with_modules=()
@@ -248,6 +249,9 @@ while (( $# > 0 )); do
 		;;
 	--bootstrap )
 		bootstrap='yes'
+		;;
+	--install-modulefile )
+		opt_install_modulefile='yes'
 		;;
 	[0-9]* )
 		V=$1
