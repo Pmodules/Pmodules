@@ -47,8 +47,10 @@ if [[ -z ${PMODULES_DEFINED_RELEASES} ]]; then
 	declare -r PMODULES_DEFINED_RELEASES=":unstable:stable:deprecated:"
 fi
 
-# flag: build in source or separate build directory
-declare	    CompileInSource='no'
+declare	SOURCE_URL=()
+declare SOURCE_SHA256=()
+declare	SOURCE_FILE=()
+declare	CONFIGURE_ARGS=()
 
 #..............................................................................
 #
@@ -60,36 +62,6 @@ declare	    CompileInSource='no'
 # i.e:: ${PMODULES_ROOT}/${ModuleGroup)/${ModuleName}
 declare -x  PREFIX=''
 
-# Source directory for module. Will be set to "${PMODULES_TMPDIR}/src/$P-$V"
-declare -x  MODULE_SRCDIR=''
-
-# Build directory for module. Will be set to "${PMODULES_TMPDIR}/build/$P-$V"
-declare -x  MODULE_BUILDDIR=''
-
-##############################################################################
-#
-# Set release of module. Exit script, if given release name is invalid.
-#
-# Arguments:
-#   $1: release name
-#
-# :FIXME:
-#   This function is obsolete and should not be used any more!
-#   Releases have to be defined in 'variants' configuration file.
-#
-pbuild::set_release() {
-	#.....................................................................
-	#
-	# test whether the given argument is a valid release name
-	#
-	is_release() {
-		[[ :${PMODULES_DEFINED_RELEASES}: =~ :$1: ]] && return 0
-		std::die 1 "${P}: '$1' is not a valid release name."
-	}
-
-	is_release "$1" || std::die 1 "${P}: specified release '$1' is not valid!"
-	ModuleRelease="$1"
-}
 
 ##############################################################################
 #
@@ -99,7 +71,7 @@ pbuild::set_release() {
 #   none
 #
 pbuild::compile_in_sourcetree() {
-	CompileInSource='yes'
+	BUILD_DIR="${SRC_DIR}"
 }
 
 ##############################################################################
@@ -140,6 +112,9 @@ pbuild::add_to_group() {
 pbuild::set_docfiles() {
 	MODULE_DOCFILES=("$@")
 }
+pbuild::add_docfile() {
+	MODULE_DOCFILES+=("$@")
+}
 
 ##############################################################################
 #
@@ -151,6 +126,7 @@ pbuild::set_docfiles() {
 pbuild::set_supported_compilers() {
 	MODULE_SUPPORTED_COMPILERS=("$@")
 }
+
 
 ##############################################################################
 #
@@ -164,6 +140,49 @@ pbuild::set_supported_compilers() {
 #
 pbuild::module_exists() {
 	[[ -n $("${MODULECMD}" bash search -a --no-header "$1" 2>&1 1>/dev/null) ]]
+}
+
+#
+# Search for variants file to use
+#
+# Arguments:
+#   none
+#
+# Used global variables:
+#   OS
+#   BUILDBLOCK_DIR
+#   variants_file [out]
+#
+search_variants_file() {
+	local -a eligible_variants_files=()
+	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*.*}/variants" )
+	eligible_variants_files+=( "${V%.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*}/variants" )
+	eligible_variants_files+=( "${V}/variants.${OS}" )
+	eligible_variants_files+=( "${V}/variants" )
+	eligible_variants_files+=( "files/variants.${OS}" )
+	eligible_variants_files+=( "files/variants" )
+
+	for variants_file in "${eligible_variants_files[@]}"; do
+		if [[ -e "${BUILDBLOCK_DIR}/${variants_file}" ]]; then
+			variants_file="${BUILDBLOCK_DIR}/${variants_file}"
+		    	return 0
+	    	fi
+	done
+	variants_file=''
+	return 1
+}
+
+pbuild::set_download_url() {
+	SOURCE_URL+=( "$1" )
+	SOURCE_SHA256+=( "$2" )
+}
+
+pbuild::use_cc() {
+	# :FIXME: check whether this an executable
+	[[ -x "$1" ]] || std::die 3 "Error in setting CC: '$1' is not an executable!"
+	CC="$1"
 }
 
 #......................................................................
@@ -180,7 +199,7 @@ pbuild::module_exists() {
 # Returns:
 #   0 on success otherwise a value > 0
 #
-pbuild::get_source() {
+download_source_file() {
 	local "$1"
 	local var="$1"
 	local -r url="$2"
@@ -197,9 +216,6 @@ pbuild::get_source() {
 		local -r output_fname="${dirs[0]}/${fname}"
 		local -r method="${url%:*}"
 		case "${method}" in
-			file )
-				cp "${url/file:}" "output_fname"
-				;;
 			http | https | ftp )
 				curl \
 				    -L \
@@ -212,6 +228,9 @@ pbuild::get_source() {
 					    "${url}"
 				fi
 				;;
+			* )
+				std::die 4 "Error in download URL: unknown download method '${method}'!"
+				;;
                 esac
 	else
 		output_fname="${dir}/${fname}"
@@ -220,102 +239,99 @@ pbuild::get_source() {
 	[[ -r "${output_fname}" ]]
 }
 
-#
-# Search for variants file to use
-#
-# Arguments:
-#   none
-#
-# Used global variables:
-#   OS
-#   BUILD_BLOCK_DIR
-#   variants_file [out]
-#
-search_variants_file() {
-	local -a eligible_variants_files=()
-	eligible_variants_files+=( "${V}/variants.${OS}" )
-	eligible_variants_files+=( "${V}/variants" )
-	eligible_variants_files+=( "${V%.*}/variants.${OS}" )
-	eligible_variants_files+=( "${V%.*}/variants" )
-	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
-	eligible_variants_files+=( "${V%.*.*}/variants" )
-
-	for variants_file in "${eligible_variants_files[@]}"; do
-		if [[ -e "${BUILD_BLOCK_DIR}/${variants_file}" ]]; then
-			variants_file="${BUILD_BLOCK_DIR}/${variants_file}"
-		    	return 0
-	    	fi
-	done
-	variants_file=''
-	return 1
-}
-
-
 pbuild::pre_prep() {
 	:
 }
+eval "pbuild::pre_prep_${OS}() { :; }"
 
 pbuild::post_prep() {
 	:
 }
-
-pbuild::unpack() {
-	local -r file="$1"
-	local -r dir="$2"
-	(
-		if [[ -n "${dir}" ]]; then
-			mkdir -p "${dir}"
-			cd "${dir}"
-		fi
-		tar -xv --strip-components 1 -f "${file}"
-	)
-}
+eval "pbuild::post_prep_${OS}() { :; }"
 
 ###############################################################################
 #
 # extract sources. For the time being only tar-files are supported.
 #
 pbuild::prep() {
-	local source_file=''
-	pbuild::get_source \
-	    source_file \
+	unpack() {
+		local -r file="$1"
+		local -r dir="$2"
+		(
+			if [[ -n "${dir}" ]]; then
+				mkdir -p "${dir}"
+				cd "${dir}"
+			fi
+			tar -xv --strip-components 1 -f "${file}"
+		)
+	}
+
+	patch_sources() {
+		cd "${SRC_DIR}"
+		for (( i=0; i<${#PATCH_FILES[@]}; i++ )); do
+			std::info "Appling patch '${PATCH_FILES[i]}' ..."
+			local -i strip_val="${PATCH_STRIPS[i]:-${PATCH_STRIP_DEFAULT}}"
+			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[i]}"
+		done
+	}
+
+	[[ -z "${SOURCE_URL}" ]] && std::die 3 "Download source not set!"
+	download_source_file \
+	    SOURCE_FILE \
 	    "${SOURCE_URL}" \
 	    "${PMODULES_DISTFILESDIR}" \
-	    "${BUILD_BLOCK_DIR}" ||
+	    "${BUILDBLOCK_DIR}" ||
 	        std::die 4 "$P/$V: sources for not found."
-	pbuild::unpack "${source_file}" "${MODULE_SRCDIR}"
-	pbuild::patch_sources
+	[[ -z "${SOURCE_FILE}" ]] && std::die 3 "Source file not set!"
+	unpack "${SOURCE_FILE}" "${SRC_DIR}"
+	patch_sources
 	# create build directory
-	mkdir -p "${MODULE_BUILDDIR}"
+	mkdir -p "${BUILD_DIR}"
+}
+
+declare PATCH_FILES=()
+declare PATCH_STRIPS=()
+declare PATCH_STRIP_DEFAULT='1'
+
+pbuild::add_patch() {
+	[[ -z "$1" ]] && std::die 1 "pbuild::add_patch: missing argument!"
+	PATCH_FILES+=( "$1" )
+	PATCH_STRIPS+=( "$2" )
+}
+eval "pbuild::add_patch_${OS}() { :; }"
+
+pbuild::set_default_patch_strip() {
+	[[ -n "$1" ]] || std::die 1 "Missing argument to '${FUNCNAME}'!"
+	PATCH_STRIP_DEFAULT="$1"
 }
 
 ###############################################################################
 #
-# create an OS specific stub. If OS is 'Darwin' this creates a function named
-# 'pbuild::patch_sources_Darwin()'
 #
-eval "pbuild::patch_sources_${OS}() { :; }"
-
-pbuild::patch_sources() {
-	pbuild::patch_sources_${OS}
-}
-
 pbuild::pre_configure() {
 	:
 }
+eval "pbuild::pre_configure_${OS}() { :; }"
+
+pbuild::set_configure_args() {
+	CONFIGURE_ARGS+=( "$@" )
+}
 
 pbuild::configure() {
-	${MODULE_SRCDIR}/configure \
-		--prefix="${PREFIX}"
+	${SRC_DIR}/configure \
+		--prefix="${PREFIX}" \
+		"${CONFIGURE_ARGS[@]}" || std::die 3 "configure failed"
 }
 
 pbuild::post_configure() {
 	:
 }
+eval "pbuild::post_configure_${OS}() { :; }"
 
 pbuild::pre_build() {
 	:
 }
+eval "pbuild::pre_build_${OS}() { :; }"
 
 pbuild::build() {
 	make -j${JOBS}
@@ -324,10 +340,12 @@ pbuild::build() {
 pbuild::post_build() {
 	:
 }
+eval "pbuild::post_build_${OS}() { :; }"
 
 pbuild::pre_install() {
 	:
 }
+eval "pbuild::pre_install_${OS}() { :; }"
 
 pbuild::install() {
 	make install
@@ -336,52 +354,43 @@ pbuild::install() {
 pbuild::post_install() {
 	:
 }
-
 eval "pbuild::post_install_${OS}() { :; }"
 
-pbuild::install_doc() {
-	local -r docdir="${PREFIX}/${_DOCDIR}/$P"
-
-	std::info "${P}/${V}: Installing documentation to ${docdir}"
-	install -m 0755 -d "${docdir}"
-	install -m0444 "${MODULE_DOCFILES[@]/#/${MODULE_SRCDIR}/}" "${BUILD_BLOCK}" "${docdir}"
-}
-
 pbuild::cleanup_build() {
-	[[ "${MODULE_BUILDDIR}" == "${MODULE_SRCDIR}" ]] && return 0
+	[[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
 
 	# the following two checks we should de earlier!	
-	if [[ -z "${MODULE_BUILDDIR}" ]]; then
+	if [[ -z "${BUILD_DIR}" ]]; then
 	        std::die 1 "Oops: internal error: %s is %s..." \
-			 MODULE_BUILDDIR 'set to empty string'
+			 BUILD_DIR 'set to empty string'
 	fi
-	if [[ ! -d "/${MODULE_BUILDDIR}" ]]; then
+	if [[ ! -d "/${BUILD_DIR}" ]]; then
 		std::die 1 "Oops: internal error: %s is %s..." \
-			 MODULE_BUILDDIR=${MODULE_BUILDDIR} "not a directory"
+			 BUILD_DIR=${BUILD_DIR} "not a directory"
 	fi
 
 	{
-		cd "/${MODULE_BUILDDIR}/.."
+		cd "/${BUILD_DIR}/.."
 		if [[ "$(pwd)" == "/" ]]; then
 		        std::die 1 "Oops: internal error: %s is %s..." \
-			     	 MODULE_BUILDDIR "set to '/'"
+			     	 BUILD_DIR "set to '/'"
 		fi
-		echo "Cleaning up '${MODULE_BUILDDIR}'..."
-		rm -rf "${MODULE_BUILDDIR##*/}"
+		echo "Cleaning up '${BUILD_DIR}'..."
+		rm -rf "${BUILD_DIR##*/}"
 	};
 	return 0
 }
 
 pbuild::cleanup_src() {
-	[[ -d /${MODULE_SRCDIR} ]] || return 0
+	[[ -d /${SRC_DIR} ]] || return 0
     	{
-		cd "/${MODULE_SRCDIR}/..";
+		cd "/${SRC_DIR}/..";
 		if [[ $(pwd) == / ]]; then
 		        std::die 1 "Oops: internal error: %s is %s..." \
-			     	 MODULE_SRCDIR "set to '/'"
+			     	 SRC_DIR "set to '/'"
 		fi
-		echo "Cleaning up '${MODULE_SRCDIR}'..."
-		rm -rf "${MODULE_SRCDIR##*/}"
+		echo "Cleaning up '${SRC_DIR}'..."
+		rm -rf "${SRC_DIR##*/}"
    	};
 	return 0
 }
@@ -444,7 +453,7 @@ pbuild::make_all() {
 			shift
 		done
 
-		local buildscript=$( std::get_abspath "${BUILD_BLOCK_DIR}"/../../*/${m/\/*}/build )
+		local buildscript=$( std::get_abspath "${BUILDBLOCK_DIR}"/../../*/${m/\/*}/build )
 		[[ -x "${buildscript}" ]] || std::die 1 "$m: build-block not found!"
 		"${buildscript}" "${m#*/}" ${args[@]}
 		pbuild::module_exists "$m" || std::die 1 "$m: oops: build failed..."
@@ -541,8 +550,8 @@ pbuild::make_all() {
 	#			    'deprecated'
 	#
 	# The following variables are set in this function
-	#	MODULE_SRCDIR
-	#	MODULE_BUILDDIR
+	#	SRC_DIR
+	#	BUILD_DIR
 	#	ModuleName
 	#	ModuleRelease
 	#	PREFIX
@@ -550,19 +559,12 @@ pbuild::make_all() {
 	check_and_setup_env() {
 		local FullModuleName=''
 		
-		if [[ -z ${ModuleGroup} ]]; then
-			std::die 1 "${P}/${V}: group not set."
-		fi
-		MODULE_SRCDIR="${PMODULES_TMPDIR}/$P-$V/src"
-		if [[ "${CompileInSource}" == "yes" ]]; then
-		        MODULE_BUILDDIR="${MODULE_SRCDIR}"
-		else
-			MODULE_BUILDDIR="${PMODULES_TMPDIR}/$P-$V/build"
-		fi
-
 		# build module name
 		# :FIXME: the MODULE_PREFIX should be derived from ModuleName
 		# :FIXME: this should be read from a configuration file
+		if [[ -z ${ModuleGroup} ]]; then
+			std::die 1 "${P}/${V}: group not set."
+		fi
 		case ${ModuleGroup} in
 		Tools )
 			FullModuleName="${P}/${V}"
@@ -691,8 +693,8 @@ pbuild::make_all() {
 			std::die 1 "${P}/${V}: group not set."
 		fi
 
-		MODULE_SRCDIR="${PMODULES_TMPDIR}/src/$P-$V"
-		MODULE_BUILDDIR="${PMODULES_TMPDIR}/build/$P-$V"
+		SRC_DIR="${TEMP_DIR}/src/$P-$V"
+		BUILD_DIR="${TEMP_DIR}/build/$P-$V"
 		ModuleGroup='Tools'
 		ModuleName="Pmodules/${PMODULES_VERSION}"
 		# set PREFIX of module
@@ -727,15 +729,24 @@ pbuild::make_all() {
 	#......................................................................
 	# non-redefinable post-install
 	post_install() {
+		install_doc() {
+			local -r docdir="${PREFIX}/${_DOCDIR}/$P"
+
+			std::info "${P}/${V}: Installing documentation to ${docdir}"
+			install -m 0755 -d "${docdir}"
+			install -m0444 "${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
+						"${BUILD_SCRIPT}" "${docdir}"
+		}
+
 		# unfortunatelly sometime we need an OS depended post-install
 		post_install_linux() {
+			std::info "${P}/${V}: running post-installation for ${OS} ..."
 			cd "${PREFIX}"
 			# solve multilib problem with LIBRARY_PATH on 64bit Linux
 			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
 			return 0
 		}
 
-		std::info "${P}/${V}: running post-installation for ${OS} ..."
 		[[ "${OS}" == "Linux" ]] && post_install_linux
 		return 0
 	}
@@ -769,7 +780,7 @@ pbuild::make_all() {
  	#......................................................................
 	# Install modulefile
 	install_modulefile() {
-		local -r src="${BUILD_BLOCK_DIR}/modulefile"
+		local -r src="${BUILDBLOCK_DIR}/modulefile"
 		if [[ ! -r "${src}" ]]; then
 			std::info "${P}/${V}: skipping modulefile installation ..."
 			return
@@ -809,58 +820,76 @@ pbuild::make_all() {
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 		check_compiler
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.prep" ]] || \
+		if [[ ! -e "${BUILD_DIR}/.prep" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
 		   [[ -z ${target} ]] || \
 		   [[ "${target}" == "prep" ]]; then
-			mkdir -p "${MODULE_SRCDIR}"
-			cd "${MODULE_SRCDIR}"
-			( pbuild::pre_prep )
-			( pbuild::prep )
-			( pbuild::post_prep )
-			touch "${MODULE_BUILDDIR}/.prep"
+			# We cd into the source dir before every function
+			# call - just in case there was another cd call
+			# in the called function.
+			# 
+			# Executing the function in a sub-process doesn't
+			# work because in some function global variables 
+			# have to be set.
+			#
+			mkdir -p "${SRC_DIR}"
+			cd "${SRC_DIR}"
+			pbuild::pre_prep
+			cd "${SRC_DIR}"
+			pbuild::prep
+			cd "${SRC_DIR}"
+			pbuild::post_prep
+			touch "${BUILD_DIR}/.prep"
 		fi
 		[[ "${target}" == "prep" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.configure" ]] || \
+		if [[ ! -e "${BUILD_DIR}/.configure" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
 		   [[ -z ${target} ]] || \
 		   [[ "${target}" == "configure" ]]; then
-		        cd "${MODULE_BUILDDIR}"
-			( pbuild::pre_configure )
-			( pbuild::configure )
-			( pbuild::post_configure )
-			touch "${MODULE_BUILDDIR}/.configure"
+		        cd "${BUILD_DIR}"
+			pbuild::pre_configure
+		        cd "${BUILD_DIR}"
+			pbuild::configure
+		        cd "${BUILD_DIR}"
+			pbuild::post_configure
+			touch "${BUILD_DIR}/.configure"
 		fi
 		[[ "${target}" == "configure" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.compile" ]] || \
+		if [[ ! -e "${BUILD_DIR}/.compile" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
 		   [[ -z ${target} ]] || \
 		   [[ "${target}" == "compile" ]]; then
-			cd "${MODULE_BUILDDIR}"
-			( pbuild::pre_build )
-			( pbuild::build )
-			( pbuild::post_build )
-			touch "${MODULE_BUILDDIR}/.compile"
+			cd "${BUILD_DIR}"
+			pbuild::pre_build
+			cd "${BUILD_DIR}"
+			pbuild::build
+			cd "${BUILD_DIR}"
+			pbuild::post_build
+			touch "${BUILD_DIR}/.compile"
 		fi
 		[[ "${target}" == "compile" ]] && return 0
 
-		if [[ ! -e "${MODULE_BUILDDIR}/.install" ]] || \
+		if [[ ! -e "${BUILD_DIR}/.install" ]] || \
 		   [[ ${force_rebuild} == 'yes' ]] || \
 		   [[ -z ${target} ]] || \
 		   [[ "${target}" == "install" ]]; then
-			cd "${MODULE_BUILDDIR}"
-			( pbuild::pre_install )
-			( pbuild::install )
-			( pbuild::post_install_${OS} "$@" )
-			( pbuild::post_install )
-			( pbuild::install_doc )
+			cd "${BUILD_DIR}"
+			pbuild::pre_install
+			cd "${BUILD_DIR}"
+			pbuild::install
+			cd "${BUILD_DIR}"
+			pbuild::post_install_${OS} "$@"
+			cd "${BUILD_DIR}"
+			pbuild::post_install
+			cd "${BUILD_DIR}"
+			post_install
 			if [[ ${bootstrap} == 'no' ]]; then
 				write_runtime_dependencies
 				write_build_dependencies
 			fi
-			touch "${MODULE_BUILDDIR}/.install"
+			touch "${BUILD_DIR}/.install"
 		fi
 		[[ "${target}" == "install" ]] && return 0
 

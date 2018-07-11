@@ -39,7 +39,7 @@ unset CDPATH
 #
 usage() {
 	std::error "
-Usage: $0 [OPTIONS..] [BUILD_BLOCK] [VERSION]
+Usage: $0 [OPTIONS..] [BUILD_SCRIPT] [VERSION]
 
 VERSION
         Version of module to compile.
@@ -208,11 +208,11 @@ while (( $# > 0 )); do
 		PMODULES_DISTFILESDIR=${1/--distdir=}
 		;;
 	--tmpdir )
-		PMODULES_TMPDIR=$2
+		TEMP_DIR=$2
 		shift
 		;;
 	--tmpdir=* )
-		PMODULES_TMPDIR=${1/--tmpdir=}
+		TEMP_DIR=${1/--tmpdir=}
 		;;
 	--variants-file )
 		variants_file="$2"
@@ -253,8 +253,8 @@ while (( $# > 0 )); do
 		V=$1
 		;;
 	* )
-	        declare -r BUILD_BLOCK=$(std::get_abspath "$1")
-		declare -r BUILD_BLOCK_DIR=$(dirname "${BUILD_BLOCK}")
+	        declare -r BUILD_SCRIPT=$(std::get_abspath "$1")
+		declare -r BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 		;;
 	esac
 	shift
@@ -264,8 +264,8 @@ if [[ ${debug_on} == yes ]]; then
 	trap 'echo "$BASH_COMMAND"' DEBUG
 fi
 
-[[ -n ${BUILD_BLOCK} ]] || std::die 1 "No build-block specified!"
-[[ -r ${BUILD_BLOCK} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
+[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
+[[ -r ${BUILD_SCRIPT} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
 
 declare -r OS
 
@@ -275,28 +275,25 @@ PATH="/usr/bin:/bin:/usr/sbin:/sbin:${PMODULES_DIR}/bin"
 
 # source Pmodule environment configuration
 if [[ "${bootstrap}" == "yes" ]]; then
-	[[ -r ${BUILD_BLOCK_DIR}/../config/${pmodules_build_config} ]] || \
+	[[ -r ${BUILDBLOCK_DIR}/../config/${pmodules_build_config} ]] || \
 		std::die 1 "Cannot read configuration file!"
-        source "${BUILD_BLOCK_DIR}/../config/${pmodules_build_config}"
-	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/..")
+        source "${BUILDBLOCK_DIR}/../config/${pmodules_build_config}"
+	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILDBLOCK_DIR}/..")
 elif [[ -n "${PMODULES_ROOT}" ]] && [[ -n "${PMODULES_CONFIG_DIR}" ]] && \
      [[ -r "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" ]]; then
 	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf"
-	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILD_BLOCK_DIR}/../..")
+	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILDBLOCK_DIR}/../..")
 else
 	std::die 3 "Build environment not setup properbly!"
 fi
 
-: ${PMODULES_TMPDIR:="${BUILD_BASEDIR}/tmp"}
+: ${TEMP_DIR:="${PMODULES_TMPDIR}"}
 : ${PMODULES_DISTFILESDIR:="${BUILD_BASEDIR}/Downloads"}
 
-declare -x  PMODULES_TMPDIR
+declare -x  TEMP_DIR
 declare -x  PMODULES_DISTFILESDIR
 
 mkdir -p "${PMODULES_DISTFILESDIR}"
-
-declare -r BUILD_SCRIPTSDIR="${BUILD_BASEDIR}/scripts"
-declare -r BUILD_VERSIONSFILE="${BUILD_BASEDIR}/config/versions.conf"
 
 # source BASH library with standard functions
 ((ok=1))
@@ -370,14 +367,21 @@ case "${tmp}" in
 		V_MAJOR="${tmp}"
 		;;
 esac
-P=$(basename $(dirname "${BUILD_BLOCK}"))
+P=$(basename $(dirname "${BUILD_SCRIPT}"))
 
 [[ -z ${V} ]] && std::die 1 "Module version must be specified on command line!"
+
+SRC_DIR="${TEMP_DIR}/$P-$V/src"
+if [[ "${CompileInSource}" == "yes" ]]; then
+        BUILD_DIR="${SRC_DIR}"
+else
+	BUILD_DIR="${TEMP_DIR}/$P-$V/build"
+fi
 
 #
 # run build
 #
-source "${BUILD_BLOCK}"
+source "${BUILD_SCRIPT}"
 
 std::info "${P}/${V}: Done ..."
 
