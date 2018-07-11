@@ -1,13 +1,7 @@
 #!/usr/bin/env modbuild
 
-SOURCE_URL="https://ftp.gnu.org/gnu/$P/$P-$V.tar.gz"
-
-pbuild::configure() {
-	"${MODULE_SRCDIR}"/configure \
-		--prefix="${PREFIX}" \
-		--bindir="${PREFIX}/sbin" \
-		|| exit 1
-}
-
 pbuild::add_to_group 'Tools'
+pbuild::set_download_url "https://ftp.gnu.org/gnu/$P/$P-$V.tar.gz"
+pbuild::add_configure_args "--bindir=${PREFIX}/sbin" 
+
 pbuild::make_all

@@ -1,16 +1,16 @@
 #!/usr/bin/env modbuild
 
-SOURCE_URL="http://frodo.looijaard.name/system/files/software/getopt/getopt-1.1.6.tar.gz"
+pbuild::add_to_group 'Tools'
+pbuild::set_download_url "http://frodo.looijaard.name/system/files/software/getopt/getopt-1.1.6.tar.gz"
+pbuild::compile_in_sourcetree
 
-pbuild::patch_sources_Linux() {
-	patch -p1 < "${BUILD_BLOCK_DIR}/Makefile.patch"
-}
+pbuild::add_patch_Linux "Makefile.patch"
 
 pbuild::configure() {
 	:
 }
 
-pbuild::build() {
+pbuild::compile() {
 	declare -x C_INCLUDE_PATH="${PREFIX}/include"
 	declare -x LIBRARY_PATH="${PREFIX}/lib"
 	case ${OS} in
@@ -22,12 +22,10 @@ pbuild::build() {
 			;;
 	esac
 
-	cd "${MODULE_SRCDIR}"
 	make -e all
 }
 
 pbuild::install() {
-	cd "${MODULE_SRCDIR}"
 	declare -x DESTDIR="${PREFIX}"
 	declare -x prefix=''
 	make -e install
@@ -36,11 +34,9 @@ pbuild::install() {
 }
 
 pbuild::cleanup_build() {
-	cd "${MODULE_SRCDIR}"
 	make -e realclean
 }
 
-pbuild::add_to_group 'Tools'
 pbuild::make_all
 
 # Local Variables:

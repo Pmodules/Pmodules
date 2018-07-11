@@ -1,13 +1,16 @@
 #!/usr/bin/env modbuild
 
-SOURCE_URL="ftp://ftp.tcl.tk/pub/tcl/tcl8_6/tcl$V-src.tar.gz"
+pbuild::add_to_group 'Tools'
+pbuild::set_download_url "ftp://ftp.tcl.tk/pub/tcl/tcl8_6/tcl$V-src.tar.gz"
+pbuild::set_docfiles 'license.terms' 'README'
+
 pbuild::configure() {
 	case ${OS} in
 	Linux )
-		srcdir="${MODULE_SRCDIR}/unix"
+		srcdir="${SRC_DIR}/unix"
 		;;
 	Darwin )
-		srcdir="${MODULE_SRCDIR}/macosx"
+		srcdir="${SRC_DIR}/macosx"
 		;;
 	esac
 	"${srcdir}"/configure \
@@ -21,6 +24,4 @@ pbuild::post_install() {
 	{ cd "${PREFIX}"/sbin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
 }
 
-pbuild::add_to_group 'Tools'
-pbuild::set_docfiles 'license.terms' 'README'
 pbuild::make_all
