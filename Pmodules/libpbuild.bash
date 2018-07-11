@@ -301,7 +301,7 @@ pbuild::add_patch() {
 	PATCH_FILES+=( "$1" )
 	PATCH_STRIPS+=( "$2" )
 }
-eval "pbuild::add_patch_${OS}() { :; }"
+eval "pbuild::add_patch_${OS}() { pbuild::add_patch \"\$@\"; }"
 
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || std::die 1 "Missing argument to '${FUNCNAME}'!"
@@ -697,19 +697,12 @@ pbuild::make_all() {
 	# setup environment for bootstrapping
 	#
 	check_and_setup_env_bootstrap() {
-		if [[ -z ${ModuleGroup} ]]; then
-			std::die 1 "${P}/${V}: group not set."
-		fi
-
-		SRC_DIR="${TEMP_DIR}/src/$P-$V"
-		BUILD_DIR="${TEMP_DIR}/build/$P-$V"
 		ModuleGroup='Tools'
 		ModuleName="Pmodules/${PMODULES_VERSION}"
 		# set PREFIX of module
 		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${ModuleName}"
 		
 		ModuleRelease='unstable'
-		std::info "${P}/${V}: will be released as \"${ModuleRelease}\""
 
 		C_INCLUDE_PATH="${PREFIX}/include"
 		CPLUS_INCLUDE_PATH="${PREFIX}/include"
@@ -888,7 +881,7 @@ pbuild::make_all() {
 		fi
 		set_module_release
 	else
-		check_and_setup_env_bootstrap
+		#check_and_setup_env_bootstrap
 		build_module
 	fi
 

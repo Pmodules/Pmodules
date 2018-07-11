@@ -346,6 +346,22 @@ else
 		_V=${_P}_VERSION
 		V=${!_V}
 	fi
+	ModuleGroup='Tools'
+	ModuleName="Pmodules/${PMODULES_VERSION}"
+	# set PREFIX of module
+	PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${ModuleName}"
+		
+	ModuleRelease='unstable'
+
+	C_INCLUDE_PATH="${PREFIX}/include"
+	CPLUS_INCLUDE_PATH="${PREFIX}/include"
+	CPP_INCLUDE_PATH="${PREFIX}/include"
+	LIBRARY_PATH="${PREFIX}/lib"
+	LD_LIBRARY_PATH="${PREFIX}/lib"
+	DYLD_LIBRARY_PATH="${PREFIX}/lib"
+
+	PATH+=":${PREFIX}/bin"
+	PATH+=":${PREFIX}/sbin"
 fi
 
 declare V_MAJOR=''
