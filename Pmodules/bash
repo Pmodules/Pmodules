@@ -5,7 +5,7 @@
 #
 if [ ${BASH_VERSINFO:-0} -lt 3 ]; then
 	echo "BASH version ${BASH_VERSION} ist not supported! You need at least version 3..."
-	return
+	return 1
 fi
 
 #############################################################################
@@ -60,12 +60,12 @@ export -f module
 # helper functions
 #
 std::append_path () {
-	local -r P=$1
-	local -r d=$2
+	local -r P="$1"
+	local -r d="$2"
 
         if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
 		if [[ -z ${!P} ]]; then
-			eval $P=${d}
+			eval $P="${d}"
 		else
 			eval $P="${!P}:${d}"
         	fi
@@ -90,9 +90,9 @@ std::append_path () {
 # https://stackoverflow.com/questions/273909/how-do-i-manipulate-path-elements-in-shell-scripts 
 #
 std::replace_path () {
-	local -r path=$1
-	local -r removepat=$2
-	local -r replacestr=$3
+	local -r path="$1"
+	local -r removepat="$2"
+	local -r replacestr="$3"
 
 	local -r removestr=$(echo "${!path}" | tr ":" "\n" | grep -m 1 "^$removepat\$")
     	export $path=$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
@@ -108,7 +108,17 @@ save_env() {
 	echo export PMODULES_ENV=$( "${PMODULES_HOME}/sbin/base64" --wrap=0 <<< "$s" )	
 }
 
-#module purge
+############################################################################
+# some sanity checks
+#
+if [[ ! -d ${PMODULES_ROOT} ]]; then
+        echo "Oops: ${PMODULES_ROOT}: Set as Pmodules root, but this is not a directory." 1>&2
+        return 1
+fi
+if [[ ! -d ${PMODULES_HOME} ]]; then
+        echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
+        return 1
+fi
 
 #############################################################################
 # setup environment

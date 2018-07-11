@@ -7,10 +7,6 @@
 #	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
 #
 
-declare -x PMODULES_DEFAULT_GROUPS
-declare -x PMODULES_DEFAULT_RELEASES
-declare -x PMODULES_VERSION
-
 : ${PMODULES_DEFAULT_GROUPS:='Tools Programming'}
 : ${PMODULES_DEFAULT_RELEASES:='stable'}
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
@@ -18,6 +14,10 @@ declare -x PMODULES_VERSION
 #############################################################################
 #          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
 #############################################################################
+
+export	PMODULES_DEFAULT_GROUPS
+export	PMODULES_DEFAULT_RELEASES
+export	PMODULES_VERSION
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
 declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
@@ -27,29 +27,12 @@ declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${BASH_SOURCE}") && pw
 declare -x PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
 declare -x PMODULES_DIR="${PMODULES_HOME}"
 
-############################################################################
-# some sanity checks
-#
-if [[ ! -d ${PMODULES_ROOT} ]]; then 
-	echo "Oops: ${PMODULES_ROOT}: Set as Pmodules root, but this is not a directory." 1>&2
-	return 1
-fi
-if [[ ! -d ${PMODULES_HOME} ]]; then
-	echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
-	return 1
-fi
+test -r "${PMODULES_HOME}/init/bash" && source "$_"
 
-############################################################################
-# inititialize Pmodules for bash
-#
-_init_bash="${PMODULES_HOME}/init/bash"
-if [[ ! -r "${_init_bash}" ]]; then
-	echo "Oops: cannot initialize Modules!"
-	echo "${_init_bash}: File does not exist or is not readable."
+if [[ $? != 0 ]]; then
+	echo "Oops: cannot initialize Pmodules!"
 	return 1
 fi
-source "${_init_bash}"
-unset _init_bash
 
 # Local Variables:
 # mode: sh
