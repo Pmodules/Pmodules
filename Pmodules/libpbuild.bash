@@ -320,6 +320,11 @@ pbuild::set_configure_args() {
 	CONFIGURE_ARGS+=( "$@" )
 }
 
+pbuild::add_configure_args() {
+	CONFIGURE_ARGS+=( "$@" )
+}
+
+
 pbuild::configure() {
 	${SRC_DIR}/configure \
 		--prefix="${PREFIX}" \
