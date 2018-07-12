@@ -133,13 +133,30 @@ pbuild::set_supported_compilers() {
 # Test whether a module with the given name already exists.
 #
 # Arguments:
-#   $@: module name
+#   $1: module name
 #
 # Notes:
 #   The passed module name should be NAME/VERSION
+#   :FIXME: this does not really work in a hierarchical group without 
+#           adding the dependencies...
 #
 pbuild::module_exists() {
 	[[ -n $("${MODULECMD}" bash search -a --no-header "$1" 2>&1 1>/dev/null) ]]
+}
+
+##############################################################################
+#
+# Test whether a module with the given name is available.
+#
+# Arguments:
+#   $1: module name
+#
+# Notes:
+#   The passed module name must be NAME/VERSION! 
+#
+pbuild::module_is_avail() {
+	local output=( $("${MODULECMD}" bash avail -a -m "$1" 2>&1 1>/dev/null) )
+	[[ "${output[0]}" == "$1" ]]
 }
 
 #
@@ -518,19 +535,28 @@ pbuild::make_all() {
 				runtime_dependencies+=( "$m" )
 			fi
 			is_loaded "$m" && continue
-			if ! pbuild::module_exists "$m"; then
+
+			# 'module avail' might output multiple matches if module 
+			# name and version are not fully specified or in case
+			# modules with and without a release number exist. Example:
+			# mpc/1.1.0 and mpc/1.1.0-1. Since we get a sorted list 
+			# from 'module avail' and the full version should be set
+			# in the variants file, we look for the first exact match.
+			local name=''
+			name=$("${MODULECMD}" bash avail -a -m $m 2>&1 1>/dev/null | awk "/^${m/\//\\/}[[:blank:]]/ {print \$1}" )
+
+			if [[ -z "${name}" ]]; then
 			        build_dependency "$m"
 			fi
 
-			local mod_name=''
-			local mod_release=''
-			read mod_name mod_release < <("${MODULECMD}" bash avail -a -m $m 2>&1 1>/dev/null | tail -1)
+			local release=( $("${MODULECMD}" bash avail -a -m $m 2>&1 1>/dev/null | awk "/^${m/\//\\/}[[:blank:]]/ {print \$2}" ))
+			[[ -z "${release}" ]] && std::die 5 "Internal error..."
 
-			if [[ ${mod_release} == deprecated ]]; then
+			if [[ ${release} == deprecated ]]; then
 				# set module release to 'deprecated' if a build dependency
 				# is deprecated
 				depend_release='deprecated'
-			elif [[ ${mod_release} == unstable ]] && [[ -z ${depend_release} ]]; then
+			elif [[ ${release} == unstable ]] && [[ -z ${depend_release} ]]; then
 				# set module release to 'unstable' if a build dependency is
 				# unstable and release not yet set
 				depend_release='unstable'
