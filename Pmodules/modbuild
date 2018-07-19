@@ -1,39 +1,19 @@
 #!/bin/bash
 
-# The directory where this programm is installed will be added to PATH and
-# to the search path of BASH libraries.
-declare -r  mydir=$(dirname "$0")
+#.............................................................................
+# get absolute path of script
+declare	    mydir=$(dirname "$0")
+declare -r  mydir=$(cd ${mydir} && pwd -P)
+declare -r  prog=$(basename "$0")
 
+# The libs are found via PATH
+PATH="/usr/bin:/bin:/usr/sbin:/sbin:${mydir}:${mydir}/../lib"
+source libstd.bash    || { echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3; }
+source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
 
-declare -r  libpbuild='libpbuild.bash'
-declare -r  libstd='libstd.bash'
-declare -r  pmodules_build_config='modbuild.conf'
-declare -ra bash_libpath=("${mydir}" "${mydir}/../lib")
-
-##############################################################################
-#
-# set an error handler. If a function _exit() exists, it will be called
-# with the passed exit code.
-#
-# $1	exit code
-#
-set -o errexit
-
-_exit() {
-	:
-}
-
-error_handler() {
-	local -i ec=$?
-
-	_exit ${ec}
-	exit ${ec}
-}
-
-trap "error_handler" ERR
-
-# disable auto-echo feature of 'cd'
-unset CDPATH
+#.............................................................................
+# constants
+declare -r  PMODULES_BUILD_CONFIG='modbuild.conf'
 
 ##############################################################################
 #
@@ -102,255 +82,147 @@ VERSION
 	exit 1
 }
 
-#
-# We need GNU versions of the following utilities. This code works
-# well on Linux and Mac OS X with MacPorts.
-# :FIXME: implement a smarter, portable solution.
-#
-shopt -s expand_aliases
-unalias -a
-
-__path=$(which gsed 2>/dev/null || : )
-if [[ $__path ]]; then
-	alias sed=$__path
-else
-	alias sed=$(which sed 2>/dev/null)
-fi
-
 ##############################################################################
 #
-# source BASH library with standard functions
-declare	    ok=1
-for dir in "${bash_libpath[@]}"; do
-        if [[ -r ${dir}/${libstd} ]]; then
-		source "${dir}/${libstd}"
-		ok=0
-		break
-	fi
-done
-if (( ok != 0 )); then
-	echo "Oops: required BASH library '${libstd}' not found" 1>&2
-	exit 1
-fi
-
-##############################################################################
-#
-# parse arguments
-#
-
-# number of parallel make jobs
-declare -i  JOBS=3
-
-declare debug_on='no'
-declare force_rebuild='no'
-declare dry_run='no'
-declare enable_cleanup_build='yes'
-declare enable_cleanup_src='no'
-declare target=''
-declare bootstrap='no'
-declare variants_file=''
-declare opt_install_modulefile=''
-
-# array collecting all modules specified on the command line via '--with=module'
-with_modules=()
-
-# save arguments, we might need later again
-declare -r ARGS="$@"
-
-# OS/system default
-declare    OS=$(uname -s)
-
-# 
-while (( $# > 0 )); do
-	case $1 in
-	-j )
-		JOBS=$2
+parse_args() {
+	while (( $# > 0 )); do
+		case $1 in
+		-j )
+			JOBS=$2
+			shift
+			;;
+		--jobs=[0-9]* )
+			JOBS=${1/--jobs=}
+			;;
+		-v | --verbose )
+			trap 'echo "$BASH_COMMAND"' DEBUG
+			;;
+		--debug )
+			set -x
+			;;
+		-f | --force-rebuild )
+			force_rebuild='yes'
+			;;
+		-\? | -h | --help )
+			usage
+			;;
+		--dry-run )
+			dry_run='yes'
+			;;
+		--disable-cleanup )
+			enable_cleanup_build='no'
+			enable_cleanup_src='no'
+			;;
+		--enable-cleanup-build )
+			enable_cleanup_build='yes'
+			;;
+		--disable-cleanup-build )
+			enable_cleanup_build='no'
+			;;
+		--enable-cleanup-src )
+			enable_cleanup_src='yes'
+			;;
+		--disable-cleanup-src )
+			enable_cleanup_src='no'
+			;;
+		--distdir )
+			PMODULES_DISTFILESDIR=$2
+			shift
+			;;
+		--distdir=* )
+			PMODULES_DISTFILESDIR=${1/--distdir=}
+			;;
+		--tmpdir )
+			TEMP_DIR=$2
+			shift
+			;;
+		--tmpdir=* )
+			TEMP_DIR=${1/--tmpdir=}
+			;;
+		--variants-file )
+			variants_file="$2"
+			shift
+			;;
+		--variants-file=* )
+			variants_file="${1/--variants-file=}"
+			test -r "${variants_file}" || std::die 1 \
+				"${prog}: variants file does not exist or is not readable -- '$_'"
+			;;
+		--with )
+			with_modules+=( "$2" )
+			shift
+			;;
+		--with=*/* )
+			m="${1/--with=}"
+			with_modules+=( ${m} )
+			;;
+		--prep | --configure | --compile | --install | --all )
+			build_target=${1:2}
+			;;
+		--bootstrap )
+			bootstrap='yes'
+			;;
+		--install-modulefile )
+			opt_install_modulefile='yes'
+			;;
+		-* )
+			std::die 1 "${prog}: invalid option -- '$1'"
+			;;
+		[0-9]* )
+			[[ -z "$V" ]] || std::die 1 "${prog}: version already set -- '$1'"
+			V=$1
+			;;
+		* )
+			[[ -z "${BUILD_SCRIPT}" ]] || \
+				std::die 1 "${prog}: build script already set -- '$1'"
+		        BUILD_SCRIPT=$(std::get_abspath "$1")
+			test -r ${BUILD_SCRIPT} || \
+				std::die 1 "${prog}: build script does not exist or is not readable -- '$_'"
+			BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
+			;;
+		esac
 		shift
-		;;
-	--jobs=[0-9]* )
-		JOBS=${1/--jobs=}
-		;;
-	-v | --verbose )
-		debug_on='yes'
-		;;
-	--debug )
-		set -x
-		;;
-	-f | --force-rebuild )
-		force_rebuild='yes'
-		;;
-	-\? | -h | --help )
-		usage
-		;;
-	--dry-run )
-		dry_run='yes'
-		;;
-	--disable-cleanup )
-		enable_cleanup_build='no'
-		enable_cleanup_src='no'
-		;;
-	--enable-cleanup-build )
-		enable_cleanup_build='yes'
-		;;
-	--disable-cleanup-build )
-		enable_cleanup_build='no'
-		;;
-	--enable-cleanup-src )
-		enable_cleanup_src='yes'
-		;;
-	--disable-cleanup-src )
-		enable_cleanup_src='no'
-		;;
-	--distdir )
-		PMODULES_DISTFILESDIR=$2
-		shift
-		;;
-	--distdir=* )
-		PMODULES_DISTFILESDIR=${1/--distdir=}
-		;;
-	--tmpdir )
-		TEMP_DIR=$2
-		shift
-		;;
-	--tmpdir=* )
-		TEMP_DIR=${1/--tmpdir=}
-		;;
-	--variants-file )
-		variants_file="$2"
-		shift
-		;;
-	--variants-file=* )
-		variants_file="${1/--variants-file=}"
-		;;
-	--with )
-		with_modules+=( "$2" )
-		shift
-		;;
-	--with=*/* )
-		m="${1/--with=}"
-		with_modules+=( ${m} )
-		;;
-	--prep | --configure | --compile | --install | --all )
-		target=${1:2}
-		;;
-	--system )
-		OS="$2"
-		shift
-		;;
-	--system=* )
-		OS="${1/--system=}"
-		;;
-	--version | -V )
-		V=$2
-		shift
-		;;
-	--version= )
-		V=${1/--version=}
-		;;
-	--bootstrap )
-		bootstrap='yes'
-		;;
-	--install-modulefile )
-		opt_install_modulefile='yes'
-		;;
-	[0-9]* )
-		V=$1
-		;;
-	* )
-	        declare -r BUILD_SCRIPT=$(std::get_abspath "$1")
-		declare -r BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
-		;;
+	done	
+	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "${prog}: No build-block specified!"
+	[[ -n ${V} ]]            || std::die 1 "${prog} Module version not specified!"
+}
+
+set_module_name_and_version_strings() {
+	P=$(basename $(dirname "$1"))
+	V_MAJOR=''
+	V_MINOR=''
+	V_PATCHLVL=''
+
+	V_PKG="${V%%-*}"
+	V_RELEASE="${V#*-}"
+	local tmp="${V_PKG}"
+
+	case "${tmp}" in
+		*.*.* )
+			V_MAJOR="${tmp%%.*}"
+			tmp="${tmp#*.}"
+			V_MINOR="${tmp%%.*}"
+			V_PATCHLVL="${tmp#*.}"
+			;;
+		*.* )
+			V_MAJOR="${tmp%.*}"
+			V_MINOR="${tmp#*.}"
+			;;
+		* )
+			V_MAJOR="${tmp}"
+			;;
 	esac
-	shift
-done
+}
 
-if [[ ${debug_on} == yes ]]; then
-	trap 'echo "$BASH_COMMAND"' DEBUG
-fi
-
-[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
-[[ -r ${BUILD_SCRIPT} ]] || std::die 1 "${BUILD_BLOCK}: no such file!"
-
-declare -r OS
-
-# assemble default path. We have to do this here, before
-# including the modbuild configuration file.
-PATH="/usr/bin:/bin:/usr/sbin:/sbin:${PMODULES_DIR}/bin"
-
-# source Pmodule environment configuration
-if [[ "${bootstrap}" == "yes" ]]; then
-	[[ -r ${BUILDBLOCK_DIR}/../config/${pmodules_build_config} ]] || \
-		std::die 1 "Cannot read configuration file!"
-        source "${BUILDBLOCK_DIR}/../config/${pmodules_build_config}"
-	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILDBLOCK_DIR}/..")
-elif [[ -n "${PMODULES_ROOT}" ]] && [[ -n "${PMODULES_CONFIG_DIR}" ]] && \
-     [[ -r "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" ]]; then
-	source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf"
-	declare -r BUILD_BASEDIR=$(std::get_abspath "${BUILDBLOCK_DIR}/../..")
-else
-	std::die 3 "Build environment not setup properbly!"
-fi
-
-: ${TEMP_DIR:="${PMODULES_TMPDIR}"}
-: ${PMODULES_DISTFILESDIR:="${BUILD_BASEDIR}/Downloads"}
-
-declare -x  TEMP_DIR
-declare -x  PMODULES_DISTFILESDIR
-
-mkdir -p "${PMODULES_DISTFILESDIR}"
-
-# source BASH library with standard functions
-((ok=1))
-for dir in "${bash_libpath[@]}"; do
-        if [[ -r ${dir}/${libpbuild} ]]; then
-		source "${dir}/${libpbuild}"
-		ok=0
-		break
-	fi
-done
-(( ok == 0 )) || std::die 3 "Oops: required BASH library '${libpbuild}' not found"
-
-
-if [[ ${bootstrap} == no ]]; then
-	if [[ -n "${variants_file}" ]]; then
-		if [[ ! -r "${variants_file}" ]]; then
-			std::die 1 "${variants_file}: variants file does not exist or is not readable!"
-		fi
-	else
-		search_variants_file || std::die 2 "No usable variants file found!"
-	fi
-
-        # initialize module environment
-	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
-	[[ -x ${MODULECMD} ]] || std::die 1 "${MODULECMD}: no such executable"
-
-	eval $( "${MODULECMD}" bash purge )
-	eval $( "${MODULECMD}" bash use unstable )
-	eval $( "${MODULECMD}" bash use deprecated )
-
-	# :FIXME: this is a hack!!!
-	eval $( "${MODULECMD}" bash use Libraries )
-
-	# if version is not specified, use version from last line of variants file
-	if [[ -z "$V" ]]; then
-		declare tmp=$(awk 'END{print $1}' "${variants_file}")
-		V="${tmp#*/}"
-	fi
-else
-	unset PMODULES_HOME
-	unset PMODULES_VERSION
-	std::read_versions "${BUILD_BASEDIR}/config/versions.conf"
-	if [[ -z ${V} ]]; then
-		_P=$(echo $P | tr [:lower:] [:upper:])
-		_P=${_P//-/_}
-		_V=${_P}_VERSION
-		V=${!_V}
-	fi
+#......................................................................
+# setup environment for bootstrapping
+#
+setup_env_for_bootstrapping() {
 	ModuleGroup='Tools'
 	ModuleName="Pmodules/${PMODULES_VERSION}"
 	# set PREFIX of module
 	PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${ModuleName}"
-		
+	
 	ModuleRelease='unstable'
 
 	C_INCLUDE_PATH="${PREFIX}/include"
@@ -362,40 +234,103 @@ else
 
 	PATH+=":${PREFIX}/bin"
 	PATH+=":${PREFIX}/sbin"
-fi
+}
 
-declare V_MAJOR=''
-declare V_MINOR=''
-declare V_PATCHLVL=''
+#......................................................................
+#
+# Search for variants file to use
+#
+# Arguments:
+#   none
+#
+# Used global variables:
+#   OS
+#   BUILDBLOCK_DIR
+#   variants_file [out]
+#
+search_variants_file() {
+	local -a eligible_variants_files=()
+	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*.*}/variants" )
+	eligible_variants_files+=( "${V%.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*}/variants" )
+	eligible_variants_files+=( "${V}/variants.${OS}" )
+	eligible_variants_files+=( "${V}/variants" )
+	eligible_variants_files+=( "files/variants.${OS}" )
+	eligible_variants_files+=( "files/variants" )
 
-declare V_PKG="${V%%-*}"
-declare V_RELEASE="${V#*-}"
-declare tmp="${V_PKG}"
+	for variants_file in "${eligible_variants_files[@]}"; do
+		if [[ -e "${BUILDBLOCK_DIR}/${variants_file}" ]]; then
+			variants_file="${BUILDBLOCK_DIR}/${variants_file}"
+		    	return 0
+	    	fi
+	done
+	variants_file=''
+	return 1
+}
 
-case "${tmp}" in
-	*.*.* )
-		V_MAJOR="${tmp%%.*}"
-		tmp="${tmp#*.}"
-		V_MINOR="${tmp%%.*}"
-		V_PATCHLVL="${tmp#*.}"
-		;;
-	*.* )
-		V_MAJOR="${tmp%.*}"
-		V_MINOR="${tmp#*.}"
-		;;
-	* )
-		V_MAJOR="${tmp}"
-		;;
-esac
-P=$(basename $(dirname "${BUILD_SCRIPT}"))
+#.............................................................................
+# defaults for arguments/options
 
-[[ -z ${V} ]] && std::die 1 "Module version must be specified on command line!"
+# number of parallel make jobs
+declare -i  JOBS=3
+
+declare force_rebuild='no'
+declare dry_run='no'
+declare enable_cleanup_build='yes'
+declare enable_cleanup_src='no'
+declare build_target='all'
+declare bootstrap='no'
+declare variants_file=''
+declare opt_install_modulefile=''
+
+# array collecting all modules specified on the command line via '--with=module'
+declare -a with_modules=()
+
+# save arguments, we might need them later again for building dependencies
+declare -r ARGS="$@"
+
+#.............................................................................
+# main
+parse_args "$@"
+declare -r BUILD_SCRIPT
+declare -r BUILDBLOCK_DIR
+
+set_module_name_and_version_strings "${BUILD_SCRIPT}" "$V"
+
+# source Pmodule environment configuration
+PATH+="${BUILDBLOCK_DIR}/../../config/${PMODULES_BUILD_CONFIG}"
+PATH+=":${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}"
+source "${PMODULES_BUILD_CONFIG}" || std::die 3 "${prog}: Cannot source build configuration file."
+
+: ${TEMP_DIR:="${PMODULES_TMPDIR:-/var/tmp/${USER}}"}
+declare -rx  TEMP_DIR
+: ${PMODULES_DISTFILESDIR:="${BUILD_BASEDIR}/Downloads"}
+declare -xr  PMODULES_DISTFILESDIR
+mkdir -p "${PMODULES_DISTFILESDIR}"
 
 SRC_DIR="${TEMP_DIR}/$P-$V/src"
-if [[ "${CompileInSource}" == "yes" ]]; then
-        BUILD_DIR="${SRC_DIR}"
+BUILD_DIR="${TEMP_DIR}/$P-$V/build"
+
+if [[ ${bootstrap} == no ]]; then
+	if [[ -z "${variants_file}" ]]; then
+		search_variants_file || \
+			std::die 2 "${prog}: No usable variants file found!"
+	fi
+
+        # initialize module environment
+	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
+	[[ -x ${MODULECMD} ]] || \
+			std::die 2 "${prog}: no such file or executable -- '${MODULECMD}'"
+
+	eval $( "${MODULECMD}" bash purge )
+	eval $( "${MODULECMD}" bash use unstable )
+	eval $( "${MODULECMD}" bash use deprecated )
+
+	# :FIXME: this is a hack!!!
+	eval $( "${MODULECMD}" bash use Libraries )
 else
-	BUILD_DIR="${TEMP_DIR}/$P-$V/build"
+	setup_env_for_bootstrapping
 fi
 
 #

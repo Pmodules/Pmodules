@@ -1,10 +1,43 @@
 #!/bin/bash
 
+#.............................................................................
+#
+# We need GNU versions of the following utilities. This code works
+# well on Linux and Mac OS X with MacPorts.
+# :FIXME: implement a smarter, portable solution.
+#
+shopt -s expand_aliases
+unalias -a
+
+__path=$(which gsed 2>/dev/null || : )
+if [[ $__path ]]; then
+	alias sed=$__path
+else
+	alias sed=$(which sed 2>/dev/null)
+fi
+
+#.............................................................................
+# disable auto-echo feature of 'cd'
+unset CDPATH
+
+#.............................................................................
+#
+# Exit script on errror.
+#
+# $1	exit code
+#
+set -o errexit
+
+error_handler() {
+	local -i ec=$?
+
+	std::die ${ec} "Oops"
+}
+
+trap "error_handler" ERR
+
 ###############################################################################
 #
-# initialize lib
-#
-
 # unset environment variables used for compiling
 unset	C_INCLUDE_PATH
 unset	CPLUS_INCLUDE_PATH
@@ -28,6 +61,8 @@ unset	F90
 #..............................................................................
 # global variables used in the library
 
+declare -r  OS=$(uname -s)
+
 # module name including path in hierarchy and version
 # (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
 declare -x  ModuleName=''
@@ -41,11 +76,6 @@ declare	-x  ModuleRelease=''
 # relative path of documentation
 # abs. path is "${PREFIX}/${_docdir}/$P"
 declare -r  _DOCDIR='share/doc'
-
-# set default for the defined releases
-if [[ -z ${PMODULES_DEFINED_RELEASES} ]]; then
-	declare -r PMODULES_DEFINED_RELEASES=":unstable:stable:deprecated:"
-fi
 
 declare	SOURCE_URL=()
 declare SOURCE_SHA256=()
@@ -61,7 +91,6 @@ declare	CONFIGURE_ARGS=()
 # install prefix of module.
 # i.e:: ${PMODULES_ROOT}/${ModuleGroup)/${ModuleName}
 declare -x  PREFIX=''
-
 
 ##############################################################################
 #
@@ -157,38 +186,6 @@ pbuild::module_exists() {
 pbuild::module_is_avail() {
 	local output=( $("${MODULECMD}" bash avail -a -m "$1" 2>&1 1>/dev/null) )
 	[[ "${output[0]}" == "$1" ]]
-}
-
-#
-# Search for variants file to use
-#
-# Arguments:
-#   none
-#
-# Used global variables:
-#   OS
-#   BUILDBLOCK_DIR
-#   variants_file [out]
-#
-search_variants_file() {
-	local -a eligible_variants_files=()
-	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
-	eligible_variants_files+=( "${V%.*.*}/variants" )
-	eligible_variants_files+=( "${V%.*}/variants.${OS}" )
-	eligible_variants_files+=( "${V%.*}/variants" )
-	eligible_variants_files+=( "${V}/variants.${OS}" )
-	eligible_variants_files+=( "${V}/variants" )
-	eligible_variants_files+=( "files/variants.${OS}" )
-	eligible_variants_files+=( "files/variants" )
-
-	for variants_file in "${eligible_variants_files[@]}"; do
-		if [[ -e "${BUILDBLOCK_DIR}/${variants_file}" ]]; then
-			variants_file="${BUILDBLOCK_DIR}/${variants_file}"
-		    	return 0
-	    	fi
-	done
-	variants_file=''
-	return 1
 }
 
 pbuild::set_download_url() {
@@ -591,87 +588,52 @@ pbuild::make_all() {
 	#	PREFIX
 	#
 	check_and_setup_env() {
-		local FullModuleName=''
 		
 		# build module name
-		# :FIXME: the MODULE_PREFIX should be derived from ModuleName
 		# :FIXME: this should be read from a configuration file
 		if [[ -z ${ModuleGroup} ]]; then
 			std::die 1 "${P}/${V}: group not set."
 		fi
+		local module_name=()
 		case ${ModuleGroup} in
-		Tools )
-			FullModuleName="${P}/${V}"
-			ModuleName="${P}/${V}"
-			;;
-		Programming )
-			FullModuleName="${P}/${V}"
-			ModuleName="${P}/${V}"
-			;;
-		Libraries )
-			FullModuleName="${P}/${V}"
-			ModuleName="${P}/${V}"
-			;;
-		System )
-			FullModuleName="${P}/${V}"
-			ModuleName="${P}/${V}"
-			;;
 		Compiler )
-			FullModuleName="${P}/${V}"
-			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
-			
-			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
-			ModuleName+="${P}/${V}"
+			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
+			module_name+=( "${P}/${V}" )
 			;;
 		MPI )
-			FullModuleName="${P}/${V}/"
-			FullModuleName+="${MPI}/${MPI_VERSION}/"
-			FullModuleName+="${COMPILER}/${COMPILER_VERSION}"
-			
-			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
-			ModuleName+="${MPI}/${MPI_VERSION}/"
-			ModuleName+="${P}/${V}"
+			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
+			module_name+=( "${MPI}/${MPI_VERSION}" )
+			module_name+=( "${P}/${V}" )
 			;;
 		HDF5 )
-			FullModuleName="${P}/${V}"
-			FullModuleName+="/${HDF5}/${HDF5_VERSION}"
-			FullModuleName+="/${MPI}/${MPI_VERSION}"
-			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
-			
-			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
-			ModuleName+="${MPI}/${MPI_VERSION}/"
-			ModuleName+="${HDF5}/${HDF5_VERSION}/"
-			ModuleName+="${P}/${V}"
+			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
+			module_name+=( "${MPI}/${MPI_VERSION}" )
+			module_name+=( "${HDF5}/${HDF5_VERSION}" )
+			module_name+=( "${P}/${V}" )
 			;;
 		OPAL )
-			FullModuleName="${P}/${V}"
-			FullModuleName+="/${OPAL}/${OPAL_VERSION}"
-			FullModuleName+="/${MPI}/${MPI_VERSION}"
-			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
-			
-			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
-			ModuleName+="${MPI}/${MPI_VERSION}/"
-			ModuleName+="${OPAL}/${OPAL_VERSION}/"
-			ModuleName+="${P}/${V}"
+			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
+			module_name+=( "${MPI}/${MPI_VERSION}" )
+			module_name+=( "${OPAL}/${OPAL_VERSION}" )
+			module_name+=( "${P}/${V}" )
 			;;
 		HDF5_serial )
-			FullModuleName="${P}/${V}"
-			FullModuleName+="/hdf5_serial/${HDF5_SERIAL_VERSION}"
-			FullModuleName+="/${COMPILER}/${COMPILER_VERSION}"
-			
-			ModuleName="${COMPILER}/${COMPILER_VERSION}/"
-			ModuleName+="hdf5_serial/${HDF5_SERIAL_VERSION}/"
-			ModuleName+="${P}/${V}"
+			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
+			module_name+=( "hdf5_serial/${HDF5_SERIAL_VERSION}" )
+			module_name+=( "${P}/${V}" )
 			;;
 		* )
-			FullModuleName="${P}/${V}"
-			ModuleName="${P}/${V}"
-			#std::die 1 "${P}/${V}: oops: unknown group: ${ModuleGroup}"
+			module_name+=("${P}/${V}" )
 			;;
 		esac
 
+		# set full module name
+		ModuleName=$( IFS='/'; echo "${module_name[*]}" ; )
 		# set PREFIX of module
-		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${FullModuleName}"
+		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/"
+		for ((i=${#module_name[@]}-1; i >= 0; i--)); do
+			PREFIX+="${module_name[i]}"
+		done
 
 		# get module release if already available
 		local cur_module_release=''
@@ -717,28 +679,6 @@ pbuild::make_all() {
 			ModuleRelease='unstable'
 		fi
 		std::info "${P}/${V}: will be released as \"${ModuleRelease}\""
-	}
-
-	#......................................................................
-	# setup environment for bootstrapping
-	#
-	check_and_setup_env_bootstrap() {
-		ModuleGroup='Tools'
-		ModuleName="Pmodules/${PMODULES_VERSION}"
-		# set PREFIX of module
-		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${ModuleName}"
-		
-		ModuleRelease='unstable'
-
-		C_INCLUDE_PATH="${PREFIX}/include"
-		CPLUS_INCLUDE_PATH="${PREFIX}/include"
-		CPP_INCLUDE_PATH="${PREFIX}/include"
-		LIBRARY_PATH="${PREFIX}/lib"
-		LD_LIBRARY_PATH="${PREFIX}/lib"
-		DYLD_LIBRARY_PATH="${PREFIX}/lib"
-
-		PATH+=":${PREFIX}/bin"
-		PATH+=":${PREFIX}/sbin"
 	}
 
 	#......................................................................
@@ -857,7 +797,7 @@ pbuild::make_all() {
 			cd "${dir}" && "pbuild::${target}"
 			cd "${dir}" && "pbuild::post_${target}_${OS}"
 			cd "${dir}" && "pbuild::post_${target}"
-			touch "${BUILD_DIR}/.i${target}"
+			touch "${BUILD_DIR}/.${target}"
 		fi
 	}
 
@@ -870,16 +810,16 @@ pbuild::make_all() {
 		mkdir -p "${SRC_DIR}"
 
 		build_target "${SRC_DIR}" prep
-		[[ "${target}" == "prep" ]] && return 0
+		[[ "${build_target}" == "prep" ]] && return 0
 
 		build_target "${BUILD_DIR}" configure
-		[[ "${target}" == "configure" ]] && return 0
+		[[ "${build_target}" == "configure" ]] && return 0
 
 		build_target "${BUILD_DIR}" compile
-		[[ "${target}" == "compile" ]] && return 0
+		[[ "${build_target}" == "compile" ]] && return 0
 
 		build_target "${BUILD_DIR}" install
-		[[ "${target}" == "install" ]] && return 0
+		[[ "${build_target}" == "install" ]] && return 0
 
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
