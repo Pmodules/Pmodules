@@ -1,17 +1,38 @@
 #!/bin/bash
 
 declare	BOOTSTRAP_DIR=$(dirname "$0")
-
-unset PMODULES_ROOT
-unset PMODULES_HOME
-unset PMODULES_VERSION
-unset PMODULES_DISTFILESDIR
-
-source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash"
+source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash" || { echo "Oops!" 1>&2; exit 42; }
 
 declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
+# not used here
+unset PMODULES_ROOT
+
+# these variables are re-declared and set in the configuration file
+unset PMODULES_HOME
+unset PMODULES_DISTFILESDIR
+
+# defaults
+declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
+declare -rx DEFAULT_PMODULES_DISTFILESDIR="${DEFAULT_PMODULES_ROOT}/var/distfiles"
+declare -rx DEFAULT_MODBUILD_CONFIG='config/modbuild.conf'
+declare -rx DEFAULT_VERSIONS_CONFIG='config/versions.conf'
+declare -rx DEFAULT_PMODULES_TMPDIR='/var/tmp/${USER}'
+
+
+#-----------------------------------------------------------------------------
+#
+get_version() {
+	local -r name="$1"
+	echo $(awk "/^$1[[:blank:]]/ {print \$2}" "${DEFAULT_VERSIONS_CONFIG}")
+}
+
+declare -r PMODULES_VERSION=$(get_version 'Pmodules')
+
+
+#-----------------------------------------------------------------------------
+#
 usage() {
 	echo "
 build [OPTIONS] configure|compile|install
@@ -19,18 +40,13 @@ build [OPTIONS] configure|compile|install
 	std::die 1 ""
 }
 
-declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
-declare -rx DEFAULT_PMODULES_DISTFILESDIR="${DEFAULT_PMODULES_ROOT}/var/distfiles"
-declare -rx DEFAULT_CONFIG_FILE='config/modbuild.conf'
-declare -rx DEFAULT_PMODULES_TMPDIR='/var/tmp/${USER}'
-
 #-----------------------------------------------------------------------------
 #
 pmodules::configure() {
 	local install_root="${DEFAULT_PMODULES_ROOT}"
 	local distfilesdir="${DEFAULT_PMODULES_DISTFILESDIR}"
 	local tmpdir="${DEFAULT_PMODULES_TMPDIR}"
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
+	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
 
 	while (( $# > 0 )); do
 		case "$1" in
@@ -76,7 +92,7 @@ pmodules::configure() {
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
 
-	sed "${sed_cmd}" "${DEFAULT_CONFIG_FILE}.in" > "${config_file}"
+	sed "${sed_cmd}" "${DEFAULT_MODBUILD_CONFIG}.in" > "${config_file}"
 }
 
 #-----------------------------------------------------------------------------
@@ -84,17 +100,17 @@ pmodules::configure() {
 pmodules::compile() {
 	build () {
 		local -r name="$1"
-		local -r version="$2"
+		local -r version=$(get_version "${name}")
 		shift 2
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
-			"${BOOTSTRAP_DIR}/${name}/build" \
+			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
 			"${build_opts[@]}" "$@" "${version}" || \
 			std::die 3 "Compiling '${name}' failed!"
 	}
 
 	local force='no'
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
+	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -131,31 +147,30 @@ pmodules::compile() {
 		shift 1
 	done
 
-	std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
 	source "${config_file}"
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/base64" ]] || [[ ${force} == 'yes' ]]; then
-		build coreutils "${COREUTILS_VERSION}"
+		build coreutils
 	fi
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/xgettext" ]] || [[ ${force} == 'yes' ]]; then
-		build gettext "${GETTEXT_VERSION}"
+		build gettext
 	fi
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/getopt" ]] || [[ ${force} == 'yes' ]]; then
-		build getopt "${GETOPT_VERSION}"
+		build getopt
 	fi
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/bash" ]] || [[ ${force} == 'yes' ]]; then
-		build bash "4.3.30"
+		build bash
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${force} == 'yes' ]]; then
-		build Tcl "${TCL_VERSION}"
+		build Tcl
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${force} == 'yes' ]]; then
-		build modules "${MODULES_VERSION}"
+		build modules
 	fi
 	echo "Done..."
 }
@@ -164,7 +179,7 @@ pmodules::compile() {
 #
 pmodules::install() {
 	local opt_force='no'
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_CONFIG_FILE}"
+	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -201,7 +216,6 @@ pmodules::install() {
 		shift 1
 	done
 
-	std::read_versions "${BOOTSTRAP_DIR}/config/versions.conf"
 	source "${config_file}"
 
 	if [[ ! -d "${PMODULES_ROOT}" ]]; then
