@@ -128,7 +128,8 @@ pbuild::add_to_group() {
 	if [[ -z ${1} ]]; then
 		std::die 42 "${FUNCNAME}: Missing group argument."
 	fi
-	ModuleGroup=$1
+	ModuleGroup="$1"
+	set_full_module_name_and_prefix
 }
 
 ##############################################################################
@@ -175,7 +176,8 @@ pbuild::module_exists() {
 
 ##############################################################################
 #
-# Test whether a module with the given name is available.
+# Test whether a module with the given name is available. If yes, return
+# release
 #
 # Arguments:
 #   $1: module name
@@ -184,8 +186,11 @@ pbuild::module_exists() {
 #   The passed module name must be NAME/VERSION! 
 #
 pbuild::module_is_avail() {
+	local "$2"
+	local uvar="$2"
+	[[ -z "${uvar}" ]] || uvar="__unused__"
 	local output=( $("${MODULECMD}" bash avail -a -m "$1" 2>&1 1>/dev/null) )
-	[[ "${output[0]}" == "$1" ]]
+	[[ "${output[0]}" == "$1" ]] && std::upvar "${uvar}" "${output[1]}"
 }
 
 pbuild::set_download_url() {
@@ -224,8 +229,8 @@ download_source_file() {
 	dirs+=( "$@" )
 
 	local -r fname="${url##*/}"
-	local -r extension=$(echo ${fname} | sed 's/.*\(.tar.bz2\|.tbz2\|.tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/')
-	echo "fname=\"${fname}\""
+	local expr='s/.*\(.tar.bz2\|.tbz2\|.tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/'
+	local -r extension=$(echo ${fname} | sed "${expr}")
 	local dir=''
 	dirs+=( 'not found' )
 	for dir in "${dirs[@]}"; do
@@ -420,7 +425,10 @@ pbuild::cleanup_src() {
 #
 # The 'do it all' function.
 #
+make_all_called='no'
 pbuild::make_all() {
+	[[ "${make_all_called}" == 'yes' ]] && return 0
+
 	local variant=''
 	local depend_release=''
 	local -a runtime_dependencies=()
@@ -569,88 +577,17 @@ pbuild::make_all() {
 	# check and setup module specific environment.
 	#
 	# The following variables must already be set:
-	#	ModuleGroup	    module group
 	#	P		    module name
 	#	V		    module version
-	#	MODULEPATH	    module path
-	#	PMODULES_DISTFILESDIR directory where all the tar-balls are stored
-	#
-	# The following variables might already be set
-	#	${_P}_VERSION	    module version
-	#	ModuleRelease	    module release, one of 'unstable', 'stable',
-	#			    'deprecated'
 	#
 	# The following variables are set in this function
-	#	SRC_DIR
-	#	BUILD_DIR
-	#	ModuleName
 	#	ModuleRelease
-	#	PREFIX
 	#
-	check_and_setup_env() {
-		
-		# build module name
-		# :FIXME: this should be read from a configuration file
-		if [[ -z ${ModuleGroup} ]]; then
-			std::die 1 "${P}/${V}: group not set."
-		fi
-		local module_name=()
-		case ${ModuleGroup} in
-		Compiler )
-			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-			module_name+=( "${P}/${V}" )
-			;;
-		MPI )
-			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-			module_name+=( "${MPI}/${MPI_VERSION}" )
-			module_name+=( "${P}/${V}" )
-			;;
-		HDF5 )
-			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-			module_name+=( "${MPI}/${MPI_VERSION}" )
-			module_name+=( "${HDF5}/${HDF5_VERSION}" )
-			module_name+=( "${P}/${V}" )
-			;;
-		OPAL )
-			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-			module_name+=( "${MPI}/${MPI_VERSION}" )
-			module_name+=( "${OPAL}/${OPAL_VERSION}" )
-			module_name+=( "${P}/${V}" )
-			;;
-		HDF5_serial )
-			module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-			module_name+=( "hdf5_serial/${HDF5_SERIAL_VERSION}" )
-			module_name+=( "${P}/${V}" )
-			;;
-		* )
-			module_name+=("${P}/${V}" )
-			;;
-		esac
-
-		# set full module name
-		ModuleName=$( IFS='/'; echo "${module_name[*]}" ; )
-		# set PREFIX of module
-		PREFIX="${PMODULES_ROOT}/${ModuleGroup}/"
-		for ((i=${#module_name[@]}-1; i >= 0; i--)); do
-			PREFIX+="${module_name[i]}"
-		done
-
+	set_module_release() {
 		# get module release if already available
-		local cur_module_release=''
-		local saved_modulepath=${MODULEPATH}
-		rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
-		for rel in "${rels[@]}"; do
-			eval $("${MODULECMD}" bash unuse ${rel})
-		done
-		for rel in "${rels[@]}"; do
-			eval $("${MODULECMD}" bash use ${rel})
-			if pbuild::module_exists "${P}/${V}"; then
-				cur_module_release=${rel}
-				std::info "${P}/${V}: already exists and released as \"${rel}\""
-				break
-			fi
-		done
-		MODULEPATH=${saved_modulepath}
+		local release=''
+		pbuild::module_is_avail "$P/$V" release && \
+			std::info "${P}/${V}: already exists and released as '${release}'"
 
 		# set release of module
 		if [[ "${depend_release}" == 'deprecated' ]] || \
@@ -658,11 +595,11 @@ pbuild::make_all() {
 		       #   - if a build-dependency is deprecated or 
 		       #   - the module already exists and is deprecated or
 		       #   - is forced to be deprecated by setting this on the command line
-		       [[ "${cur_module_release}" == 'deprecated' ]] \
+		       [[ "${release}" == 'deprecated' ]] \
 		       || [[ "${ModuleRelease}" == 'deprecated' ]]; then
 			ModuleRelease='deprecated'
 		elif [[ "${depend_release}" == 'stable' ]] \
-			 || [[ "${cur_module_release}" == 'stable' ]] \
+			 || [[ "${release}" == 'stable' ]] \
 			 || [[ "${ModuleRelease}" == 'stable' ]]; then
  			 # release is stable
 			 #   - if all build-dependency are stable or
@@ -678,7 +615,7 @@ pbuild::make_all() {
 			#   - and all the cases I didn't think of
 			ModuleRelease='unstable'
 		fi
-		std::info "${P}/${V}: will be released as \"${ModuleRelease}\""
+		std::info "${P}/${V}: will be released as '${ModuleRelease}'"
 	}
 
 	#......................................................................
@@ -768,7 +705,7 @@ pbuild::make_all() {
 
  	#......................................................................
 	# Install release-file
-	set_module_release() {
+	install_module_release_file() {
 		# directory where to install module- and release-file
 		local target_dir="${PMODULES_ROOT}/"
 		target_dir+="${ModuleGroup}/"
@@ -834,7 +771,8 @@ pbuild::make_all() {
 	# setup module specific environment
 	if [[ "${bootstrap}" == 'no' ]]; then
 		load_build_dependencies
-		check_and_setup_env
+		set_full_module_name_and_prefix
+		set_module_release
 		if [[ ! -d "${PREFIX}" ]] || \
 		       [[ "${force_rebuild}" == 'yes' ]]; then
 			build_module
@@ -845,12 +783,12 @@ pbuild::make_all() {
 				install_modulefile
 			fi
 		fi
-		set_module_release
+		install_module_release_file
 	else
 		#check_and_setup_env_bootstrap
 		build_module
 	fi
-
+	make_all_called='yes'
 	return 0
 }
 
