@@ -3,7 +3,6 @@
 # use system gcc to compile
 declare -rx CC=gcc
 
-pbuild::add_to_group 'Tools'
 pbuild::set_download_url "https://amas.web.psi.ch/Downloads/$P/$P-$V.tar.bz2"
 
 TCL_DIR="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"

@@ -1,6 +1,5 @@
 #!/usr/bin/env modbuild
 
-pbuild::add_to_group 'Tools'
 pbuild::set_download_url "https://ftp.gnu.org/gnu/$P/$P-$V.tar.gz"
 pbuild::add_configure_args "--bindir=${PREFIX}/sbin" 
 

@@ -101,7 +101,7 @@ pmodules::compile() {
 	build () {
 		local -r name="$1"
 		local -r version=$(get_version "${name}")
-		shift 2
+		shift
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
 			"${BOOTSTRAP_DIR}/Tools/${name}/build" \

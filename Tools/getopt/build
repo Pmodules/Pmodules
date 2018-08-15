@@ -1,6 +1,5 @@
 #!/usr/bin/env modbuild
 
-pbuild::add_to_group 'Tools'
 pbuild::set_download_url "http://frodo.looijaard.name/system/files/software/getopt/getopt-1.1.6.tar.gz"
 pbuild::compile_in_sourcetree
 
