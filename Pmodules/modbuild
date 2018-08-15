@@ -7,7 +7,7 @@ declare -r  mydir=$(cd ${mydir} && pwd -P)
 declare -r  prog=$(basename "$0")
 
 # The libs are found via PATH
-PATH="/usr/bin:/bin:/usr/sbin:/sbin:${mydir}:${mydir}/../lib"
+PATH="/usr/bin:/bin:/usr/sbin:/sbin:${mydir}:${mydir}/../lib:${mydir}/../config"
 source libstd.bash    || { echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3; }
 source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
 
@@ -172,9 +172,12 @@ parse_args() {
 			[[ -z "$V" ]] || std::die 1 "${prog}: version already set -- '$1'"
 			V=$1
 			;;
+		'')	
+			:
+			;;
 		* )
 			[[ -z "${BUILD_SCRIPT}" ]] || \
-				std::die 1 "${prog}: build script already set -- '$1'"
+				std::die 1 "${prog}: build script already set to '${BUILD_SCRIPT}' -- '$1'"
 		        BUILD_SCRIPT=$(std::get_abspath "$1")
 			test -r ${BUILD_SCRIPT} || \
 				std::die 1 "${prog}: build script does not exist" \
@@ -310,6 +313,7 @@ initialize_module_vars() {
 setup_env_for_bootstrapping() {
 	ModuleName="Pmodules/${PMODULES_VERSION}"
 	# set PREFIX of module
+	ModuleGroup='Tools'
 	PREFIX="${PMODULES_ROOT}/${ModuleGroup}/${ModuleName}"
 
 	C_INCLUDE_PATH="${PREFIX}/include"
@@ -386,8 +390,8 @@ declare -r BUILDBLOCK_DIR
 initialize_module_vars "${BUILD_SCRIPT}" "$V"
 
 # source Pmodule environment configuration
-PATH+="${BUILDBLOCK_DIR}/../../config/${PMODULES_BUILD_CONFIG}"
-PATH+=":${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}"
+test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 source "${PMODULES_BUILD_CONFIG}" || std::die 3 "${prog}: Cannot source build configuration file."
 
 : ${TEMP_DIR:="${PMODULES_TMPDIR:-/var/tmp/${USER}}"}
