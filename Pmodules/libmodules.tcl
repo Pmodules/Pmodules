@@ -41,8 +41,8 @@ proc module-addgroup { group } {
 	if { [module-info mode load] } {
 		debug "mode is load"
 
-		append-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
-		append-path PMODULES_USED_GROUPS $group
+		prepend-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
+		prepend-path PMODULES_USED_GROUPS $group
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
 		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
 	} elseif { [module-info mode remove] } {
