@@ -15,10 +15,10 @@ declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
 declare -r base64="${sbindir}/base64"
-declare -r getopt="${sbindir}/getopt"
+#declare -r getopt="${sbindir}/getopt"
 declare -r mktemp="${sbindir}/mktemp"
 declare -r sort="${sbindir}/sort"
-declare -r tail="${sbindir}/tail"
+#declare -r tail="${sbindir}/tail"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
@@ -450,11 +450,12 @@ USAGE:
 # 	$1: absolute modulefile name
 #
 get_release() {
-	local -r modulefile="$1"
+	local "$1"
+	local -r modulefile="$2"
 
 	# is modulefile outside ${PMODULES_ROOT}?
 	if [[ ! ${modulefile} =~ ${PMODULES_ROOT} ]]; then
-		echo 'stable'
+		std::upvar $1 'stable'
 		return 0
 	fi
 
@@ -463,9 +464,9 @@ get_release() {
 	if [[ -r ${releasefile} ]]; then
 		# read releasefile, remove empty lines, spaces etc
 		local -r data=$( < "${releasefile}" )
-		echo ${data}
+		std::upvar $1 "${data}"
 	else	
-		echo 'unstable'
+		std::upvar $1 'unstable'
 	fi
 	return 0
 }
@@ -509,15 +510,15 @@ is_modulefile() {
 	local shebang
 	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
-	[[ "${shebang:0:8}" == "#%Module" ]] || [[ "${shebang:0:9}" == "#%Pmodule" ]]
+	[[ "${shebang:0:8}" == '#%Module' ]] || [[ "${shebang:0:9}" == '#%Pmodule' ]]
 }
 
 subcommand_generic0() {
 	local -r subcommand="$1"
 	shift
-	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
 	while (( $# > 0 )); do
 		case $1 in
 			-- )
@@ -534,9 +535,9 @@ subcommand_generic0() {
 subcommand_generic1() {
 	local -r subcommand="$1"
 	shift
-	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -561,9 +562,9 @@ subcommand_generic1() {
 subcommand_generic1plus() {
 	local -r subcommand="$1"
 	shift
-	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -584,9 +585,9 @@ subcommand_generic1plus() {
 subcommand_generic1or2() {
 	local -r subcommand="$1"
 	shift
-	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -614,7 +615,8 @@ subcommand_generic1or2() {
 #
 subcommand_load() {
 	local release='undef'
-	local moduledir=''
+	local current_modulefile=''
+	local prefix=''
 	local m=''
 
 	local saved_IFS="${IFS}"; 
@@ -622,24 +624,8 @@ subcommand_load() {
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
 	local -r saved_MODULEPATH=${MODULEPATH}
-	local -a saved_modulepath=${modulepath}
-	local -r saved_UsedReleases=${UsedReleases}
-
-	#
-	# Test whether a given module can be loaded according to the 
-	# accepted releases.
-	#
-	# Notes:
-	#	The variable 'release' in function 'subcommand_load()' will be set.
-	#	The release of a modulefile outsite our hierarchy is 'stable'.
-	#
-	# $1: absolute name of modulefile
-	#
-	is_loadable() {
-		release=$( get_release "$1" )			
-		[[ :${UsedReleases}: =~ ${release} ]] && return 0
-		return 1
-	}
+	local -a saved_modulepath=( "${modulepath[@]}" )
+	local -r saved_UsedReleases=( "${UsedReleases[@]}" )
 
 	#
 	# Test whether a given module is available.
@@ -664,10 +650,7 @@ subcommand_load() {
 	#
 	# possible return values:
 	# 	0: module is loadable
-	# 	1: nothing found
-	# 	2: not a modulefile (shebang is wrong)
-	# 	3: the release of the module is not in use
-	#	4: inside our hierarchy but not a loadable module-file
+	# 	1: either not a modulefile or unsused release
 	#
 	# Notes:
 	#	The variable 'release' in function 'subcommand_load()' will be set.
@@ -675,53 +658,25 @@ subcommand_load() {
 	#
 	is_available() {
 		local  m=$1
-
-		if [[ -f ${m} ]]; then
-			# the passed argument is a modulefile
-			if [[ "${m:0:1}" != "/" ]]; then
-				# file-name is relative
-				m=$(std::get_abspath "${m}")
-			fi
-			# from here on we have an absolute file name
-			is_modulefile "${m}" || return 2
-			is_loadable "${m}"   || return 3
-			if [[ "${m}" =~ "${PMODULES_ROOT}" ]]; then
-				for dir in "${modulepath[@]}"; do
-					[[ "${m}" =~ "${dir}" ]] && return 0
-				done
-				# inside hierarchy, but not loadable
-				return 4
-			fi
-			current_modulefile="${m}"
-			return 0
-		fi
-
-		# the argument is a module name
-		# check whether $m is in our modulepath
-		for dir in "${modulepath[@]}"; do
-			if [[ -d ${dir}/$1 ]]; then
-				# module specified without version, like 'hdf5'
-				while read fname; do
-					is_modulefile "${fname}" || return 2
-					if is_loadable "${fname}"; then
-						moduledir="${dir}"
-						current_modulefile="${fname}"
-						return 0
-					fi
-				done < <(find "${dir}/$1" -mindepth 1 -maxdepth 1 -type l -o -type f  \! -name ".*")
-			else
-				# module specified with name/version, like 'hdf5/1.8.14'
-				[[ -f ${dir}/$1 ]] || continue
- 				[[ -r ${dir}/$1 ]] || continue
-				is_modulefile "${dir}/$1" || return 2
-		        	if is_loadable "${dir}/$1"; then
-					moduledir="${dir}"
-					current_modulefile="${dir}/$1"
-					return 0
-				fi
-			fi
-		done
-		return 1
+		local -a array
+		#
+		# the next command assigns the absolute modulefile path
+		# to ${arry[0]} and - if the module is in our root - the
+		# prefix of the module to ${array[1]}.
+		#
+		# The trick with the first line matching "_PREFIX" is not
+		# 100% reliable: One of the Pmodules extensions must be 
+		# called before something like 
+		#   setenv FOO_PREFIX bar
+		# can be used.
+		#
+		mapfile -t array  < <("${modulecmd}" "${shell}" show "$m" 2>&1 | \
+			awk 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX/ {print $3; exit}')
+		current_modulefile="${array[0]}"
+		prefix="${array[1]}"
+		test -n "${current_modulefile}" || return 1
+		get_release release "${current_modulefile}"
+		[[ :${UsedReleases}: =~ ${release} ]]
 	}
 
 	#
@@ -761,22 +716,22 @@ subcommand_load() {
 			module_is_loaded "${dep}" && continue
 			local output=$( subcommand_load --internal "${dep}")
 
-			#echo ${output}
 			eval ${output}
 		done < "${fname}"
 	}
 
-	local opts
-	opts=$(pmodules::get_options -o fsvwi -l force -l silent -l verbose -l warn -l internal -- "$@") || \
-	    subcommand_help_load
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts \
+		-o fsvwi -l force -l silent -l verbose -l warn -l internal \
+		-- "$@" || subcommand_help_load
+	eval set --  "${opts[@]}"
 	local args=()
-	opts=''
+	opts=()
 	local shell="${g_shell}"
 	while (($# > 0)); do
 		case $1 in
 			-f | --force )
-				opts+=' -f'
+				opts+=(' -f')
 				;;
 			-s | --silent )
 				verbosity_lvl='silent'
@@ -866,32 +821,32 @@ subcommand_load() {
 			continue
 		fi
 		if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]]; then
-			# modulefile is in our hierarchy:
-			# compute installation prefix
-			local tmp=${current_modulefile#${PMODULES_ROOT}/}
-			tmp=${tmp/${PMODULES_MODULEFILES_DIR}\/}
-			local save_IFS="${IFS}"
-			IFS='/'
-			local -a toks=( ${tmp} )
-			IFS="${save_IFS}"
-			# reverse remaining path items pairwise
-			local p=""
-			for ((i=1; i<${#toks[@]}; i+=2)); do
-				p="/${toks[i]}/${toks[i+1]}${p}"
-			done
-			local dependency_file="${PMODULES_ROOT}/${toks[0]}${p}/.dependencies"
-			if [[ -r ${dependency_file} ]]; then
-				load_dependencies "${dependency_file}"
-			fi
+			# modulefile is in our hierarchy
+			# ${prefix} was set in is_available()!
+			test -r "${prefix}/.dependencies" && load_dependencies "$_"
 		fi
-		"${modulecmd}" "${shell}" ${opts} load "${m}"
+		"${modulecmd}" "${shell}" ${opts} load "${current_modulefile}"
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded."
+		fi
+		if [[ -z "${_LMFILES_}" ]]; then
+			_LMFILES_="${current_modulefile}"
+		else
+			_LMFILES_+=":${current_modulefile}"
 		fi
 	done
 	# restore original MODULEPATH; it might have been overwritten
 	MODULEPATH=${saved_MODULEPATH}
 	UsedReleases=${saved_UsedReleases}
+	#
+	# fix LOADEDMODULES
+	LOADEDMODULES="${_LMFILES_}"
+	for dir in "${saved_modulepath[@]}"; do
+		[[ "${dir: -1}" == "/" ]] || dir+="/"
+		dir="${dir//\//\\/}"
+		LOADEDMODULES="${LOADEDMODULES//${dir}}"
+	done
+	pbuild::export_env "${g_shell}" LOADEDMODULES
 }
 
 #
@@ -931,28 +886,14 @@ subcommand_show() {
 get_available_modules() {
 	local -r dir="$1"
 	local -r module="$2"
-	local -r use_releases=${3:-${UsedReleases}}
-	local -a mods=()
-	while read mod; do
-		local release=$( get_release "${dir}/${mod}" )
-
-		if [[ :${use_releases}: =~ :${release}: ]]; then
-		        mods+=( "${mod}" ${release} )
-		fi
-	done < <(MODULEPATH="${dir}" "${modulecmd}" bash avail -t "${module}" 2>&1 | "${tail}" -n +2)
-	echo "${mods[@]}"
-}
-
-get_available_modules2() {
-	local -r dir="$1"
-	local -r module="$2"
 	local -r use_releases="${3:-${UsedReleases}}"
 	local -a mods=()
+	local    release
 	test -d "${dir}" || return 0
 	{
 		cd "${dir}"
 		while read mod; do
-			local release=$( get_release "${dir}/${mod}" )
+			get_release release "${dir}/${mod}"
 
 			if [[ :${use_releases}: =~ :${release}: ]]; then
 			        mods+=( "${mod}" ${release} )
@@ -1063,14 +1004,13 @@ subcommand_avail() {
 		done
 		printf -- "\n\n" 1>&2
 	}
-	local opts=''
-	opts=$(pmodules::get_options -o ahlmt \
+	local opts=()
+	pmodules::get_options opts -o ahlmt \
 			-l all -l all-releases \
-			-l human -l long -l machine -l terse -- "$@") || subcommand_help_avail
-	eval set --  "${opts}"
+			-l human -l long -l machine -l terse -- "$@" || subcommand_help_avail
+	eval set --  "${opts[@]}"
 	local pattern=()
-	local output_function=''
-	local opts=''
+	local output_function='human_readable_output'
 	local opt_all_groups='no'
 	local opt_use_releases="${UsedReleases}"
 	while (($# > 0)); do
@@ -1083,27 +1023,15 @@ subcommand_avail() {
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			-h | --human )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts=$1
 				output_function='human_readable_output'
 				;;
 			-l | --long )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts=$1
 				output_function='long_output'
 				;;
 			-t | --terse )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts=$1
 				output_function='terse_output'
 				;;
 			-m | --machine )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts=$1
 				output_function='machine_output'
 				;;
 			-- )
@@ -1114,7 +1042,6 @@ subcommand_avail() {
 		esac
 		shift
 	done
-	output_function=${output_function:-human_readable_output}
 	if [[ "${opt_all_groups}" = 'yes' ]]; then
 		rescan_groups "${PMODULES_ROOT}"
 	fi
@@ -1127,7 +1054,7 @@ subcommand_avail() {
 	IFS=${saved_IFS}
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules2 "${dir}" "${string}" "${opt_use_releases}" ) )
+			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 
 			${output_function}
@@ -1155,7 +1082,9 @@ get_groups () {
 #
 get_group_depth2 () {
 	local -r group="$1"
-	local  tmp=$(find "${group}/${PMODULES_MODULEFILES_DIR}" -depth -type f -o -type l | head -1)
+	local -r dir="${group}/${PMODULES_MODULEFILES_DIR}"
+	test -d "${dir}" || return 0
+	local  tmp=$(find "${dir}" -depth -type f -o -type l 2>/dev/null| head -1)
 	local -a tmp2=( ${tmp//\// } )
 	local depth=${#tmp2[@]}
 	(( depth-=4 ))
@@ -1322,13 +1251,12 @@ subcommand_use() {
 		pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
 	}
 
-	local opts=''
+	local opts=()
+	pmodules::get_options opts -o 'ap' -l 'append' -l 'prepend' -- "$@" || subcommand_help_use
+	eval set --  "${opts[@]}"
+	
 	local opt_append='no'
 	local -a args=()
-
-	opts=$(pmodules::get_options -o 'ap' -l 'append' -l 'prepend' -- "$@") || subcommand_help_use
-	eval set --  "${opts}"
-	
 	while (( $# > 0)); do
 		case "$1" in
 		-a | --append )
@@ -1357,9 +1285,10 @@ subcommand_use() {
 # unuse directory|group|release...
 #
 subcommand_unuse() {
-	local opts=''
-	opts=$(pmodules::get_options -o '' -- "$@") || subcommand_help_unuse
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -o '' -- "$@" || subcommand_help_unuse
+	eval set --  "${opts[@]}"
+
 	local dirs_to_remove=()
 	while (( $# > 0)); do
 		if [[ "$1" == "--" ]]; then
@@ -1440,26 +1369,22 @@ subcommand_purge() {
 # list [-hlt]
 #
 subcommand_list() {
-	local opts=''
-	opts=$(pmodules::get_options -o hlt -l human -l long -l terse -- "$@") || subcommand_help_list
-	eval set --  "${opts}"
-	local opts=''
+	local opts=()
+	pmodules::get_options opts -o hlt -l human -l long -l terse -- "$@" || \
+		subcommand_help_list
+	eval set --  "${opts[@]}"
+
+	local opts=()
 	while (( $# > 0 )); do
 		case $1 in
 			-h | --human )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts='-h'
+				opts+=( '-h' )
 				;;
 			-l | --long )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts='-l'
+				opts+=( '-l' )
 				;;
 			-t | --terse )
-				[[ -z ${opts} ]] || \
-				    std::die 1 "${CMD} list: you cannot set both options: '$1' and '${opts}'."
-				opts='-t'
+				opts+=( '-t' )
 				;;
 			-- )
 				;;
@@ -1469,16 +1394,11 @@ subcommand_list() {
 		esac
 		shift
 	done
-	"${modulecmd}" "${g_shell}" list "${opts}"
+	"${modulecmd}" "${g_shell}" list "${opts[@]}"
 }
 
 ##############################################################################
 pmodules_init() {
-	#declare -g PMODULES_DEFAULT_GROUPS=''
-	#declare -g PMODULES_DEFAULT_RELEASES=''
-
-	#source "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.${g_shell}"
-
 	declare -g LOADEDMODULES=''
 	declare -g PMODULES_USED_GROUPS=''
 	declare -g MODULEPATH=''
@@ -1503,9 +1423,9 @@ pmodules_init() {
 #
 subcommand_clear() {
 	local -r subcommand="${FUNCNAME##*_}"
-	local opts=''
-	opts=$(pmodules::get_options -- '' "$@") || subcommand_help_${subcommand}
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
 	while (( $# > 0 )); do
 		case $1 in
 			-- )
@@ -1661,7 +1581,7 @@ subcommand_search() {
 				# get and print all available modules in $mpath
 				# with respect to the requested releases
 				# tmpfile: module/version release group group-dependencies...
-				local mods=( $( get_available_modules2 \
+				local mods=( $( get_available_modules \
 						    "${mpath}" \
 						    "${module}" \
 						    "${opt_use_releases}" ) )
@@ -1675,8 +1595,9 @@ subcommand_search() {
 		print_result "${tmpfile}"
 		rm -f "${tmpfile}"
 	}
-
-	opts=$(pmodules::get_options -o 'ahH?' \
+	local opts=()
+	pmodules::get_options opts \
+			   -o 'ahH?' \
 			   -l help \
 			   -l no-header \
 			   -l print-modulefiles \
@@ -1686,8 +1607,8 @@ subcommand_search() {
 			   -l src: \
 			   -l print-variants \
 			   -l print-csv \
-			   --  "$@") || subcommand_help_${subcommand}
-	eval set --  "${opts}"
+			   --  "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
 	
 	while (( $# > 0 )); do
 		case $1 in
@@ -1766,9 +1687,9 @@ subcommand_search() {
 # help [module|sub-command]
 #
 subcommand_help() {
-	local opts=''
-	opts=$(pmodules::get_options -o HV\? -l version -l help -- "$@") || usage
-	eval set --  "${opts}"
+	local opts=()
+	pmodules::get_options opts -o HV\? -l version -l help -- "$@" || usage
+	eval set --  "${opts[@]}"
 	local arg=''
 	
 	while (( $# > 0 )); do
