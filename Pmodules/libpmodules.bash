@@ -6,7 +6,8 @@ if [[  -z ${sbindir} ]]; then
 fi
 
 pmodules::get_options() {
-	"${sbindir}/getopt" "$@"
+	local "$1"
+	std::upvar $1 $("${sbindir}/getopt" "${@:2}")
 }
 
 pmodules::check_env_vars() {
