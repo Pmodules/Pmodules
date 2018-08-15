@@ -432,6 +432,12 @@ pbuild::make_all() {
 	local variant=''
 	local depend_release=''
 	local -a runtime_dependencies=()
+
+	#
+	# everything set up?
+	#
+	[[ -n ${ModuleGroup} ]] || std::die 5 "Module group not set! Aborting ..."
+
 	#
 	# helper functions
 	#
