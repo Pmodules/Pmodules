@@ -249,7 +249,7 @@ set_full_module_name_and_prefix() {
 	# set PREFIX of module
 	PREFIX="${PMODULES_ROOT}/${ModuleGroup}/"
 	for ((i=${#module_name[@]}-1; i >= 0; i--)); do
-		PREFIX+="${module_name[i]}"
+		PREFIX+="${module_name[i]}/"
 	done
 }
 
