@@ -623,9 +623,9 @@ subcommand_load() {
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
-	local -r saved_MODULEPATH=${MODULEPATH}
-	local -a saved_modulepath=( "${modulepath[@]}" )
-	local -r saved_UsedReleases=( "${UsedReleases[@]}" )
+	#local -r saved_MODULEPATH=${MODULEPATH}
+	#local -a saved_modulepath=( "${modulepath[@]}" )
+	#local saved_UsedReleases=( "${UsedReleases[@]}" )
 
 	#
 	# Test whether a given module is available.
@@ -758,9 +758,9 @@ subcommand_load() {
 	fi
 	for m in "${args[@]}"; do
 		# restore original MODULEPATH; it might have been overwritten
-		MODULEPATH=${saved_MODULEPATH}
-		modulepath=${saved_modulepath}
-		UsedReleases=${saved_UsedReleases}
+		#MODULEPATH=${saved_MODULEPATH}
+		#modulepath=${saved_modulepath}
+		#UsedReleases=${saved_UsedReleases}
 		if [[ "$m" =~ ":" ]]; then
 
 			# extendet module name is either
@@ -820,12 +820,22 @@ subcommand_load() {
 			fi
 			continue
 		fi
+		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
+			std::die 3 "${CMD} load: module conflicts with already loaded module -- ${m}"
+		fi
 		if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]]; then
 			# modulefile is in our hierarchy
 			# ${prefix} was set in is_available()!
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
 		fi
-		"${modulecmd}" "${shell}" ${opts} load "${current_modulefile}"
+		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
+                    || std::die 1 "Oops: unable to create tmp file!"
+		"${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}"
+		error=$( < "${tmpfile}")
+		if [[ -n "${error}" ]]; then
+			echo "${error}" 1>&2
+			std::die 4 "${CMD} load: failed -- ${m}"
+		fi
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded."
 		fi
@@ -836,14 +846,13 @@ subcommand_load() {
 		fi
 	done
 	# restore original MODULEPATH; it might have been overwritten
-	MODULEPATH=${saved_MODULEPATH}
-	UsedReleases=${saved_UsedReleases}
+	#MODULEPATH=${saved_MODULEPATH}
+	#UsedReleases=${saved_UsedReleases}
 	#
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
-	for dir in "${saved_modulepath[@]}"; do
+	for dir in "${modulepath[@]}"; do
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
-		dir="${dir//\//\\/}"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
 	done
 	pbuild::export_env "${g_shell}" LOADEDMODULES
