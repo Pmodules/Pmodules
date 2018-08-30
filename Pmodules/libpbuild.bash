@@ -343,11 +343,37 @@ pbuild::add_configure_args() {
 	CONFIGURE_ARGS+=( "$@" )
 }
 
+configure_with='undef'
+	
+pbuild::use_autotools() {
+	if [[ -r "${SRC_DIR}/configure" ]]; then
+		configure_with='autotools'
+	else
+		std::die 3 "${FNCNAME[0]}: autotools configuration not available, aborting..."
+	fi
+}
+
+pbuild::use_cmake() {
+	if [[ -r "${SRC_DIR}/CMakeLists.txt" ]]; then
+		configure_with='cmake'
+	else
+		std::die 3 "${FNCNAME[0]}: CMake script not available, aborting..."
+	fi
+}
 
 pbuild::configure() {
-	${SRC_DIR}/configure \
-		--prefix="${PREFIX}" \
-		"${CONFIGURE_ARGS[@]}" || std::die 3 "configure failed"
+	if [[ -r "${SRC_DIR}/configure" ]] && [[ "${configure_with}" == 'undef' ]] || [[ "${configure_with}" == 'autotools' ]]; then
+		${SRC_DIR}/configure \
+			--prefix="${PREFIX}" \
+			"${CONFIGURE_ARGS[@]}" || std::die 3 "configure failed"
+	elif [[ -r "${SRC_DIR}/CMakeLists.txt" ]] && [[ "${configure_with}" == 'undef' ]] || [[ "${configure_with}" == "cmake" ]]; then
+		cmake \
+			-DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+			"${CONFIGURE_ARGS[@]}" \
+			"${SRC_DIR}" || std::die 3 "cmake failed"
+	else
+		std::info "${FUNCNAME[0]}: skipping..."
+	fi
 }
 
 pbuild::post_configure() {
@@ -645,7 +671,9 @@ pbuild::make_all() {
 			std::info "${P}/${V}: Installing documentation to ${docdir}"
 			install -m 0755 -d "${docdir}"
 			install -m0444 "${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
-						"${BUILD_SCRIPT}" "${docdir}"
+						"${BUILD_SCRIPT}" \
+						"${BUILDBLOCK_DIR}/modulefile" \
+						"${docdir}"
 		}
 
 		# unfortunatelly sometime we need an OS depended post-install
@@ -657,7 +685,9 @@ pbuild::make_all() {
 			return 0
 		}
 
+		cd "${BUILD_DIR}"
 		[[ "${OS}" == "Linux" ]] && post_install_linux
+		install_doc
 		return 0
 	}
 
@@ -762,6 +792,8 @@ pbuild::make_all() {
 		[[ "${build_target}" == "compile" ]] && return 0
 
 		build_target "${BUILD_DIR}" install
+		post_install
+
 		[[ "${build_target}" == "install" ]] && return 0
 
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
