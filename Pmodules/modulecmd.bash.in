@@ -623,9 +623,6 @@ subcommand_load() {
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
-	#local -r saved_MODULEPATH=${MODULEPATH}
-	#local -a saved_modulepath=( "${modulepath[@]}" )
-	#local saved_UsedReleases=( "${UsedReleases[@]}" )
 
 	#
 	# Test whether a given module is available.
@@ -689,22 +686,18 @@ subcommand_load() {
 	# Args:
 	#	none
 	output_load_hints() {
-		local output="The module '${m}' cannot be loaded!\n"
-		output+="Try with one of the following command(s):\n\n"
+		local output=''
 		local release=''
-		local -i n=0
 		while read -a line; do
 			release=${line[1]}
 			if [[ ! ":${UsedReleases}:" =~ "${release}" ]]; then
 				output+="module use ${release}; "
 			fi
 			output+="module load ${line[@]:3} ${line[0]}\n"
-			let n+=1
 		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
-		if (( n == 0 )); then
-		        std::info "The module '${m}' doesn't exist!"
-		else
- 			std::info "${output}"
+		if [[ -n "${output}" ]]; then
+			std::info "\nTry with one of the following command(s):\n"
+ 			std::die 3 "${output}"
 		fi
 	}
 
@@ -757,10 +750,6 @@ subcommand_load() {
 		std::die 2 "${CMD} load: No module specified."
 	fi
 	for m in "${args[@]}"; do
-		# restore original MODULEPATH; it might have been overwritten
-		#MODULEPATH=${saved_MODULEPATH}
-		#modulepath=${saved_modulepath}
-		#UsedReleases=${saved_UsedReleases}
 		if [[ "$m" =~ ":" ]]; then
 
 			# extendet module name is either
@@ -813,12 +802,9 @@ subcommand_load() {
 			fi
 		fi 
 		if ! is_available "${m}"; then
-			if [[ ${verbosity_lvl} == 'verbose' ]]; then
-			        output_load_hints
-			else
-				std::die 3 "${CMD} load: module unavailable -- ${m}"
-			fi
-			continue
+			std::info "${CMD} load: module unavailable -- ${m}"
+			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
+			std::die 3 ""
 		fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
 			std::die 3 "${CMD} load: module conflicts with already loaded module -- ${m}"
@@ -845,10 +831,6 @@ subcommand_load() {
 			_LMFILES_+=":${current_modulefile}"
 		fi
 	done
-	# restore original MODULEPATH; it might have been overwritten
-	#MODULEPATH=${saved_MODULEPATH}
-	#UsedReleases=${saved_UsedReleases}
-	#
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
 	for dir in "${modulepath[@]}"; do
