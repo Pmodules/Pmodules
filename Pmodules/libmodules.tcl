@@ -282,7 +282,15 @@ proc ModulesHelp { } {
 proc _pmodules_init_global_vars { } {
 	global	group
 	global  name
+	global	P
 	global  version
+	global	V
+	global	V_MAJOR
+	global	V_MINOR
+	global	V_PATCHLVL
+	global	V_RELEASE
+	global	V_PKG
+
 	global	implementation
 	global	PREFIX		# prefix of package
 
@@ -302,7 +310,11 @@ proc _pmodules_init_global_vars { } {
 	set	rel_modulefile	[lrange $modulefile [llength $pmodules_root] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	name		[lindex $modulefile end-1]
+	set	P		"${name}"
 	set	version		[lindex $modulefile end]
+	set 	V		"${version}"
+	lassign [split $V -] V_PKG V_RELEASE
+	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 	set	implementation	[lrange $rel_modulefile 2 end]
 	set	prefix		"$pmodules_root $group [lreverse_n $implementation 2]"
 	set	PREFIX		[file join {*}$prefix]
