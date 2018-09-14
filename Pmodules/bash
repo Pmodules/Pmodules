@@ -65,9 +65,9 @@ std::append_path () {
 
         if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
 		if [[ -z ${!P} ]]; then
-			eval $P="${d}"
+			eval $P=\"${d}\"
 		else
-			eval $P="${!P}:${d}"
+			eval $P=\"${!P}:${d}\"
         	fi
 	fi
 }
@@ -95,8 +95,8 @@ std::replace_path () {
 	local -r replacestr="$3"
 
 	local -r removestr=$(echo "${!path}" | tr ":" "\n" | grep -m 1 "^$removepat\$")
-    	export $path=$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
-                   sed '/^\s*$/d' | tr "\n" ":" | sed -e 's|^:||' -e 's|:$||')
+	export $path="$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
+                   sed '/^\s*$/d' | tr "\n" ":" | sed -e 's|^:||' -e 's|:$||')"
 }
 
 save_env() {
