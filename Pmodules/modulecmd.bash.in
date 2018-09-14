@@ -816,7 +816,9 @@ subcommand_load() {
 		fi
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
                     || std::die 1 "Oops: unable to create tmp file!"
-		"${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}"
+		local output=$("${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}")
+		echo "${output}"
+		eval "${output}"
 		error=$( < "${tmpfile}")
 		if [[ -n "${error}" ]]; then
 			echo "${error}" 1>&2
@@ -825,18 +827,13 @@ subcommand_load() {
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded."
 		fi
-		if [[ -z "${_LMFILES_}" ]]; then
-			_LMFILES_="${current_modulefile}"
-		else
-			_LMFILES_+=":${current_modulefile}"
-		fi
 	done
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
-	for dir in "${modulepath[@]}"; do
+	while read dir; do
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
-	done
+	done <<< "${MODULEPATH//:/$'\n'}"
 	pbuild::export_env "${g_shell}" LOADEDMODULES
 }
 
