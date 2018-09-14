@@ -672,11 +672,15 @@ pbuild::make_all() {
 			install -m 0755 -d "${docdir}"
 			install -m0444 "${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
 						"${BUILD_SCRIPT}" \
-						"${BUILDBLOCK_DIR}/modulefile" \
 						"${docdir}"
+			# skip modulefile if it does not exist
+			# (e.g. while bootstrapping)
+			test -r "${BUILDBLOCK_DIR}/modulefile" && \
+				install -m0444 "$_" "${docdir}"
+			return 0
 		}
 
-		# unfortunatelly sometime we need an OS depended post-install
+		# sometime we need an OS depended post-install
 		post_install_linux() {
 			std::info "${P}/${V}: running post-installation for ${OS} ..."
 			cd "${PREFIX}"
@@ -770,6 +774,7 @@ pbuild::make_all() {
 			cd "${dir}" && "pbuild::${target}"
 			cd "${dir}" && "pbuild::post_${target}_${OS}"
 			cd "${dir}" && "pbuild::post_${target}"
+			mkdir -p "${BUILD_DIR}"
 			touch "${BUILD_DIR}/.${target}"
 		fi
 	}
