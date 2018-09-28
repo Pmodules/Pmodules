@@ -68,7 +68,7 @@ declare -r  OS=$(uname -s)
 declare -x  ModuleName=''
 
 # group this module is in (ex: 'Programming')
-declare -x  ModuleGroup=''
+declare -x  GROUP=''
 
 # release of module (ex: 'stable')
 declare	-x  ModuleRelease=''
@@ -77,8 +77,10 @@ declare	-x  ModuleRelease=''
 # abs. path is "${PREFIX}/${_docdir}/$P"
 declare -r  _DOCDIR='share/doc'
 
-declare	SOURCE_URL=()
-declare SOURCE_SHA256=()
+declare	SOURCE_URLS=()
+declare SOURCE_SHA256_SUMS=()
+declare SOURCE_NAMES=()
+
 declare	SOURCE_FILE=()
 declare	CONFIGURE_ARGS=()
 
@@ -89,7 +91,7 @@ declare	CONFIGURE_ARGS=()
 #
 
 # install prefix of module.
-# i.e:: ${PMODULES_ROOT}/${ModuleGroup)/${ModuleName}
+# i.e:: ${PMODULES_ROOT}/${GROUP)/${ModuleName}
 declare -x  PREFIX=''
 
 ##############################################################################
@@ -128,7 +130,7 @@ pbuild::add_to_group() {
 	if [[ -z ${1} ]]; then
 		std::die 42 "${FUNCNAME}: Missing group argument."
 	fi
-	ModuleGroup="$1"
+	GROUP="$1"
 	set_full_module_name_and_prefix
 }
 
@@ -139,10 +141,7 @@ pbuild::add_to_group() {
 # Arguments:
 #   $@: documentation files relative to source
 #
-pbuild::set_docfiles() {
-	MODULE_DOCFILES=("$@")
-}
-pbuild::add_docfile() {
+pbuild::install_docfiles() {
 	MODULE_DOCFILES+=("$@")
 }
 
@@ -194,8 +193,10 @@ pbuild::module_is_avail() {
 }
 
 pbuild::set_download_url() {
-	SOURCE_URL+=( "$1" )
-	SOURCE_SHA256+=( "$2" )
+	local -i i=${#SOURCE_URLS[@]}
+	SOURCE_URLS[i]="$1"
+	SOURCE_SHA256_SUMS[i]="$2"
+	SOURCE_NAMES[i]="$3"
 }
 
 pbuild::use_cc() {
@@ -216,19 +217,39 @@ pbuild::use_cc() {
 # Arguments:
 #   $1:	    store file name with upvar here
 #   $2:	    download URL 
-#   $3...:  download directories
+#   $3:	    SHA256 hash sum (can be empty string)
+#   $4:	    output filename (can be empty string)
+#   $5...:  download directories
 #
 # Returns:
 #   0 on success otherwise a value > 0
 #
 download_source_file() {
+	check_hash_sum() {
+		local -r fname="$1"
+		local -r expected_hash_sum="$2"
+		local hash_sum=''
+
+		if which 'sha256sum' 1>/dev/null; then
+			hash_sum=$(sha256sum "${fname}" | awk '{print $1}')
+		elif which 'shasum' 1>/dev/null; then
+			hash_sum=$(shasum -a 256 "${fname}" | awk '{print $1}')
+		else
+			std::die 42 "Binary to compute SHA256 sum missing!"
+		fi
+		test "${hash_sum}" == "${expected_hash_sum}" || std::die 42 \
+			"$P/$V: hash-sum missmatch for file '%s'" "${fname}"
+	}
+
 	local "$1"
 	local var="$1"
 	local -r url="$2"
-	shift 2
+	local -r sha256_sum="$3"
+	local    fname="$4"
+	shift 4
 	dirs+=( "$@" )
 
-	local -r fname="${url##*/}"
+	[[ -n "${fname}" ]] || fname="${url##*/}"
 	local expr='s/.*\(.tar.bz2\|.tbz2\|.tar.gz\|.tgz\|.tar.xz\|.zip\)/\1/'
 	local -r extension=$(echo ${fname} | sed "${expr}")
 	local dir=''
@@ -256,6 +277,9 @@ download_source_file() {
 				std::die 4 "Error in download URL: unknown download method '${method}'!"
 				;;
                 esac
+	fi
+	if [[ -n "${sha256_sum}" ]]; then
+		check_hash_sum "${dir}/${fname}" "${sha256_sum}"
 	fi
 	std::upvar "${var}" "${dir}/${fname}"
 	[[ -r "${dir}/${fname}" ]]
@@ -297,15 +321,18 @@ pbuild::prep() {
 		done
 	}
 
-	[[ -z "${SOURCE_URL}" ]] && std::die 3 "Download source not set!"
-	download_source_file \
-	    SOURCE_FILE \
-	    "${SOURCE_URL}" \
-	    "${PMODULES_DISTFILESDIR}" \
-	    "${BUILDBLOCK_DIR}" ||
-	        std::die 4 "$P/$V: sources for not found."
-	[[ -z "${SOURCE_FILE}" ]] && std::die 3 "Source file not set!"
-	unpack "${SOURCE_FILE}" "${SRC_DIR}"
+	[[ -z "${SOURCE_URLS}" ]] && std::die 3 "Download source not set!"
+	for ((i = 0; i < ${#SOURCE_URLS[@]}; i++)); do
+		download_source_file \
+		    SOURCE_FILE \
+		    "${SOURCE_URLS[i]}" \
+		    "${SOURCE_SHA256_SUMS[i]}" \
+		    "${SOURCE_NAMES[i]}" \
+		    "${PMODULES_DISTFILESDIR}" \
+		    "${BUILDBLOCK_DIR}" ||
+		        std::die 4 "$P/$V: sources for not found."
+		unpack "${SOURCE_FILE}" "${SRC_DIR}"
+	done
 	patch_sources
 	# create build directory
 	mkdir -p "${BUILD_DIR}"
@@ -462,7 +489,7 @@ pbuild::make_all() {
 	#
 	# everything set up?
 	#
-	[[ -n ${ModuleGroup} ]] || std::die 5 "Module group not set! Aborting ..."
+	[[ -n ${GROUP} ]] || std::die 5 "Module group not set! Aborting ..."
 
 	#
 	# helper functions
@@ -523,10 +550,13 @@ pbuild::make_all() {
 	
 	#......................................................................
 	#
-	# build dependencies can be defined
-	# - on the command line via '--with=MODULE/VERSION'
-	# - in a 'variants' file
-	# - in the build block
+	# Load build- and run-time dependencies.
+	#
+	# The modules passed with the '--with' arguments are used to select
+	# the variant. The last matching line in the variants file will be
+	# used.
+	#
+	# All dependencies must be specified in the variants-file!
 	#
 	# Arguments:
 	#   none
@@ -538,21 +568,17 @@ pbuild::make_all() {
 	#
 	load_build_dependencies() {
 		local m
-		if [[ -n "${variants_file}" ]]; then
-		        # :FIXME:
-			# handle conflicts in modules specified via command-line
-			# argument and variants file
-		        local pattern="/^$P\/$V[[:blank:]]/"
-			for m in "${with_modules[@]}"; do 
-				pattern+=" && /${m//\//\\/}/"
-			done
-			variant=$(awk "${pattern}" "${variants_file}" | tail -1)
-			local variant_release=$(awk '{printf $2}' <<< "${variant}")
-			if [[ -n "${variant_release}" ]]; then
-				ModuleRelease="${variant_release}"
-			fi
-			with_modules+=( $(awk "{for (i=3; i<=NF; i++) printf \$i \" \"}" <<< "${variant}" ) )
+	        local pattern="/^$P\/$V[[:blank:]]/"
+		for m in "${with_modules[@]}"; do 
+			pattern+=" && /${m//\//\\/}/"
+		done
+		variant=$(awk "${pattern}" "${variants_file}" | tail -1)
+		test -n "${variant}" || std::die 10 "$P/$V: no suitable variant found!"
+		local variant_release=$(awk '{printf $2}' <<< "${variant}")
+		if [[ -n "${variant_release}" ]]; then
+			ModuleRelease="${variant_release}"
 		fi
+		with_modules=( $(awk "{for (i=3; i<=NF; i++) printf \$i \" \"}" <<< "${variant}" ) )
 
 		for m in "${with_modules[@]}"; do
 			# :FIXME:
@@ -666,19 +692,52 @@ pbuild::make_all() {
 	# non-redefinable post-install
 	post_install() {
 		install_doc() {
+			test -n "${MODULE_DOCFILES}" || return 0
 			local -r docdir="${PREFIX}/${_DOCDIR}/$P"
 
 			std::info "${P}/${V}: Installing documentation to ${docdir}"
 			install -m 0755 -d "${docdir}"
 			install -m0444 "${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
-						"${BUILD_SCRIPT}" \
 						"${docdir}"
-			# skip modulefile if it does not exist
-			# (e.g. while bootstrapping)
-			test -r "${BUILDBLOCK_DIR}/modulefile" && \
-				install -m0444 "$_" "${docdir}"
 			return 0
 		}
+
+		#..............................................................
+		# install build-block
+		# Skip installation if modulefile does not exist.
+		install_pmodules_files() {
+			test -r "${BUILDBLOCK_DIR}/modulefile" || return 0
+
+			local -r target_dir="${PREFIX}/share/Pmodules/Tools/gnuplot"
+			install -m 0756 -d "${target_dir}/files"
+			install -m0444 "${BUILD_SCRIPT}" "${target_dir}"
+			install -m0444 "${BUILDBLOCK_DIR}/modulefile" "${target_dir}"
+			install -m0444 "${variants_file}" "${target_dir}/files"
+
+			local -r fname="${target_dir}/dependencies"
+			"${MODULECMD}" bash list -t 2>&1 1>/dev/null | \
+					grep -v "Currently Loaded" > "${fname}" || :
+		}
+
+		#..............................................................
+		# write run time dependencies to file
+		write_runtime_dependencies() {
+			local -r fname="${PREFIX}/.dependencies"
+			std::info "${P}/${V}: writing run-time dependencies to ${fname} ..."
+			local dep
+			echo -n "" > "${fname}"
+			for dep in "${runtime_dependencies[@]}"; do
+				[[ -z $dep ]] && continue
+				if [[ ! $dep =~ .*/.* ]]; then
+					# no version given: derive the version
+					# from the currently loaded module
+					dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null \
+							| grep "^${dep}/" )
+				fi
+				echo "${dep}" >> "${fname}"
+			done
+		}
+
 
 		# sometime we need an OS depended post-install
 		post_install_linux() {
@@ -692,35 +751,11 @@ pbuild::make_all() {
 		cd "${BUILD_DIR}"
 		[[ "${OS}" == "Linux" ]] && post_install_linux
 		install_doc
+		install_pmodules_files
+		write_runtime_dependencies
 		return 0
 	}
 
-	#......................................................................
-	# write run time dependencies to file
-	write_runtime_dependencies() {
-		local -r fname="${PREFIX}/.dependencies"
-		std::info "${P}/${V}: writing run-time dependencies to ${fname} ..."
-		local dep
-		echo -n "" > "${fname}"
-		for dep in "${runtime_dependencies[@]}"; do
-			[[ -z $dep ]] && continue
-			if [[ ! $dep =~ .*/.* ]]; then
-				# no version given: derive the version from the currently
-				# loaded modules
-				dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep "${dep}/" )
-			fi
-			echo "${dep}" >> "${fname}"
-		done
-	}
-
-	#......................................................................
-	# Write all loaded modules as build dependencies to file.
-	write_build_dependencies() {
-		local -r fname="${PREFIX}/.build_dependencies"
-		std::info "${P}/${V}: writing build dependencies to ${fname} ..."
-		"${MODULECMD}" bash list -t 2>&1 1>/dev/null | grep -v "Currently Loaded" > "${fname}" || :
-	}
-	
  	#......................................................................
 	# Install modulefile
 	install_modulefile() {
@@ -731,7 +766,7 @@ pbuild::make_all() {
 		fi
 		# assemble name of modulefile
 		local dst="${PMODULES_ROOT}/"
-		dst+="${ModuleGroup}/"
+		dst+="${GROUP}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
 		dst+="${ModuleName}"  # = group hierarchy + name/version
 
@@ -748,7 +783,7 @@ pbuild::make_all() {
 	install_module_release_file() {
 		# directory where to install module- and release-file
 		local target_dir="${PMODULES_ROOT}/"
-		target_dir+="${ModuleGroup}/"
+		target_dir+="${GROUP}/"
 		target_dir+="${PMODULES_MODULEFILES_DIR}/"
 		target_dir+="${ModuleName%/*}"  # = group hierarchy + name
 
@@ -761,7 +796,7 @@ pbuild::make_all() {
 		local dir="$1"
 		local target="$2"
 		if [[ ! -e "${BUILD_DIR}/.${target}" ]] || \
-		   [[ ${force_rebuild} == 'yes' ]]; then
+			[[ ${force_rebuild} == 'yes' ]]; then
 			# We cd into the dir before every function call -
 			# just in case there was a cd in the called function.
 			# 
@@ -774,7 +809,6 @@ pbuild::make_all() {
 			cd "${dir}" && "pbuild::${target}"
 			cd "${dir}" && "pbuild::post_${target}_${OS}"
 			cd "${dir}" && "pbuild::post_${target}"
-			mkdir -p "${BUILD_DIR}"
 			touch "${BUILD_DIR}/.${target}"
 		fi
 	}
@@ -786,6 +820,7 @@ pbuild::make_all() {
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 		check_compiler
 		mkdir -p "${SRC_DIR}"
+		mkdir -p "${BUILD_DIR}"
 
 		build_target "${SRC_DIR}" prep
 		[[ "${build_target}" == "prep" ]] && return 0
@@ -816,8 +851,7 @@ pbuild::make_all() {
 		load_build_dependencies
 		set_full_module_name_and_prefix
 		set_module_release
-		if [[ ! -d "${PREFIX}" ]] || \
-		       [[ "${force_rebuild}" == 'yes' ]]; then
+		if [[ ! -d "${PREFIX}" ]] || [[ "${force_rebuild}" == 'yes' ]]; then
 			build_module
 			install_modulefile
 		else
