@@ -214,6 +214,18 @@ proc _pmodules_setenv { PREFIX name version } {
 		}
 	}
 
+	if { [file isdirectory "$PREFIX/lib/pkgconfig"] } {
+		if { [lsearch ${::dont-setenv} "PKG_CONFIG_PATH"] == -1 } {
+			prepend-path	PKG_CONFIG_PATH		$PREFIX/lib/pkgconfig
+		}
+	}
+
+	if { [file isdirectory "$PREFIX/lib/cmake"] } {
+		if { [lsearch ${::dont-setenv} "CMAKE_MODULE_PATH"] == -1 } {
+			prepend-path	CMAKE_MODULE_PATH	$PREFIX/lib/cmake
+		}
+	}
+
 	debug "prepend to library paths (64bit)"
 	if { [file isdirectory "$PREFIX/lib64"] } {
 		if { [lsearch ${::dont-setenv} "LIBRARY_PATH"] == -1 } {
@@ -281,6 +293,7 @@ proc ModulesHelp { } {
 #
 proc _pmodules_init_global_vars { } {
 	global	group
+	global  GROUP
 	global  name
 	global	P
 	global  version
@@ -309,6 +322,7 @@ proc _pmodules_init_global_vars { } {
 	debug	"modulefile is inside our root"
 	set	rel_modulefile	[lrange $modulefile [llength $pmodules_root] end]
 	set	group		[lindex $rel_modulefile 0]
+	set	GROUP		"${group}"
 	set	name		[lindex $modulefile end-1]
 	set	P		"${name}"
 	set	version		[lindex $modulefile end]
