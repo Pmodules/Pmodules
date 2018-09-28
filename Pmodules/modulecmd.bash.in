@@ -1439,7 +1439,6 @@ subcommand_search() {
 	local src_prefix=''
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
-	local opt_print_variants='no'
 	local opt_print_csv='no'
 	local opt_use_releases=':'
 	local -r fmt="%-20s %-10s %-12s %-s\n"
@@ -1461,7 +1460,6 @@ subcommand_search() {
 	# variables used from enclosing function:
 	#   opt_print_header
 	#   opt_print_modulefiles
-	#   opt_print_variants
 	#   with_modules
 	#
 	print_result() {
@@ -1478,48 +1476,6 @@ subcommand_search() {
 				done
 				out+="${line[0]}"
 				std::info "${out}"
-			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
-		elif [[ "${opt_print_variants}" == "yes" ]]; then
-			while read -a toks; do
-				unset deps
-
-				# build prefix for this module
-				local prefix="${PMODULES_ROOT}/${toks[2]}/${toks[0]}/"
-				for ((i=${#toks[@]}-1; i>=3; i--)); do
-					prefix+="${toks[i]}/"
-				done
-				# read dependencies
-				local -a ordered_deps=()
-				local d
-				local -A deps
-				if [[ -r "${prefix}/.build_dependencies" ]]; then
-					readarray -t ordered_deps < "${prefix}/.build_dependencies"
-					for d in "${ordered_deps[@]}"; do
-						[[ -z $d ]] && continue
-						deps[$d]='b:'
-					done
-				fi
-				if [[ -r "${prefix}/.dependencies" ]]; then
-					local -a rdeps
-					readarray -t rdeps < "${prefix}/.dependencies"
-					for d in "${rdeps[@]}"; do
-						[[ -z $d ]] && continue
-						if [[ ${deps[$d]+isset} ]]; then
-							# is a build- and run-time dependency
-							deps[$d]=''
-						else
-							# is a run-time dependency only
-							ordered_deps+=( "$d" )
-							deps[$d]='r:'
-						fi
-					done
-				fi
-				local dependecies=''
-				for d in "${ordered_deps[@]}"; do
-					[[ -z $d ]] && continue
-					dependecies+="${deps[$d]}$d "
-				done
-				printf "%-20s %-10s %-s\n" "${toks[0]}" "${toks[1]}" "${dependecies}" 1>&2
 			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
 		elif [[ "${opt_print_csv}" == "yes" ]]; then
 			while read -a toks; do
@@ -1593,7 +1549,6 @@ subcommand_search() {
 			   -l with: \
 			   -l all-releases \
 			   -l src: \
-			   -l print-variants \
 			   -l print-csv \
 			   --  "$@" || subcommand_help_${subcommand}
 	eval set --  "${opts[@]}"
@@ -1631,12 +1586,6 @@ subcommand_search() {
 				src_prefix=$2
 				pmodules::check_directories "${src_prefix}"
 				shift
-				;;
-			--print-variants )
-				opt_print_variants='yes'
-				opt_print_header='no'
-				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
-				:
 				;;
 			-\? | -h | -H | --help )
 				usage
