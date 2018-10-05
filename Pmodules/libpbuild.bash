@@ -61,7 +61,7 @@ unset	F90
 #..............................................................................
 # global variables used in the library
 
-declare -r  OS=$(uname -s)
+declare -r  OS="${SYSTEM}"
 
 # module name including path in hierarchy and version
 # (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
@@ -114,9 +114,9 @@ pbuild::compile_in_sourcetree() {
 #
 pbuild::supported_os() {
 	for os in "$@"; do
-		[[ ${os} == ${OS} ]] && return 0
+		[[ ${os} == ${SYSTEM} ]] && return 0
 	done
-	std::die 1 "${P}: Not available for ${OS}."
+	std::die 1 "${P}: Not available for ${SYSTEM}."
 }
 
 ##############################################################################
@@ -288,12 +288,12 @@ download_source_file() {
 pbuild::pre_prep() {
 	:
 }
-eval "pbuild::pre_prep_${OS}() { :; }"
+eval "pbuild::pre_prep_${SYSTEM}() { :; }"
 
 pbuild::post_prep() {
 	:
 }
-eval "pbuild::post_prep_${OS}() { :; }"
+eval "pbuild::post_prep_${SYSTEM}() { :; }"
 
 ###############################################################################
 #
@@ -347,7 +347,7 @@ pbuild::add_patch() {
 	PATCH_FILES+=( "$1" )
 	PATCH_STRIPS+=( "$2" )
 }
-eval "pbuild::add_patch_${OS}() { pbuild::add_patch \"\$@\"; }"
+eval "pbuild::add_patch_${SYSTEM}() { pbuild::add_patch \"\$@\"; }"
 
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || std::die 1 "Missing argument to '${FUNCNAME}'!"
@@ -360,7 +360,7 @@ pbuild::set_default_patch_strip() {
 pbuild::pre_configure() {
 	:
 }
-eval "pbuild::pre_configure_${OS}() { :; }"
+eval "pbuild::pre_configure_${SYSTEM}() { :; }"
 
 pbuild::set_configure_args() {
 	CONFIGURE_ARGS+=( "$@" )
@@ -406,12 +406,12 @@ pbuild::configure() {
 pbuild::post_configure() {
 	:
 }
-eval "pbuild::post_configure_${OS}() { :; }"
+eval "pbuild::post_configure_${SYSTEM}() { :; }"
 
 pbuild::pre_compile() {
 	:
 }
-eval "pbuild::pre_compile_${OS}() { :; }"
+eval "pbuild::pre_compile_${SYSTEM}() { :; }"
 
 pbuild::compile() {
 	make -j${JOBS}
@@ -420,12 +420,12 @@ pbuild::compile() {
 pbuild::post_compile() {
 	:
 }
-eval "pbuild::post_compile_${OS}() { :; }"
+eval "pbuild::post_compile_${SYSTEM}() { :; }"
 
 pbuild::pre_install() {
 	:
 }
-eval "pbuild::pre_install_${OS}() { :; }"
+eval "pbuild::pre_install_${SYSTEM}() { :; }"
 
 pbuild::install() {
 	make install
@@ -434,7 +434,7 @@ pbuild::install() {
 pbuild::post_install() {
 	:
 }
-eval "pbuild::post_install_${OS}() { :; }"
+eval "pbuild::post_install_${SYSTEM}() { :; }"
 
 pbuild::cleanup_build() {
 	[[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
@@ -612,7 +612,8 @@ pbuild::make_all() {
 			        build_dependency "$m"
 			fi
 
-			local release=( $("${MODULECMD}" bash avail -a -m $m 2>&1 1>/dev/null | awk "/^${m/\//\\/}[[:blank:]]/ {print \$2}" ))
+			local release=( $("${MODULECMD}" bash avail -a -m $m 2>&1 1>/dev/null \
+						  | awk "/^${m/\//\\/}[[:blank:]]/ {print \$2}" ))
 			[[ -z "${release}" ]] && std::die 5 "Internal error..."
 
 			if [[ ${release} == deprecated ]]; then
@@ -708,7 +709,7 @@ pbuild::make_all() {
 		install_pmodules_files() {
 			test -r "${BUILDBLOCK_DIR}/modulefile" || return 0
 
-			local -r target_dir="${PREFIX}/share/Pmodules/Tools/gnuplot"
+			local -r target_dir="${PREFIX}/share/$GROUP/$P"
 			install -m 0756 -d "${target_dir}/files"
 			install -m0444 "${BUILD_SCRIPT}" "${target_dir}"
 			install -m0444 "${BUILDBLOCK_DIR}/modulefile" "${target_dir}"
@@ -739,9 +740,9 @@ pbuild::make_all() {
 		}
 
 
-		# sometime we need an OS depended post-install
+		# sometimes we need an system depended post-install
 		post_install_linux() {
-			std::info "${P}/${V}: running post-installation for ${OS} ..."
+			std::info "${P}/${V}: running post-installation for ${SYSTEM} ..."
 			cd "${PREFIX}"
 			# solve multilib problem with LIBRARY_PATH on 64bit Linux
 			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
@@ -749,7 +750,7 @@ pbuild::make_all() {
 		}
 
 		cd "${BUILD_DIR}"
-		[[ "${OS}" == "Linux" ]] && post_install_linux
+		[[ "${SYSTEM}" == "Linux" ]] && post_install_linux
 		install_doc
 		install_pmodules_files
 		write_runtime_dependencies
@@ -804,10 +805,10 @@ pbuild::make_all() {
 			# work because in some function global variables 
 			# might to be set.
 			#
-			cd "${dir}" && "pbuild::pre_${target}_${OS}"
+			cd "${dir}" && "pbuild::pre_${target}_${SYSTEM}"
 			cd "${dir}" && "pbuild::pre_${target}"
 			cd "${dir}" && "pbuild::${target}"
-			cd "${dir}" && "pbuild::post_${target}_${OS}"
+			cd "${dir}" && "pbuild::post_${target}_${SYSTEM}"
 			cd "${dir}" && "pbuild::post_${target}"
 			touch "${BUILD_DIR}/.${target}"
 		fi
@@ -853,14 +854,14 @@ pbuild::make_all() {
 		set_module_release
 		if [[ ! -d "${PREFIX}" ]] || [[ "${force_rebuild}" == 'yes' ]]; then
 			build_module
-			install_modulefile
+			opt_update_modulefiles='yes'
 		else
  			std::info "${P}/${V}: already exists, not rebuilding ..."
-			if [[ "${opt_install_modulefile}" == "yes" ]]; then
-				install_modulefile
-			fi
 		fi
-		install_module_release_file
+		if [[ "${opt_update_modulefiles}" == "yes" ]]; then
+			install_modulefile
+			install_module_release_file
+		fi
 	else
 		#check_and_setup_env_bootstrap
 		build_module
