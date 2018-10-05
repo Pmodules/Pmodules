@@ -19,10 +19,46 @@ declare -r  PMODULES_BUILD_CONFIG='modbuild.conf'
 #
 usage() {
 	std::error "
-Usage: $0 [OPTIONS..] [BUILD_SCRIPT] [VERSION]
+USAGE:
+        $0 [options..] [build_script] version
 
-VERSION
-        Version of module to compile.
+MANDATORY ARGUMENTS:
+
+version
+        Variant of module to build.
+
+SELECT VARIANT TO BUILD:
+
+--system
+        Specify the system for selecting a variants. Defaults to the
+	output of 'uname -s'.
+
+--with=P/V
+        Select variant to compile. Use multiple '--with' arguments
+	to make the selected variant unique.
+
+BUILD-STEPS OPTIONS:
+
+--prep
+	Prepare sources: unpack sources and apply patches only.
+
+--configure
+	Prepare and configure sources.
+
+--compile
+	Prepare, configure and compile everything.
+
+--install
+	Prepare, configure and compile everything. Finally run install
+	step. Do not cleanup build and source directory.
+
+--all
+	Run throu all steps including cleanup.
+
+--update-modulefiles
+	Only install the modulefile and set the release.
+
+MISCELLANEOUS OPTIONS:
 
 -? | -h | --help
         Print usage
@@ -39,45 +75,27 @@ VERSION
 --dry-run
 	Dry run.
 
---enable-cleanup-build
-	Cleanup files in the build directory (default).
-
---enable-cleanup-src
-	Cleanup files in the source directory.
-
---disable-cleanup
-	Keep files in build and source directory
-
 --disable-cleanup-build
-	Keep files in build directory.
+--enable-cleanup-build
+	Cleanup files in the build directory. Default is to remove.
+      	all files in the build-directory.
 
 --disable-cleanup-src
-	Keep files in source directory (default).
+--enable-cleanup-src
+	Cleanup files in the source directory. Default is to
+	remove all files in the source directory.
 
---variant-flavor
-        Specify which flavor of variants file to use
+--disable-cleanup
+--enable-cleanup
+	Cleanup all files in temporyry directory. Default is to
+	remove all files created during building.
 
---with=P/V
-        Preload module P with version V. To preload multiple modules,
-        use this option per module. Order may matter!
+--distdir
+	Directory wwhere to store and lookup downloaded files.
 
---release=stable|unstable|deprecated
+--tmpdir
+        Directory used for building a module.
 
---prep
-	Unpack sources only.
-
---configure
-	Unpack sources and configure build.
-
---compile
-	Unpack sources, configure build and compile software
-
---install
-	Unpack sources, configure build, compile software and install.
-
---all
-	Do everything, this step includes cleanup files and setting 
-	the symbolic link to the modulefile.
 "
 	exit 1
 }
@@ -139,12 +157,12 @@ parse_args() {
 		--tmpdir=* )
 			TEMP_DIR=${1/--tmpdir=}
 			;;
-		--variant-flavor )
-			variant_flavor=".$2"
+		--system )
+			SYSTEM=".$2"
 			shift
 			;;
-		--variant-flavor=* )
-			variant_flavor="${1/*=}"
+		--system=* )
+			SYSTEM=".${1/*=}"
 			;;
 		--with )
 			with_modules+=( "$2" )
@@ -160,8 +178,8 @@ parse_args() {
 		--bootstrap )
 			bootstrap='yes'
 			;;
-		--install-modulefile )
-			opt_install_modulefile='yes'
+		--update-modulefiles )
+			opt_update_modulefiles='yes'
 			;;
 		-* )
 			std::die 1 "${prog}: invalid option -- '$1'"
@@ -339,23 +357,19 @@ setup_env_for_bootstrapping() {
 #   none
 #
 # Used global variables:
-#   OS
+#   SYSTEM
 #   BUILDBLOCK_DIR
 #   variants_file [out]
 #
 search_variants_file() {
 	local -a eligible_variants_files=()
-	eligible_variants_files+=( "${V%.*.*}/variants${variant_flavor}" )
-	eligible_variants_files+=( "${V%.*.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*.*}/variants.${SYSTEM}" )
 	eligible_variants_files+=( "${V%.*.*}/variants" )
-	eligible_variants_files+=( "${V%.*}/variants${variant_flavor}" )
-	eligible_variants_files+=( "${V%.*}/variants.${OS}" )
+	eligible_variants_files+=( "${V%.*}/variants.${SYSTEM}" )
 	eligible_variants_files+=( "${V%.*}/variants" )
-	eligible_variants_files+=( "${V}/variants${variant_flavor}" )
-	eligible_variants_files+=( "${V}/variants.${OS}" )
+	eligible_variants_files+=( "${V}/variants.${SYSTEM}" )
 	eligible_variants_files+=( "${V}/variants" )
-	eligible_variants_files+=( "files/variants${variant_flavor}" )
-	eligible_variants_files+=( "files/variants.${OS}" )
+	eligible_variants_files+=( "files/variants.${SYSTEM}" )
 	eligible_variants_files+=( "files/variants" )
 
 	for variants_file in "${eligible_variants_files[@]}"; do
@@ -381,8 +395,8 @@ declare enable_cleanup_src='no'
 declare build_target='all'
 declare bootstrap='no'
 declare variants_file=''
-declare variant_flavor='__not_set__'
-declare opt_install_modulefile=''
+declare SYSTEM="$(uname -s)"
+declare opt_update_modulefiles='no'
 
 # array collecting all modules specified on the command line via '--with=module'
 declare -a with_modules=()
