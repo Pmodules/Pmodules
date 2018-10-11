@@ -112,11 +112,9 @@ pbuild::compile_in_sourcetree() {
 # Arguments:
 #   $@: supported opertating systems (as printed by 'uname -s')
 #
-pbuild::supported_os() {
-	for os in "$@"; do
-		[[ ${os} == ${SYSTEM} ]] && return 0
-	done
-	std::die 1 "${P}: Not available for ${SYSTEM}."
+SUPPORTED_SYSTEMS=()
+pbuild::supported_systems() {
+	SUPPORTED_SYSTEMS+=( "$@" )
 }
 
 ##############################################################################
@@ -147,34 +145,6 @@ pbuild::install_docfiles() {
 
 ##############################################################################
 #
-# Set supported compilers.
-#
-# Arguments:
-#   $@: compilers
-#
-pbuild::set_supported_compilers() {
-	MODULE_SUPPORTED_COMPILERS=("$@")
-}
-
-
-##############################################################################
-#
-# Test whether a module with the given name already exists.
-#
-# Arguments:
-#   $1: module name
-#
-# Notes:
-#   The passed module name should be NAME/VERSION
-#   :FIXME: this does not really work in a hierarchical group without 
-#           adding the dependencies...
-#
-pbuild::module_exists() {
-	[[ -n $("${MODULECMD}" bash search -a --no-header "$1" 2>&1 1>/dev/null) ]]
-}
-
-##############################################################################
-#
 # Test whether a module with the given name is available. If yes, return
 # release
 #
@@ -195,8 +165,11 @@ pbuild::module_is_avail() {
 pbuild::set_download_url() {
 	local -i i=${#SOURCE_URLS[@]}
 	SOURCE_URLS[i]="$1"
-	SOURCE_SHA256_SUMS[i]="$2"
-	SOURCE_NAMES[i]="$3"
+	SOURCE_NAMES[i]="$2"
+}
+
+pbuild::set_sha256sum() {
+	SOURCE_SHA256_SUMS+=("$1")
 }
 
 pbuild::use_cc() {
@@ -217,9 +190,8 @@ pbuild::use_cc() {
 # Arguments:
 #   $1:	    store file name with upvar here
 #   $2:	    download URL 
-#   $3:	    SHA256 hash sum (can be empty string)
-#   $4:	    output filename (can be empty string)
-#   $5...:  download directories
+#   $3:	    output filename (can be empty string)
+#   $4...:  download directories
 #
 # Returns:
 #   0 on success otherwise a value > 0
@@ -244,9 +216,8 @@ download_source_file() {
 	local "$1"
 	local var="$1"
 	local -r url="$2"
-	local -r sha256_sum="$3"
-	local    fname="$4"
-	shift 4
+	local    fname="$3"
+	shift 3
 	dirs+=( "$@" )
 
 	[[ -n "${fname}" ]] || fname="${url##*/}"
@@ -278,6 +249,13 @@ download_source_file() {
 				;;
                 esac
 	fi
+	local sha256_sum=''
+	local hash=''
+	for hash in "${SOURCE_SHA256_SUMS[@]}"; do
+		if [[ ${hash} =~ $fname: ]]; then
+			sha256_sum="${hash#*:}"
+		fi
+	done
 	if [[ -n "${sha256_sum}" ]]; then
 		check_hash_sum "${dir}/${fname}" "${sha256_sum}"
 	fi
@@ -326,7 +304,6 @@ pbuild::prep() {
 		download_source_file \
 		    SOURCE_FILE \
 		    "${SOURCE_URLS[i]}" \
-		    "${SOURCE_SHA256_SUMS[i]}" \
 		    "${SOURCE_NAMES[i]}" \
 		    "${PMODULES_DISTFILESDIR}" \
 		    "${BUILDBLOCK_DIR}" ||
@@ -352,6 +329,10 @@ eval "pbuild::add_patch_${SYSTEM}() { pbuild::add_patch \"\$@\"; }"
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || std::die 1 "Missing argument to '${FUNCNAME}'!"
 	PATCH_STRIP_DEFAULT="$1"
+}
+
+pbuild::use_flag() {
+	[[ "${USE_FLAGS}" =~ ":${1}:" ]]
 }
 
 ###############################################################################
@@ -389,11 +370,13 @@ pbuild::use_cmake() {
 }
 
 pbuild::configure() {
-	if [[ -r "${SRC_DIR}/configure" ]] && [[ "${configure_with}" == 'undef' ]] || [[ "${configure_with}" == 'autotools' ]]; then
+	if [[ -r "${SRC_DIR}/configure" ]] && [[ "${configure_with}" == 'undef' ]] || \
+		   [[ "${configure_with}" == 'autotools' ]]; then
 		${SRC_DIR}/configure \
 			--prefix="${PREFIX}" \
 			"${CONFIGURE_ARGS[@]}" || std::die 3 "configure failed"
-	elif [[ -r "${SRC_DIR}/CMakeLists.txt" ]] && [[ "${configure_with}" == 'undef' ]] || [[ "${configure_with}" == "cmake" ]]; then
+	elif [[ -r "${SRC_DIR}/CMakeLists.txt" ]] && [[ "${configure_with}" == 'undef' ]] || \
+		     [[ "${configure_with}" == "cmake" ]]; then
 		cmake \
 			-DCMAKE_INSTALL_PREFIX="${PREFIX}" \
 			"${CONFIGURE_ARGS[@]}" \
@@ -496,6 +479,14 @@ pbuild::make_all() {
 	#
 
 	#......................................................................
+	check_supported_systems() {
+		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
+			[[ ${sys} == ${SYSTEM} ]] && return 0
+		done
+		std::die 1 "${P}: Not available for ${SYSTEM}."
+	}
+
+	#......................................................................
 	#
 	# test whether a module is loaded or not
 	#
@@ -514,6 +505,23 @@ pbuild::make_all() {
 	# :FIXME: needs testing
 	#
 	build_dependency() {
+		#..............................................................
+		#
+		# Test whether a module with the given name already exists.
+		#
+		# Arguments:
+		#   $1: module name
+		#
+		# Notes:
+		#   The passed module name should be NAME/VERSION
+		#   :FIXME: this does not really work in a hierarchical group without 
+		#           adding the dependencies...
+		#
+		module_exists() {
+			[[ -n $("${MODULECMD}" bash search -a --no-header "$1" 2>&1 1>/dev/null) ]]
+		}
+
+
 		local -r m=$1
 		std::debug "${m}: module not available"
 		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
@@ -545,7 +553,7 @@ pbuild::make_all() {
 		local buildscript=$( std::get_abspath "${BUILDBLOCK_DIR}"/../../*/${m/\/*}/build )
 		[[ -x "${buildscript}" ]] || std::die 1 "$m: build-block not found!"
 		"${buildscript}" "${m#*/}" ${args[@]}
-		pbuild::module_exists "$m" || std::die 1 "$m: oops: build failed..."
+		module_exists "$m" || std::die 1 "$m: oops: build failed..."
 	}
 	
 	#......................................................................
@@ -678,18 +686,6 @@ pbuild::make_all() {
 	}
 
 	#......................................................................
-	# test whether the module can be compiled with loaded compiler
-	check_compiler() {
-		test -z ${MODULE_SUPPORTED_COMPILERS} && return 0
-		for cc in ${MODULE_SUPPORTED_COMPILERS[@]}; do
-			if [[ ${COMPILER}/${COMPILER_VERSION} =~ ${cc} ]]; then
-				return 0
-			fi
-		done
-		std::die 1 "${P}/${V}: cannot be build with ${COMPILER}/${COMPILER_VERSION}."
-	}
-
-	#......................................................................
 	# non-redefinable post-install
 	post_install() {
 		install_doc() {
@@ -819,7 +815,7 @@ pbuild::make_all() {
 	build_module() {
  		echo "Building $P/$V ..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
-		check_compiler
+
 		mkdir -p "${SRC_DIR}"
 		mkdir -p "${BUILD_DIR}"
 
@@ -837,6 +833,9 @@ pbuild::make_all() {
 
 		[[ "${build_target}" == "install" ]] && return 0
 
+		install_modulefile
+		install_module_release_file
+
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
 		return 0
@@ -849,21 +848,20 @@ pbuild::make_all() {
 
 	# setup module specific environment
 	if [[ "${bootstrap}" == 'no' ]]; then
+		check_supported_systems
 		load_build_dependencies
 		set_full_module_name_and_prefix
 		set_module_release
 		if [[ ! -d "${PREFIX}" ]] || [[ "${force_rebuild}" == 'yes' ]]; then
 			build_module
-			opt_update_modulefiles='yes'
 		else
  			std::info "${P}/${V}: already exists, not rebuilding ..."
-		fi
-		if [[ "${opt_update_modulefiles}" == "yes" ]]; then
-			install_modulefile
-			install_module_release_file
+			if [[ "${opt_update_modulefiles}" == "yes" ]]; then
+				install_modulefile
+				install_module_release_file
+			fi
 		fi
 	else
-		#check_and_setup_env_bootstrap
 		build_module
 	fi
 	make_all_called='yes'
