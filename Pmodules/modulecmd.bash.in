@@ -77,7 +77,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases UsedArchs PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases UseFlags PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 print_version() {
 	echo "
@@ -798,19 +798,18 @@ subcommand_load() {
 				std::append_path UsedReleases "${release}"
 			fi
 		fi
-		local use_arch='no'
-		for arch in "${UsedArchs[@]}"; do
-			if is_available "${m}_${arch}"; then
-				m="${m}_${arch}"
-				use_arch='yes'
+		local found=''
+		for flag in "${UseFlags[@]/#/_}" ""; do
+			if is_available "${m}${flag}"; then
+				m+="${flag}"
+				found=':'
+				break
 			fi
 		done
-		if [[ "${use_arch}" = 'no' ]]; then
-			if ! is_available "${m}"; then
-				std::info "${CMD} load: module unavailable -- ${m}"
-				[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
-				std::die 3 ""
-			fi
+		if [[ ! "${found}" ]]; then
+			std::info "${CMD} load: module unavailable -- ${m}"
+			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
+			std::die 3 ""
 		fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
 			std::die 3 "${CMD} load: module conflicts with already loaded module -- ${m}"
@@ -1178,9 +1177,9 @@ subcommand_use() {
 			fi
 		done
 
-		std::info "\nUsed architecures:"
-		for arch in "${UsedArchs//:/ }"; do
-			std::info "\t${arch}"
+		std::info "\nUsed flags:"
+		for flag in "${UseFlags//:/ }"; do
+			std::info "\t${flag}"
 		done
 
 		std::info "\nAdditonal directories in MODULEPATH:"
@@ -1219,8 +1218,8 @@ subcommand_use() {
 			if is_release "${arg}"; then
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
-			elif [[ "${arg}" =~ "arch=" ]]; then
-				std::append_path UsedArchs "${arg/arch=}"
+			elif [[ "${arg}" =~ "flag=" ]]; then
+				std::append_path UseFlags "${arg/flag=}"
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
 				if [[ -z "${GroupDepths[$arg]}" ]]; then
 					# not yet cached group
@@ -1308,8 +1307,8 @@ subcommand_unuse() {
 		local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
 		if is_release "${arg}"; then
 			std::remove_path UsedReleases "${arg}"
-		elif [[ "${arg}" =~ "arch=" ]]; then
-			std::remove_path UsedArchs "${arg/arch=}"
+		elif [[ "${arg}" =~ "flag=" ]]; then
+			std::remove_path UseFlags "${arg/flag=}"
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
 			if (( ${GroupDepths[$arg]} != 0 )); then
 				std::die 3 "${CMD} ${FUNCNAME[0]##*_}: cannot remove group ${arg} from module path"
@@ -1414,7 +1413,7 @@ pmodules_init() {
 	declare -ag Groups='()'
 	declare -Ag GroupDepths='()'
 	declare -g  UsedReleases=''
-	declare -g  UsedArchs=()
+	declare -g  UseFlags=()
 	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
 		std::append_path UsedReleases "${r}"
 	done
