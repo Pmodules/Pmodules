@@ -480,6 +480,7 @@ pbuild::make_all() {
 
 	#......................................................................
 	check_supported_systems() {
+		[[ -z "${SUPPORTED_SYSTEMS}" ]] && return 0
 		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
 			[[ ${sys} == ${SYSTEM} ]] && return 0
 		done
