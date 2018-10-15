@@ -35,7 +35,7 @@ pbuild::install() {
 }
 
 pbuild::cleanup_build() {
-	make -e realclean
+	:
 }
 
 pbuild::make_all
