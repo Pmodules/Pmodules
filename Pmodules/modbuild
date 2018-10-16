@@ -322,7 +322,7 @@ initialize_module_vars() {
 	case "${V_PKG}" in
 		*.*.* )
 			V_MAJOR="${V_PKG%%.*}"
-			tmp="${V_PKG%%.*#*.}"
+			tmp="${V_PKG#*.}"
 			V_MINOR="${tmp%%.*}"
 			V_PATCHLVL="${tmp#*.}"
 			;;
