@@ -824,10 +824,10 @@ subcommand_load() {
 		local output=$("${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}")
 		echo "${output}"
 		eval "${output}"
-		error=$( < "${tmpfile}")
-		if [[ -n "${error}" ]]; then
-			echo "${error}" 1>&2
-			std::die 4 "${CMD} load: failed -- ${m}"
+		local error=$( < "${tmpfile}")
+		echo "${error}" 1>&2
+		if [[ "${error}" =~ ":ERROR:" ]]; then
+			std::info "${CMD} load: failed -- ${m}"
 		fi
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded."
