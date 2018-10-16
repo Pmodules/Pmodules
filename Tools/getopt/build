@@ -1,9 +1,10 @@
 #!/usr/bin/env modbuild
+set -x
 
 pbuild::set_download_url "http://frodo.looijaard.name/system/files/software/getopt/getopt-1.1.6.tar.gz"
 pbuild::compile_in_sourcetree
 
-pbuild::pre_configure_Linux() {
+pbuild::pre_prep_Linux() {
 	pbuild::add_patch "Makefile.patch"
 }
 
@@ -37,8 +38,6 @@ pbuild::install() {
 pbuild::cleanup_build() {
 	:
 }
-
-pbuild::make_all
 
 # Local Variables:
 # mode: sh
