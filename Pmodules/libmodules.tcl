@@ -327,7 +327,8 @@ proc _pmodules_init_global_vars { } {
 	set	P		"${name}"
 	set	version		[lindex $modulefile end]
 	set 	V		"${version}"
-	lassign [split $V -] V_PKG V_RELEASE
+	lassign [split $V -]	V_PKG tmp
+	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 	set	implementation	[lrange $rel_modulefile 2 end]
 	set	prefix		"$pmodules_root $group [lreverse_n $implementation 2]"
