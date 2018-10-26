@@ -12,7 +12,7 @@ source libstd.bash    || { echo "Oops: library '$_' cannot be loaded!" 1>&2; exi
 
 #.............................................................................
 # constants
-declare -r  PMODULES_BUILD_CONFIG='modbuild.conf'
+declare	   fname_build_config='modbuild.conf'
 
 ##############################################################################
 #
@@ -125,6 +125,13 @@ parse_args() {
 			;;
 		--dry-run )
 			dry_run='yes'
+			;;
+		--config )
+			fname_build_config="$2"
+			shift 1
+			;;
+		--config=* )
+			fname_build_config="${1#*=}"
 			;;
 		--disable-cleanup )
 			enable_cleanup_build='no'
@@ -423,7 +430,7 @@ initialize_module_vars "${BUILD_SCRIPT}" "$V"
 # source Pmodule environment configuration
 test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
-source "${PMODULES_BUILD_CONFIG}" || std::die 3 "${prog}: Cannot source build configuration file."
+source "${fname_build_config}" || std::die 3 "${prog}: Cannot source build configuration file."
 
 : ${TEMP_DIR:="${PMODULES_TMPDIR:-/var/tmp/${USER}}"}
 declare -rx  TEMP_DIR
