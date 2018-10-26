@@ -104,6 +104,7 @@ pmodules::compile() {
 		shift
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
+			"--config=${config_file}" \
 			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
 			"${build_opts[@]}" "$@" "${version}" || \
 			std::die 3 "Compiling '${name}' failed!"
@@ -121,11 +122,11 @@ pmodules::compile() {
 				build_opts+=( "$1" )
 				;;
 			--config )
-				config_file="$2"
+				config_file=$(std::get_abspath "$2")
 				shift 1
 				;;
 			--config=* )
-				config_file="${1#*=}"
+				config_file=$(std::get_abspath "${1#*=}")
 				;;
 			--install-root )
 				PMODULES_ROOT="$2"
