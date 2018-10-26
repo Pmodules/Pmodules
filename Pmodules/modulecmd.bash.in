@@ -825,7 +825,7 @@ subcommand_load() {
 		echo "${output}"
 		eval "${output}"
 		local error=$( < "${tmpfile}")
-		echo "${error}" 1>&2
+		#echo "${error}" 1>&2
 		if [[ "${error}" =~ ":ERROR:" ]]; then
 			std::info "${CMD} load: failed -- ${m}"
 		fi
