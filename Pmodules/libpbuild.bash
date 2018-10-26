@@ -292,7 +292,7 @@ pbuild::prep() {
 
 	patch_sources() {
 		cd "${SRC_DIR}"
-		for (( i=0; i<${#PATCH_FILES[@]}; i++ )); do
+		for ((i = 0; i < ${#PATCH_FILES[@]}; i++)); do
 			std::info "Appling patch '${PATCH_FILES[i]}' ..."
 			local -i strip_val="${PATCH_STRIPS[i]:-${PATCH_STRIP_DEFAULT}}"
 			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[i]}"
