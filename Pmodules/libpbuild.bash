@@ -157,7 +157,7 @@ pbuild::install_docfiles() {
 pbuild::module_is_avail() {
 	local "$2"
 	local uvar="$2"
-	[[ -z "${uvar}" ]] || uvar="__unused__"
+	[[ -n "${uvar}" ]] || uvar="__unused__"
 	local output=( $("${MODULECMD}" bash avail -a -m "$1" 2>&1 1>/dev/null) )
 	[[ "${output[0]}" == "$1" ]] && std::upvar "${uvar}" "${output[1]}"
 }
