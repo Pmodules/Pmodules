@@ -665,7 +665,7 @@ subcommand_load() {
 		# can be used.
 		#
 		mapfile -t array  < <("${modulecmd}" "${shell}" show "$m" 2>&1 | \
-			awk 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX/ {print $3; exit}')
+			awk 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
 		test -n "${current_modulefile}" || return 1
@@ -705,7 +705,7 @@ subcommand_load() {
 			[[ ${dep:0:1} == \# ]] && continue
 			module_is_loaded "${dep}" && continue
 			local output=$( subcommand_load --internal "${dep}")
-
+			echo ${output}
 			eval ${output}
 		done < "${fname}"
 	}
