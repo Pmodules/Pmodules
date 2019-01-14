@@ -414,6 +414,17 @@ pbuild::install() {
 	make install
 }
 
+pbuild::install_shared_libs() {
+	local -r binary="${PREFIX}/$1"
+	local -r pattern="$2"
+	local -r dstdir="${3:-${PREFIX}/lib}"
+
+	test -e "${binary}" || std::die 3 "${binary}: does not exist or is not executable!"
+	mkdir -p "${dstdir}"
+	local -r libs=( $(ldd "${binary}" | awk "/ => \// && /${pattern}/ {print \$3}") )
+	cp -avL "${libs[@]}" "${dstdir}"
+}
+
 pbuild::post_install() {
 	:
 }
