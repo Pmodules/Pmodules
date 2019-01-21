@@ -4,7 +4,6 @@
 # get absolute path of script
 declare	    mydir=$(dirname "$0")
 declare -r  mydir=$(cd ${mydir} && pwd -P)
-declare -r  prog=$(basename "$0")
 
 # The libs are found via PATH
 PATH="/usr/bin:/bin:/usr/sbin:/sbin:${mydir}:${mydir}/../lib:${mydir}/../config"
@@ -188,10 +187,10 @@ parse_args() {
 			opt_update_modulefiles='yes'
 			;;
 		-* )
-			std::die 1 "${prog}: invalid option -- '$1'"
+			std::die 1 "Invalid option -- '$1'"
 			;;
 		[0-9]* )
-			[[ -z "$V" ]] || std::die 1 "${prog}: version already set -- '$1'"
+			[[ -z "$V" ]] || std::die 1 "Version already set -- '$1'"
 			V=$1
 			;;
 		'')	
@@ -199,18 +198,21 @@ parse_args() {
 			;;
 		* )
 			[[ -z "${BUILD_SCRIPT}" ]] || \
-				std::die 1 "${prog}: build script already set to '${BUILD_SCRIPT}' -- '$1'"
+				std::die 1 \
+					 "Build script already set to" \
+					 "'${BUILD_SCRIPT}' -- '$1'"
 		        BUILD_SCRIPT=$(std::get_abspath "$1")
 			test -r ${BUILD_SCRIPT} || \
-				std::die 1 "${prog}: build script does not exist" \
-						    "or is not readable -- '$_'"
+				std::die 1 \
+					 "Build script does not exist" \
+					 "or is not readable -- '$_'"
 			BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 			;;
 		esac
 		shift
 	done	
-	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "${prog}: No build-block specified!"
-	[[ -n ${V} ]]            || std::die 1 "${prog} Module version not specified!"
+	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
+	[[ -n ${V} ]]            || std::die 1 "Module version not specified!"
 }
 
 #......................................................................
@@ -430,7 +432,7 @@ initialize_module_vars "${BUILD_SCRIPT}" "$V"
 # source Pmodule environment configuration
 test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
-source "${fname_build_config}" || std::die 3 "${prog}: Cannot source build configuration file."
+source "${fname_build_config}" || std::die 3 "Cannot source build configuration file."
 
 : ${TEMP_DIR:="${PMODULES_TMPDIR:-/var/tmp/${USER}}"}
 declare -rx  TEMP_DIR
@@ -443,12 +445,12 @@ BUILD_DIR="${TEMP_DIR}/$P-$V/build"
 
 if [[ ${bootstrap} == no ]]; then
 	search_variants_file || \
-		std::die 2 "${prog}: No usable variants file found!"
+		std::die 2 "No usable variants file found!"
 
         # initialize module environment
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	[[ -x ${MODULECMD} ]] || \
-			std::die 2 "${prog}: no such file or executable -- '${MODULECMD}'"
+			std::die 2 "No such file or executable -- '${MODULECMD}'"
 
 	eval $( "${MODULECMD}" bash purge )
 	eval $( "${MODULECMD}" bash use unstable )
@@ -460,7 +462,7 @@ else
 	setup_env_for_bootstrapping
 fi
 
-#
+#y
 # run build
 #
 source "${BUILD_SCRIPT}"
