@@ -15,6 +15,7 @@ if [[ $__path ]]; then
 else
 	alias sed=$(which sed 2>/dev/null)
 fi
+unset __path
 
 #.............................................................................
 # disable auto-echo feature of 'cd'
@@ -245,7 +246,8 @@ download_source_file() {
 				fi
 				;;
 			* )
-				std::die 4 "Error in download URL: unknown download method '${method}'!"
+				std::die 4 "Error in download URL:" \
+					 "unknown download method '${method}'!"
 				;;
                 esac
 	fi
@@ -530,7 +532,8 @@ pbuild::make_all() {
 		#           adding the dependencies...
 		#
 		module_exists() {
-			[[ -n $("${MODULECMD}" bash search -a --no-header "$1" 2>&1 1>/dev/null) ]]
+			[[ -n $("${MODULECMD}" bash search -a --no-header "$1" \
+					       2>&1 1>/dev/null) ]]
 		}
 
 
@@ -538,7 +541,9 @@ pbuild::make_all() {
 		std::debug "${m}: module not available"
 		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
 		[[ ${dry_run} == yes ]] && \
-			std::die 1 "${m}: module does not exist, cannot continue with dry run..."
+			std::die 1 \
+				 "${m}: module does not exist," \
+				 "cannot continue with dry run..."
 
 		echo "$m: module does not exist, trying to build it..."
 		local args=( '' )
@@ -661,6 +666,8 @@ pbuild::make_all() {
 	#
 	# The following variables are set in this function
 	#	ModuleRelease
+	# The following global variables are used:
+	#       depend_release
 	#
 	set_module_release() {
 		# get module release if already available
@@ -669,22 +676,25 @@ pbuild::make_all() {
 			std::info "${P}/${V}: already exists and released as '${release}'"
 
 		# set release of module
-		if [[ "${depend_release}" == 'deprecated' ]] || \
-		       # release is deprecated
-		       #   - if a build-dependency is deprecated or 
-		       #   - the module already exists and is deprecated or
-		       #   - is forced to be deprecated by setting this on the command line
-		       [[ "${release}" == 'deprecated' ]] \
-		       || [[ "${ModuleRelease}" == 'deprecated' ]]; then
+		if [[ "${depend_release}" == 'deprecated' ]] \
+			   || [[ "${release}" == 'deprecated' ]]; then
+			# release is deprecated
+			#   - if a build-dependency is deprecated or 
+			#   - the module already exists and is deprecated or
+			#   - is forced to be deprecated by setting this on the command line
+			if [[ "${ModuleRelease}" != 'deprecated' ]]; then
+				std::warn "${P}/${V}: has deprecated dependencies!"
+				std::warn "${P}/${V}: but requested release is '${ModuleRelease}'!"
+			fi
 			ModuleRelease='deprecated'
 		elif [[ "${depend_release}" == 'stable' ]] \
-			 || [[ "${release}" == 'stable' ]] \
-			 || [[ "${ModuleRelease}" == 'stable' ]]; then
- 			 # release is stable
-			 #   - if all build-dependency are stable or
-			 #   - the module already exists and is stable
-			 #   - an unstable release of the module exists and the release is
-			 #     changed to stable on the command line
+			     || [[ "${release}" == 'stable' ]] \
+			     || [[ "${ModuleRelease}" == 'stable' ]]; then
+ 			# release is stable
+			#   - if all build-dependency are stable or
+			#   - the module already exists and is stable
+			#   - an unstable release of the module exists and the release is
+			#     changed to stable on the command line
 			ModuleRelease='stable'
 		else
 			# release is unstable
@@ -692,6 +702,10 @@ pbuild::make_all() {
 			#   - if the module does not exists and no other release-type is
 			#     given on the command line
 			#   - and all the cases I didn't think of
+			if [[ "${ModuleRelease}" != 'unstable' ]]; then
+				std::warn "${P}/${V}: has unstable dependencies!"
+				std::warn "${P}/${V}: but requested release is '${ModuleRelease}'!"
+			fi
 			ModuleRelease='unstable'
 		fi
 		std::info "${P}/${V}: will be released as '${ModuleRelease}'"
@@ -767,7 +781,7 @@ pbuild::make_all() {
 
  	#......................................................................
 	# Install modulefile
-	install_modulefile() {
+	install_modulefiles() {
 		local -r src="${BUILDBLOCK_DIR}/modulefile"
 		if [[ ! -r "${src}" ]]; then
 			std::info "${P}/${V}: skipping modulefile installation ..."
@@ -785,20 +799,8 @@ pbuild::make_all() {
 		std::info "${P}/${V}: installing modulefile in '${dstdir}' ..."
 		mkdir -p "${dstdir}"
 		install -m 0444 "${src}" "${dst}"
-	}
-
- 	#......................................................................
-	# Install release-file
-	install_module_release_file() {
-		# directory where to install module- and release-file
-		local target_dir="${PMODULES_ROOT}/"
-		target_dir+="${GROUP}/"
-		target_dir+="${PMODULES_MODULEFILES_DIR}/"
-		target_dir+="${ModuleName%/*}"  # = group hierarchy + name
-
-		mkdir -p "${target_dir}"
 		std::info "${P}/${V}: setting release to '${ModuleRelease}' ..."
-		echo "${ModuleRelease}" > "${target_dir}/.release-$V"
+		echo "${ModuleRelease}" > "${dstdir}/.release-$V"
 	}
 
 	build_target() {
@@ -845,14 +847,39 @@ pbuild::make_all() {
 
 		[[ "${build_target}" == "install" ]] && return 0
 
-		install_modulefile
-		install_module_release_file
+		install_modulefiles
 
 		[[ ${enable_cleanup_build} == yes ]] && pbuild::cleanup_build
 		[[ ${enable_cleanup_src} == yes ]] && pbuild::cleanup_src
 		return 0
 	}
-	
+	remove_module() {
+		if [[ -d "${PREFIX}" ]]; then
+			std::info "${P}/${V}: removing all files in '${PREFIX}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -rf ${PREFIX}
+		fi
+
+		# assemble name of modulefile
+		local dst="${PMODULES_ROOT}/"
+		dst+="${GROUP}/"
+		dst+="${PMODULES_MODULEFILES_DIR}/"
+		dst+="${ModuleName}"  # = group hierarchy + name/version
+
+		# directory where to install modulefile
+ 		local -r dstdir=${dst%/*}
+
+		if [[ -e "${dst}" ]]; then
+			std::info "${P}/${V}: removing modulefile '${dst}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -v "${dst}"
+		fi
+		local release_file="${dstdir}/.release-$V"
+		if [[ -e "${release_file}" ]]; then
+			std::info "${P}/${V}: removing release file '${release_file}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
+		fi
+		rmdir -p  --ignore-fail-on-non-empty "${dstdir}" 2>/dev/null
+	}
+
 	##############################################################################
 	#
 	# here we really start with make_all()
@@ -863,14 +890,16 @@ pbuild::make_all() {
 		check_supported_systems
 		load_build_dependencies
 		set_full_module_name_and_prefix
-		set_module_release
-		if [[ ! -d "${PREFIX}" ]] || [[ "${force_rebuild}" == 'yes' ]]; then
+		if [[ "${ModuleRelease}" == 'removed' ]]; then
+			remove_module
+		elif [[ ! -d "${PREFIX}" ]] || [[ "${force_rebuild}" == 'yes' ]]; then
+			set_module_release
 			build_module
 		else
  			std::info "${P}/${V}: already exists, not rebuilding ..."
 			if [[ "${opt_update_modulefiles}" == "yes" ]]; then
-				install_modulefile
-				install_module_release_file
+				set_module_release
+				install_modulefiles
 			fi
 		fi
 	else
