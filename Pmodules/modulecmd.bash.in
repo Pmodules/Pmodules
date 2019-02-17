@@ -807,7 +807,7 @@ subcommand_load() {
 			fi
 		done
 		if [[ ! "${found}" ]]; then
-			std::info "${CMD} load: module unavailable -- ${m}"
+			std::info "${CMD} load: module unavailable -- ${m}\n"
 			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
 			std::die 3 ""
 		fi
@@ -827,10 +827,10 @@ subcommand_load() {
 		local error=$( < "${tmpfile}")
 		#echo "${error}" 1>&2
 		if [[ "${error}" =~ ":ERROR:" ]]; then
-			std::info "${CMD} load: failed -- ${m}"
+			std::info "${CMD} load: failed -- ${m}\n"
 		fi
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
-			std::info "Warning: the ${release} module '${m}' has been loaded."
+			std::info "Warning: the ${release} module '${m}' has been loaded.\n"
 		fi
 	done
 	# fix LOADEDMODULES
@@ -932,7 +932,7 @@ subcommand_avail() {
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
 		done
-		std::info ""
+		std::info "\n"
 	}
 
 	machine_output() {
@@ -958,7 +958,7 @@ subcommand_avail() {
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
 		done
-		std::info ""
+		std::info "\n"
 	}
 
 	human_readable_output() {
@@ -1153,45 +1153,45 @@ subcommand_use() {
 	print_info() {
 		local f
 		local r
-		std::info "Used groups:"
+		std::info "Used groups:\n"
 		for f in ${PMODULES_USED_GROUPS//:/ }; do
-			std::info "\t${f}"
+			std::info "\t${f}\n"
 		done
-		std::info "\nUnused groups:"
+		std::info "\nUnused groups:\n"
 		local _group
 		for _group in "${Groups[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
 			if ! is_used_group "${_group}" && (( depth == 0 )); then
-			    std::info "\t${_group}"
+			    std::info "\t${_group}\n"
 			fi
 		done
 		
-		std::info "\nUsed releases:"
+		std::info "\nUsed releases:\n"
 		for r in ${UsedReleases//:/ }; do
-			std::info "\t${r}"
+			std::info "\t${r}\n"
 		done
-		std::info "\nUnused releases:"
+		std::info "\nUnused releases:\n"
 		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
 			if ! is_used_release $r; then
-				std::info "\t${r}"
+				std::info "\t${r}\n"
 			fi
 		done
 
-		std::info "\nUsed flags:"
+		std::info "\nUsed flags:\n"
 		for flag in "${UseFlags//:/ }"; do
-			std::info "\t${flag}"
+			std::info "\t${flag}\n"
 		done
 
-		std::info "\nAdditonal directories in MODULEPATH:"
+		std::info "\nAdditonal directories in MODULEPATH:\n"
 		let n=0
 		for (( i=0; i<${#modulepath[@]}; i++)); do
 			if [[ ! ${modulepath[i]} =~ ${PMODULES_ROOT} ]]; then
-			        std::info "\t${modulepath[i]}"
+			        std::info "\t${modulepath[i]}\n"
 			        let n+=1
 			fi
 		done
 		if (( n == 0 )); then
-		        std::info "\tnone"
+		        std::info "\tnone\n"
 		fi
 		std::info "\n"
 	}
@@ -1490,7 +1490,7 @@ subcommand_search() {
 					out+="$d/"
 				done
 				out+="${line[0]}"
-				std::info "${out}"
+				std::info "${out}\n"
 			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
 		elif [[ "${opt_print_csv}" == "yes" ]]; then
 			while read -a toks; do
