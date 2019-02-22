@@ -5,13 +5,37 @@
 declare	    mydir=$(dirname "$0")
 declare -r  mydir=$(cd ${mydir} && pwd -P)
 
-# The libs are found via PATH
-PATH="/usr/bin:/bin:/usr/sbin:/sbin:${mydir}:${mydir}/../lib:${mydir}/../config"
+PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
+# add pathes where files we have to source are installed
+PATH+=":${mydir}:${mydir}/../lib:${mydir}/../config"
+
 source libstd.bash    || { echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3; }
 
 #.............................................................................
 # constants
 declare	   fname_build_config='modbuild.conf'
+
+#.............................................................................
+# defaults for arguments/options
+
+# number of parallel make jobs
+declare -i  JOBS=3
+
+declare force_rebuild='no'
+declare dry_run='no'
+declare enable_cleanup_build='yes'
+declare enable_cleanup_src='no'
+declare build_target='all'
+declare bootstrap='no'
+declare SYSTEM="$(uname -s)"
+declare opt_update_modulefiles='no'
+
+# array collecting all modules specified on the command line via '--with=module'
+declare -a with_modules=()
+
+# save arguments, we might need them later again for building dependencies
+declare -r ARGS="$@"
 
 ##############################################################################
 #
@@ -73,6 +97,9 @@ MISCELLANEOUS OPTIONS:
 --dry-run
 	Dry run.
 
+--all-variants
+        Build build all variants
+
 --disable-cleanup-build
 --enable-cleanup-build
 	Cleanup files in the build directory. Default is to remove.
@@ -100,6 +127,9 @@ MISCELLANEOUS OPTIONS:
 
 ##############################################################################
 #
+
+declare -a versions=()
+declare opt_all_variants='no'
 parse_args() {
 	while (( $# > 0 )); do
 		case $1 in
@@ -125,6 +155,9 @@ parse_args() {
 		--dry-run )
 			dry_run='yes'
 			;;
+                --all-variants )
+                        opt_all_variants='yes'
+                        ;;
 		--config )
 			fname_build_config="$2"
 			shift 1
@@ -190,20 +223,19 @@ parse_args() {
 			std::die 1 "Invalid option -- '$1'"
 			;;
 		[0-9]* )
-			[[ -z "$V" ]] || std::die 1 "Version already set -- '$1'"
-			V=$1
+			versions+=( "$1" )
 			;;
 		'')	
 			:
 			;;
 		* )
 			[[ -z "${BUILD_SCRIPT}" ]] || \
-				std::die 1 \
+				std::die 1 "%s "\
 					 "Build script already set to" \
 					 "'${BUILD_SCRIPT}' -- '$1'"
 		        BUILD_SCRIPT=$(std::get_abspath "$1")
 			test -r ${BUILD_SCRIPT} || \
-				std::die 1 \
+				std::die 1 "%s " \
 					 "Build script does not exist" \
 					 "or is not readable -- '$_'"
 			BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
@@ -212,222 +244,87 @@ parse_args() {
 		shift
 	done	
 	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
-	[[ -n ${V} ]]            || std::die 1 "Module version not specified!"
+	(( ${#versions[@]} > 0)) || std::die 1 "Module version not specified!"
 }
 
-#......................................................................
-#
-# compute full module name and installation prefix
-#
-# The following variables are expected to be set:
-#	GROUP	    module group
-#	P		    module name
-#	V		    module version
-#       variables defining the hierarchical environment like
-#	COMPILER and COMPILER_VERSION
-#
-# The following variables are set in this function
-#	ModuleName
-#	PREFIX
-#
-set_full_module_name_and_prefix() {
-	join_by() {
-		local IFS="$1"
-		shift
-		echo "$*"
-	}
+source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
 
-	[[ -n ${GROUP} ]] || std::die 1 "${P}/${V}: group not set."
-	
-	# build module name
-	# :FIXME: this should be read from a configuration file
-	local module_name=()
-	case ${GROUP} in
-	Compiler )
-		module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		module_name+=( "${P}/${V}" )
-		;;
-	MPI )
-		module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		module_name+=( "${MPI}/${MPI_VERSION}" )
-		module_name+=( "${P}/${V}" )
-		;;
-	HDF5 )
-		module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		module_name+=( "${MPI}/${MPI_VERSION}" )
-		module_name+=( "${HDF5}/${HDF5_VERSION}" )
-		module_name+=( "${P}/${V}" )
-		;;
-	OPAL )
-		module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		module_name+=( "${MPI}/${MPI_VERSION}" )
-		module_name+=( "${OPAL}/${OPAL_VERSION}" )
-		module_name+=( "${P}/${V}" )
-		;;
-	HDF5_serial )
-		module_name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		module_name+=( "hdf5_serial/${HDF5_SERIAL_VERSION}" )
-		module_name+=( "${P}/${V}" )
-		;;
-	* )
-		module_name+=("${P}/${V}" )
-		;;
-	esac
-
-	# set full module name
-	ModuleName=$( join_by '/' "${module_name[@]}" )
-	# set PREFIX of module
-	PREFIX="${PMODULES_ROOT}/${GROUP}/"
-	for ((i=${#module_name[@]}-1; i >= 0; i--)); do
-		PREFIX+="${module_name[i]}/"
+find_variants_files(){
+	local files=( $(ls -1 "${BUILDBLOCK_DIR}"/*/variants.${SYSTEM} 2> /dev/null) )
+        local f
+	for f in "${BUILDBLOCK_DIR}"/*/variants; do
+		if [[ ! -e "${f}.${SYSTEM}" ]]; then
+			files+=( "$f" )
+		fi
 	done
+	std::upvar "$1" "${files[@]}"
 }
 
-#......................................................................
-#
-# $1:	absolute path to build script
-# $2:	version 
-initialize_module_vars() {
-	local -r script_name="$1"
-	local    v="$2"
-
-	# split path of build script into components
-	local -a fname
-	IFS=/ read -r -a fname <<< "${script_name:1}"
-
-	# the second last element defines the module name!
-	P=${fname[${#fname[@]}-2]}
-
-	# use third last element as group if dir with this name exists
-	# in PMODULES_ROOT
-	GROUP=${fname[${#fname[@]}-3]}
-	if [[ -d "${PMODULES_ROOT}/${GROUP}" ]]; then
-		# Note:
-		# The module group might be overwritten in the build script.
-		set_full_module_name_and_prefix
-	else
-		GROUP=''
-	fi
-
-	# module is unstable by default
-	ModuleRelease='unstable'
-
-	V_MAJOR=''		# first number in version string
-	V_MINOR=''		# second number in version string (or empty)
-	V_PATCHLVL=''		# third number in version string (or empty)
-	V_RELEASE=''		# module release (or empty)
-	USE_FLAGS=''		# architectures (or empty)
-
-	local tmp=''
-	
-	if [[ "$v" =~ "_" ]]; then
-		tmp="${v#*_}"
-		USE_FLAGS=":${tmp//_/:}:"
-		v="${v%%_*}"
-	fi
-	V_PKG="${v%%-*}"	# version without the release number
-	V_RELEASE="${v#*-}"	# release number 
-
-	case "${V_PKG}" in
-		*.*.* )
-			V_MAJOR="${V_PKG%%.*}"
-			tmp="${V_PKG#*.}"
-			V_MINOR="${tmp%%.*}"
-			V_PATCHLVL="${tmp#*.}"
-			;;
-		*.* )
-			V_MAJOR="${V_PKG%.*}"
-			V_MINOR="${V_PKG#*.}"
-			;;
-		* )
-			V_MAJOR="${V_PKG}"
-			;;
-	esac
-}
-
-#......................................................................
-# setup environment for bootstrapping
-#
-setup_env_for_bootstrapping() {
-	ModuleName="Pmodules/${PMODULES_VERSION}"
-	# set PREFIX of module
-	GROUP='Tools'
-	PREFIX="${PMODULES_ROOT}/${GROUP}/${ModuleName}"
-
-	C_INCLUDE_PATH="${PREFIX}/include"
-	CPLUS_INCLUDE_PATH="${PREFIX}/include"
-	CPP_INCLUDE_PATH="${PREFIX}/include"
-	LIBRARY_PATH="${PREFIX}/lib"
-	LD_LIBRARY_PATH="${PREFIX}/lib"
-	DYLD_LIBRARY_PATH="${PREFIX}/lib"
-
-	PATH+=":${PREFIX}/bin"
-	PATH+=":${PREFIX}/sbin"
-}
-
-#......................................................................
-#
-# Search for variants file to use
-#
-# Arguments:
-#   none
-#
-# Used global variables:
-#   SYSTEM
-#   BUILDBLOCK_DIR
-#   variants_file [out]
-#
-search_variants_file() {
-	local -a eligible_variants_files=()
-	eligible_variants_files+=( "${V%.*.*}/variants.${SYSTEM}" )
-	eligible_variants_files+=( "${V%.*.*}/variants" )
-	eligible_variants_files+=( "${V%.*}/variants.${SYSTEM}" )
-	eligible_variants_files+=( "${V%.*}/variants" )
-	eligible_variants_files+=( "${V}/variants.${SYSTEM}" )
-	eligible_variants_files+=( "${V}/variants" )
-	eligible_variants_files+=( "files/variants.${SYSTEM}" )
-	eligible_variants_files+=( "files/variants" )
-
-	for variants_file in "${eligible_variants_files[@]}"; do
-		if [[ -e "${BUILDBLOCK_DIR}/${variants_file}" ]]; then
-			variants_file="${BUILDBLOCK_DIR}/${variants_file}"
-		    	return 0
-	    	fi
+build_modules() {
+        local name="$1"
+        local version="$2"
+        local exact_match='no'
+        if [[ "${version:0:1}" == "=" ]]; then
+                exact_match='yes'
+                version="${version:1}"
+        fi
+        shift 2
+        local with_modules=( $* )
+        local files
+        find_variants_files files
+        local m
+	local pattern="/^${name}\/${version}[[:blank:]]/"
+	for m in "${with_modules[@]}"; do 
+		pattern+=" && /${m//\//\\/}/"
 	done
-	variants_file=''
-	return 1
+        local variants=()
+        local variants_files=()
+        local lines=()
+        for f in "${files[@]}"; do
+                mapfile -t lines < <(awk "${pattern}" "${f}")
+                variants+=( "${lines[@]}" )
+                local i
+                for ((i=0; i<${#lines[@]}; i++)); do
+                        variants_files+=( "$f" )
+                done
+                # here we should add a check, whether the version of the
+                # found variants are in the right variants files. Example:
+                # a variant for hdf5/1.10.4 is not allowed in a variants file
+                # for version 1.8
+        done
+        if (( ${#variants[@]} == 0 )); then
+		std::info "%s " \
+			 "${name}/${version}:" \
+			 "no suitable variant found!"
+                std::die 10 "Aborting..."
+        elif (( ${#variants[@]} > 1 )) && [[ ${exact_match} == 'yes' ]]; then
+		std::info "%s " \
+			 "Multiple variants found:"
+                for variant in "${variants[@]}"; do
+                        std::info "${variant}"
+                done
+                std::die 10 "Aborting..."
+        fi
+        local -i i=0
+        local -i num_variants=${#variants[@]}
+        for ((i = 0; i < num_variants; i++)); do
+                local tokens=( ${variants[i]} )
+                local name="${tokens[0]%/*}"
+                version="${tokens[0]#*/}"
+                release="${tokens[1]}"
+                with_modules=( "${tokens[@]:2}" )
+                pbuild.build_module \
+                        "${name}" "${version}" \
+                        "${release}" "${with_modules[@]}"
+        done
 }
-
-#.............................................................................
-# defaults for arguments/options
-
-# number of parallel make jobs
-declare -i  JOBS=3
-
-declare force_rebuild='no'
-declare dry_run='no'
-declare enable_cleanup_build='yes'
-declare enable_cleanup_src='no'
-declare build_target='all'
-declare bootstrap='no'
-declare variants_file=''
-declare SYSTEM="$(uname -s)"
-declare opt_update_modulefiles='no'
-
-# array collecting all modules specified on the command line via '--with=module'
-declare -a with_modules=()
-
-# save arguments, we might need them later again for building dependencies
-declare -r ARGS="$@"
 
 #.............................................................................
 # main
 parse_args "$@"
-source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
+
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
-
-initialize_module_vars "${BUILD_SCRIPT}" "$V"
 
 # source Pmodule environment configuration
 test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
@@ -440,36 +337,45 @@ declare -rx  TEMP_DIR
 declare -xr  PMODULES_DISTFILESDIR
 mkdir -p "${PMODULES_DISTFILESDIR}"
 
-SRC_DIR="${TEMP_DIR}/$P-$V/src"
-BUILD_DIR="${TEMP_DIR}/$P-$V/build"
+MODULECMD="${PMODULES_HOME}/bin/modulecmd"
+[[ -x ${MODULECMD} ]] || \
+	std::die 2 "No such file or executable -- '${MODULECMD}'"
 
-if [[ ${bootstrap} == no ]]; then
-	search_variants_file || \
-		std::die 2 "No usable variants file found!"
+IFS=/ read -r -a fname <<< "${BUILD_SCRIPT:1}"
+module_name=${fname[${#fname[@]}-2]}
 
-        # initialize module environment
-	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
-	[[ -x ${MODULECMD} ]] || \
-			std::die 2 "No such file or executable -- '${MODULECMD}'"
+#
+# are we bootstrapping? If yes, everything is a bit simpler...
+#
+if [[ "${bootstrap}" == 'yes' ]]; then
+	MODULECMD='/bin/true'
+        #......................................................................
 
-	eval $( "${MODULECMD}" bash purge )
-	eval $( "${MODULECMD}" bash use unstable )
-	eval $( "${MODULECMD}" bash use deprecated )
+	C_INCLUDE_PATH="${PREFIX}/include"
+	CPLUS_INCLUDE_PATH="${PREFIX}/include"
+	CPP_INCLUDE_PATH="${PREFIX}/include"
+	LIBRARY_PATH="${PREFIX}/lib"
+	LD_LIBRARY_PATH="${PREFIX}/lib"
+	DYLD_LIBRARY_PATH="${PREFIX}/lib"
 
-	# :FIXME: this is a hack!!!
-	eval $( "${MODULECMD}" bash use Libraries )
-else
-	setup_env_for_bootstrapping
+	PATH+=":${PREFIX}/bin"
+	PATH+=":${PREFIX}/sbin"
+
+	pbuild.build_module "${module_name}"  "{versions[0]" 'stable'
+        exit $?
 fi
 
-#y
-# run build
-#
-source "${BUILD_SCRIPT}"
+eval $( "${MODULECMD}" bash use unstable )
+eval $( "${MODULECMD}" bash use deprecated )
 
-pbuild::make_all
-
-std::info "${P}/${V}: Done ..."
+# if option '--all-variants' is set, we loop over all variants matching the given
+# versions
+for version in "${versions[@]}"; do
+        if [[ "${opt_all_variants}" == "no" ]]; then
+                version="=${version}"
+        fi
+        build_modules "${module_name}" "${version}" "${with_modules[@]}"
+done
 
 # Local Variables:
 # mode: sh
