@@ -5,9 +5,10 @@
 #
 std::log() {
         local -ri fd=$1
-        local -r fmt="$2\n"
+        local -r fmt="$2"
         shift 2
         printf -- "$fmt" "$@" 1>&$fd
+        echo
 }
 
 std::info() {
