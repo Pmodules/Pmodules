@@ -1,5 +1,10 @@
 #!/bin/bash
-
+#
+# The following build specific variables are set and used in libpbuild.bash:
+#       ARGS
+#       BUILD_SCRIPT
+#       BUILDBLOCK_DIR
+#
 #.............................................................................
 # get absolute path of script
 declare	    mydir=$(dirname "$0")
@@ -11,28 +16,6 @@ PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 PATH+=":${mydir}:${mydir}/../lib:${mydir}/../config"
 
 source libstd.bash    || { echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3; }
-
-#.............................................................................
-# constants
-declare	   fname_build_config='modbuild.conf'
-
-#.............................................................................
-# defaults for arguments/options
-
-# number of parallel make jobs
-declare -i  JOBS=3
-
-declare force_rebuild='no'
-declare dry_run='no'
-declare enable_cleanup_build='yes'
-declare enable_cleanup_src='no'
-declare build_target='all'
-declare bootstrap='no'
-declare SYSTEM="$(uname -s)"
-declare opt_update_modulefiles='no'
-
-# array collecting all modules specified on the command line via '--with=module'
-declare -a with_modules=()
 
 # save arguments, we might need them later again for building dependencies
 declare -r ARGS="$@"
@@ -127,18 +110,27 @@ MISCELLANEOUS OPTIONS:
 
 ##############################################################################
 #
+# parse options and arguments
+#
 
-declare -a versions=()
-declare opt_all_variants='no'
+# multiple version can be passed via comand line
+declare -a      versions=()
+declare         opt_all_variants='no'
+declare         opt_bootstrap='no'
+# array collecting all modules specified on the command line via '--with=module'
+declare -a      opt_with_modules=()
+declare 	build_config='modbuild.conf'
+declare         system="$(uname -s)"
+
 parse_args() {
 	while (( $# > 0 )); do
 		case $1 in
 		-j )
-			JOBS=$2
+			pbuild.jobs "$2"
 			shift
 			;;
 		--jobs=[0-9]* )
-			JOBS=${1/--jobs=}
+			pbuild.jobs "${1/--jobs=}"
 			;;
 		-v | --verbose )
 			trap 'echo "$BASH_COMMAND"' DEBUG
@@ -147,77 +139,79 @@ parse_args() {
 			set -x
 			;;
 		-f | --force-rebuild )
-			force_rebuild='yes'
+			pbuild.force_rebuild 'yes'
 			;;
 		-\? | -h | --help )
 			usage
 			;;
 		--dry-run )
-			dry_run='yes'
+			pbuild.dry_run 'yes'
 			;;
                 --all-variants )
                         opt_all_variants='yes'
                         ;;
 		--config )
-			fname_build_config="$2"
+			build_config="$2"
 			shift 1
 			;;
 		--config=* )
-			fname_build_config="${1#*=}"
+			build_config="${1#*=}"
 			;;
 		--disable-cleanup )
-			enable_cleanup_build='no'
-			enable_cleanup_src='no'
+			pbuild.enable_cleanup_build 'no'
+			pbuild.enable_cleanup_src 'no'
 			;;
 		--enable-cleanup-build )
-			enable_cleanup_build='yes'
+			pbuild.enable_cleanup_build 'yes'
 			;;
 		--disable-cleanup-build )
-			enable_cleanup_build='no'
+			pbuild.enable_cleanup_build 'no'
 			;;
 		--enable-cleanup-src )
-			enable_cleanup_src='yes'
+			pbuild.enable_cleanup_src 'yes'
 			;;
 		--disable-cleanup-src )
-			enable_cleanup_src='no'
+			pbuild.enable_cleanup_src 'no'
 			;;
 		--distdir )
-			PMODULES_DISTFILESDIR=$2
+			pbuild.pmodules_distfilesdir "$2"
 			shift
 			;;
 		--distdir=* )
-			PMODULES_DISTFILESDIR=${1/--distdir=}
+			pbuild.pmodules_distfilesdir "${1/--distdir=}"
 			;;
 		--tmpdir )
-			TEMP_DIR=$2
+			pbuild.temp_dir "$2"
 			shift
 			;;
 		--tmpdir=* )
-			TEMP_DIR=${1/--tmpdir=}
+			pbuilf.temp_dir "${1/--tmpdir=}"
 			;;
 		--system )
-			SYSTEM=".$2"
+			system=".$2"
+                        pbuild.system "${system}"
 			shift
 			;;
 		--system=* )
-			SYSTEM=".${1/*=}"
+			system=".${1/*=}"
+                        pbuild.system "${system}"
 			;;
 		--with )
-			with_modules+=( "$2" )
+			opt_with_modules+=( "$2" )
 			shift
 			;;
 		--with=*/* )
 			m="${1/--with=}"
-			with_modules+=( ${m} )
+			opt_with_modules+=( ${m} )
 			;;
 		--prep | --configure | --compile | --install | --all )
-			build_target=${1:2}
+			pbuild.build_target ${1:2}
 			;;
 		--bootstrap )
-			bootstrap='yes'
+			opt_bootstrap='yes'
 			;;
 		--update-modulefiles )
-			opt_update_modulefiles='yes'
+			pbuild.update_modulefiles 'yes'
 			;;
 		-* )
 			std::die 1 "Invalid option -- '$1'"
@@ -247,16 +241,16 @@ parse_args() {
 	(( ${#versions[@]} > 0)) || std::die 1 "Module version not specified!"
 }
 
-source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
-
 find_variants_files(){
-	local files=( $(ls -1 "${BUILDBLOCK_DIR}"/*/variants.${SYSTEM} 2> /dev/null) )
+        shopt -q nullglob || :
+        local -i nullglob_set=$?
+        shopt -s nullglob
+	local files=( "${BUILDBLOCK_DIR}"/*/variants.${system} )
         local f
 	for f in "${BUILDBLOCK_DIR}"/*/variants; do
-		if [[ ! -e "${f}.${SYSTEM}" ]]; then
-			files+=( "$f" )
-		fi
+		[[ -e "${f}.${system}" ]] || files+=( "$f" )
 	done
+        (( nullglob_set == 1 )) && shopt -u nullglob
 	std::upvar "$1" "${files[@]}"
 }
 
@@ -279,9 +273,12 @@ build_modules() {
 	done
         local variants=()
         local variants_files=()
+        local line=''
         local lines=()
         for f in "${files[@]}"; do
-                mapfile -t lines < <(awk "${pattern}" "${f}")
+                while read line; do
+                        lines+=( "${line}" )
+                done < <(awk "${pattern}" "${f}")
                 variants+=( "${lines[@]}" )
                 local i
                 for ((i=0; i<${#lines[@]}; i++)); do
@@ -321,52 +318,33 @@ build_modules() {
 
 #.............................................................................
 # main
+source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
+
 parse_args "$@"
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
 
-# source Pmodule environment configuration
-test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
-test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
-source "${fname_build_config}" || std::die 3 "Cannot source build configuration file."
-
-: ${TEMP_DIR:="${PMODULES_TMPDIR:-/var/tmp/${USER}}"}
-declare -rx  TEMP_DIR
-: ${PMODULES_DISTFILESDIR:="${BUILD_BASEDIR}/Downloads"}
-declare -xr  PMODULES_DISTFILESDIR
-mkdir -p "${PMODULES_DISTFILESDIR}"
-
-MODULECMD="${PMODULES_HOME}/bin/modulecmd"
-[[ -x ${MODULECMD} ]] || \
-	std::die 2 "No such file or executable -- '${MODULECMD}'"
-
 IFS=/ read -r -a fname <<< "${BUILD_SCRIPT:1}"
 module_name=${fname[${#fname[@]}-2]}
 
 #
-# are we bootstrapping? If yes, everything is a bit simpler...
+# are we bootstrapping? If yes, go for it...
 #
-if [[ "${bootstrap}" == 'yes' ]]; then
-	MODULECMD='/bin/true'
-        #......................................................................
-
-	C_INCLUDE_PATH="${PREFIX}/include"
-	CPLUS_INCLUDE_PATH="${PREFIX}/include"
-	CPP_INCLUDE_PATH="${PREFIX}/include"
-	LIBRARY_PATH="${PREFIX}/lib"
-	LD_LIBRARY_PATH="${PREFIX}/lib"
-	DYLD_LIBRARY_PATH="${PREFIX}/lib"
-
-	PATH+=":${PREFIX}/bin"
-	PATH+=":${PREFIX}/sbin"
-
-	pbuild.build_module "${module_name}"  "{versions[0]" 'stable'
+if [[ "${opt_bootstrap}" == 'yes' ]]; then
+        test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+        source "${build_config}" || std::die 3 "Cannot source build configuration file."
+	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
         exit $?
 fi
 
-eval $( "${MODULECMD}" bash use unstable )
-eval $( "${MODULECMD}" bash use deprecated )
+#
+# we are NOT bootstrapping!
+#
+
+# source Pmodule environment configuration
+test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+source "${build_config}" || std::die 3 "Cannot source build configuration file."
 
 # if option '--all-variants' is set, we loop over all variants matching the given
 # versions
@@ -374,7 +352,7 @@ for version in "${versions[@]}"; do
         if [[ "${opt_all_variants}" == "no" ]]; then
                 version="=${version}"
         fi
-        build_modules "${module_name}" "${version}" "${with_modules[@]}"
+        build_modules "${module_name}" "${version}" "${opt_with_modules[@]}"
 done
 
 # Local Variables:

@@ -71,10 +71,60 @@ declare PATCH_STRIPS=()
 declare PATCH_STRIP_DEFAULT='1'
 declare configure_with='undef'	
 
-#..............................................................................
-# global variables used in the library
+declare bootstrap='no'
 
-declare -r  OS="${SYSTEM}"
+#..............................................................................
+# global variables
+declare force_rebuild='no'
+pbuild.force_rebuild() {
+	force_rebuild="$1"
+}
+
+declare dry_run='no'
+pbuild.dry_run() {
+	dry_run="$1"
+}
+
+declare enable_cleanup_build='yes'
+pbuild.enable_cleanup_build() {
+	enable_cleanup_build="$1"
+}
+
+declare enable_cleanup_src='no'
+pbuild.enable_cleanup_src() {
+	enable_cleanup_src="$1"
+}
+
+declare build_target='all'
+pbuild.build_target() {
+	build_target="$1"
+}
+
+declare opt_update_modulefiles='no'
+pbuild.update_modulefiles() {
+	opt_update_modulefiles="$1"
+}
+
+# number of parallel make jobs
+declare -i  JOBS=3
+pbuild.jobs() {
+        JOBS="$1"
+}
+
+declare system=$(uname -s)
+pbuild.system() {
+        system="$1"
+}
+
+declare TEMP_DIR="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
+pbuild.temp_dir() {
+        TEMP_DIR="$1"
+}
+
+declare PMODULES_DISTFILESDIR="${PMODULES_ROOT}/var/distfiles"
+pbuild.pmodules_distfilesdir() {
+        PMODULES_DISTFILESDIR="$1"
+}
 
 # module name including path in hierarchy and version
 # (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
@@ -83,12 +133,24 @@ declare -x  fully_qualified_module_name=''
 # group this module is in (ex: 'Programming')
 declare -x  GROUP=''
 
-# release of module (ex: 'stable')
+# name, version and release of module
+declare	-x  module_name=''
+declare	-x  module_version=''
 declare	-x  module_release=''
 
 # relative path of documentation
 # abs. path is "${PREFIX}/${_docdir}/${module_name}"
 declare -r  _DOCDIR='share/doc'
+
+# initialize module environment.
+# in case of bootstrapping the modulecmd does not exist. Setting
+# it to ':' is save. We check the existence later again.
+MODULECMD="${PMODULES_HOME}/bin/modulecmd"
+[[ -x ${MODULECMD} ]] || MODULECMD=':'
+
+eval $( "${MODULECMD}" bash use unstable )
+eval $( "${MODULECMD}" bash use deprecated )
+
 
 #..............................................................................
 #
@@ -98,6 +160,12 @@ declare -r  _DOCDIR='share/doc'
 
 # install prefix of module.
 declare -x  PREFIX=''
+
+# :FIXME:
+# OS is still used in some build-scripts. We have to implement a getter
+# and use this getter in the build-scripts.
+declare -r  OS="${system}"
+
 
 ##############################################################################
 #
@@ -352,12 +420,12 @@ download_source_file() {
 pbuild::pre_prep() {
 	:
 }
-eval "pbuild::pre_prep_${SYSTEM}() { :; }"
+eval "pbuild::pre_prep_${system}() { :; }"
 
 pbuild::post_prep() {
 	:
 }
-eval "pbuild::post_prep_${SYSTEM}() { :; }"
+eval "pbuild::post_prep_${system}() { :; }"
 
 ###############################################################################
 #
@@ -392,6 +460,7 @@ pbuild::prep() {
                 std::die 3 \
                          "%s " "${module_name}/${module_version}:" \
                          "Download source not set!"
+        mkdir -p "${PMODULES_DISTFILESDIR}"
         local i=0
 	for ((i = 0; i < ${#SOURCE_URLS[@]}; i++)); do
 		download_source_file \
@@ -418,7 +487,7 @@ pbuild::add_patch() {
 	PATCH_FILES+=( "$1" )
 	PATCH_STRIPS+=( "$2" )
 }
-eval "pbuild::add_patch_${SYSTEM}() { pbuild::add_patch \"\$@\"; }"
+eval "pbuild::add_patch_${system}() { pbuild::add_patch \"\$@\"; }"
 
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || \
@@ -439,7 +508,7 @@ pbuild::use_flag() {
 pbuild::pre_configure() {
 	:
 }
-eval "pbuild::pre_configure_${SYSTEM}() { :; }"
+eval "pbuild::pre_configure_${system}() { :; }"
 
 pbuild::set_configure_args() {
 	CONFIGURE_ARGS+=( "$@" )
@@ -501,12 +570,12 @@ pbuild::configure() {
 pbuild::post_configure() {
 	:
 }
-eval "pbuild::post_configure_${SYSTEM}() { :; }"
+eval "pbuild::post_configure_${system}() { :; }"
 
 pbuild::pre_compile() {
 	:
 }
-eval "pbuild::pre_compile_${SYSTEM}() { :; }"
+eval "pbuild::pre_compile_${system}() { :; }"
 
 pbuild::compile() {
 	make -j${JOBS}
@@ -515,12 +584,12 @@ pbuild::compile() {
 pbuild::post_compile() {
 	:
 }
-eval "pbuild::post_compile_${SYSTEM}() { :; }"
+eval "pbuild::post_compile_${system}() { :; }"
 
 pbuild::pre_install() {
 	:
 }
-eval "pbuild::pre_install_${SYSTEM}() { :; }"
+eval "pbuild::pre_install_${system}() { :; }"
 
 pbuild::install() {
 	make install
@@ -544,7 +613,7 @@ pbuild::install_shared_libs() {
 pbuild::post_install() {
 	:
 }
-eval "pbuild::post_install_${SYSTEM}() { :; }"
+eval "pbuild::post_install_${system}() { :; }"
 
 pbuild::cleanup_build() {
 	[[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
@@ -616,11 +685,11 @@ pbuild::make_all() {
 	check_supported_systems() {
 		[[ -z "${SUPPORTED_SYSTEMS}" ]] && return 0
 		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-			[[ ${sys} == ${SYSTEM} ]] && return 0
+			[[ ${sys} == ${system} ]] && return 0
 		done
 		std::die 1 \
                          "%s " "${module_name}/${module_version}:" \
-                         "Not available for ${SYSTEM}."
+                         "Not available for ${system}."
 	}
 
 	#......................................................................
@@ -758,7 +827,7 @@ pbuild::make_all() {
                                          "since the dependency '$m' is ${release_of_dependency}"
                         # for a unstable module no dependency must be deprecated
                         elif [[ "${module_release}" == 'unstable' ]] \
-                                     && [[ "${release_of_dependency}" != 'deprecated' ]]; then
+                                     && [[ "${release_of_dependency}" == 'deprecated' ]]; then
                                 std::die 5 \
                                          "%s " "${module_name}/${module_version}:" \
                                          "release cannot be set to '${module_release}'" \
@@ -838,7 +907,7 @@ pbuild::make_all() {
 		post_install_linux() {
 			std::info \
                                 "%s " "${module_name}/${module_version}:" \
-                                "running post-installation for ${SYSTEM} ..."
+                                "running post-installation for ${system} ..."
 			cd "${PREFIX}"
 			# solve multilib problem with LIBRARY_PATH
                         # on 64bit Linux
@@ -847,7 +916,7 @@ pbuild::make_all() {
 		}
 
 		cd "${BUILD_DIR}"
-		[[ "${SYSTEM}" == "Linux" ]] && post_install_linux
+		[[ "${system}" == "Linux" ]] && post_install_linux
 		install_doc
 		install_pmodules_files
 		write_runtime_dependencies
@@ -898,7 +967,8 @@ pbuild::make_all() {
                         if [[ "${release}" != "${module_release}" ]]; then
 		                std::info \
                                         "%s " "${module_name}/${module_version}:" \
-                                        "changing release from '${release}' to '${module_release}' ..."
+                                        "changing release from" \
+                                        "'${release}' to '${module_release}' ..."
 		                echo "${module_release}" > "${release_file}"
                         fi
                 else
@@ -921,10 +991,10 @@ pbuild::make_all() {
 			# work because in some function global variables 
 			# might to be set.
 			#
-			cd "${dir}" && "pbuild::pre_${target}_${SYSTEM}"
+			cd "${dir}" && "pbuild::pre_${target}_${system}"
 			cd "${dir}" && "pbuild::pre_${target}"
 			cd "${dir}" && "pbuild::${target}"
-			cd "${dir}" && "pbuild::post_${target}_${SYSTEM}"
+			cd "${dir}" && "pbuild::post_${target}_${system}"
 			cd "${dir}" && "pbuild::post_${target}"
 			touch "${BUILD_DIR}/.${target}"
 		fi
@@ -1112,6 +1182,9 @@ pbuild.build_module() {
         shift 3
         with_modules=( "$@" )
 
+        [[ -x ${MODULECMD} ]] || \
+	        std::die 2 "No such file or executable -- '${MODULECMD}'"
+
         # P and V can be used in the build-script, so we have to set them here
         P="${module_name}"
         V="${module_version}"
@@ -1131,6 +1204,28 @@ pbuild.build_module() {
         source "${BUILD_SCRIPT}"
         pbuild::make_all
         std::info "%s" "${module_name}/${module_version}: Done ..."
+}
+
+pbuild.bootstrap() {
+	local -r name="$1"
+	local -r version="$2"
+
+	bootstrap='yes'
+
+	MODULECMD='/bin/true'
+	GROUP='Tools'
+	PREFIX="${PMODULES_ROOT}/${GROUP}/Pmodules/${PMODULES_VERSION}"
+
+	C_INCLUDE_PATH="${PREFIX}/include"
+	CPLUS_INCLUDE_PATH="${PREFIX}/include"
+	CPP_INCLUDE_PATH="${PREFIX}/include"
+	LIBRARY_PATH="${PREFIX}/lib"
+	LD_LIBRARY_PATH="${PREFIX}/lib"
+	DYLD_LIBRARY_PATH="${PREFIX}/lib"
+
+	PATH+=":${PREFIX}/bin"
+	PATH+=":${PREFIX}/sbin"
+	pbuild.build_module "${name}"  "${version}" 'stable'
 }
 
 # Local Variables:
