@@ -2,5 +2,3 @@
 
 pbuild::set_download_url "http://ftp.gnu.org/gnu/coreutils/$P-$V.tar.xz"
 pbuild::add_configure_args "--bindir=${PREFIX}/sbin"
-
-pbuild::make_all

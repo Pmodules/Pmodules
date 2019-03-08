@@ -17,4 +17,3 @@ pbuild::add_configure_args "--without-libintl-prefix"
 pbuild::add_configure_args "--with-included-libxml"
 pbuild::add_configure_args "--with-pic=yes"
 
-pbuild::make_all

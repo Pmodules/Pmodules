@@ -48,8 +48,6 @@ module() {
     :
 }
 
-pbuild::make_all
-
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8

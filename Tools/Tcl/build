@@ -23,4 +23,3 @@ pbuild::post_install() {
 	{ cd "${PREFIX}"/sbin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
 }
 
-pbuild::make_all
