@@ -28,7 +28,7 @@ get_version() {
 	echo $(awk "/^$1[[:blank:]]/ {print \$2}" "${DEFAULT_VERSIONS_CONFIG}")
 }
 
-declare -r PMODULES_VERSION=$(get_version 'Pmodules')
+declare -rx PMODULES_VERSION=$(get_version 'Pmodules')
 
 
 #-----------------------------------------------------------------------------
