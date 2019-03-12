@@ -1020,6 +1020,7 @@ pbuild::make_all() {
 		build_target "${BUILD_DIR}" compile
 		[[ "${build_target}" == "compile" ]] && return 0
 
+                mkdir -p "${PREFIX}"
 		build_target "${BUILD_DIR}" install
 		post_install
 
@@ -1212,7 +1213,7 @@ pbuild.bootstrap() {
 
 	bootstrap='yes'
 
-	MODULECMD='/bin/true'
+	MODULECMD='/usr/bin/true'
 	GROUP='Tools'
 	PREFIX="${PMODULES_ROOT}/${GROUP}/Pmodules/${PMODULES_VERSION}"
 
