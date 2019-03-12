@@ -825,9 +825,14 @@ subcommand_load() {
 		echo "${output}"
 		eval "${output}"
 		local error=$( < "${tmpfile}")
-		#echo "${error}" 1>&2
+
+                # :FIXME: Not sure whether this is now correct!
+                # The idea is to supress the error messages from the Tcl modulecmd, but not
+                # the output to stderr coded in a modulefile.
 		if [[ "${error}" =~ ":ERROR:" ]]; then
 			std::info "${CMD} load: failed -- ${m}\n"
+		elif [[ -n ${error} ]]; then
+                        echo "${error}" 1>&2
 		fi
 		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
 			std::info "Warning: the ${release} module '${m}' has been loaded.\n"
@@ -847,7 +852,9 @@ subcommand_load() {
 #
 subcommand_unload() {
 	# :FIXME: add dependency tests: don't unload if module is required be
-	#	  another module
+	#	  another module.
+        #         For the time being the modules requiring this module will be
+        #         unloaded too.
 	while (( $# > 0 )); do
 		subcommand_generic1 unload "$1"
 		shift
