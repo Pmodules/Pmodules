@@ -6,18 +6,25 @@
 #       BUILDBLOCK_DIR
 #
 #.............................................................................
+
+declare VERSION='@PMODULES_VERSION@'
+
 # get absolute path of script
 declare	    mydir=$(dirname "$0")
 declare -r  mydir=$(cd ${mydir} && pwd -P)
 
+# initialize PATH,
+# add library installation directories to the PATH,
+# so 'source' is able find them
 PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+PATH+=":${mydir}"
+PATH+=":${mydir}/../lib:${mydir}/../config"
 
-# add pathes where files we have to source are installed
-PATH+=":${mydir}:${mydir}/../lib:${mydir}/../config"
+source libstd.bash    || {
+        echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3;
+}
 
-source libstd.bash    || { echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3; }
-
-# save arguments, we might need them later again for building dependencies
+# save arguments, (still) required for building dependencies
 declare -r ARGS="$@"
 
 ##############################################################################
@@ -66,13 +73,16 @@ BUILD-STEPS OPTIONS:
 MISCELLANEOUS OPTIONS:
 
 -? | -h | --help
-        Print usage
+        Print usage.
+
+-V | --version )
+        Print version.
 
 -v | --verbose )
-        Verbose output
+        Verbose output.
 
 -j N | --jobs=N
-        Run N parallel make jobs
+        Run N parallel make jobs.
 
 -f | --force-rebuild
         Force rebuild of module.
@@ -81,7 +91,8 @@ MISCELLANEOUS OPTIONS:
 	Dry run.
 
 --all-variants
-        Build build all variants
+        Build build all variants. In this case the argument 'version'
+        must be a regular expression.
 
 --disable-cleanup-build
 --enable-cleanup-build
@@ -144,6 +155,9 @@ parse_args() {
 		-\? | -h | --help )
 			usage
 			;;
+                -V | --version )
+                        std::die 0  "\nPmodules version ${VERSION}\nCopyright GNU GPL v2\n"
+                        ;;
 		--dry-run )
 			pbuild.dry_run 'yes'
 			;;
@@ -268,8 +282,11 @@ build_modules() {
         find_variants_files files
         local m
 	local pattern="/^${name}\/${version}[[:blank:]]/"
-	for m in "${with_modules[@]}"; do 
-		pattern+=" && /${m//\//\\/}/"
+	for m in "${with_modules[@]}"; do
+                # check if this module is really a dependency
+                if [[ -n $(awk "/${m%/*}[\/ ]/" "${files}") ]]; then
+		        pattern+=" && /${m//\//\\/}/"
+                fi
 	done
         local variants=()
         local variants_files=()
@@ -318,13 +335,25 @@ build_modules() {
 
 #.............................................................................
 # main
-source libpbuild.bash || std::die 3 "Oops: library '$_' cannot be loaded!"
+
+# source build configuration,
+# must be done before sourcing libpbuild!
+if [[ "${opt_bootstrap}" == 'yes' ]]; then
+        test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+else
+        test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+fi
+source "${build_config}" || \
+        std::die 3 "Oops: Cannot source configuration file -- '${build_config}'"
+source libpbuild.bash    || \
+        std::die 3 "Oops: Cannot source library -- '$_'"
 
 parse_args "$@"
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
 
+# the module name is defined by the directory the build script is in
 IFS=/ read -r -a fname <<< "${BUILD_SCRIPT:1}"
 module_name=${fname[${#fname[@]}-2]}
 
@@ -332,8 +361,6 @@ module_name=${fname[${#fname[@]}-2]}
 # are we bootstrapping? If yes, go for it...
 #
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
-        test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
-        source "${build_config}" || std::die 3 "Cannot source build configuration file."
 	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
         exit $?
 fi
@@ -341,10 +368,6 @@ fi
 #
 # we are NOT bootstrapping!
 #
-
-# source Pmodule environment configuration
-test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
-source "${build_config}" || std::die 3 "Cannot source build configuration file."
 
 # if option '--all-variants' is set, we loop over all variants matching the given
 # versions

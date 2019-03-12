@@ -1,4 +1,5 @@
 environment.bash
+modbuild
 modbuild.conf
 modulecmd.bash
 modulecmd.tcl
