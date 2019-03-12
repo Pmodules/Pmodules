@@ -91,8 +91,10 @@ pmodules::configure() {
 	sed_cmd="s:@PMODULES_ROOT@:${install_root}:g;"
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
-
+        sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
+        
 	sed "${sed_cmd}" "${DEFAULT_MODBUILD_CONFIG}.in" > "${config_file}"
+        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" > "${SRC_DIR}/modbuild"
 }
 
 #-----------------------------------------------------------------------------
@@ -259,6 +261,7 @@ pmodules::install() {
 	
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in"   > "${SRC_DIR}/modulecmd.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${SRC_DIR}/modulecmd.tcl"
+        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in"         > "${SRC_DIR}/modbuild"
 	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${SRC_DIR}/modmanage.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in"     > "${SRC_DIR}/profile.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in"      > "${SRC_DIR}/profile.csh"
