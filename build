@@ -94,7 +94,6 @@ pmodules::configure() {
         sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
         
 	sed "${sed_cmd}" "${DEFAULT_MODBUILD_CONFIG}.in" > "${config_file}"
-        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" > "${SRC_DIR}/modbuild"
 }
 
 #-----------------------------------------------------------------------------
@@ -106,7 +105,10 @@ pmodules::compile() {
 		shift
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
+			"--debug" \
 			"--config=${config_file}" \
+			"--enable-cleanup" \
+			"--force-rebuild" \
 			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
 			"${build_opts[@]}" "$@" "${version}" || \
 			std::die 3 "Compiling '${name}' failed!"
@@ -262,6 +264,7 @@ pmodules::install() {
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in"   > "${SRC_DIR}/modulecmd.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${SRC_DIR}/modulecmd.tcl"
         sed "${sed_cmd}" "${SRC_DIR}/modbuild.in"         > "${SRC_DIR}/modbuild"
+	chmod 0755 "${SRC_DIR}/modbuild"
 	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${SRC_DIR}/modmanage.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in"     > "${SRC_DIR}/profile.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in"      > "${SRC_DIR}/profile.csh"
@@ -355,6 +358,10 @@ done
 
 [[ -n "${subcmd}" ]] || std::die 1 "Missing sub-command.\n\nUse 'build --help' to get some help..."
 
+if [[ "${SRC_DIR}/modbuild" -ot "${SRC_DIR}/modbuild.in" ]]; then
+        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" > "${SRC_DIR}/modbuild"
+	chmod 0755 "${SRC_DIR}/modbuild"
+fi
 
 pmodules::${subcmd} "${subcmd_args[@]}"
 
