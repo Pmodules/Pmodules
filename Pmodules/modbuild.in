@@ -90,10 +90,6 @@ MISCELLANEOUS OPTIONS:
 --dry-run
 	Dry run.
 
---all-variants
-        Build build all variants. In this case the argument 'version'
-        must be a regular expression.
-
 --disable-cleanup-build
 --enable-cleanup-build
 	Cleanup files in the build directory. Default is to remove.
@@ -106,7 +102,7 @@ MISCELLANEOUS OPTIONS:
 
 --disable-cleanup
 --enable-cleanup
-	Cleanup all files in temporyry directory. Default is to
+	Cleanup all files in temporary directory. Default is to
 	remove all files created during building.
 
 --distdir
@@ -145,6 +141,7 @@ parse_args() {
 			;;
 		-v | --verbose )
 			trap 'echo "$BASH_COMMAND"' DEBUG
+                        pbuild.verbose 'yes'
 			;;
 		--debug )
 			set -x
@@ -161,15 +158,16 @@ parse_args() {
 		--dry-run )
 			pbuild.dry_run 'yes'
 			;;
-                --all-variants )
-                        opt_all_variants='yes'
-                        ;;
 		--config )
 			build_config="$2"
 			shift 1
 			;;
 		--config=* )
 			build_config="${1#*=}"
+			;;
+		--enable-cleanup )
+			pbuild.enable_cleanup_build 'yes'
+			pbuild.enable_cleanup_src 'yes'
 			;;
 		--disable-cleanup )
 			pbuild.enable_cleanup_build 'no'
@@ -230,7 +228,7 @@ parse_args() {
 		-* )
 			std::die 1 "Invalid option -- '$1'"
 			;;
-		[0-9]* )
+		[=0-9]* )
 			versions+=( "$1" )
 			;;
 		'')	
@@ -268,6 +266,35 @@ find_variants_files(){
 	std::upvar "$1" "${files[@]}"
 }
 
+shopt -s extglob
+expand_variants_file(){
+	expand_deps(){
+		local text="$1"
+                shift
+		local deps=( "${@}" )
+                echo "${deps[@]}"
+                if (( ${#deps[@]} == 0 )); then
+                        echo ${text}
+		else
+                        local list
+		        eval list=( ${deps[0]} )
+			for dep in ${list[*]}; do
+				expand_deps "${text} ${dep}" "${deps[@]:1}"
+			done
+		fi
+	}
+
+	local -r input="$1"
+	while read -a toks; do
+		# skip empty and comment lines
+		[[ -z ${toks} ]] && continue
+		[[ ${toke:0:1} == '#' ]] && continue
+
+		deps=( ${toks[*]:2} )
+		expand_deps "${toks[0]} ${toks[1]}" "${deps[@]}"
+	done < "${input}"
+}
+
 build_modules() {
         local name="$1"
         local version="$2"
@@ -280,31 +307,33 @@ build_modules() {
         local with_modules=( $* )
         local files
         find_variants_files files
+
+        # if we have to build a dependency, we might have less dependencies
+        # on it. Or in other words: the list of "with modules" might be
+        # overdetermined. In the loop below we check, which dependencies
+        # specified with '--with' are required.
         local m
 	local pattern="/^${name}\/${version}[[:blank:]]/"
 	for m in "${with_modules[@]}"; do
-                # check if this module is really a dependency
-                if [[ -n $(awk "/${m%/*}[\/ ]/" "${files}") ]]; then
+                if [[ -n $(awk "/${m%/*}[\/ ]/" "${files[@]}") ]]; then
 		        pattern+=" && /${m//\//\\/}/"
                 fi
 	done
+
+        
         local variants=()
         local variants_files=()
-        local line=''
-        local lines=()
         for f in "${files[@]}"; do
+                local line=''
                 while read line; do
-                        lines+=( "${line}" )
-                done < <(awk "${pattern}" "${f}")
-                variants+=( "${lines[@]}" )
-                local i
-                for ((i=0; i<${#lines[@]}; i++)); do
+                        variants+=( "${line}" )
                         variants_files+=( "$f" )
-                done
+                done < <(expand_variants_file "${f}" | awk "${pattern}")
                 # here we should add a check, whether the version of the
                 # found variants are in the right variants files. Example:
                 # a variant for hdf5/1.10.4 is not allowed in a variants file
-                # for version 1.8
+                # for version 1.8. For this we need the mapping of a variant
+                # to the variants file in array 'variants_files'
         done
         if (( ${#variants[@]} == 0 )); then
 		std::info "%s " \
@@ -366,15 +395,9 @@ if [[ "${opt_bootstrap}" == 'yes' ]]; then
 fi
 
 #
-# we are NOT bootstrapping!
+# else
 #
-
-# if option '--all-variants' is set, we loop over all variants matching the given
-# versions
 for version in "${versions[@]}"; do
-        if [[ "${opt_all_variants}" == "no" ]]; then
-                version="=${version}"
-        fi
         build_modules "${module_name}" "${version}" "${opt_with_modules[@]}"
 done
 
