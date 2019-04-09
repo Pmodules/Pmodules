@@ -737,8 +737,12 @@ pbuild::make_all() {
 			shift
 		done
 
-                local path="${BUILDBLOCK_DIR}"/../../*/${m/\/*}/build
-		local buildscript=$(std::get_abspath "${path}")
+		find_build_script(){
+			local p=$1
+			local script=$(find "${BUILDBLOCK_DIR}/../.." -path "*/$p/build")
+			std::get_abspath "${script}"
+		}
+		local buildscript=$(find_build_script "${m%/*}")
 		[[ -x "${buildscript}" ]] || \
                         std::die 1 \
                                  "$m: build-block not found!"
@@ -991,32 +995,31 @@ pbuild::make_all() {
 		        rm -rf "${SRC_DIR##*/}"
    	        };
 	        return 0
-}
+        }
         
 	build_target() {
 		local dir="$1"
 		local target="$2"
-		if [[ ! -e "${BUILD_DIR}/.${target}" ]] || \
-			[[ ${force_rebuild} == 'yes' ]]; then
-			# We cd into the dir before every function call -
-			# just in case there was a cd in the called function.
+		if [[ -e "${BUILD_DIR}/.${target}" ]] && \
+			   [[ ${force_rebuild} != 'yes' ]]; then
+                        return 0
+                fi
+		local targets=()
+		targets+=( "pre_${target}_${system}" "pre_${target}" )
+		targets+=( "${target}" )
+		targets+=( "post_${target}_${system}" "post_${target}" )
+
+		for t in "${targets[@]}"; do
+			# We cd into the dir before calling the function -
+			# just to be sure we are in the right directory.
 			# 
 			# Executing the function in a sub-process doesn't
 			# work because in some function global variables 
-			# might to be set.
+			# might/need to be set.
 			#
-			cd "${dir}" && "pbuild::pre_${target}_${system}" || \
-                                        std::die 42 "Aborting..."
-			cd "${dir}" && "pbuild::pre_${target}" || \
-                                        std::die 42 "Aborting..."
-			cd "${dir}" && "pbuild::${target}" || \
-                                        std::die 42 "Aborting..."
-			cd "${dir}" && "pbuild::post_${target}_${system}" || \
-                                        std::die 42 "Aborting..."
-			cd "${dir}" && "pbuild::post_${target}" || \
-                                        std::die 42 "Aborting..."
-			touch "${BUILD_DIR}/.${target}"
-		fi
+			cd "${dir}" && "pbuild::$t" || std::die 42 "Aborting ..."
+		done
+		touch "${BUILD_DIR}/.${target}"
 	}
 
 	#......................................................................
