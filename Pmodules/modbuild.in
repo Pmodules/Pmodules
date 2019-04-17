@@ -365,10 +365,12 @@ build_modules() {
 #.............................................................................
 # main
 
+parse_args "$@"
+
 # source build configuration,
 # must be done before sourcing libpbuild!
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
-        test -d ":${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+        test -d "${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 else
         test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 fi
@@ -377,7 +379,6 @@ source "${build_config}" || \
 source libpbuild.bash    || \
         std::die 3 "Oops: Cannot source library -- '$_'"
 
-parse_args "$@"
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
