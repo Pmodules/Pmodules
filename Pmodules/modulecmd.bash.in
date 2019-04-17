@@ -440,9 +440,9 @@ USAGE:
 #
 # get release of module
 # Note:
-# - the release of a modulefile outside ${PMODULES_ROOT} is 'stable'
-# - the release of a modulefile inside ${PMODULES_ROOT} without a 
-#   coresponding release file is 'unstable'
+# - the release of a module outside ${PMODULES_ROOT[@]} is always 'stable'
+# - the release of a module inside ${PMODULES_ROOT[@]} without a 
+#   coresponding release file is always 'unstable'
 #
 # Args:
 # 	$1: absolute modulefile name
@@ -452,12 +452,15 @@ get_release() {
 	local -r modulefile="$2"
 
 	# is modulefile outside ${PMODULES_ROOT}?
-	if [[ ! ${modulefile} =~ ${PMODULES_ROOT} ]]; then
+        for root in "${PMODULES_ROOT[@]}" 'ZZZZZZZ'; do
+                [[ ${modulefile} =~ ${root} ]] && break
+        done
+        if [[ "${root}" == 'ZZZZZZZ' ]]; then
 		std::upvar $1 'stable'
 		return 0
 	fi
 
-	# we are inside ${PMODULES_ROOT}
+	# we are inside ${PMODULES_ROOT[@]}
 	local -r releasefile="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${releasefile} ]]; then
 		# read releasefile, remove empty lines, spaces etc
@@ -479,17 +482,29 @@ is_used_release() {
 	[[ ":${UsedReleases}:" =~ :$1: ]]
 }
 
+find_overlay () {
+        local "$1"
+        local -r group="$2"
+        for root in "${PMODULES_ROOT[@]}"; do
+	        if [[ -d "${root}/${group}/${PMODULES_MODULEFILES_DIR}" ]]; then
+                        std::upvar $1 "${root}"
+                        return 0
+                fi
+        done
+        return 1
+}
+
 is_group () {
 	local -r group="$1"
 	# arg isn't emtpy and group already in cache
 	[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]] && return 0
 
 	# not yet cached or not a group
-	if [[ -d "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}" ]]; then
-		Groups+=( "${group}" )
-		get_group_depths "${PMODULES_ROOT}" "${group}"
-	fi
-	return 1
+        local overlay=''
+        find_overlay overlay "${group}" || return 1
+	Groups+=( "${group}" )
+	get_group_depths "${root}" "${group}"
+        return 0
 }
 
 is_used_group() {
@@ -755,11 +770,12 @@ subcommand_load() {
 	for m in "${args[@]}"; do
 		if [[ "$m" =~ ":" ]]; then
 
-			# extendet module name is either
-			# - group:name or
-			# - group:name:release or
-			# - release:name or
-			# - release:group:name or
+                        # $m is an extendet module
+                        # the format is one of
+			# - group:name
+			# - group:name:release
+			# - release:name
+			# - release:group:name
 			# - name:release
 
 			local save_ifs=${IFS}
@@ -799,8 +815,12 @@ subcommand_load() {
 				(( depth != 0 )) && \
                                         std::die 3 "%s %s: illegal group name -- %s\n" \
                                                  "${CMD}" 'load' "${group}"
-				MODULEPATH="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
-				modulepath=( ${MODULEPATH} )
+				MODULEPATH=""
+				modulepath=()
+                                for root in "${PMODULES_ROOT[@]}"; do
+                                        MODULEPATH+="${root}/${group}/${PMODULES_MODULEFILES_DIR}:"
+				        modulepath+=( ${MODULEPATH} )
+                                done
 			fi
 			if [[ -n ${release} ]]; then
 			        is_release "${release}" || \
@@ -827,11 +847,14 @@ subcommand_load() {
 			std::die 3 "%s %s: module conflicts with already loaded module -- %s\n" \
                                  "${CMD}" 'load' "${m}"
 		fi
-		if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]]; then
-			# modulefile is in our hierarchy
-			# ${prefix} was set in is_available()!
-			test -r "${prefix}/.dependencies" && load_dependencies "$_"
-		fi
+                for root in "${PMODULES_ROOT[@]}"; do
+		        if [[ ${current_modulefile} =~ ${root} ]]; then
+			        # modulefile is in our hierarchy
+			        # ${prefix} was set in is_available()!
+			        test -r "${prefix}/.dependencies" && load_dependencies "$_"
+                                break
+		        fi
+                done
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
                     || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}")
@@ -929,9 +952,14 @@ subcommand_avail() {
 	cols=$(tput cols)
 
 	output_header() {
-		local caption=${dir/${PMODULES_ROOT}\/}
-		local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
-		local caption=${caption/: \//: }
+		local caption=${dir}
+                for root in "${PMODULES_ROOT[@]}"; do
+		        if [[ ${current_modulefile} =~ ${root} ]]; then
+		                local caption=${dir/${root}\/}
+		                local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
+		                local caption=${caption/: \//: }
+                        fi
+                done
 		let i=($cols-${#caption})/2-2
 		printf -- "%0.s-" $(seq 1 $i) 1>&2
 		printf -- " %s " "${caption}" 1>&2
@@ -1058,7 +1086,7 @@ subcommand_avail() {
 		shift
 	done
 	if [[ "${opt_all_groups}" = 'yes' ]]; then
-		rescan_groups "${PMODULES_ROOT}"
+		rescan_groups "${PMODULES_ROOT[@]}"
 	fi
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
@@ -1069,7 +1097,8 @@ subcommand_avail() {
 	IFS=${saved_IFS}
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
+			mods=( $( get_available_modules \
+                                          "${dir}" "${string}" "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 
 			${output_function}
@@ -1081,14 +1110,18 @@ subcommand_avail() {
 # $1: root of modulefile hierarchy
 #
 get_groups () {
-	local -r root="$1"
-	{
-		cd "${root}" 
-		# for some unknown reason [A-Z]* doesn't work on (some?) SL6 systems
-		for f in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
-			Groups+=( $f )
-		done
-	};
+	local -r roots="$@"
+        local    root
+        for root in "${roots[@]}"; do
+	        {
+		        cd "${root}" 
+		        # for some unknown reason [A-Z]* doesn't work
+                        # on (some?) SL6 systems
+		        for f in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
+			        Groups+=( $f )
+		        done
+	        };
+        done
 }
 
 # compute depths or passed group
@@ -1117,7 +1150,6 @@ get_group_depth2 () {
 get_group_depth () {
 	local -r root="$1"
 	local -r group="$2"
-
 	{
 		cd "${root}"
 		get_group_depth2 "${group}"
@@ -1128,14 +1160,17 @@ get_group_depth () {
 # Compute depth for all known groups
 # $1: root of modulefile hierarchy
 get_group_depths () {
-	local -r root="$1"
-	{
-		cd "${root}"
-		local group
-		for group in "${Groups[@]}"; do
-			get_group_depth2 "${group}"
-		done
-	};
+	local -r roots="$@"
+        local    root
+        for root in "${roots[@]}"; do
+	        {
+		        cd "${root}"
+		        local group
+		        for group in "${Groups[@]}"; do
+			        get_group_depth2 "${group}"
+		        done
+	        };
+        done
 }
 
 # re-scan available groups.
@@ -1146,17 +1181,29 @@ get_group_depths () {
 #
 # $1: root of modulefile hierarchy
 rescan_groups() {
-	local -r root="$1"
-	{
-		cd "${root}" 
-		# for some unknown reason [A-Z]* doesn't work with some bash versions
-		for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
-			if [[ -z "${GroupDepths[${group}]}" ]]; then
-				Groups+=( "${group}" )
-				get_group_depth2 "${group}"
-			fi
-		done
-	};
+	local -r roots="$@"
+        local    root
+        for root in "${roots[@]}"; do
+	        {
+		        cd "${root}" 
+		        # for some unknown reason [A-Z]* doesn't work with
+                        # some bash versions
+		        for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
+			        if [[ -z "${GroupDepths[${group}]}" ]]; then
+				        Groups+=( "${group}" )
+				        get_group_depth2 "${group}"
+			        fi
+		        done
+	        };
+        done
+}
+is_in_pmodules_root() {
+        local -r dir="$1"
+        local root
+        for root in "${PMODULES_ROOT[@]}"; do
+                [[ ${dir} =~ ${root} ]] && return 0
+        done
+        return 1
 }
 
 #
@@ -1164,14 +1211,15 @@ rescan_groups() {
 #
 subcommand_use() {
 	if (( ${#Groups[@]} == 0 )); then
-	        get_groups "${PMODULES_ROOT}"
-		get_group_depths "${PMODULES_ROOT}"
+	        get_groups "${PMODULES_ROOT[@]}"
+		get_group_depths "${PMODULES_ROOT[@]}"
 	fi
 	local saved_IFS=${IFS}; 
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
-
+        local add2path_func='std::append_path'
+        
 	print_info() {
 		local f
 		local r
@@ -1207,7 +1255,7 @@ subcommand_use() {
 		std::info "\nAdditonal directories in MODULEPATH:\n"
 		let n=0
 		for (( i=0; i<${#modulepath[@]}; i++)); do
-			if [[ ! ${modulepath[i]} =~ ${PMODULES_ROOT} ]]; then
+			if [[ ! is_in_pmodules_root "${modulepath[i]}" ]]; then
 			        std::info "\t${modulepath[i]}\n"
 			        let n+=1
 			fi
@@ -1219,7 +1267,8 @@ subcommand_use() {
 	}
 
 	use () {
-		declare -g PMODULES_USED_GROUPS
+		declare -g PMODULES
+                _USED_GROUPS
 		declare -g MODULEPATH
 		
 		local dirs_to_add=()
@@ -1236,29 +1285,25 @@ subcommand_use() {
 			# else
 			# 	error
 			#
-			local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
 			if is_release "${arg}"; then
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
 			elif [[ "${arg}" =~ "flag=" ]]; then
 				std::append_path UseFlags "${arg/flag=}"
-			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
-				if [[ -z "${GroupDepths[$arg]}" ]]; then
-					# not yet cached group
-					Groups+=( "${arg}" )
-					get_group_depth "${PMODULES_ROOT}" "${arg}"
-				fi
+			elif [[ ! ${arg} =~ */* ]] && is_group "${arg}" ]]; then
 				if (( ${GroupDepths[$arg]} != 0 )); then
 					std::die 3 "%s %s: cannot add group to module path -- %s\n" \
                                                  "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 				fi
 				std::append_path PMODULES_USED_GROUPS "${arg}"
-			       	dirs_to_add+=( ${modulefiles_dir} )
+                                local overlay=''
+                                find_overlay overlay "${arg}" 
+                               ${add2path_func} MODULEPATH "${overlay}/${PMODULES_MODULEFILES_DIR}/${arg}"
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
 				std::die 3 "%s %s: illegal directory -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 			elif [[ -d ${arg} ]]; then
-			        dirs_to_add+=( "$(cd "${arg}" && pwd)" )
+                                ${add2path_func} "$(cd "${arg}" && pwd)"
 			else
 				std::die 3 "%s %s: neither a directory, release or group -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
@@ -1266,13 +1311,6 @@ subcommand_use() {
 			shift
 		done
 
-		for dir in "${dirs_to_add[@]}"; do
-			if [[ ${opt_append} == yes ]]; then
-				std::append_path MODULEPATH "${dir}"
-			else
-				std::prepend_path MODULEPATH "${dir}"
-			fi
-		done
 		pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
 	}
 
@@ -1280,15 +1318,14 @@ subcommand_use() {
 	pmodules::get_options opts -o 'ap' -l 'append' -l 'prepend' -- "$@" || subcommand_help_use
 	eval set --  "${opts[@]}"
 	
-	local opt_append='no'
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
 		-a | --append )
-			opt_append='yes'
+			add2path_func='std::append_path'
 			;;
 		-p | --prepend )
-			opt_append='no'
+                        add2path_func='std::prepend_path'
 			;;
 		-- )
 			;;
@@ -1378,19 +1415,35 @@ subcommand_refresh() {
 	subcommand_generic0 refresh "$@"
 }
 
+reset_modulepath() {
+	MODULEPATH=''
+        local group
+        for group in ${PMODULES_DEFAULT_GROUPS}; do
+                local root
+                for root in "${PMODULES_ROOT[@]}"; do
+                        local dir="${root}/${group}/${PMODULES_MODULEFILES_DIR}"
+                        [[ -d "${dir}" ]] && std::append_path MODULEPATH "${dir}"
+                done
+		std::append_path PMODULES_USED_GROUPS "${group}"
+	done
+}
+
+reset_used_groups() {
+	PMODULES_USED_GROUPS=''
+        local group
+        for group in ${PMODULES_DEFAULT_GROUPS}; do
+                std::append_path PMODULES_USED_GROUPS "${group}"
+        done
+}
+
 ##############################################################################
 #
 # purge
 #
 subcommand_purge() {
 	subcommand_generic0 purge "$@"
-	PMODULES_USED_GROUPS=''
-	MODULEPATH=''
-
-	for group in ${PMODULES_DEFAULT_GROUPS}; do
-		std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
-		std::append_path PMODULES_USED_GROUPS "${group}"
-	done
+        reset_modulepath
+        reset_used_groups
 	pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
 }
 
@@ -1431,14 +1484,11 @@ subcommand_list() {
 ##############################################################################
 pmodules_init() {
 	declare -g LOADEDMODULES=''
-	declare -g PMODULES_USED_GROUPS=''
-	declare -g MODULEPATH=''
 	declare -g _LMFILES_=''
 
-	for group in ${PMODULES_DEFAULT_GROUPS}; do
-		std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
-		std::append_path PMODULES_USED_GROUPS "${group}"
-	done
+        reset_modulepath
+        reset_used_groups
+
 	declare -ag Groups='()'
 	declare -Ag GroupDepths='()'
 	declare -g  UsedReleases=''
@@ -1481,7 +1531,7 @@ subcommand_search() {
 	local -r subcommand="${FUNCNAME##*_}"
 	local modules=()
 	local with_modules='//'
-	local src_prefix=''
+	local src_prefix=()
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
 	local opt_print_csv='no'
@@ -1551,7 +1601,7 @@ subcommand_search() {
 			# MODULEPATH inside current group
 			local depth=${GroupDepths[${_group}]}
 			local mpaths=( $(find \
-					     "${src_prefix}/${_group}/modulefiles" \
+					     "${src_prefix[@]/%//${_group}/modulefiles" \
 					     -type d \
 					     -mindepth ${depth} -maxdepth ${depth} \
 					     2>/dev/null))
@@ -1646,7 +1696,7 @@ subcommand_search() {
 		shift
 	done
 	if [[ -z "${src_prefix}" ]]; then
-	        src_prefix="${PMODULES_ROOT}"
+	        src_prefix="${PMODULES_ROOT[@]}"
 	fi
 	
 	if [[ "${opt_use_releases}" == ":" ]]; then
@@ -1863,8 +1913,8 @@ if [[ -z "${subcommand}" ]]; then
 fi
 
 if (( ${#Groups[@]} == 0 )); then
-        get_groups "${PMODULES_ROOT}"
-	get_group_depths "${PMODULES_ROOT}"
+        get_groups "${PMODULES_ROOT[@]}"
+	get_group_depths "${PMODULES_ROOT[@]}"
 fi
 
 ${Subcommands[$subcommand]} "${opts[@]}"
