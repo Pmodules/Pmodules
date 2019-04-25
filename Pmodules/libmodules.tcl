@@ -28,7 +28,7 @@ proc module-addgroup { group } {
 	global version
 
 	debug "called with arg $group"
-	set Implementation [file join {*}$::implementation]
+	set Variant [file join {*}$::variant]
 
 	set	GROUP [string toupper $group]
 	regsub -- "-" ${GROUP} "_" GROUP
@@ -40,8 +40,12 @@ proc module-addgroup { group } {
 
 	if { [module-info mode load] } {
 		debug "mode is load"
-
-		prepend-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
+                foreach overlay $::PmodulesOverlays {
+                        set dir $overlay/$group/$::PmodulesModulfilesDir/$Variant
+                        if { [file isdirectory $dir] } {
+                                prepend-path MODULEPATH $dir
+                        }
+                }
 		prepend-path PMODULES_USED_GROUPS $group
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
 		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
@@ -65,13 +69,17 @@ proc module-addgroup { group } {
 			debug "no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
-		remove-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
+                foreach overlay $::PmodulesOverlays {
+                        remove-path MODULEPATH $overlay/$group/$::PmodulesModulfilesDir/$Variant
+                }
 		debug "mode=remove: $env(PMODULES_USED_GROUPS)"
 		remove-path PMODULES_USED_GROUPS $group
 	}
 	if { [module-info mode switch2] } {
 		debug "mode=switch2"
-		append-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/[module-info name]
+                foreach overlay $::PmodulesOverlays {
+                        append-path MODULEPATH $overlay/$group/$::PmodulesModulfilesDir/[module-info name]
+                }
 		append-path PMODULES_USED_GROUPS ${group}
 	}
 }
@@ -131,6 +139,7 @@ proc lreverse_n { list n } {
         set res
 }
 
+debug "test"
 #
 # set standard environment variables
 #
@@ -291,6 +300,22 @@ proc ModulesHelp { } {
 # or
 #   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1//X2/Y2/name/version
 #
+proc _find_overlay { modulefile_components } {
+        debug "_is_in_overlay"
+        foreach overlay $::PmodulesOverlays  {
+                set	overlay_components	[file split $overlay]
+                set	overlay_num_components	[llength $overlay_components]
+                set	modulefile_root	[file join \
+                                             {*}[lrange \
+                                                     $modulefile_components \
+                                                     0 [expr $overlay_num_components - 1]]]
+                if { [string compare $overlay $modulefile_root] == 0 } {
+                        return $overlay_components
+                }
+        }
+        return {}
+}
+
 proc _pmodules_init_global_vars { } {
 	global	group
 	global  GROUP
@@ -303,38 +328,34 @@ proc _pmodules_init_global_vars { } {
 	global	V_PATCHLVL
 	global	V_RELEASE
 	global	V_PKG
-
-	global	implementation
+	global	variant
 	global	PREFIX		# prefix of package
 
-	debug	"$::ModulesCurrentModulefile"
-	set	::PmodulesRoot		$::env(PMODULES_ROOT)
-	set	::PmodulesModulfilesDir	$::env(PMODULES_MODULEFILES_DIR)
-	set	modulefile		[file split $::ModulesCurrentModulefile]
-	set	pmodules_root		[file split $::PmodulesRoot]
-	set	pmodules_root_num_dirs	[llength $pmodules_root]
+	set	::PmodulesOverlays	[split $::env(PMODULES_OVERLAYS) ':']
+        set	::PmodulesModulfilesDir	$::env(PMODULES_MODULEFILES_DIR)
+        set	modulefile_components	[file split $::ModulesCurrentModulefile]
 
-	set	modulefile_root	[file join {*}[lrange $modulefile 0 [expr $pmodules_root_num_dirs - 1]]]
-	if { $::PmodulesRoot != $modulefile_root } {
-		debug "stop sourcing: ${::PmodulesRoot} != $modulefile_root"
-		return
-	} 
+        set     overlay_components [_find_overlay ${modulefile_components}]
+        if { [ string compare $overlay_components "" ] == 0 } {
+                debug "not in an overlay"
+                return
+        }
+
 	debug	"modulefile is inside our root"
-	set	rel_modulefile	[lrange $modulefile [llength $pmodules_root] end]
+	set	rel_modulefile	[lrange $modulefile_components [llength $overlay_components] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	GROUP		"${group}"
-	set	name		[lindex $modulefile end-1]
+	set	name		[lindex $modulefile_components end-1]
 	set	P		"${name}"
-	set	version		[lindex $modulefile end]
+	set	version		[lindex $modulefile_components end]
 	set 	V		"${version}"
 	lassign [split $V -]	V_PKG tmp
 	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
-	set	implementation	[lrange $rel_modulefile 2 end]
-	set	prefix		"$pmodules_root $group [lreverse_n $implementation 2]"
+	set	variant 	[lrange $rel_modulefile 2 end]
+	set	prefix		"$overlay_components $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
 
-	debug "PREFIX=$PREFIX"
 	debug "group of module $name: $group"
 }
 
@@ -367,3 +388,4 @@ _pmodules_setenv ${PREFIX} ${name} ${version}
 _pmodules_update_loaded_modules ${group} ${name} ${version}
 
 debug "return from lib"
+

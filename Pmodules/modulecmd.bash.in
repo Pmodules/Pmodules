@@ -37,7 +37,6 @@ declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 shopt -s nullglob
 
-declare -a Groups='()'
 declare -A GroupDepths='()'
 declare current_modulefile=''
 declare g_shell=''
@@ -77,7 +76,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases UseFlags PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'pbuild::save_env ${g_shell} Overlays PMODULES_OVERLAYS GroupDepths UsedReleases UseFlags PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 print_version() {
 	echo "
@@ -440,8 +439,8 @@ USAGE:
 #
 # get release of module
 # Note:
-# - the release of a module outside ${PMODULES_ROOT[@]} is always 'stable'
-# - the release of a module inside ${PMODULES_ROOT[@]} without a 
+# - the release of a module outside ${Overlays[@]} is always 'stable'
+# - the release of a module inside ${Overlays[@]} without a 
 #   coresponding release file is always 'unstable'
 #
 # Args:
@@ -451,8 +450,8 @@ get_release() {
 	local "$1"
 	local -r modulefile="$2"
 
-	# is modulefile outside ${PMODULES_ROOT}?
-        for root in "${PMODULES_ROOT[@]}" 'ZZZZZZZ'; do
+	# is modulefile in a used overlay?
+        for root in "${!Overlays[@]}" 'ZZZZZZZ'; do
                 [[ ${modulefile} =~ ${root} ]] && break
         done
         if [[ "${root}" == 'ZZZZZZZ' ]]; then
@@ -460,7 +459,7 @@ get_release() {
 		return 0
 	fi
 
-	# we are inside ${PMODULES_ROOT[@]}
+	# we are inside the used overlays
 	local -r releasefile="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${releasefile} ]]; then
 		# read releasefile, remove empty lines, spaces etc
@@ -485,7 +484,7 @@ is_used_release() {
 find_overlay () {
         local "$1"
         local -r group="$2"
-        for root in "${PMODULES_ROOT[@]}"; do
+        for root in "${!Overlays[@]}"; do
 	        if [[ -d "${root}/${group}/${PMODULES_MODULEFILES_DIR}" ]]; then
                         std::upvar $1 "${root}"
                         return 0
@@ -502,7 +501,6 @@ is_group () {
 	# not yet cached or not a group
         local overlay=''
         find_overlay overlay "${group}" || return 1
-	Groups+=( "${group}" )
 	get_group_depths "${root}" "${group}"
         return 0
 }
@@ -817,7 +815,7 @@ subcommand_load() {
                                                  "${CMD}" 'load' "${group}"
 				MODULEPATH=""
 				modulepath=()
-                                for root in "${PMODULES_ROOT[@]}"; do
+                                for root in "${!Overlays[@]}"; do
                                         MODULEPATH+="${root}/${group}/${PMODULES_MODULEFILES_DIR}:"
 				        modulepath+=( ${MODULEPATH} )
                                 done
@@ -844,10 +842,10 @@ subcommand_load() {
 			std::die 3 ""
 		fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
-			std::die 3 "%s %s: module conflicts with already loaded module -- %s\n" \
+			std::die 3 "%s %s: module already loaded -- %s\n" \
                                  "${CMD}" 'load' "${m}"
 		fi
-                for root in "${PMODULES_ROOT[@]}"; do
+                for root in "${!Overlays[@]}"; do
 		        if [[ ${current_modulefile} =~ ${root} ]]; then
 			        # modulefile is in our hierarchy
 			        # ${prefix} was set in is_available()!
@@ -856,7 +854,7 @@ subcommand_load() {
 		        fi
                 done
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-                    || std::die 1 "Oops: unable to create tmp file!\n"
+                        || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}")
 		echo "${output}"
 		eval "${output}"
@@ -953,7 +951,7 @@ subcommand_avail() {
 
 	output_header() {
 		local caption=${dir}
-                for root in "${PMODULES_ROOT[@]}"; do
+                for root in "${!Overlays[@]}"; do
 		        if [[ ${current_modulefile} =~ ${root} ]]; then
 		                local caption=${dir/${root}\/}
 		                local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
@@ -1086,7 +1084,7 @@ subcommand_avail() {
 		shift
 	done
 	if [[ "${opt_all_groups}" = 'yes' ]]; then
-		rescan_groups "${PMODULES_ROOT[@]}"
+		rescan_groups "${!Overlays[@]}"
 	fi
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
@@ -1106,29 +1104,11 @@ subcommand_avail() {
 	done
 }
 
-# get available groups
-# $1: root of modulefile hierarchy
-#
-get_groups () {
-	local -r roots="$@"
-        local    root
-        for root in "${roots[@]}"; do
-	        {
-		        cd "${root}" 
-		        # for some unknown reason [A-Z]* doesn't work
-                        # on (some?) SL6 systems
-		        for f in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
-			        Groups+=( $f )
-		        done
-	        };
-        done
-}
-
 # compute depths or passed group
 # Note: cwd must be Pmodules root directory
 # $1: group
 #
-get_group_depth2 () {
+get_group_depth () {
 	local -r group="$1"
 	local -r dir="${group}/${PMODULES_MODULEFILES_DIR}"
 	test -d "${dir}" || return 0
@@ -1136,38 +1116,27 @@ get_group_depth2 () {
 	local -a tmp2=( ${tmp//\// } )
 	local depth=${#tmp2[@]}
 	(( depth-=4 ))
-	# if a group doesn't contain a module yet, depth would be -4
-	# instead of 0
+	# if a group doesn't contain a module, the above computed depth is < 0.
+        # We set it to 0 (even this might be wrong).
 	# :FIXME: better solution?
-	(( depth == -4 )) && (( depth = 0 ))
+	(( depth < 0 )) && (( depth = 0 ))
 	GroupDepths[$group]=${depth} 
-}
-
-# compute depths or passed group
-# $1: root
-# $2: group
-#
-get_group_depth () {
-	local -r root="$1"
-	local -r group="$2"
-	{
-		cd "${root}"
-		get_group_depth2 "${group}"
-	}
 }
 
 #
 # Compute depth for all known groups
 # $1: root of modulefile hierarchy
 get_group_depths () {
-	local -r roots="$@"
+	local -r roots=( "$@" )
         local    root
         for root in "${roots[@]}"; do
 	        {
 		        cd "${root}"
 		        local group
-		        for group in "${Groups[@]}"; do
-			        get_group_depth2 "${group}"
+                        # for some unknown reason [A-Z]* doesn't work
+                        # on (some?) SL6 systems
+		        for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
+			        get_group_depth "${group}"
 		        done
 	        };
         done
@@ -1190,8 +1159,7 @@ rescan_groups() {
                         # some bash versions
 		        for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
 			        if [[ -z "${GroupDepths[${group}]}" ]]; then
-				        Groups+=( "${group}" )
-				        get_group_depth2 "${group}"
+				        get_group_depth "${group}"
 			        fi
 		        done
 	        };
@@ -1200,7 +1168,7 @@ rescan_groups() {
 is_in_pmodules_root() {
         local -r dir="$1"
         local root
-        for root in "${PMODULES_ROOT[@]}"; do
+        for root in "${!Overlays[@]}"; do
                 [[ ${dir} =~ ${root} ]] && return 0
         done
         return 1
@@ -1210,9 +1178,8 @@ is_in_pmodules_root() {
 # use [-a|--append|-p|--prepend] [directory|group|release...]
 #
 subcommand_use() {
-	if (( ${#Groups[@]} == 0 )); then
-	        get_groups "${PMODULES_ROOT[@]}"
-		get_group_depths "${PMODULES_ROOT[@]}"
+	if (( ${#GroupDepths[@]} == 0 )); then
+		get_group_depths "${!Overlays[@]}"
 	fi
 	local saved_IFS=${IFS}; 
 	IFS=':'
@@ -1229,7 +1196,7 @@ subcommand_use() {
 		done
 		std::info "\nUnused groups:\n"
 		local _group
-		for _group in "${Groups[@]}"; do
+		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
 			if ! is_used_group "${_group}" && (( depth == 0 )); then
 			    std::info "\t${_group}\n"
@@ -1255,7 +1222,7 @@ subcommand_use() {
 		std::info "\nAdditonal directories in MODULEPATH:\n"
 		let n=0
 		for (( i=0; i<${#modulepath[@]}; i++)); do
-			if [[ ! is_in_pmodules_root "${modulepath[i]}" ]]; then
+			if ! is_in_pmodules_root "${modulepath[i]}"; then
 			        std::info "\t${modulepath[i]}\n"
 			        let n+=1
 			fi
@@ -1267,10 +1234,6 @@ subcommand_use() {
 	}
 
 	use () {
-		declare -g PMODULES
-                _USED_GROUPS
-		declare -g MODULEPATH
-		
 		local dirs_to_add=()
 		while (( $# > 0)); do
 			arg="$1"
@@ -1290,15 +1253,39 @@ subcommand_use() {
 			        std::append_path UsedReleases "${arg}"
 			elif [[ "${arg}" =~ "flag=" ]]; then
 				std::append_path UseFlags "${arg/flag=}"
-			elif [[ ! ${arg} =~ */* ]] && is_group "${arg}" ]]; then
-				if (( ${GroupDepths[$arg]} != 0 )); then
+			elif [[ "${arg}" =~ "overlay=" ]]; then
+                                local overlay="${arg/overlay=}"
+                                [[ -d "${overlay}" ]] || \
+                                        std:die 3 "%s %s: is not a directory -- %s\n" \
+                                                "${CMD}" "${FUNCNAME[0]##*_}" "${overlay}"
+                                if [[ ! ${Overlays[${overlay}]} ]]; then
+                                        Overlays[${overlay}]=1
+                                        PMODULES_OVERLAYS="${PMODULES_OVERLAYS}:${overlay}"
+	                                get_group_depths "${!Overlays[@]}"
+                                        echo "MODULEPATH=$MODULEPATH" 1>&2
+                                        for group in ${PMODULES_USED_GROUPS//:/ }; do
+                                                local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
+                                                if [[ -d "${dir}" ]]; then
+                                                        std::prepend_path MODULEPATH "${dir}"
+                                                fi
+                                        done
+                                fi
+                                
+			elif [[ ! ${arg} =~ */* ]] && is_group "${arg}"; then
+                                if (( ${GroupDepths[$arg]} != 0 )); then
 					std::die 3 "%s %s: cannot add group to module path -- %s\n" \
                                                  "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 				fi
 				std::append_path PMODULES_USED_GROUPS "${arg}"
-                                local overlay=''
-                                find_overlay overlay "${arg}" 
-                               ${add2path_func} MODULEPATH "${overlay}/${PMODULES_MODULEFILES_DIR}/${arg}"
+                                for overlay in "${!Overlays[@]}"; do
+                                        for group in ${PMODULES_USED_GROUPS//:/ }; do
+                                                local dir="${overlay}/"
+                                                dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                                if [[ -d "${dir}" ]]; then
+                                                        std::prepend_path MODULEPATH "${dir}"
+                                                fi
+                                        done
+                                done
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
 				std::die 3 "%s %s: illegal directory -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
@@ -1418,13 +1405,12 @@ subcommand_refresh() {
 reset_modulepath() {
 	MODULEPATH=''
         local group
-        for group in ${PMODULES_DEFAULT_GROUPS}; do
-                local root
-                for root in "${PMODULES_ROOT[@]}"; do
+        local root
+        for root in "${!Overlays[@]}"; do
+                for group in ${PMODULES_DEFAULT_GROUPS}; do
                         local dir="${root}/${group}/${PMODULES_MODULEFILES_DIR}"
-                        [[ -d "${dir}" ]] && std::append_path MODULEPATH "${dir}"
+                        [[ -d "${dir}" ]] && std::prepend_path MODULEPATH "${dir}"
                 done
-		std::append_path PMODULES_USED_GROUPS "${group}"
 	done
 }
 
@@ -1486,17 +1472,16 @@ pmodules_init() {
 	declare -g LOADEDMODULES=''
 	declare -g _LMFILES_=''
 
-        reset_modulepath
-        reset_used_groups
-
-	declare -ag Groups='()'
+        declare -Ag Overlays=([${PMODULES_ROOT}]="1")
+        declare -xg PMODULES_OVERLAYS="${PMODULES_ROOT}"
 	declare -Ag GroupDepths='()'
 	declare -g  UsedReleases=''
 	declare -g  UseFlags=()
 	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
 		std::append_path UsedReleases "${r}"
 	done
-
+        reset_modulepath
+        reset_used_groups
 }
 
 ##############################################################################
@@ -1580,6 +1565,7 @@ subcommand_search() {
 			"${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
 		fi
 	}
+
 	#.....................................................................
 	#
 	# search modules
@@ -1596,12 +1582,12 @@ subcommand_search() {
 		    || std::die 1 "Oops: unable to create tmp file!\n"
 		local _group
 		# loop over all groups
-		for _group in "${Groups[@]}"; do
+		for _group in "${!GroupDepths[@]}"; do
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
 			local depth=${GroupDepths[${_group}]}
 			local mpaths=( $(find \
-					     "${src_prefix[@]/%//${_group}/modulefiles" \
+					     "${src_prefix[@]/%//${_group}/modulefiles}" \
 					     -type d \
 					     -mindepth ${depth} -maxdepth ${depth} \
 					     2>/dev/null))
@@ -1696,7 +1682,7 @@ subcommand_search() {
 		shift
 	done
 	if [[ -z "${src_prefix}" ]]; then
-	        src_prefix="${PMODULES_ROOT[@]}"
+	        src_prefix="${PMODULES_ROOT}"
 	fi
 	
 	if [[ "${opt_use_releases}" == ":" ]]; then
@@ -1707,8 +1693,7 @@ subcommand_search() {
 		modules+=( '' )
 	fi
 
-	if (( ${#Groups[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
-	        get_groups "${src_prefix}"
+	if (( ${#GroupDepths[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
 		get_group_depths "${src_prefix}"
 	fi
 	
@@ -1830,6 +1815,9 @@ case "$1" in
 		;;
 esac
 shift
+
+export PMODULES_OVERLAYS
+
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 else
@@ -1912,9 +1900,8 @@ if [[ -z "${subcommand}" ]]; then
 	std::die 1 "${CMD}: no sub-command specified.\n"
 fi
 
-if (( ${#Groups[@]} == 0 )); then
-        get_groups "${PMODULES_ROOT[@]}"
-	get_group_depths "${PMODULES_ROOT[@]}"
+if (( ${#GroupDepths[@]} == 0 )); then
+	get_group_depths "${!Overlays[@]}"
 fi
 
 ${Subcommands[$subcommand]} "${opts[@]}"
