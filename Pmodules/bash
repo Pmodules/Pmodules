@@ -128,6 +128,7 @@ declare -x _LMFILES_=''
 declare -x MODULEPATH=''
 for group in ${PMODULES_DEFAULT_GROUPS//:/ }; do
 	std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+        std::append_path PMODULES_USED_GROUPS "${group}"
 done
 declare -x UsedReleases=''
 for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
@@ -135,7 +136,7 @@ for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
 done
 
 #eval $(save_env UsedReleases PMODULES_DEFAULT_RELEASES PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES)
-#unset UsedReleases
+unset UsedReleases
 #unset PMODULES_DEFAULT_RELEASES
 #unset PMODULES_DEFAULT_GROUPS
 #unset PMODULES_DEFINED_RELEASES

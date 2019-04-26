@@ -444,11 +444,14 @@ USAGE:
 #   coresponding release file is always 'unstable'
 #
 # Args:
-# 	$1: absolute modulefile name
+#       $1      upvar for returned release
+# 	$2      absolute modulefile name
+#       $3      colon seperated list of accepted releases
 #
 get_release() {
 	local "$1"
-	local -r modulefile="$2"
+	local -r modulefile=$2
+        local -r releases=$3
 
 	# is modulefile in a used overlay?
         for root in "${!Overlays[@]}" 'ZZZZZZZ'; do
@@ -468,7 +471,7 @@ get_release() {
 	else	
 		std::upvar $1 'unstable'
 	fi
-	return 0
+	[[ :${releases}: =~ ${release} ]]
 }
 
 : ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
@@ -481,12 +484,12 @@ is_used_release() {
 	[[ ":${UsedReleases}:" =~ :$1: ]]
 }
 
-find_overlay () {
+get_overlay_of_group () {
         local "$1"
         local -r group="$2"
-        for root in "${!Overlays[@]}"; do
-	        if [[ -d "${root}/${group}/${PMODULES_MODULEFILES_DIR}" ]]; then
-                        std::upvar $1 "${root}"
+        for overlay in "${!Overlays[@]}"; do
+	        if [[ -d "${overlay}/${group}/${PMODULES_MODULEFILES_DIR}" ]]; then
+                        std::upvar $1 "${overlay}"
                         return 0
                 fi
         done
@@ -500,9 +503,34 @@ is_group () {
 
 	# not yet cached or not a group
         local overlay=''
-        find_overlay overlay "${group}" || return 1
+        get_overlay_of_group overlay "${group}" || return 1
 	get_group_depths "${root}" "${group}"
         return 0
+}
+
+#
+# Check whether a given path is in an overlay.
+# If yes, return 0 and the overlay with upvar of first argument
+# otherwise return 1
+#
+# $1    upvar to return overlay
+# $2    upvar to return group
+# $3    path to check
+#
+find_overlay () {
+        local "$1"
+        local "$2"
+        local -r path=$3
+        for overlay in "${!Overlays[@]}"; do
+                if [[ "${path}" =~ "${overlay}" ]]; then
+                        std::upvar $1 "${overlay}"
+                        local group="${path#${overlay}/}"
+                        group=${group%%/*}
+                        std::upvar $2 "${group}"
+                        return 0
+                fi
+        done
+        return 1
 }
 
 is_used_group() {
@@ -688,8 +716,8 @@ subcommand_load() {
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
 		test -n "${current_modulefile}" || return 1
-		get_release release "${current_modulefile}"
-		[[ :${UsedReleases}: =~ ${release} ]]
+                local release=''
+		get_release release "${current_modulefile}" "${UsedReleases}"
 	}
 
 	#
@@ -915,29 +943,38 @@ subcommand_show() {
 }
 
 #
-# get all available modules in given directory.
+# Get all available modules in given modulepath. Whereby modulepath is
+# a colon separated list.
 # return list like
 #	modulename1 release1 modulename2 release2 ...
 #
 get_available_modules() {
-	local -r dir="$1"
+	local saved_IFS=${IFS}; 
+	IFS=':'
+	local -a dirs=($1)
+	IFS=${saved_IFS}
 	local -r module="$2"
-	local -r use_releases="${3:-${UsedReleases}}"
+	local -r releases="${3:-${UsedReleases}}"
 	local -a mods=()
 	local    release
-	test -d "${dir}" || return 0
-	{
-		cd "${dir}"
-		while read mod; do
-			get_release release "${dir}/${mod}"
 
-			if [[ :${use_releases}: =~ :${release}: ]]; then
-			        mods+=( "${mod}" ${release} )
-			fi
-		done < <(find * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
-	}
+        local -A dict
+        for dir in "${dirs[@]}"; do
+                test -d "${dir}" || continue
+	        {
+		        cd "${dir}"
+		        while read mod; do
+			        get_release release "${dir}/${mod}" "${releases}" || continue
+                                if [[ -z ${dict[${mod}]} ]]; then
+			                mods+=( "${mod}" ${release} )
+                                        dict[${mod}]=1
+                                fi
+		        done < <(find * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
+	        }
+        done
 	echo "${mods[@]}"
 }
+
 #
 # avail [-hlt] [<module-pattern>...]
 #
@@ -950,14 +987,7 @@ subcommand_avail() {
 	cols=$(tput cols)
 
 	output_header() {
-		local caption=${dir}
-                for root in "${!Overlays[@]}"; do
-		        if [[ ${current_modulefile} =~ ${root} ]]; then
-		                local caption=${dir/${root}\/}
-		                local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
-		                local caption=${caption/: \//: }
-                        fi
-                done
+		local caption=$1
 		let i=($cols-${#caption})/2-2
 		printf -- "%0.s-" $(seq 1 $i) 1>&2
 		printf -- " %s " "${caption}" 1>&2
@@ -966,7 +996,7 @@ subcommand_avail() {
 	}
 
 	terse_output() {
-		output_header
+		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=2 )); do
 			local mod=${mods[i]}
 			local release=${mods[i+1]}
@@ -992,7 +1022,7 @@ subcommand_avail() {
 	#
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
-		output_header
+		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=2 )); do
 			local mod=${mods[i]}
 			local release=${mods[i+1]}
@@ -1010,7 +1040,7 @@ subcommand_avail() {
 	}
 
 	human_readable_output() {
-		output_header
+		output_header "$1"
 
 		local -i column=$cols
 		local -i colsize=16
@@ -1045,6 +1075,7 @@ subcommand_avail() {
 		done
 		printf -- "\n\n" 1>&2
 	}
+
 	local opts=()
 	pmodules::get_options opts -o ahlmt \
 			-l all -l all-releases \
@@ -1089,17 +1120,36 @@ subcommand_avail() {
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
-	local saved_IFS=${IFS}; 
+        local -a modulepath
+	local saved_IFS=${IFS}
 	IFS=':'
-	local -a modulepath=(${MODULEPATH})
+	modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
+        
+        local overlay=''
+        local group=''
+        local -A modulepath_of_group
+        local -a groups=()
+        for dir in "${modulepath[@]}"; do
+                group='other'
+                find_overlay overlay group "${dir}"
+                if [[ ${modulepath_of_group[${group}]} ]]; then
+                        modulepath_of_group[${group}]+=:${dir}
+                else
+                        modulepath_of_group[${group}]=${dir}
+                        groups+=( "${group}" )
+                fi
+        done
+        groups+=( 'other' )
 	for string in "${pattern[@]}"; do
-		for dir in "${modulepath[@]}"; do
+                for group in "${groups[@]}"; do
 			mods=( $( get_available_modules \
-                                          "${dir}" "${string}" "${opt_use_releases}" ) )
+                                          "${modulepath_of_group[${group}]}" \
+                                          "${string}" \
+                                          "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 
-			${output_function}
+			${output_function} "${group}"
 		done
 	done
 }
@@ -1165,14 +1215,6 @@ rescan_groups() {
 	        };
         done
 }
-is_in_pmodules_root() {
-        local -r dir="$1"
-        local root
-        for root in "${!Overlays[@]}"; do
-                [[ ${dir} =~ ${root} ]] && return 0
-        done
-        return 1
-}
 
 #
 # use [-a|--append|-p|--prepend] [directory|group|release...]
@@ -1181,7 +1223,7 @@ subcommand_use() {
 	if (( ${#GroupDepths[@]} == 0 )); then
 		get_group_depths "${!Overlays[@]}"
 	fi
-	local saved_IFS=${IFS}; 
+	local saved_IFS=${IFS} 
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
@@ -1219,10 +1261,17 @@ subcommand_use() {
 			std::info "\t${flag}\n"
 		done
 
+                local overlay
+                std::info "\nUsed overlays:\n"
+                for overlay in "${!Overlays[@]}"; do
+                        std::info "\t${overlay}\n"
+                done
+
 		std::info "\nAdditonal directories in MODULEPATH:\n"
 		let n=0
+                local group
 		for (( i=0; i<${#modulepath[@]}; i++)); do
-			if ! is_in_pmodules_root "${modulepath[i]}"; then
+			if ! find_overlay overlay group "${modulepath[i]}"; then
 			        std::info "\t${modulepath[i]}\n"
 			        let n+=1
 			fi
@@ -1262,7 +1311,6 @@ subcommand_use() {
                                         Overlays[${overlay}]=1
                                         PMODULES_OVERLAYS="${PMODULES_OVERLAYS}:${overlay}"
 	                                get_group_depths "${!Overlays[@]}"
-                                        echo "MODULEPATH=$MODULEPATH" 1>&2
                                         for group in ${PMODULES_USED_GROUPS//:/ }; do
                                                 local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
                                                 if [[ -d "${dir}" ]]; then
@@ -1335,6 +1383,11 @@ subcommand_use() {
 #
 subcommand_unuse() {
 	local opts=()
+	local saved_IFS=${IFS}
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${saved_IFS}
+
 	pmodules::get_options opts -o '' -- "$@" || subcommand_help_unuse
 	eval set --  "${opts[@]}"
 
@@ -1356,8 +1409,31 @@ subcommand_unuse() {
 		local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
 		if is_release "${arg}"; then
 			std::remove_path UsedReleases "${arg}"
+            
 		elif [[ "${arg}" =~ "flag=" ]]; then
 			std::remove_path UseFlags "${arg/flag=}"
+
+                elif [[ "${arg}" =~ "overlay=" ]]; then
+                                local overlay="${arg/overlay=}"
+                                [[ -d "${overlay}" ]] || \
+                                        std::die 3 "%s %s: is not a directory -- %s\n" \
+                                                 "${CMD}" "${FUNCNAME[0]##*_}" "${overlay}"
+                                [[ "${overlay}" == "${PMODULES_ROOT}" ]] && \
+                                        std::die 3 "%s %s: cannot remove root overlay -- %s\n" \
+                                                 "${CMD}" "${FUNCNAME[0]##*_}" "${overlay}"
+                                if [[ ${Overlays[${overlay}]} ]]; then
+                                        [[ "${_LMFILES_}" =~ "${overlay}" ]] && \
+                                                std::die 3 "%s %s: cannot remove overlay -- %s\n" \
+                                                         "${CMD}" "${FUNCNAME[0]##*_}" "${overlay}"
+                                        unset Overlays[${overlay}]
+                                        std::remove_path PMODULES_OVERLAYS "${overlay}"
+                                        for dir in "${modulepath[@]}"; do
+                                                if [[ "${dir}" =~ "${overlay}" ]]; then
+                                                        std::remove_path MODULEPATH "${dir}"
+                                                fi
+                                        done
+                                fi
+
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
 			if (( ${GroupDepths[$arg]} != 0 )); then
 				std::die 3 "%s %s: cannot remove group from module path -- %s\n" \
@@ -1365,6 +1441,7 @@ subcommand_unuse() {
 			fi
 			std::remove_path PMODULES_USED_GROUPS "${arg}"
 			dirs_to_remove+=( ${modulefiles_dir} )
+                       
 		elif [[ -d ${arg} ]]; then
 			local normalized_dir=$(cd "${arg}" && pwd)
 			dirs_to_remove+=( ${normalized_dir} )
@@ -1580,21 +1657,23 @@ subcommand_search() {
 		# write results to a temporary file for later processing
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
 		    || std::die 1 "Oops: unable to create tmp file!\n"
-		local _group
-		# loop over all groups
-		for _group in "${!GroupDepths[@]}"; do
+		local group
+		for group in "${!GroupDepths[@]}"; do
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
-			local depth=${GroupDepths[${_group}]}
+			local depth=${GroupDepths[${group}]}
 			local mpaths=( $(find \
-					     "${src_prefix[@]/%//${_group}/modulefiles}" \
+					     "${src_prefix[@]/%//${group}/modulefiles}" \
 					     -type d \
 					     -mindepth ${depth} -maxdepth ${depth} \
 					     2>/dev/null))
 			local mpath
+                        local overlay
+                        local unused
 			for mpath in "${mpaths[@]}"; do
 				# get dependencies encoded in directory name
-				local p="${mpath/${src_prefix}}"
+                                find_overlay overlay unused "${mpath}"
+				local p="${mpath/${overlay}}"
 				p=( ${p//\// } )
 				local deps=()
 				local -i i
@@ -1613,7 +1692,7 @@ subcommand_search() {
 				[[ ${#mods[@]} == 0 ]] && continue
 				for (( i=0; i<${#mods[@]}; i+=2 )); do
 					printf "${fmt}" ${mods[i]} "${mods[i+1]}" \
-					       ${_group} "${requires}" >> "${tmpfile}"
+					       ${group} "${requires}" >> "${tmpfile}"
 				done
 			done
 		done
@@ -1682,7 +1761,7 @@ subcommand_search() {
 		shift
 	done
 	if [[ -z "${src_prefix}" ]]; then
-	        src_prefix="${PMODULES_ROOT}"
+	        src_prefix=( "${!Overlays[@]}" )
 	fi
 	
 	if [[ "${opt_use_releases}" == ":" ]]; then
@@ -1796,7 +1875,7 @@ subcommand_initlist() {
 	subcommand_generic0 initlist "$@"
 }
 
-#
+ #
 # initclear
 #
 subcommand_initclear() {
