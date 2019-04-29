@@ -77,7 +77,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases UseFlags PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'pbuild::save_env ${g_shell} Groups GroupDepths UsedReleases UseFlags UsedGroups PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 print_version() {
 	echo "
@@ -493,7 +493,7 @@ is_group () {
 }
 
 is_used_group() {
-	[[ :${PMODULES_USED_GROUPS}: =~ :$1: ]]
+	[[ :${UsedGroups}: =~ :$1: ]]
 }
 
 module_is_loaded() {
@@ -1176,7 +1176,7 @@ subcommand_use() {
 		local f
 		local r
 		std::info "Used groups:\n"
-		for f in ${PMODULES_USED_GROUPS//:/ }; do
+		for f in ${UsedGroups//:/ }; do
 			std::info "\t${f}\n"
 		done
 		std::info "\nUnused groups:\n"
@@ -1219,7 +1219,7 @@ subcommand_use() {
 	}
 
 	use () {
-		declare -g PMODULES_USED_GROUPS
+		declare -g UsedGroups
 		declare -g MODULEPATH
 		
 		local dirs_to_add=()
@@ -1252,7 +1252,7 @@ subcommand_use() {
 					std::die 3 "%s %s: cannot add group to module path -- %s\n" \
                                                  "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 				fi
-				std::append_path PMODULES_USED_GROUPS "${arg}"
+				std::append_path UsedGroups "${arg}"
 			       	dirs_to_add+=( ${modulefiles_dir} )
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
 				std::die 3 "%s %s: illegal directory -- %s\n" \
@@ -1273,7 +1273,7 @@ subcommand_use() {
 				std::prepend_path MODULEPATH "${dir}"
 			fi
 		done
-		pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
+		pbuild::export_env ${g_shell} MODULEPATH UsedGroups
 	}
 
 	local opts=()
@@ -1339,7 +1339,7 @@ subcommand_unuse() {
 				std::die 3 "%s %s: cannot remove group from module path -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 			fi
-			std::remove_path PMODULES_USED_GROUPS "${arg}"
+			std::remove_path UsedGroups "${arg}"
 			dirs_to_remove+=( ${modulefiles_dir} )
 		elif [[ -d ${arg} ]]; then
 			local normalized_dir=$(cd "${arg}" && pwd)
@@ -1354,8 +1354,8 @@ subcommand_unuse() {
 		shift
 	done
 
-	declare -g PMODULES_USED_GROUPS
-	pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
+	declare -g UsedGroups
+	pbuild::export_env ${g_shell} UsedGroups
 	[[ ${#dirs_to_remove[@]} == 0 ]] && return
 	for dir in "${dirs_to_remove[@]}"; do
 		subcommand_generic1 unuse "${dir}"
@@ -1389,10 +1389,10 @@ reset_modulepath() {
 }
 
 reset_used_groups() {
-	PMODULES_USED_GROUPS=''
+	UsedGroups=''
         local group
         for group in ${PMODULES_DEFAULT_GROUPS}; do
-                std::append_path PMODULES_USED_GROUPS "${group}"
+                std::append_path UsedGroups "${group}"
         done
 }
 
@@ -1411,7 +1411,7 @@ subcommand_purge() {
 	subcommand_generic0 purge "$@"
         reset_modulepath
         reset_used_groups
-	pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
+	pbuild::export_env ${g_shell} MODULEPATH UsedGroups
 }
 
 ##############################################################################
@@ -1472,12 +1472,17 @@ init_manpath() {
         fi
 }
 
+export LOADEDMODULES
+export _LMFILES_
+export UsedGroups
+export MODULEPATH
+
 ##############################################################################
 pmodules_init() {
-	declare -g LOADEDMODULES=''
-	declare -g _LMFILES_=''
-	declare -g PMODULES_USED_GROUPS=''
-	declare -g MODULEPATH=''
+	declare -gx LOADEDMODULES=''
+	declare -gx _LMFILES_=''
+	declare -gx UsedGroups=''
+	declare -gx MODULEPATH=''
 
 	declare -ag Groups='()'
 	declare -Ag GroupDepths='()'
@@ -1487,6 +1492,11 @@ pmodules_init() {
         reset_used_releases
         init_path
         init_manpath
+        pbuild::export_env "${g_shell}" \
+                           LOADEDMODULES \
+                           _LMFILES_ \
+                           MODULEPATH \
+                           PATH
 }
 
 ##############################################################################
@@ -1510,7 +1520,7 @@ subcommand_clear() {
 		esac
 	done
 	pmodules_init
-	pbuild::export_env ${g_shell} LOADEDMODULES PMODULES_USED_GROUPS MODULEPATH _LMFILES_
+	pbuild::export_env ${g_shell} LOADEDMODULES MODULEPATH _LMFILES_
 }
 
 ##############################################################################
