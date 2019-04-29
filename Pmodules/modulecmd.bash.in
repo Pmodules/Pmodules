@@ -1378,19 +1378,39 @@ subcommand_refresh() {
 	subcommand_generic0 refresh "$@"
 }
 
+reset_modulepath() {
+	MODULEPATH=''
+        local group
+        local root="${PMODULES_ROOT}"
+        for group in ${PMODULES_DEFAULT_GROUPS}; do
+                local dir="${root}/${group}/${PMODULES_MODULEFILES_DIR}"
+                [[ -d "${dir}" ]] && std::prepend_path MODULEPATH "${dir}"
+        done
+}
+
+reset_used_groups() {
+	PMODULES_USED_GROUPS=''
+        local group
+        for group in ${PMODULES_DEFAULT_GROUPS}; do
+                std::append_path PMODULES_USED_GROUPS "${group}"
+        done
+}
+
+reset_used_releases() {
+	declare -g  UsedReleases=''
+	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
+		std::append_path UsedReleases "${r}"
+	done
+}
+
 ##############################################################################
 #
 # purge
 #
 subcommand_purge() {
 	subcommand_generic0 purge "$@"
-	PMODULES_USED_GROUPS=''
-	MODULEPATH=''
-
-	for group in ${PMODULES_DEFAULT_GROUPS}; do
-		std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
-		std::append_path PMODULES_USED_GROUPS "${group}"
-	done
+        reset_modulepath
+        reset_used_groups
 	pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
 }
 
@@ -1428,25 +1448,45 @@ subcommand_list() {
 	"${modulecmd}" "${g_shell}" list "${opts[@]}"
 }
 
+init_path() {
+        std::replace_path PATH    "${PMODULES_HOME%/*}/.*"
+        std::append_path  PATH    "${PMODULES_HOME}/bin"
+}
+
+init_manpath() {
+        std::replace_path MANPATH "${PMODULES_HOME%/*}/.*"
+
+        if [[ -r /etc/man.config ]]; then
+	        declare _manconf='/etc/man.config'
+        elif [[ -r /etc/man.conf ]]; then
+	        declare _manconf='/etc/man.conf'
+        fi
+        if [[ -n ${_manconf} ]]; then
+	        while read name value rest; do
+		        std::append_path MANPATH "${value}"
+	        done < <(grep "^MANPATH\s" "${_manconf}")
+	        unset _manconf
+        else
+	        std::append_path  MANPATH "${PMODULES_HOME}/share/man"
+	        std::append_path  MANPATH "/usr/share/man"
+        fi
+}
+
 ##############################################################################
 pmodules_init() {
 	declare -g LOADEDMODULES=''
+	declare -g _LMFILES_=''
 	declare -g PMODULES_USED_GROUPS=''
 	declare -g MODULEPATH=''
-	declare -g _LMFILES_=''
 
-	for group in ${PMODULES_DEFAULT_GROUPS}; do
-		std::append_path MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
-		std::append_path PMODULES_USED_GROUPS "${group}"
-	done
 	declare -ag Groups='()'
 	declare -Ag GroupDepths='()'
-	declare -g  UsedReleases=''
 	declare -g  UseFlags=()
-	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
-		std::append_path UsedReleases "${r}"
-	done
-
+        reset_modulepath
+        reset_used_groups
+        reset_used_releases
+        init_path
+        init_manpath
 }
 
 ##############################################################################
