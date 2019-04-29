@@ -1455,7 +1455,7 @@ subcommand_unuse() {
 		shift
 	done
 
-	declare -g PMODULES_USED_GROUPS
+	declare -gx PMODULES_USED_GROUPS
 	pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
 	[[ ${#dirs_to_remove[@]} == 0 ]] && return
 	for dir in "${dirs_to_remove[@]}"; do
