@@ -67,16 +67,16 @@ std::get_abspath() {
 }
 
 std::append_path () {
-        local -r P=$1
-        local -r d=$2
+	local -r P="$1"
+	local -r d="$2"
 
         if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
-                if [[ -z ${!P} ]]; then
-                        eval $P=${d}
-                else
-                        eval $P=${!P}:${d}
-                fi
-        fi
+		if [[ -z ${!P} ]]; then
+			eval $P=\"${d}\"
+		else
+			eval $P=\"${!P}:${d}\"
+        	fi
+	fi
 }
 
 std::prepend_path () {
@@ -103,6 +103,33 @@ std::remove_path() {
 	done
 	# remove leading ':'
 	eval ${P}="${new_path:1}"
+}
+
+#
+# Replace or remove a directory in a path variable.
+#
+# To remove a dir:
+#	std::replace_path PATH <pattern>
+#
+# To replace a dir:
+#	std::replace_path PATH <pattern> /replacement/path
+#
+# Args:
+#	$1 name of the shell variable to set (e.g. PATH)
+#	$2 a grep pattern identifying the element to be removed/replaced
+#	$3 the replacement string (use "" for removal)
+#
+# Based on solution published here:
+# https://stackoverflow.com/questions/273909/how-do-i-manipulate-path-elements-in-shell-scripts 
+#
+std::replace_path () {
+	local -r path="$1"
+	local -r removepat="$2"
+	local -r replacestr="$3"
+
+	local -r removestr=$(echo "${!path}" | tr ":" "\n" | grep -m 1 "^$removepat\$")
+	export $path="$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
+                   sed '/^\s*$/d' | tr "\n" ":" | sed -e 's|^:||' -e 's|:$||')"
 }
 
 #

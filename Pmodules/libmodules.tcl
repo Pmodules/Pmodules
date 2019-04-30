@@ -28,7 +28,6 @@ proc module-addgroup { group } {
 	global version
 
 	debug "called with arg $group"
-	set Implementation [file join {*}$::implementation]
 
 	set	GROUP [string toupper $group]
 	regsub -- "-" ${GROUP} "_" GROUP
@@ -41,10 +40,14 @@ proc module-addgroup { group } {
 	if { [module-info mode load] } {
 		debug "mode is load"
 
-		prepend-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
-		prepend-path PMODULES_USED_GROUPS $group
+		prepend-path MODULEPATH [file join \
+                                             $::PmodulesRoot \
+                                             $group \
+                                             $::PmodulesModulfilesDir \
+                                             {*}$::variant]
+		prepend-path UsedGroups $group
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
-		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
+		debug "mode=load: new UsedGroups=$env(UsedGroups)"
 	} elseif { [module-info mode remove] } {
 		set GROUP [string toupper $group]
 		debug "remove hierarchical group '${GROUP}'"
@@ -65,14 +68,22 @@ proc module-addgroup { group } {
 			debug "no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
-		remove-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/$Implementation
-		debug "mode=remove: $env(PMODULES_USED_GROUPS)"
-		remove-path PMODULES_USED_GROUPS $group
+		remove-path MODULEPATH [file join \
+                                             $::PmodulesRoot \
+                                             $group \
+                                             $::PmodulesModulfilesDir \
+                                             {*}$::variant]
+		debug "mode=remove: $env(UsedGroups)"
+		remove-path UsedGroups $group
 	}
 	if { [module-info mode switch2] } {
 		debug "mode=switch2"
-		append-path MODULEPATH $::PmodulesRoot/$group/$::PmodulesModulfilesDir/[module-info name]
-		append-path PMODULES_USED_GROUPS ${group}
+		append-path MODULEPATH [file join \
+                                            $::PmodulesRoot \
+                                            $group \
+                                            $::PmodulesModulfilesDir \
+                                            [module-info name]]
+		append-path UsedGroups ${group}
 	}
 }
 
@@ -304,7 +315,7 @@ proc _pmodules_init_global_vars { } {
 	global	V_RELEASE
 	global	V_PKG
 
-	global	implementation
+	global	variant
 	global	PREFIX		# prefix of package
 
 	debug	"$::ModulesCurrentModulefile"
@@ -314,7 +325,8 @@ proc _pmodules_init_global_vars { } {
 	set	pmodules_root		[file split $::PmodulesRoot]
 	set	pmodules_root_num_dirs	[llength $pmodules_root]
 
-	set	modulefile_root	[file join {*}[lrange $modulefile 0 [expr $pmodules_root_num_dirs - 1]]]
+	set	modulefile_root	[file join {*}[lrange $modulefile 0 \
+                                                   [expr $pmodules_root_num_dirs - 1]]]
 	if { $::PmodulesRoot != $modulefile_root } {
 		debug "stop sourcing: ${::PmodulesRoot} != $modulefile_root"
 		return
@@ -330,11 +342,10 @@ proc _pmodules_init_global_vars { } {
 	lassign [split $V -]	V_PKG tmp
 	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
-	set	implementation	[lrange $rel_modulefile 2 end]
-	set	prefix		"$pmodules_root $group [lreverse_n $implementation 2]"
+	set	variant	[lrange $rel_modulefile 2 end]
+	set	prefix		"$pmodules_root $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
 
-	debug "PREFIX=$PREFIX"
 	debug "group of module $name: $group"
 }
 
