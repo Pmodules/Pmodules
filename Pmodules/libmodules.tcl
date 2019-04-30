@@ -28,7 +28,6 @@ proc module-addgroup { group } {
 	global version
 
 	debug "called with arg $group"
-	set Variant [file join {*}$::variant]
 
 	set	GROUP [string toupper $group]
 	regsub -- "-" ${GROUP} "_" GROUP
@@ -41,14 +40,18 @@ proc module-addgroup { group } {
 	if { [module-info mode load] } {
 		debug "mode is load"
                 foreach overlay $::PmodulesOverlays {
-                        set dir $overlay/$group/$::PmodulesModulfilesDir/$Variant
+                        set dir [file join \
+                                     $overlay \
+                                     $group \
+                                     $::PmodulesModulfilesDir \
+                                     {*}$::variant]
                         if { [file isdirectory $dir] } {
                                 prepend-path MODULEPATH $dir
                         }
                 }
-		prepend-path PMODULES_USED_GROUPS $group
+		prepend-path UsedGroups $group
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
-		debug "mode=load: new PMODULES_USED_GROUPS=$env(PMODULES_USED_GROUPS)"
+		debug "mode=load: new UsedGroups=$env(UsedGroups)"
 	} elseif { [module-info mode remove] } {
 		set GROUP [string toupper $group]
 		debug "remove hierarchical group '${GROUP}'"
@@ -70,17 +73,25 @@ proc module-addgroup { group } {
 		}
 		debug "mode=remove: $env(MODULEPATH)"
                 foreach overlay $::PmodulesOverlays {
-                        remove-path MODULEPATH $overlay/$group/$::PmodulesModulfilesDir/$Variant
+                        remove-path MODULEPATH [file join \
+                                                    $overlay \
+                                                    $group \
+                                                    $::PmodulesModulfilesDir \
+                                                    {*}$::variant]
                 }
 		debug "mode=remove: $env(PMODULES_USED_GROUPS)"
-		remove-path PMODULES_USED_GROUPS $group
+		remove-path UsedGroups $group
 	}
 	if { [module-info mode switch2] } {
 		debug "mode=switch2"
                 foreach overlay $::PmodulesOverlays {
-                        append-path MODULEPATH $overlay/$group/$::PmodulesModulfilesDir/[module-info name]
+                        append-path MODULEPATH  [file join \
+                                                     $::PmodulesRoot \
+                                                     $group \
+                                                     $::PmodulesModulfilesDir \
+                                                     [module-info name]]
                 }
-		append-path PMODULES_USED_GROUPS ${group}
+		append-path UsedGroups ${group}
 	}
 }
 

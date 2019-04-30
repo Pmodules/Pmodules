@@ -76,7 +76,7 @@ pbuild::save_env() {
 	pbuild::export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} Overlays PMODULES_OVERLAYS GroupDepths UsedReleases UseFlags PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'pbuild::save_env ${g_shell} Overlays PMODULES_OVERLAYS GroupDepths UsedReleases UseFlags UsedGroups PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 print_version() {
 	echo "
@@ -504,8 +504,7 @@ is_group () {
 	# not yet cached or not a group
         local overlay=''
         get_overlay_of_group overlay "${group}" || return 1
-	get_group_depths "${root}" "${group}"
-        return 0
+	get_group_depths "${overlay}" "${group}"
 }
 
 #
@@ -534,7 +533,7 @@ find_overlay () {
 }
 
 is_used_group() {
-	[[ :${PMODULES_USED_GROUPS}: =~ :$1: ]]
+	[[ :${UsedGroups}: =~ :$1: ]]
 }
 
 module_is_loaded() {
@@ -1161,7 +1160,7 @@ subcommand_avail() {
 get_group_depth () {
 	local -r group="$1"
 	local -r dir="${group}/${PMODULES_MODULEFILES_DIR}"
-	test -d "${dir}" || return 0
+	test -d "${dir}" || return 1
 	local  tmp=$(find "${dir}" -depth -type f -o -type l 2>/dev/null| head -1)
 	local -a tmp2=( ${tmp//\// } )
 	local depth=${#tmp2[@]}
@@ -1233,7 +1232,7 @@ subcommand_use() {
 		local f
 		local r
 		std::info "Used groups:\n"
-		for f in ${PMODULES_USED_GROUPS//:/ }; do
+		for f in ${UsedGroups//:/ }; do
 			std::info "\t${f}\n"
 		done
 		std::info "\nUnused groups:\n"
@@ -1283,6 +1282,9 @@ subcommand_use() {
 	}
 
 	use () {
+		declare -g UsedGroups
+		declare -g MODULEPATH
+		
 		local dirs_to_add=()
 		while (( $# > 0)); do
 			arg="$1"
@@ -1311,7 +1313,7 @@ subcommand_use() {
                                         Overlays[${overlay}]=1
                                         PMODULES_OVERLAYS="${PMODULES_OVERLAYS}:${overlay}"
 	                                get_group_depths "${!Overlays[@]}"
-                                        for group in ${PMODULES_USED_GROUPS//:/ }; do
+                                        for group in ${UsedGroups//:/ }; do
                                                 local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
                                                 if [[ -d "${dir}" ]]; then
                                                         std::prepend_path MODULEPATH "${dir}"
@@ -1324,9 +1326,9 @@ subcommand_use() {
 					std::die 3 "%s %s: cannot add group to module path -- %s\n" \
                                                  "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 				fi
-				std::append_path PMODULES_USED_GROUPS "${arg}"
+				std::append_path UsedGroups "${arg}"
                                 for overlay in "${!Overlays[@]}"; do
-                                        for group in ${PMODULES_USED_GROUPS//:/ }; do
+                                        for group in ${UsedGroups//:/ }; do
                                                 local dir="${overlay}/"
                                                 dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                                 if [[ -d "${dir}" ]]; then
@@ -1346,7 +1348,7 @@ subcommand_use() {
 			shift
 		done
 
-		pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
+		pbuild::export_env ${g_shell} MODULEPATH UsedGroups
 	}
 
 	local opts=()
@@ -1439,7 +1441,7 @@ subcommand_unuse() {
 				std::die 3 "%s %s: cannot remove group from module path -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 			fi
-			std::remove_path PMODULES_USED_GROUPS "${arg}"
+			std::remove_path UsedGroups "${arg}"
 			dirs_to_remove+=( ${modulefiles_dir} )
                        
 		elif [[ -d ${arg} ]]; then
@@ -1455,8 +1457,8 @@ subcommand_unuse() {
 		shift
 	done
 
-	declare -gx PMODULES_USED_GROUPS
-	pbuild::export_env ${g_shell} PMODULES_USED_GROUPS
+	declare -gx UsedGroups
+	pbuild::export_env ${g_shell} UsedGroups
 	[[ ${#dirs_to_remove[@]} == 0 ]] && return
 	for dir in "${dirs_to_remove[@]}"; do
 		subcommand_generic1 unuse "${dir}"
@@ -1492,11 +1494,18 @@ reset_modulepath() {
 }
 
 reset_used_groups() {
-	PMODULES_USED_GROUPS=''
+	UsedGroups=''
         local group
         for group in ${PMODULES_DEFAULT_GROUPS}; do
-                std::append_path PMODULES_USED_GROUPS "${group}"
+                std::append_path UsedGroups "${group}"
         done
+}
+
+reset_used_releases() {
+	declare -g  UsedReleases=''
+	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
+		std::append_path UsedReleases "${r}"
+	done
 }
 
 ##############################################################################
@@ -1507,7 +1516,7 @@ subcommand_purge() {
 	subcommand_generic0 purge "$@"
         reset_modulepath
         reset_used_groups
-	pbuild::export_env ${g_shell} MODULEPATH PMODULES_USED_GROUPS
+	pbuild::export_env ${g_shell} MODULEPATH UsedGroups
 }
 
 ##############################################################################
@@ -1544,21 +1553,51 @@ subcommand_list() {
 	"${modulecmd}" "${g_shell}" list "${opts[@]}"
 }
 
+init_path() {
+        std::replace_path PATH    "${PMODULES_HOME%/*}/.*"
+        std::append_path  PATH    "${PMODULES_HOME}/bin"
+}
+
+init_manpath() {
+        std::replace_path MANPATH "${PMODULES_HOME%/*}/.*"
+
+        if [[ -r /etc/man.config ]]; then
+	        declare _manconf='/etc/man.config'
+        elif [[ -r /etc/man.conf ]]; then
+	        declare _manconf='/etc/man.conf'
+        fi
+        if [[ -n ${_manconf} ]]; then
+	        while read name value rest; do
+		        std::append_path MANPATH "${value}"
+	        done < <(grep "^MANPATH\s" "${_manconf}")
+	        unset _manconf
+        else
+	        std::append_path  MANPATH "${PMODULES_HOME}/share/man"
+	        std::append_path  MANPATH "/usr/share/man"
+        fi
+}
+
 ##############################################################################
 pmodules_init() {
-	declare -g LOADEDMODULES=''
-	declare -g _LMFILES_=''
+	declare -gx LOADEDMODULES=''
+	declare -gx _LMFILES_=''
 
         declare -Ag Overlays=([${PMODULES_ROOT}]="1")
-        declare -xg PMODULES_OVERLAYS="${PMODULES_ROOT}"
+        declare -gx PMODULES_OVERLAYS="${PMODULES_ROOT}"
+	declare -g  UsedGroups=''
+	declare -gx MODULEPATH=''
 	declare -Ag GroupDepths='()'
-	declare -g  UsedReleases=''
 	declare -g  UseFlags=()
-	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
-		std::append_path UsedReleases "${r}"
-	done
         reset_modulepath
         reset_used_groups
+        reset_used_releases
+        init_path
+        init_manpath
+        pbuild::export_env "${g_shell}" \
+                           LOADEDMODULES \
+                           _LMFILES_ \
+                           MODULEPATH \
+                           PATH
 }
 
 ##############################################################################
@@ -1582,7 +1621,7 @@ subcommand_clear() {
 		esac
 	done
 	pmodules_init
-	pbuild::export_env ${g_shell} LOADEDMODULES PMODULES_USED_GROUPS MODULEPATH _LMFILES_
+	pbuild::export_env ${g_shell} LOADEDMODULES MODULEPATH _LMFILES_
 }
 
 ##############################################################################
@@ -1658,6 +1697,7 @@ subcommand_search() {
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
 		    || std::die 1 "Oops: unable to create tmp file!\n"
 		local group
+		# loop over all groups
 		for group in "${!GroupDepths[@]}"; do
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
