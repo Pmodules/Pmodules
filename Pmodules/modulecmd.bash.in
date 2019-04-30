@@ -1432,11 +1432,6 @@ init_manpath() {
         fi
 }
 
-#export LOADEDMODULES
-#export _LMFILES_
-#export UsedGroups
-#export MODULEPATH
-
 ##############################################################################
 pmodules_init() {
 	declare -gx LOADEDMODULES=''
