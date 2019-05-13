@@ -67,14 +67,14 @@ std::get_abspath() {
 }
 
 std::append_path () {
-	local -r P="$1"
-	local -r d="$2"
+	local -r P=$1
+	local -r d=$2
 
         if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
 		if [[ -z ${!P} ]]; then
-			eval $P=\"${d}\"
+			export "$P=${d}"
 		else
-			eval $P=\"${!P}:${d}\"
+			export "$P=${!P}:${d}"
         	fi
 	fi
 }
@@ -85,9 +85,9 @@ std::prepend_path () {
 
         if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
                 if [[ -z ${!P} ]]; then
-                        eval $P=${d}
+                        export "$P=${d}"
                 else
-                        eval $P=${d}:${!P}
+                        export "$P=${d}:${!P}"
                 fi
         fi
 }
