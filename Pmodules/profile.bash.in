@@ -12,10 +12,6 @@
 # set default version
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
-export     PMODULES_DEFAULT_GROUPS
-export     PMODULES_DEFAULT_RELEASES
-export     PMODULES_VERSION
-
 #############################################################################
 #          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
 #
