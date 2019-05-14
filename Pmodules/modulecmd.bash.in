@@ -1139,7 +1139,6 @@ subcommand_avail() {
                         groups+=( "${group}" )
                 fi
         done
-        groups+=( 'other' )
 	for string in "${pattern[@]}"; do
                 for group in "${groups[@]}"; do
 			mods=( $( get_available_modules \
@@ -1311,7 +1310,7 @@ subcommand_use() {
                                                 "${CMD}" "${FUNCNAME[0]##*_}" "${overlay}"
                                 if [[ ! ${Overlays[${overlay}]} ]]; then
                                         Overlays[${overlay}]=1
-                                        PMODULES_OVERLAYS="${PMODULES_OVERLAYS}:${overlay}"
+                                        PMODULES_OVERLAYS+=:${overlay}
 	                                get_group_depths "${!Overlays[@]}"
                                         for group in ${UsedGroups//:/ }; do
                                                 local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
