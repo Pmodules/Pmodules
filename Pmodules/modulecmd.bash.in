@@ -1555,7 +1555,7 @@ subcommand_list() {
 
 init_path() {
         std::replace_path PATH    "${PMODULES_HOME%/*}/.*"
-        std::append_path  PATH    "${PMODULES_HOME}/bin"
+        std::prepend_path PATH    "${PMODULES_HOME}/bin"
 }
 
 init_manpath() {
@@ -1597,7 +1597,8 @@ pmodules_init() {
                            LOADEDMODULES \
                            _LMFILES_ \
                            MODULEPATH \
-                           PATH
+                           PATH \
+                           MANPATH
 }
 
 ##############################################################################
