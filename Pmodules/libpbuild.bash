@@ -246,7 +246,7 @@ set_full_module_name_and_prefix() {
 	# set full module name
 	fully_qualified_module_name=$( join_by '/' "${name[@]}" )
 	# set PREFIX of module
-	PREFIX="${PMODULES_ROOT}/${GROUP}/"
+	PREFIX="${overlay}/${GROUP}/"
         local -i i=0
 	for ((i=${#name[@]}-1; i >= 0; i--)); do
 		PREFIX+="${name[i]}/"
@@ -916,7 +916,7 @@ pbuild::make_all() {
 			return
 		fi
 		# assemble name of modulefile
-		local dst="${PMODULES_ROOT}/"
+		local dst="${overlay}/"
 		dst+="${GROUP}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
 		dst+="${fully_qualified_module_name}"
@@ -932,7 +932,7 @@ pbuild::make_all() {
 	}
 
         install_release_file() {
-		local dst="${PMODULES_ROOT}/"
+		local dst="${overlay}/"
 		dst+="${GROUP}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
 		dst+="${fully_qualified_module_name}"
@@ -1082,7 +1082,7 @@ pbuild::make_all() {
 		fi
 
 		# assemble name of modulefile
-		local dst="${PMODULES_ROOT}/"
+		local dst="${overlay}/"
 		dst+="${GROUP}/"
 		dst+="${PMODULES_MODULEFILES_DIR}/"
 		dst+="${fully_qualified_module_name}"
@@ -1262,7 +1262,7 @@ pbuild.bootstrap() {
  
 	MODULECMD=$(which true)
 	GROUP='Tools'
-	PREFIX="${PMODULES_ROOT}/${GROUP}/Pmodules/${PMODULES_VERSION}"
+	PREFIX="${overlay}/${GROUP}/Pmodules/${PMODULES_VERSION}"
 
 	C_INCLUDE_PATH="${PREFIX}/include"
 	CPLUS_INCLUDE_PATH="${PREFIX}/include"

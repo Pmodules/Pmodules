@@ -67,7 +67,7 @@ BUILD-STEPS OPTIONS:
 --all
 	Run throu all steps including cleanup.
 
---update-modulefiles
+-update-modulefiles
 	Only install the modulefile and set the release.
 
 MISCELLANEOUS OPTIONS:
@@ -111,6 +111,8 @@ MISCELLANEOUS OPTIONS:
 --tmpdir
         Directory used for building a module.
 
+--overlay
+        Install in this overlay. Defaults to '${PMODULES_ROOT}'.
 "
 	exit 1
 }
@@ -126,6 +128,7 @@ declare         opt_all_variants='no'
 declare         opt_bootstrap='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
+declare         overlay=''
 declare 	build_config='modbuild.conf'
 declare         system="$(uname -s)"
 
@@ -225,6 +228,12 @@ parse_args() {
 		--update-modulefiles )
 			pbuild.update_modulefiles 'yes'
 			;;
+                --overlay )
+                        overlay=$2
+                        ;;
+                --overlay=* )
+                        overlay=${1*=}
+                        ;;
 		-* )
 			std::die 1 "Invalid option -- '$1'"
 			;;
@@ -379,6 +388,7 @@ source "${build_config}" || \
 source libpbuild.bash    || \
         std::die 3 "Oops: Cannot source library -- '$_'"
 
+[[ -z "${overlay}" ]] && overlay=${PMODULES_ROOT}
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
