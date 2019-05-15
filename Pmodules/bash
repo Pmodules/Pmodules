@@ -33,6 +33,9 @@ fi
 unset MODULE_VERSION
 unset MODULE_VERSION_STACK
 unset MODULESHOME
+unset PMODULES_ENV
+
+PATH="${PMODULES_HOME}/bin:$PATH"
 
 #############################################################################
 # implement module comand as shell function
