@@ -68,21 +68,27 @@ proc module-addgroup { group } {
 			debug "no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
-		remove-path MODULEPATH [file join \
-                                             $::PmodulesRoot \
-                                             $group \
-                                             $::PmodulesModulfilesDir \
-                                             {*}$::variant]
+                set dir [file join \
+                             $::PmodulesRoot \
+                             $group \
+                             $::PmodulesModulfilesDir \
+                             {*}$::variant]
+                debug "mode=remove: dir=$dir"
+                remove-path MODULEPATH $dir
 		debug "mode=remove: $env(UsedGroups)"
 		remove-path UsedGroups $group
+                debug "mode=remove: $env(UsedGroups)"
 	}
 	if { [module-info mode switch2] } {
 		debug "mode=switch2"
-		append-path MODULEPATH [file join \
-                                            $::PmodulesRoot \
-                                            $group \
-                                            $::PmodulesModulfilesDir \
-                                            [module-info name]]
+                set dir [file join \
+                             $::PmodulesRoot \
+                             $group \
+                             $::PmodulesModulfilesDir \
+                             [module-info name]]
+                if { [file isdirectory $dir] } {
+                        append-path MODULEPATH $dir
+                }
 		append-path UsedGroups ${group}
 	}
 }
