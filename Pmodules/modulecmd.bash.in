@@ -715,7 +715,6 @@ subcommand_load() {
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
 		test -n "${current_modulefile}" || return 1
-                local release=''
 		get_release release "${current_modulefile}" "${UsedReleases}"
 	}
 
@@ -918,9 +917,29 @@ subcommand_unload() {
 	#	  another module.
         #         For the time being the modules requiring this module will be
         #         unloaded too.
+        local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
+	local args=()
 	while (( $# > 0 )); do
-		subcommand_generic1 unload "$1"
+		case $1 in
+			-- )
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
 		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: missing argument\n" \
+                         "${CMD}" 'unload'
+	fi
+
+	for arg in "${args[@]}"; do
+	        local output=$("${modulecmd}" "${g_shell}" "${subcommand}" "${arg}")
+                echo "${output}"
+                eval "${output}"
 	done
 }
 

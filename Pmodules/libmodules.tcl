@@ -37,6 +37,7 @@ proc module-addgroup { group } {
 	set	::${group}		$name
 	set	::${group}_version	$version
 
+        debug "mode=[module-info mode]"
 	if { [module-info mode load] } {
 		debug "mode is load"
                 foreach overlay $::PmodulesOverlays {
@@ -73,25 +74,30 @@ proc module-addgroup { group } {
 		}
 		debug "mode=remove: $env(MODULEPATH)"
                 foreach overlay $::PmodulesOverlays {
-                        remove-path MODULEPATH [file join \
-                                                    $overlay \
-                                                    $group \
-                                                    $::PmodulesModulfilesDir \
-                                                    {*}$::variant]
+                        set dir [file join \
+                                     $overlay \
+                                     $group \
+                                     $::PmodulesModulfilesDir \
+                                     {*}$::variant]
+                        remove-path MODULEPATH $dir
                 }
-		debug "mode=remove: $env(PMODULES_USED_GROUPS)"
 		remove-path UsedGroups $group
+                debug "mode=remove: $env(UsedGroups)"
 	}
 	if { [module-info mode switch2] } {
 		debug "mode=switch2"
                 foreach overlay $::PmodulesOverlays {
-                        append-path MODULEPATH  [file join \
-                                                     $::PmodulesRoot \
-                                                     $group \
-                                                     $::PmodulesModulfilesDir \
-                                                     [module-info name]]
+                        set dir [file join \
+                                     $overlay \
+                                     $group \
+                                     $::PmodulesModulfilesDir \
+                                     [module-info name]]
+                        if { [file isdirectory $dir] } {
+                                append-path MODULEPATH  $dir
+                        }
                 }
 		append-path UsedGroups ${group}
+                debug "mode=switch2: $env(UsedGroups)"
 	}
 }
 
