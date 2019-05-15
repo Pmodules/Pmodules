@@ -670,8 +670,7 @@ subcommand_load() {
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
 		test -n "${current_modulefile}" || return 1
-		get_release release "${current_modulefile}"
-		[[ :${UsedReleases}: =~ ${release} ]]
+		get_release release "${current_modulefile}" "${UsedReleases}"
 	}
 
 	#
