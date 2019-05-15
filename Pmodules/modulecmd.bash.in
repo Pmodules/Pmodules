@@ -1358,7 +1358,7 @@ subcommand_use() {
 				std::die 3 "%s %s: illegal directory -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 			elif [[ -d ${arg} ]]; then
-                                ${add2path_func} "$(cd "${arg}" && pwd)"
+                                ${add2path_func} MODULEPATH "$(cd "${arg}" && pwd)"
 			else
 				std::die 3 "%s %s: neither a directory, release or group -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
