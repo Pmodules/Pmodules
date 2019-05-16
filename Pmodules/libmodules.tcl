@@ -28,7 +28,8 @@ proc module-addgroup { group } {
 	global version
 
 	debug "called with arg $group"
-
+        debug "mode=[module-info mode]"
+        
 	set	GROUP [string toupper $group]
 	regsub -- "-" ${GROUP} "_" GROUP
 	setenv	${GROUP}		$name
@@ -38,8 +39,6 @@ proc module-addgroup { group } {
 	set	::${group}_version	$version
 
 	if { [module-info mode load] } {
-		debug "mode is load"
-
 		prepend-path MODULEPATH [file join \
                                              $::PmodulesRoot \
                                              $group \
@@ -50,22 +49,22 @@ proc module-addgroup { group } {
 		debug "mode=load: new UsedGroups=$env(UsedGroups)"
 	} elseif { [module-info mode remove] } {
 		set GROUP [string toupper $group]
-		debug "remove hierarchical group '${GROUP}'"
+		debug "mode=remove: hierarchical group '${GROUP}'"
 		
 		if { [info exists ::env(PMODULES_LOADED_${GROUP})] } {
-			debug "unloading orphan modules"
+			debug "mode=remove: unloading orphan modules"
 			set modules [split $env(PMODULES_LOADED_${GROUP}) ":"]
 			foreach m ${modules} {
 				if { ${m} == "--APPMARKER--" } {
 					continue
 				}
 				if { [is-loaded ${m}] } {
-					debug "unloading: $m"
+					debug "mode=remove: unloading $m"
 					module unload ${m}
 				}
 			}
 		} else {
-			debug "no orphan modules to unload"
+			debug "mode=remove: no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
                 set dir [file join \
@@ -80,7 +79,6 @@ proc module-addgroup { group } {
                 debug "mode=remove: $env(UsedGroups)"
 	}
 	if { [module-info mode switch2] } {
-		debug "mode=switch2"
                 set dir [file join \
                              $::PmodulesRoot \
                              $group \
@@ -89,6 +87,7 @@ proc module-addgroup { group } {
                 if { [file isdirectory $dir] } {
                         append-path MODULEPATH $dir
                 }
+                debug "mode=switch2: new MODULEPATH=$env(MODULEPATH)"
 		append-path UsedGroups ${group}
 	}
 }
