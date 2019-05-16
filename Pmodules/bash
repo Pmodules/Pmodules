@@ -42,49 +42,9 @@ PATH="${PMODULES_HOME}/bin:$PATH"
 #
 module() {
 	unset BASH_ENV
-	local -r modulecmd="${PMODULES_HOME}/bin/modulecmd"
-
-	local -a args=()
-	local -a modulecmd_opts=()
-	local -a subcmd_opts=()
-
-	while (( $# > 0 )); do
-		case $1 in
-		-* )
-			modulecmd_opts+=( $1 )
-			shift
-			;;
-		* )
-			break
-			;;
-		esac
-	done
-	while (( $# > 0 )); do
-		case $1 in
-		-* )
-			subcmd_opts+=( $1 )
-			;;
-		[/~a-zA-Z]* )
-			args+=( $1 )
-			;;
-		esac
-		shift
-	done
-
-	[[ ${#args[@]} == 0 ]] && args+=( 'help' )
-	[[ ${#args[@]} == 1 ]] && args+=( '--' )
-
-	# Loop over all modules to load.
-	# Note: We have to eval here, otherwise we cannot do something like
-	# $ module load gcc/5.2.0 openmpi/1.8.8 hdf5/1.8.15
-	local -i i=1
-	for (( i=1; i < ${#args[@]}; i++ )); do
-		eval $( "${modulecmd}" bash "${modulecmd_opts[@]}" "${args[0]}" \
-				       "${subcmd_opts[@]}" "${args[i]}" )
-	done
+	eval $("${PMODULES_HOME}/bin/modulecmd" bash "$@")
 }
 export -f module
-
 
 # Local Variables:
 # mode: sh

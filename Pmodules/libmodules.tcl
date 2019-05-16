@@ -28,7 +28,8 @@ proc module-addgroup { group } {
 	global version
 
 	debug "called with arg $group"
-
+        debug "mode=[module-info mode]"
+        
 	set	GROUP [string toupper $group]
 	regsub -- "-" ${GROUP} "_" GROUP
 	setenv	${GROUP}		$name
@@ -38,8 +39,6 @@ proc module-addgroup { group } {
 	set	::${group}_version	$version
 
 	if { [module-info mode load] } {
-		debug "mode is load"
-
 		prepend-path MODULEPATH [file join \
                                              $::PmodulesRoot \
                                              $group \
@@ -50,22 +49,22 @@ proc module-addgroup { group } {
 		debug "mode=load: new UsedGroups=$env(UsedGroups)"
 	} elseif { [module-info mode remove] } {
 		set GROUP [string toupper $group]
-		debug "remove hierarchical group '${GROUP}'"
+		debug "mode=remove: hierarchical group '${GROUP}'"
 		
 		if { [info exists ::env(PMODULES_LOADED_${GROUP})] } {
-			debug "unloading orphan modules"
+			debug "mode=remove: unloading orphan modules"
 			set modules [split $env(PMODULES_LOADED_${GROUP}) ":"]
 			foreach m ${modules} {
 				if { ${m} == "--APPMARKER--" } {
 					continue
 				}
 				if { [is-loaded ${m}] } {
-					debug "unloading: $m"
+					debug "mode=remove: unloading $m"
 					module unload ${m}
 				}
 			}
 		} else {
-			debug "no orphan modules to unload"
+			debug "mode=remove: no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
                 set dir [file join \
@@ -78,18 +77,6 @@ proc module-addgroup { group } {
 		debug "mode=remove: $env(UsedGroups)"
 		remove-path UsedGroups $group
                 debug "mode=remove: $env(UsedGroups)"
-	}
-	if { [module-info mode switch2] } {
-		debug "mode=switch2"
-                set dir [file join \
-                             $::PmodulesRoot \
-                             $group \
-                             $::PmodulesModulfilesDir \
-                             [module-info name]]
-                if { [file isdirectory $dir] } {
-                        append-path MODULEPATH $dir
-                }
-		append-path UsedGroups ${group}
 	}
 }
 
@@ -105,37 +92,6 @@ proc _pmodules_update_loaded_modules { group name version } {
 	debug "${GROUP} $name/$version"
 	append-path PMODULES_LOADED_${GROUP} "$name/$version"
 	remove-path PMODULES_LOADED_${GROUP} "--APPMARKER--"
-}
-
-#
-# load dependencies, but do *not* unload dependencies
-#
-proc _pmodules_load_dependencies { fname } {
-	if { ! [ file exists ${fname} ] } {
-		return
-	}
-	if { ! [module-info mode load] } {
-		return
-	}
-	debug "load dependencies from: ${fname}"
-	#  Slurp up the data file
-	set fp [open ${fname} r]
-	set file_data [read ${fp}]
-	close ${fp}
-	set data [split ${file_data} "\n"]
-	foreach line ${data} {
-		debug "MODULEPATH=$::env(MODULEPATH)"
-		set module_name [string trim $line]
-		if { ${module_name} == "#" || ${module_name} == "" } {
-			continue
-		}
-		if { [is-loaded ${module_name}] } {
-			debug "module already loaded: ${module_name}"
-			continue
-		}
-		debug "module load: ${module_name}"
-		module load ${module_name}
-     }
 }
 
 proc lreverse_n { list n } {
@@ -355,15 +311,6 @@ proc _pmodules_init_global_vars { } {
 	debug "group of module $name: $group"
 }
 
-proc _pmodules_output_message { fname } {
-	if { [ file exists "${fname}" ] } {
-		set fp [open "${fname}" r]
-		set info_text [read $fp]
-		close $fp
-		puts stderr ${info_text}
-	}
-}
-
 if { [info exists ::whatis] } {
 	module-whatis	"$whatis"
 }
@@ -374,11 +321,6 @@ _pmodules_init_global_vars
 # we cannot load another module with the same name
 #
 conflict	$name
-
-if { [module-info mode load] } {
-	debug "${name}/${version}: loading ... "
-	_pmodules_output_message "${PREFIX}/.info"
-}
 
 _pmodules_setenv ${PREFIX} ${name} ${version}
 _pmodules_update_loaded_modules ${group} ${name} ${version}
