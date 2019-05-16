@@ -875,11 +875,12 @@ subcommand_load() {
 		        if [[ ${current_modulefile} =~ ${root} ]]; then
 			        # modulefile is in our hierarchy
 			        # ${prefix} was set in is_available()!
+                                test -r "${prefix}/.info" && cat "$_" 1>&2
 			        test -r "${prefix}/.dependencies" && load_dependencies "$_"
                                 break
 		        fi
                 done
-		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
+		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
                         || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" "${shell}" ${opts} load "${current_modulefile}" 2> "${tmpfile}")
 		echo "${output}"
@@ -937,7 +938,7 @@ subcommand_unload() {
 	fi
 
 	for arg in "${args[@]}"; do
-	        local output=$("${modulecmd}" "${g_shell}" "${subcommand}" "${arg}")
+	        local output=$("${modulecmd}" "${g_shell}" 'unload' "${arg}")
                 echo "${output}"
                 eval "${output}"
 	done
@@ -947,7 +948,36 @@ subcommand_unload() {
 # swap <module> [<module>]
 #
 subcommand_swap() {
-	subcommand_generic1or2 swap "$@"
+        local opts=()
+	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
+	eval set --  "${opts[@]}"
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-- )
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: missing argument\n" \
+                         "${CMD}" 'unload'
+        elif (( ${#args[@]} > 2 )); then
+                std::die 3 "%s %s: too many arguments\n" \
+                         "${CMD}" 'unload'
+	fi
+        if (( ${#args[@]} == 1 )); then
+                module_to_load=${args[0]}
+                module_to_unload=${module_to_load%/*}
+        else
+                module_to_unload=${args[0]}
+                module_to_load=${args[1]}
+        fi
+	subcommand_unload "${module_to_unload}"
+        subcommand_load   "${module_to_load}"
 }
 
 #
