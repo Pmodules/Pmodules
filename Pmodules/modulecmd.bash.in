@@ -17,6 +17,7 @@ declare -r  libexecdir="${prefix}/libexec"
 declare -r base64="${sbindir}/base64"
 declare -r mktemp="${sbindir}/mktemp"
 declare -r sort="${sbindir}/sort"
+declare -r getopt="${sbindir}/getopt"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
@@ -41,7 +42,21 @@ declare -A GroupDepths='()'
 declare current_modulefile=''
 declare g_shell=''
 
-pbuild::export_env() {
+declare -A Subcommands
+declare -A Options
+declare -A Help
+
+Help['version']="
+Pmodules ${version} using Tcl Environment Modules @MODULES_VERSION@
+Copyright GNU GPL v2
+"
+
+print_help() {
+        echo -e "${Help[$1]}" 1>&2
+        std::die 1
+}
+
+export_env() {
 	local -r shell="$1"
 	shift
 	case "${shell}" in
@@ -62,7 +77,7 @@ pbuild::export_env() {
 	done
 }
 
-pbuild::save_env() {
+save_env() {
 	local -r shell="$1"
 	shift
 	local s=''
@@ -73,368 +88,10 @@ pbuild::save_env() {
 		shift
 	done
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
-	pbuild::export_env ${shell} PMODULES_ENV
+	export_env ${shell} PMODULES_ENV
 }
 
-trap 'pbuild::save_env ${g_shell} GroupDepths UsedReleases UseFlags UsedGroups PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
-
-print_version() {
-	echo "
-Pmodules ${version} using Tcl Environment Modules @MODULES_VERSION@
-Copyright GNU GPL v2
-" 1>&2
-}
-
-usage() {
-	print_version
-	echo "
-USAGE:
-        module [ switches ] [ subcommand ] [subcommand-args ]
-
-SWITCHES:
-        -h|-H|-?|--help         this usage info
-        -V|--version            modules version & configuration options
-
-SUBCOMMANDS:
-        + add|load [switches]   modulefile [modulefile ...]
-        + rm|unload             modulefile [modulefile ...]
-        + switch|swap           [modulefile1] modulefile2
-        + display|show          modulefile [modulefile ...]
-        + avail [switches]      [modulefile [modulefile ...]]
-        + search [switches]     [args]
-        + use [switches]        [dir|group|release ...]
-        + unuse                 dir|group|release [dir|group|release ...]
-        + refresh
-        + purge
-        + list [switches]
-        + clear
-        + help                  [modulefile|subcommand]
-        + whatis                [modulefile [modulefile ...]]
-        + apropos|keyword       string
-        + initadd               modulefile [modulefile ...]
-        + initprepend           modulefile [modulefile ...]
-        + initrm                modulefile [modulefile ...]
-        + initswitch            modulefile1 modulefile2
-        + initlist
-        + initclear
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_add() {
-	echo "
-USAGE:
-        module add     modulefile...
-        module load    modulefile...
-                Load modulefile(s) into the shell environment. Loading a
-		'group-head' will extend the MODULEPATH. E.g.: loading a 
-		compiler makes additional modules like openmpi and libraries
-		compiled with this compiler available.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_load() {
-	subcommand_help_add
-}
-
-subcommand_help_rm() {
-	echo "
-USAGE:
-        module rm      modulefile...
-        moudle unload  modulefile...
-                Remove modulefile(s) from the shell environment. Removing
-		a 'group-head' will also unload all modules belonging to
-		this group.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_unload() {
-	subcommand_help_rm
-}
-
-subcommand_help_switch() {
-	echo "
-USAGE:
-        module switch  [modulefile1] modulefile2
-        module swap    [modulefile1] modulefile2
-		Switch loaded modulefile1 with modulefile2. If modulefile1
-		is not specified, then it is assumed to be the currently
-		loaded module with the same root name as modulefile2.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_swap() {
-	subcommand_help_switch
-}
-
-subcommand_help_display() {
-	echo "
-USAGE:
-        module display modulefile...
-        module show    modulefile...
-		Display information about one or more modulefiles.  The
-		display sub-command will list the full path of the
-		modulefile(s) and all (or most) of the environment changes
-		the modulefile(s) will make if loaded.  It will not display
-		any environment changes found within conditional statements.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_show() {
-	subcommand_help_display
-}
-
-subcommand_help_apropos() {
-	echo "
-USAGE:
-        module apropos string
-        module keyword string	Seeks through the 'whatis' informations of all modulefiles for
-		the specified string.  All module-whatis informations matching
-		the string will be displayed.
-		
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_keyword() {
-	subcommand_help_apropos
-}
-
-
-subcommand_help_avail() {
-	echo "
-USAGE:
-        module avail [switches] string
-		List all available modulefiles in the current MODULEPATH. If
-		an argument is given, then each directory in the MODULEPATH
-		is searched for modulefiles whose pathname match the argument.
-
-		This command does *not* display all installed modules on the
-		system. Only *loadable* modules are listed.  The list of 
-		available modules may change either by loading other modules,
-		e.g. a compiler, or with the sub-command 'use'.
-
-SWITCHES:
-        -a|--all||--all-releases
-		List all available modules independend of the release.
-		
-	-t|--terse
-		Output in short format.
-
-	-l|--long
-		Output in long format.
-
-	-h|--human
-		Output in human readable format.
-	-m|--machine
-		Output in machine readable format
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_search() {
-	echo "
-USAGE:
-        module search [switches] string...
-		Search installed modules. If an argument is given, search
-		for modules whose name match the argument.
-
-SWITCHES: 
-        --no-header
-		Suppress output of a header.
-
-        --release=RELEASE
-		Search for modules within this release. You can specify this
-		switch multiple times.  Without this switch, the used releases
-		will be searched.
-
-        -a|--all-releases
-		Search within all releases.
-		
-        --with=STRING
-		Search for modules compiled with modules matching string. The
-		command
-
-		module search --with=gcc/4.8.3
-
-		lists all modules in the hierarchy compiled with gcc 4.8.3.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_use() {
-	echo "
-USAGE:
-        module use [-a|--append|-p|--prepend] [directory|group|release...]
-		Without arguments this sub-command displays information about
-		the module search path, used families and releases. You can
-		use this sub-command to get a list of available families and
-		releases.
-
-		With a directory as argument, this directory will either be
-		prepended or appended to the module search path. The default
-		is to prepend the directory.
-
-		With a group as argument, the modules in this group will 
-		be made available.
-
-		With a release as argument, this modules with this release
-		will be made available.
-
-SWITCHES:
-        -a | --append -p | --prepend )
-                Append/prepend agrument to module search path or list of to be
-                searched releases.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_unuse() {
-	echo "
-unuse directory|group|release...
-		Remove the given directory, group or release from the search
-		path.
-" 1>&2
-	std::die 1
-}
-subcommand_help_update() {
-	echo "
-USAGE:
-        module update
-                Attempt  to  reload  all  loaded  modulefiles.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_refresh() {
-	echo "
-USAGE:
-        module refresh
-                Force a refresh of all non-persistent components of currently
-		loaded modules.  This should be used on derived shells where
-		aliases need to be reinitialized but the environment variables
-		have already been set by the currently loaded modules.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_purge() {
-	echo "
-USAGE:
-        module purge
-		Unload all loaded modulefiles.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_list() {
-	echo "
-USAGE:
-        module list
-		List loaded modules.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_clear() {
-	echo "
-USAGE:
-        module clear
-		Force the Modules package to believe that no modules are
-		currently loaded.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_whatis() {
-	echo "
-USAGE:
-        module whatis [modulefile...]
-                Display the information set up by the module-whatis commands
-		inside the specified modulefile(s). If no modulefile is
-		specified, all 'whatis' lines will be shown.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_initadd() {
-	echo "
-USAGE:
-        module initadd	modulefile...
-		Add modulefile(s) to the shell's initialization file in the
-		user's home directory.  The startup files checked (in order)
-		are:
-
-                    csh -   .modules, .cshrc(.ext), .csh_variables, and
-                            .login(.ext)
-                    tcsh -  .modules, .tcshrc, .cshrc(.ext), .csh_variables,
-                            and .login(.ext)
-                    (k)sh - .modules, .profile(.ext), and .kshenv(.ext)
-                    bash -  .modules, .bash_profile, .bash_login,
-                            .profile(.ext) and .bashrc(.ext)
-                    zsh -   .modules, .zcshrc(.ext), .zshenv(.ext), and
-                            .zlogin(.ext)
-
-                If a 'module load' line is found in any of these files, the
-                modulefile(s) is(are) appended to any existing list of 
-                modulefiles.  The 'module load' line must be located in at
-                least one of the files listed above for any of the 'init'
-                sub-commands to work properly.  If the 'module load' line
-                line is found in multiple shell initialization files, all
-		of the lines are changed.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_initprepend() {
-	echo "
-USAGE:
-        module initprepend modulefile...
-		Does the same as initadd but prepends the given modules to
-		the beginning of the list.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_initrm() {
-	echo "
-USAGE:
-        module initrm modulefile...
-		Remove modulefile(s) from the shell's initialization files.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_initswitch() {
-	echo "
-USAGE:
-        module initswitch modulefile1 modulefile2
-		Switch modulefile1 with modulefile2 in the shell's initialization files.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_initlist() {
-	echo "
-USAGE:
-        module initlist
-		List all of the modulefiles loaded from the shell's initialization file.
-" 1>&2
-	std::die 1
-}
-
-subcommand_help_initclear() {
-	echo "
-USAGE:
-	module initclear
-		Clear all of the modulefiles from the shell's initialization files.
-" 1>&2
-	std::die 1
-}
+trap 'save_env ${g_shell} GroupDepths UsedReleases UseFlags UsedGroups PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
 
 #
 # get release of module
@@ -509,47 +166,50 @@ is_modulefile() {
 subcommand_generic0() {
 	local -r subcommand="$1"
 	shift
-	local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
+        local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
+			-H | --help )
+				print_help "${subcommand}"
+				;;
 			-- )
-				shift
+				:
 				;;
 			* )
-				std::die 3 "%s %s: illegal argument -- %s\n" \
-                                         "${CMD}" "${subcommand}" "$1"
+				args+=( "$1" )
 				;;
 		esac
 	done
+        if (( ${#args[@]} > 0 )); then
+	        std::die 3 "%s %s: no arguments allowed\n" \
+                         "${CMD}" "${subcommand}"
+        fi
 	"${modulecmd}" "${g_shell}" "${subcommand}"
 }
 
 subcommand_generic1() {
 	local -r subcommand="$1"
 	shift
-	local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
-	local args=()
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
+			-H | --help )
+				print_help "${subcommand}"
+				;;
 			-- )
-					;;
+				:
+				;;
 			* )
-				if (( ${#args[@]} == 0 )); then
-				        args+=( "$1" )
-				else
-					std::die 3 "%s %s: only one argument allowed\n" \
-                                                 "${CMD}" "${subcommand}"
-				fi
+				args+=( "$1" )
 				;;
 		esac
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "%s %s: missing argument\n" \
+                         "${CMD}" "${subcommand}"
+	elif (( ${#args[@]} > 1 )); then
+	        std::die 3 "%s %s: only one argument allowed\n" \
                          "${CMD}" "${subcommand}"
 	fi
 	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
@@ -558,13 +218,14 @@ subcommand_generic1() {
 subcommand_generic1plus() {
 	local -r subcommand="$1"
 	shift
-	local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
+			-H | --help )
+				print_help "${subcommand}"
+				;;
 			-- )
+                                :
 				;;
 			* )
 				args+=( "$1" )
@@ -579,40 +240,27 @@ subcommand_generic1plus() {
 	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
 
-subcommand_generic1or2() {
-	local -r subcommand="$1"
-	shift
-	local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
-	local args=()
-	while (( $# > 0 )); do
-		case $1 in
-			-- )
-				;;
-			* )
-				if (( ${#args[@]} > 2 )); then
-					std::die 3 "%s %s: only one or two arguments are allowed\n" \
-                                                 "${CMD}" "${subcommand}"
-				fi
-				args+=( "$1" )
-				;;
-		esac
-		shift
-	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" "${subcommand}"
-	fi
-	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
-}
-
+##############################################################################
 #
 # load [-fsvw] <module>
 # 
 # $1: module to load
 #
+Subcommands[add]='load'
+Subcommands[load]='load'
+Options['load']='-l help -o Hfsvwi -l force -l silent -l verbose -l warn -l internal'
+Help[load]='
+USAGE:
+        module add     modulefile...
+        module load    modulefile...
+                Load modulefile(s) into the shell environment. Loading a
+		'group-head' will extend the MODULEPATH. E.g.: loading a 
+		compiler makes additional modules like openmpi and libraries
+		compiled with this compiler available.
+'
+
 subcommand_load() {
+        local -r subcommand='load'
 	local release='undef'
 	local current_modulefile=''
 	local prefix=''
@@ -710,16 +358,14 @@ subcommand_load() {
 		done < "${fname}"
 	}
 
-	local opts=()
-	pmodules::get_options opts \
-		-o fsvwi -l force -l silent -l verbose -l warn -l internal \
-		-- "$@" || subcommand_help_load
-	eval set --  "${opts[@]}"
 	local args=()
 	opts=()
 	local shell="${g_shell}"
 	while (($# > 0)); do
 		case $1 in
+                        -H | --help )
+                                print_help "${subcommand_load}"
+                                ;;
 			-f | --force )
 				opts+=(' -f')
 				;;
@@ -850,27 +496,42 @@ subcommand_load() {
 	done
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
+        local dir
 	while read dir; do
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
 	done <<< "${MODULEPATH//:/$'\n'}"
-	pbuild::export_env "${g_shell}" LOADEDMODULES
+	export_env "${g_shell}" LOADEDMODULES
 }
 
+##############################################################################
 #
-# unload <module>
+# unload
 #
+Subcommands[rm]='unload'
+Subcommands[unload]='unload'
+Options[unload]='-o H -l help'
+Help[unload]="
+USAGE:
+        module rm      modulefile...
+        module unload  modulefile...
+                Remove modulefile(s) from the shell environment. Removing
+		a 'group-head' will also unload all modules belonging to
+		this group.
+"
+
 subcommand_unload() {
+        local -r subcommand='unload'
 	# :FIXME: add dependency tests: don't unload if module is required be
 	#	  another module.
         #         For the time being the modules requiring this module will be
         #         unloaded too.
-        local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
 			-- )
 				;;
 			* )
@@ -884,6 +545,7 @@ subcommand_unload() {
                          "${CMD}" 'unload'
 	fi
 
+        local arg
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${g_shell}" 'unload' "${arg}")
                 echo "${output}"
@@ -891,16 +553,30 @@ subcommand_unload() {
 	done
 }
 
+##############################################################################
 #
 # swap <module> [<module>]
 #
+Subcommands[switch]='swap'
+Subcommands[swap]='swap'
+Options[swap]='-o H -l help'
+Help[swap]="
+USAGE:
+        module switch  [modulefile1] modulefile2
+        module swap    [modulefile1] modulefile2
+		Switch loaded modulefile1 with modulefile2. If modulefile1
+		is not specified, then it is assumed to be the currently
+		loaded module with the same root name as modulefile2.
+"
+
 subcommand_swap() {
-        local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
+        local -r subcommand='swap'
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
 			-- )
 				;;
 			* )
@@ -911,29 +587,64 @@ subcommand_swap() {
 	done
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" 'unload'
+                         "${CMD}" 'swap'
         elif (( ${#args[@]} > 2 )); then
                 std::die 3 "%s %s: too many arguments\n" \
-                         "${CMD}" 'unload'
+                         "${CMD}" 'swap'
 	fi
         if (( ${#args[@]} == 1 )); then
-                module_to_load=${args[0]}
-                module_to_unload=${module_to_load%/*}
+                local -r module_to_load=${args[0]}
+                local -r module_to_unload=${module_to_load%/*}
         else
-                module_to_unload=${args[0]}
-                module_to_load=${args[1]}
+                local -r module_to_unload=${args[0]}
+                local -r module_to_load=${args[1]}
         fi
 	subcommand_unload "${module_to_unload}"
         subcommand_load   "${module_to_load}"
 }
 
+##############################################################################
 #
 # show <module>
 #
+Subcommands[display]='show'
+Subcommands[show]='show'
+Options[show]='-o H -l help'
+Help[show]='
+USAGE:
+        module display modulefile...
+        module show    modulefile...
+		Display information about one or more modulefiles.  The
+		display sub-command will list the full path of the
+		modulefile(s) and all (or most) of the environment changes
+		the modulefile(s) will make if loaded.  It will not display
+		any environment changes found within conditional statements.
+'
+
 subcommand_show() {
+        local -r subcommand='show'
+	local args=()
 	while (( $# > 0 )); do
-		subcommand_generic1 show "$1"
+		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-- )
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
 		shift
+	done
+        if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: missing argument\n" \
+                         "${CMD}" "${subcommand}"
+	fi
+
+        local arg
+	for arg in "${args[@]}"; do
+	        "${modulecmd}" "${g_shell}" "${subcommand}" "${arg}"
 	done
 }
 
@@ -961,10 +672,43 @@ get_available_modules() {
 	}
 	echo "${mods[@]}"
 }
+
+##############################################################################
 #
 # avail [-hlt] [<module-pattern>...]
 #
+Subcommands[avail]='avail'
+Options[avail]='-l help -o Hahlmt -l all -l all-releases -l human -l long -l machine -l terse'
+Help[avail]="
+USAGE:
+        module avail [switches] string
+		List all available modulefiles in the current MODULEPATH. If
+		an argument is given, then each directory in the MODULEPATH
+		is searched for modulefiles whose pathname match the argument.
+
+		This command does *not* display all installed modules on the
+		system. Only *loadable* modules are listed.  The list of 
+		available modules may change either by loading other modules,
+		e.g. a compiler, or with the sub-command 'use'.
+
+SWITCHES:
+        -a|--all||--all-releases
+		List all available modules independend of the release.
+		
+	-t|--terse
+		Output in short format.
+
+	-l|--long
+		Output in long format.
+
+	-h|--human
+		Output in human readable format.
+	-m|--machine
+		Output in machine readable format
+"
+
 subcommand_avail() {
+        local -r subcommand='avail'
 	# use this variable in the output functions
 	local -a mods=()
 	local dir=''
@@ -1063,17 +807,15 @@ subcommand_avail() {
 		done
 		printf -- "\n\n" 1>&2
 	}
-	local opts=()
-	pmodules::get_options opts -o ahlmt \
-			-l all -l all-releases \
-			-l human -l long -l machine -l terse -- "$@" || subcommand_help_avail
-	eval set --  "${opts[@]}"
 	local pattern=()
 	local output_function='human_readable_output'
 	local opt_all_groups='no'
 	local opt_use_releases="${UsedReleases}"
 	while (($# > 0)); do
 		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
 			-a | --all )
 				opt_all_groups='yes'
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
@@ -1111,6 +853,7 @@ subcommand_avail() {
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
+        local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
 			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
@@ -1174,13 +917,38 @@ rescan_groups() {
 	};
 }
 
+##############################################################################
 #
 # use [-a|--append|-p|--prepend] [directory|group|release...]
 #
+Subcommands[use]='use'
+Options[use]='-l help -o Hap -l append -l prepend'
+Help[use]="
+USAGE:
+        module use [-a|--append|-p|--prepend] [directory|group|release...]
+		Without arguments this sub-command displays information about
+		the module search path, used families and releases. You can
+		use this sub-command to get a list of available families and
+		releases.
+
+		With a directory as argument, this directory will either be
+		prepended or appended to the module search path. The default
+		is to prepend the directory.
+
+		With a group as argument, the modules in this group will 
+		be made available.
+
+		With a release as argument, this modules with this release
+		will be made available.
+
+SWITCHES:
+        -a | --append -p | --prepend )
+                Append/prepend agrument to module search path or list of to be
+                searched releases.
+"
+
 subcommand_use() {
-	if (( ${#GroupDepths[@]} == 0 )); then
-		get_group_depths "${PMODULES_ROOT}"
-	fi
+        local -r subcommand='use'
 	local saved_IFS=${IFS}; 
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
@@ -1282,28 +1050,27 @@ subcommand_use() {
 				std::prepend_path MODULEPATH "${dir}"
 			fi
 		done
-		pbuild::export_env ${g_shell} MODULEPATH UsedGroups
+		export_env ${g_shell} MODULEPATH UsedGroups
 	}
 
-	local opts=()
-	pmodules::get_options opts -o 'ap' -l 'append' -l 'prepend' -- "$@" || subcommand_help_use
-	eval set --  "${opts[@]}"
-	
 	local opt_append='no'
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
-		-a | --append )
-			opt_append='yes'
-			;;
-		-p | --prepend )
-			opt_append='no'
-			;;
-		-- )
-			;;
-		* )
-			args+=( "$1" )
-			;;
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+		        -a | --append )
+			        opt_append='yes'
+			        ;;
+		        -p | --prepend )
+			        opt_append='no'
+			        ;;
+		        -- )
+			        ;;
+		        * )
+			        args+=( "$1" )
+			        ;;
 		esac
 		shift
 	done
@@ -1315,21 +1082,42 @@ subcommand_use() {
 	fi
 }
 
+##############################################################################
 #
 # unuse directory|group|release...
 #
-subcommand_unuse() {
-	local opts=()
-	pmodules::get_options opts -o '' -- "$@" || subcommand_help_unuse
-	eval set --  "${opts[@]}"
+Subcommands[unuse]='unuse'
+Options[unuse]='-o H -l help'
+Help[unuse]='
+unuse directory|group|release...
+		Remove the given directory, group or release from the search
+		path.
+'
 
+subcommand_unuse() {
+        local -r subcommand='unuse'
 	local dirs_to_remove=()
+	local -a args=()
 	while (( $# > 0)); do
-		if [[ "$1" == "--" ]]; then
-		        shift
-			continue
-		fi
-		arg=$1
+		case "$1" in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+		        -- )
+			        ;;
+		        * )
+			        args+=( "$1" )
+			        ;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: missing argument\n" \
+                         "${CMD}" "${subcommand}"
+	fi
+
+        local arg
+        for arg in "${args[@]}"; do
 		# if is release
 		# ...
 		# elif is group
@@ -1345,8 +1133,10 @@ subcommand_unuse() {
 			std::remove_path UseFlags "${arg/flag=}"
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
 			if (( ${GroupDepths[$arg]} != 0 )); then
-				std::die 3 "%s %s: cannot remove group from module path -- %s\n" \
-                                         "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
+				std::die 3 "%s %s: %s" \
+                                         "${CMD}" "${FUNCNAME[0]##*_}" \
+                                         "cannot remove group from module path -- %s\n" \
+                                         "${arg}"
 			fi
 			std::remove_path UsedGroups "${arg}"
 			dirs_to_remove+=( ${modulefiles_dir} )
@@ -1364,27 +1154,48 @@ subcommand_unuse() {
 	done
 
 	declare -g UsedGroups
-	pbuild::export_env ${g_shell} UsedGroups
+	export_env ${g_shell} UsedGroups
 	[[ ${#dirs_to_remove[@]} == 0 ]] && return
 	for dir in "${dirs_to_remove[@]}"; do
-		subcommand_generic1 unuse "${dir}"
+                "${modulecmd}" "${g_shell}" "${subcommand}" "${dir}"
 	done
 }
 
+##############################################################################
 #
 # update
 #
 # :FIXME: either compile Modules with --enable-beginenv or remove the sub-command
 #
+Subcommands[update]='update'
+Options[update]='-o H -l help'
+Help[update]='
+USAGE:
+        module update
+                Attempt  to  reload  all  loaded  modulefiles.
+'
+
 subcommand_update() {
-	subcommand_generic0 update "$@"
+        subcommand_generic0 'update' "$@"
 }
 
+##############################################################################
 #
 # refresh
 #
+Subcommands[refresh]='refresh'
+Options[refresh]='-o H -l help'
+Help[refresh]='
+USAGE:
+        module refresh
+                Force a refresh of all non-persistent components of currently
+		loaded modules.  This should be used on derived shells where
+		aliases need to be reinitialized but the environment variables
+		have already been set by the currently loaded modules.
+'
+
 subcommand_refresh() {
-	subcommand_generic0 refresh "$@"
+        subcommand_generic0 'refresh' "$@"
 }
 
 reset_modulepath() {
@@ -1412,51 +1223,6 @@ reset_used_releases() {
 	done
 }
 
-##############################################################################
-#
-# purge
-#
-subcommand_purge() {
-	subcommand_generic0 purge "$@"
-        reset_modulepath
-        reset_used_groups
-	pbuild::export_env ${g_shell} MODULEPATH UsedGroups
-}
-
-##############################################################################
-#
-# list [-hlt]
-#
-subcommand_list() {
-	local opts=()
-	pmodules::get_options opts -o hlt -l human -l long -l terse -- "$@" || \
-		subcommand_help_list
-	eval set --  "${opts[@]}"
-
-	local opts=()
-	while (( $# > 0 )); do
-		case $1 in
-			-h | --human )
-				opts+=( '-h' )
-				;;
-			-l | --long )
-				opts+=( '-l' )
-				;;
-			-t | --terse )
-				opts+=( '-t' )
-				;;
-			-- )
-				;;
-			* )
-				std::die 1 "%s %s: invalid argument -- %s" \
-                                         "${CMD}" "list" "$1"
-				;;
-		esac
-		shift
-	done
-	"${modulecmd}" "${g_shell}" list "${opts[@]}"
-}
-
 init_path() {
         std::replace_path PATH    "${PMODULES_HOME%/*}/.*"
         std::prepend_path PATH    "${PMODULES_HOME}/bin"
@@ -1481,7 +1247,6 @@ init_manpath() {
         fi
 }
 
-##############################################################################
 pmodules_init() {
 	declare -gx LOADEDMODULES=''
 	declare -gx _LMFILES_=''
@@ -1495,44 +1260,172 @@ pmodules_init() {
         reset_used_releases
         init_path
         init_manpath
-        pbuild::export_env "${g_shell}" \
-                           LOADEDMODULES \
-                           _LMFILES_ \
-                           MODULEPATH \
-                           PATH \
-                           MANPATH
+        export_env "${g_shell}" \
+                   LOADEDMODULES \
+                   _LMFILES_ \
+                   MODULEPATH \
+                   PATH \
+                   MANPATH
 }
+
+##############################################################################
+#
+# purge
+#
+Subcommands[purge]='purge'
+Options[purge]='-o H -l help'
+Help[purge]='
+USAGE:
+        module purge
+		Unload all loaded modulefiles.
+'
+
+subcommand_purge() {
+        local -r subcommand='purge'
+	local -a args=()
+	while (( $# > 0)); do
+		case "$1" in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+		        -- )
+			        ;;
+		        * )
+			        args+=( "$1" )
+			        ;;
+		esac
+		shift
+	done
+        if (( ${#args[@]} > 0 )); then
+	        std::die 3 "%s %s: no arguments allowd\n" \
+                         "${CMD}" "${subcommand}"
+        fi
+	"${modulecmd}" "${g_shell}" "${subcommand}"
+        reset_modulepath
+        reset_used_groups
+	export_env ${g_shell} MODULEPATH UsedGroups
+}
+
+##############################################################################
+#
+# list [-hlt]
+#
+Subcommands[list]='list'
+Options[list]='-l help -o Hhlt -l human -l long -l terse'
+Help[list]='
+USAGE:
+        module list
+		List loaded modules.
+'
+
+subcommand_list() {
+        local -r subcommand='list'
+	local opts=()
+        local args=()
+	while (( $# > 0 )); do
+		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-h | --human )
+				opts+=( '-h' )
+				;;
+			-l | --long )
+				opts+=( '-l' )
+				;;
+			-t | --terse )
+				opts+=( '-t' )
+				;;
+			-- )
+				;;
+			* )
+                                args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+        if (( ${#args[@]} > 0 )); then
+	        std::die 3 "%s %s: no arguments allowd\n" \
+                         "${CMD}" "${subcommand}"
+        fi
+	"${modulecmd}" "${g_shell}" list "${opts[@]}"
+}
+
 
 ##############################################################################
 #
 # clear
 #
+Subcommands[clear]='clear'
+Options[clear]='-o H -l help'
+Help[clear]='
+USAGE:
+        module clear
+		Force the Modules package to believe that no modules are
+		currently loaded.
+'
+
 subcommand_clear() {
-	local -r subcommand="${FUNCNAME##*_}"
-	local opts=()
-	pmodules::get_options opts -- '' "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
+        local -r subcommand='clear'
+        local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
 			-- )
-				shift
+				:
 				;;
 			* )
-				std::die 3 "%s %s: illegal argument -- %s" \
-                                         "${CMD}" "${subcommand}" "$1"
+                                args+=( "$1" )
 				;;
 		esac
+		shift
 	done
+        if (( ${#args[@]} > 0 )); then
+	        std::die 3 "%s %s: no arguments allowed\n" \
+                         "${CMD}" "${subcommand}"
+        fi
 	pmodules_init
-	pbuild::export_env ${g_shell} LOADEDMODULES MODULEPATH _LMFILES_
+	export_env ${g_shell} LOADEDMODULES MODULEPATH _LMFILES_
 }
 
 ##############################################################################
 #
 # search [switches] [STRING...]
 #
+Subcommands[search]='search'
+Options[search]='-o aH -l help -l no-header -l print-modulefiles '
+Options[search]+='-l release: -l with: -l all-releases -l src: -l print-csv'
+Help[search]='
+USAGE:
+        module search [switches] string...
+		Search installed modules. If an argument is given, search
+		for modules whose name match the argument.
+
+SWITCHES: 
+        --no-header
+		Suppress output of a header.
+
+        --release=RELEASE
+		Search for modules within this release. You can specify this
+		switch multiple times.  Without this switch, the used releases
+		will be searched.
+
+        -a|--all-releases
+		Search within all releases.
+		
+        --with=STRING
+		Search for modules compiled with modules matching string. The
+		command
+
+		module search --with=gcc/4.8.3
+
+		lists all modules in the hierarchy compiled with gcc 4.8.3.
+'
+
 subcommand_search() {
-	local -r subcommand="${FUNCNAME##*_}"
+	local -r subcommand='search'
 	local modules=()
 	local with_modules='//'
 	local src_prefix=''
@@ -1638,22 +1531,12 @@ subcommand_search() {
 		print_result "${tmpfile}"
 		rm -f "${tmpfile}"
 	}
-	local opts=()
-	pmodules::get_options opts \
-			   -o 'ahH?' \
-			   -l help \
-			   -l no-header \
-			   -l print-modulefiles \
-			   -l release: \
-			   -l with: \
-			   -l all-releases \
-			   -l src: \
-			   -l print-csv \
-			   --  "$@" || subcommand_help_${subcommand}
-	eval set --  "${opts[@]}"
 	
 	while (( $# > 0 )); do
 		case $1 in
+                        -H | --help )
+                                print_help "${subcommand}"
+                                ;;
 			--no-header )
 				opt_print_header='no'
 				;;
@@ -1688,9 +1571,6 @@ subcommand_search() {
 				pmodules::check_directories "${src_prefix}"
 				shift
 				;;
-			-\? | -h | -H | --help )
-				usage
-				;;
 			-- )
 				;;
 			* )
@@ -1714,113 +1594,268 @@ subcommand_search() {
 	if (( ${#GroupDepths[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
 		get_group_depths "${src_prefix}"
 	fi
-	
+
+	local module
 	for module in "${modules[@]}"; do
 		search "${module}"
 	done
 }
 
+##############################################################################
 #
 # help [module|sub-command]
 #
+Subcommands[help]='help'
+Options[help]='-o hHV? -l version -l help'
+Help[usage]='
+USAGE:
+        module [ switches ] [ subcommand ] [subcommand-args ]
+
+SWITCHES:
+        -h|-H|-?|--help         this usage info
+        -V|--version            modules version & configuration options
+
+SUBCOMMANDS:
+        + add|load [switches]   modulefile [modulefile ...]
+        + rm|unload             modulefile [modulefile ...]
+        + switch|swap           [modulefile1] modulefile2
+        + display|show          modulefile [modulefile ...]
+        + avail [switches]      [modulefile [modulefile ...]]
+        + search [switches]     [args]
+        + use [switches]        [dir|group|release ...]
+        + unuse                 dir|group|release [dir|group|release ...]
+        + refresh
+        + purge
+        + list [switches]
+        + clear
+        + help                  [modulefile|subcommand]
+        + whatis                [modulefile [modulefile ...]]
+        + apropos|keyword       string
+        + initadd               modulefile [modulefile ...]
+        + initprepend           modulefile [modulefile ...]
+        + initrm                modulefile [modulefile ...]
+        + initswitch            modulefile1 modulefile2
+        + initlist
+        + initclear
+'
+
 subcommand_help() {
-	local opts=()
-	pmodules::get_options opts -o HV\? -l version -l help -- "$@" || usage
-	eval set --  "${opts[@]}"
-	local arg=''
-	
+        local -r subcommand='help'
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
-			-[hH] | -\? | --help )
-				usage
+			-[hH] | --help )
+				print_help "${subcommand}"
 				;;
 			-V | --version )
-				print_version
-				std::die 1
+				print_help 'version'
 				;;
 			-- )
 				:
 				;;
 			* )
-				[[ -z ${arg} ]] || \
-				    std::die 1 "${CMD} help: only one argument allowed.\n"
-				arg="$1"
+				args+=( "$1" )
 				;;
 		esac
 		shift
 	done
-	if [[ -z ${arg} ]]; then
-	        usage
-	elif typeset -F subcommand_help_${arg} > /dev/null 2>&1 ; then
-	        # help for sub-command
-		subcommand_help_${arg}
-	else
-		# :FIXME: print help of newest *available* module
-		# (respecting UsedReleases)
-		subcommand_generic1plus help "${arg}"
-	fi
+	if (( ${#args[@]} == 0 )); then
+	        print_help 'help'
+        fi
+        local arg
+        for arg in "${args[@]}"; do
+        	if [[ -n "${Help[${arg}]}" ]] ; then
+                	print_help "${arg}"
+                else
+		        # :FIXME: print help of newest *available* module
+		        # (respecting UsedReleases)
+                        "${modulecmd}" "${g_shell}" "${subcommand}" "${arg}"
+	        fi
+        done
 }
 
+##############################################################################
 #
-# whatis [module]
+# whatis
 #
+Subcommands[whatis]='whatis'
+Options[whatis]='-o H -l help'
+Help[whatis]='
+USAGE:
+        module whatis [modulefile...]
+                Display the information set up by the module-whatis commands
+		inside the specified modulefile(s). If no modulefile is
+		specified, all 'whatis' lines will be shown.
+'
+
 subcommand_whatis() {
 	if (( $# == 0 )); then
-	        subcommand_generic0 whatis
+                subcommand_generic0 'whatis'
 	else
-		subcommand_generic1plus whatis "$@"
+                subcommand_generic1plus 'whatis' "$@"
 	fi
 }
 
+##############################################################################
 #
-# apropos string
+# apropos
 #
+Subcommands[apropos]='apropos'
+Subcommands[keyword]='apropos'
+Options[apropos]='-o H -l help'
+Help[apropos]='
+USAGE:
+        module apropos string
+        module keyword string	Seeks through the 'whatis' informations of
+                all modulefiles for the specified string.  All module-whatis
+                informations matching the string will be displayed.
+'
+
 subcommand_apropos() {
-	subcommand_generic1 apropos "$@"
+        subcommand_generic1 'apropos' "$@"
 }
 
+##############################################################################
 #
 # initadd module...
 #
+Subcommands[initadd]='initadd'
+Options[initadd]='-o H -l help'
+Help[initadd]="
+USAGE:
+        module initadd	modulefile...
+		Add modulefile(s) to the shell's initialization file in the
+		user's home directory.  The startup files checked (in order)
+		are:
+
+                    csh -   .modules, .cshrc(.ext), .csh_variables, and
+                            .login(.ext)
+                    tcsh -  .modules, .tcshrc, .cshrc(.ext), .csh_variables,
+                            and .login(.ext)
+                    (k)sh - .modules, .profile(.ext), and .kshenv(.ext)
+                    bash -  .modules, .bash_profile, .bash_login,
+                            .profile(.ext) and .bashrc(.ext)
+                    zsh -   .modules, .zcshrc(.ext), .zshenv(.ext), and
+                            .zlogin(.ext)
+
+                If a 'module load' line is found in any of these files, the
+                modulefile(s) is(are) appended to any existing list of 
+                modulefiles.  The 'module load' line must be located in at
+                least one of the files listed above for any of the 'init'
+                sub-commands to work properly.  If the 'module load' line
+                line is found in multiple shell initialization files, all
+		of the lines are changed.
+"
+
 subcommand_initadd() {
-	subcommand_generic1plus initadd "$@"
+        subcommand_generic1plus 'initadd' "$@"
 }
 
+##############################################################################
 #
 # initprepend module...
 #
+Subcommands[initprepend]='initprepend'
+Options[initprepend]='-o H -l help'
+Help[initprepend]="
+USAGE:
+        module initprepend modulefile...
+		Does the same as initadd but prepends the given modules to
+		the beginning of the list.
+"
+
 subcommand_initprepend() {
-	subcommand_generic1plus initprepend "$@"
+        subcommand_generic1plus 'initprepend' "$@"
 }
 
+##############################################################################
 #
 # initrm module...
 #
+Subcommands[initrm]='initrm'
+Options[initrm]='-o H -l help'
+Help[initrm]="
+USAGE:
+        module initrm modulefile...
+		Remove modulefile(s) from the shell's initialization files.
+"
+
 subcommand_initrm() {
-	subcommand_generic1plus initrm "$@"
+        subcommand_generic1plus 'initrm' "$@"
 }
 
+##############################################################################
 #
 # initswitch module1 module2
 #
+Subcommands[initswitch]='initswitch'
+Options[initswitch]='-o H -l help'
+Help[initswitch]="
+USAGE:
+        module initswitch modulefile1 modulefile2
+		Switch modulefile1 with modulefile2 in the shell's initialization files.
+"
+
 subcommand_initswitch() {
-	subcommand_generic1or2 initswitch "$@"
+        subcommand='initswitch'
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-h | --help )
+				print_help "${subcommand}"
+				;;
+			-- )
+                                :
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} != 2 )); then
+	        std::die 3 "%s %s: two arguments required not less not more\n" \
+                         "${CMD}" "${subcommand}"
+	fi
+	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
 
+##############################################################################
 #
 # initlist
 #
+Subcommands[initlist]='initlist'
+Options[initlist]='-o H -l help'
+Help[initlist]="
+USAGE:
+        module initlist
+		List all of the modulefiles loaded from the shell's initialization file.
+"
+
 subcommand_initlist() {
-	subcommand_generic0 initlist "$@"
+	subcommand_generic0 'initlist' "$@"
 }
 
+##############################################################################
 #
 # initclear
 #
+Subcommands[initclear]='initclear'
+Options[initclear]='-o H -l help'
+Help[initclear]="
+USAGE:
+	module initclear
+		Clear all of the modulefiles from the shell's initialization files.
+"
+
 subcommand_initclear() {
-	subcommand_generic0 initclear "$@"
+	subcommand_generic0 'initclear' "$@"
 }
 
+##############################################################################
+#
+# main
+#
 case "$1" in
 	bash | zsh )
 		declare g_shell="$1"
@@ -1833,79 +1868,27 @@ case "$1" in
 		;;
 esac
 shift
-if [[ -n ${PMODULES_ENV} ]]; then
-	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
-else
-	pmodules_init
-fi
 
-
-declare -A Subcommands=(\
-	[add]="subcommand_load" \
-	[load]="subcommand_load" \
-	[rm]="subcommand_unload" \
-	[unload]="subcommand_unload" \
-	[switch]="subcommand_swap" \
-	[swap]="subcommand_swap" \
-	[display]="subcommand_show" \
-	[show]="subcommand_show" \
-	[apropos]="subcommand_apropos" \
-	[keyword]="subcommand_apropos" \
-	[avail]="subcommand_avail" \
-	[search]="subcommand_search" \
-	[use]="subcommand_use" \
-	[unuse]="subcommand_unuse" \
-	[update]="subcommand_update" \
-	[refresh]="subcommand_refresh" \
-	[purge]="subcommand_purge" \
-	[list]="subcommand_list" \
-	[clear]="subcommand_clear" \
-	[whatis]="subcommand_whatis" \
-	[initadd]="subcommand_initadd" \
-	[initprepend]="subcommand_initprepend" \
-	[initrm]="subcommand_initrm" \
-	[initswitch]="subcommand_initswitch" \
-	[initlist]="subcommand_initlist" \
-	[initclear]="subcommand_initclear" \
-	[help]="subcommand_help" \
-)
-
-declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
 		-H | -\? | --help | -help )
-			usage
+			print_help 'usage'
 			;;
 		-V | --version )
-			print_version
-			std::die 1
+			print_help 'version'
 			;;
 		--debug )
 			set -x
 			;;
-		'' )
+		'' | -- )
 			;;
 		-* )
-			opts+=( "$1" )
+			std::die 1 "Illegal option -- $1"
 			;;
 		* )
-			if [[ -z "${Subcommands[$1]}" ]]; then
-			        std::die 1 "${CMD}: unknown sub-command -- $1\n"
-			fi
 			subcommand="$1"
 			shift
 			break
-			;;
-	esac
-	shift
-done
-
-while (( $# > 0 )); do
-	case "$1" in
-		-- )
-			;;
-		* )
-			opts+=( "$1" )
 			;;
 	esac
 	shift
@@ -1915,11 +1898,25 @@ if [[ -z "${subcommand}" ]]; then
 	std::die 1 "${CMD}: no sub-command specified.\n"
 fi
 
+if [[ -z "${Subcommands[${subcommand}]}" ]]; then
+	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}\n"
+fi
+
+if [[ -n ${PMODULES_ENV} ]]; then
+	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+else
+	pmodules_init
+fi
+
 if (( ${#GroupDepths[@]} == 0 )); then
 	get_group_depths "${PMODULES_ROOT}"
 fi
 
-${Subcommands[$subcommand]} "${opts[@]}"
+declare options
+options=$( "${getopt}" ${Options[${subcommand}]} -- -- "$@" ) \
+        || print_help "${subcommand}"
+eval set -- ${options}
+subcommand_${Subcommands[$subcommand]} "$@"
 
 # Local Variables:
 # mode: sh
