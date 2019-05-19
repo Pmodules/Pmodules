@@ -953,6 +953,7 @@ subcommand_use() {
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
+        local add2path_func='std::append_path'
 
 	print_info() {
 		local f
@@ -1035,7 +1036,7 @@ subcommand_use() {
 				std::die 3 "%s %s: illegal directory -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 			elif [[ -d ${arg} ]]; then
-			        dirs_to_add+=( "$(cd "${arg}" && pwd)" )
+                                ${add2path_func} MODULEPATH "$(cd "${arg}" && pwd)"
 			else
 				std::die 3 "%s %s: neither a directory, release or group -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
@@ -1043,17 +1044,9 @@ subcommand_use() {
 			shift
 		done
 
-		for dir in "${dirs_to_add[@]}"; do
-			if [[ ${opt_append} == yes ]]; then
-				std::append_path MODULEPATH "${dir}"
-			else
-				std::prepend_path MODULEPATH "${dir}"
-			fi
-		done
 		export_env ${g_shell} MODULEPATH UsedGroups
 	}
 
-	local opt_append='no'
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
@@ -1061,10 +1054,10 @@ subcommand_use() {
                                 print_help "${subcommand}"
                                 ;;
 		        -a | --append )
-			        opt_append='yes'
+                                add2path_func='std::append_path'
 			        ;;
 		        -p | --prepend )
-			        opt_append='no'
+                                add2path_func='std::prepend_path'
 			        ;;
 		        -- )
 			        ;;
@@ -1607,7 +1600,7 @@ subcommand_search() {
 #
 Subcommands[help]='help'
 Options[help]='-o hHV? -l version -l help'
-Help[usage]='
+Help[help]='
 USAGE:
         module [ switches ] [ subcommand ] [subcommand-args ]
 
@@ -1872,7 +1865,7 @@ shift
 while (( $# > 0 )); do
 	case $1 in
 		-H | -\? | --help | -help )
-			print_help 'usage'
+			print_help 'help'
 			;;
 		-V | --version )
 			print_help 'version'
