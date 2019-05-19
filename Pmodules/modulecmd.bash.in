@@ -1041,7 +1041,7 @@ subcommand_use() {
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
         local add2path_func='std::append_path'
-        
+
 	print_info() {
 		local f
 		local r
@@ -1172,7 +1172,7 @@ subcommand_use() {
                                 print_help "${subcommand}"
                                 ;;
 		        -a | --append )
-			        add2path_func='std::append_path'
+                                add2path_func='std::append_path'
 			        ;;
 		        -p | --prepend )
                                 add2path_func='std::prepend_path'
@@ -1750,7 +1750,7 @@ subcommand_search() {
 #
 Subcommands[help]='help'
 Options[help]='-o hHV? -l version -l help'
-Help[usage]='
+Help[help]='
 USAGE:
         module [ switches ] [ subcommand ] [subcommand-args ]
 
@@ -2015,7 +2015,7 @@ shift
 while (( $# > 0 )); do
 	case $1 in
 		-H | -\? | --help | -help )
-			print_help 'usage'
+			print_help 'help'
 			;;
 		-V | --version )
 			print_help 'version'
