@@ -944,12 +944,8 @@ subcommand_avail() {
                                           "${string}" \
                                           "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
-<<<<<<< HEAD
 
 			${output_function} "${group}"
-=======
-			${output_function}
->>>>>>> 38-implement-generic-print-help-function
 		done
 	done
 }
