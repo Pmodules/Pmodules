@@ -478,14 +478,22 @@ subcommand_load() {
 		local output=$("${modulecmd}" "${shell}" ${opts} 'load' "${current_modulefile}" 2> "${tmpfile}")
 		echo "${output}"
 		eval "${output}"
-		local error=$( < "${tmpfile}")
 
+                # we do not want to print the error message we got from
+                # modulecmd, they are a bit ugly
                 # :FIXME: Not sure whether this is now correct!
                 # The idea is to supress the error messages from the Tcl modulecmd, but not
                 # the output to stderr coded in a modulefile.
+                
+		local error=$( < "${tmpfile}")
 		if [[ "${error}" =~ ":ERROR:" ]]; then
-			std::info "%s %s: failed -- %s\n" \
-                                  "${CMD}" 'load' "${m}"
+                        local s=${error%%$'\n'*}
+                        local error_txt='failed'
+                        if [[ "$s" =~ ' conflicts ' ]]; then
+                                error_txt='conflicts with already loaded modules'
+                        fi
+			std::die 3 "%s %s: %s -- %s\n" \
+                                  "${CMD}" 'load' "${error_txt}" "${m}"
 		elif [[ -n ${error} ]]; then
                         echo "${error}" 1>&2
 		fi
@@ -835,7 +843,7 @@ subcommand_avail() {
 			-m | --machine )
 				output_function='machine_output'
 				;;
-			-- )
+			-- | '' )
 				;;
 			* )
 				pattern+=( "$1" )
@@ -858,7 +866,6 @@ subcommand_avail() {
 		for dir in "${modulepath[@]}"; do
 			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
-
 			${output_function}
 		done
 	done
@@ -1541,20 +1548,30 @@ subcommand_search() {
 				opt_print_csv='yes'
 				opt_print_header='no'
 				;;
-			--release )
-				is_release "$2" || \
+			--release | --release=* )
+                                if [[ "$1" == "--release" ]]; then
+                                        local arg=$2
+                                        shift
+                                else
+                                        local arg=${1/--release=}
+                                fi
+				is_release "${arg}" || \
 				        std::die 1 "%s %s: illegal release name -- %s\n" \
-                                                 "${CMD}" 'search' "$2"
-				opt_use_releases+="$2:"
-				shift
+                                                 "${CMD}" 'search' "${arg}"
+				opt_use_releases+="${arg}:"
 				;;
-			--with )
-				if [[ -z $2 ]] || [[ "$2" =~ "-*" ]]; then
+			--with | --with=* )
+                                if [[ "$1" == --with ]]; then
+                                        local arg=$2
+                                        shift
+                                else
+                                        local arg=${1/--with=}
+                                fi
+				if [[ -z ${arg} ]] || [[ "${arg}" =~ "-*" ]]; then
 				        std::die 1 "%s %s: illegal value for --with option -- %s\n" \
-                                                 "${CMD}" 'search' "$2"
+                                                 "${CMD}" 'search' "${arg}"
 				fi
-				with_modules+=" && / ${2//\//\\/}/"
-				shift
+				with_modules+=" && / ${arg//\//\\/}/"
 				;;
 			-a | --all-releases )
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
@@ -1862,6 +1879,7 @@ case "$1" in
 esac
 shift
 
+declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
 		-H | -\? | --help | -help )
@@ -1876,7 +1894,7 @@ while (( $# > 0 )); do
 		'' | -- )
 			;;
 		-* )
-			std::die 1 "Illegal option -- $1"
+			opts+=( "$1" )
 			;;
 		* )
 			subcommand="$1"
@@ -1906,7 +1924,7 @@ if (( ${#GroupDepths[@]} == 0 )); then
 fi
 
 declare options
-options=$( "${getopt}" ${Options[${subcommand}]} -- -- "$@" ) \
+options=$( "${getopt}" ${Options[${subcommand}]} -- -- "${opts[@]}" "$@" ) \
         || print_help "${subcommand}"
 eval set -- ${options}
 subcommand_${Subcommands[$subcommand]} "$@"
