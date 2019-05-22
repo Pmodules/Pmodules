@@ -950,7 +950,8 @@ subcommand_avail() {
 	done
 }
 
-# compute depths or passed group
+#
+# compute depths of group passed as argument
 # Note: cwd must be Pmodules root directory
 # $1: group
 #
