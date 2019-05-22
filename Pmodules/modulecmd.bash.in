@@ -1723,7 +1723,11 @@ subcommand_search() {
 				        std::die 1 "%s %s: illegal value for --with option -- %s\n" \
                                                  "${CMD}" 'search' "${arg}"
 				fi
-				with_modules+=" && / ${arg//\//\\/}/"
+                                arg=${arg//:/ }
+                                arg=${arg//,/ }
+                                for module in ${arg}; do
+				        with_modules+=" && / ${module//\//\\/}/"
+                                done
 				;;
 			-a | --all-releases )
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
