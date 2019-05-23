@@ -1015,12 +1015,8 @@ subcommand_use() {
 	}
 
 	use () {
-		declare -g UsedGroups
-		declare -g MODULEPATH
-		
-		local dirs_to_add=()
 		while (( $# > 0)); do
-			arg="$1"
+			local arg="$1"
 			# if is release
 			#	...
 			# elif is group
@@ -1036,30 +1032,39 @@ subcommand_use() {
 			if is_release "${arg}"; then
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
-                                g_env_must_be_saved='yes'
+                               
 			elif [[ "${arg}" =~ "flag=" ]]; then
 				std::append_path UseFlags "${arg/flag=}"
-                                g_env_must_be_saved='yes'
+
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
 				if (( ${GroupDepths[$arg]} != 0 )); then
-					std::die 3 "%s %s: cannot add group to module path -- %s\n" \
-                                                 "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
+					std::die 3 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" "${subcommand}" \
+                                                 "cannot add group to module path" \
+                                                 "${arg}"
 				fi
 				std::append_path UsedGroups "${arg}"
                                 ${add2path_func} MODULEPATH "${modulefiles_dir}"
+
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
-				std::die 3 "%s %s: illegal directory -- %s\n" \
-                                         "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
+				std::die 3 "%s %s: %s -- %s\n" \
+                                         "${CMD}" "${subcommand}" \
+                                         "illegal directory" \
+                                         "${arg}"
+
 			elif [[ -d ${arg} ]]; then
                                 ${add2path_func} MODULEPATH "$(cd "${arg}" && pwd)"
+
 			else
-				std::die 3 "%s %s: neither a directory, release or group -- %s\n" \
-                                         "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
+				std::die 3 "%s %s: %s -- %s\n" \
+                                         "${CMD}" "${subcommand}" \
+                                         "neither a directory, release or group" \
+                                         "${arg}"
 			fi
 			shift
 		done
-
-		export_env ${g_shell} MODULEPATH
+                g_env_must_be_saved='yes'
+		export_env ${g_shell} 'MODULEPATH'
 	}
 
 	local -a args=()
@@ -1104,7 +1109,62 @@ unuse directory|group|release...
 
 subcommand_unuse() {
         local -r subcommand='unuse'
-	local dirs_to_remove=()
+        unuse() {
+                while (( $# > 0 )); do
+                        local arg=$1
+		        local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
+		        if is_release "${arg}"; then
+                                # argument is release
+			        std::remove_path UsedReleases "${arg}"
+
+		        elif [[ "${arg}" =~ "flag=" ]]; then
+                                # argument is flag
+			        std::remove_path UseFlags "${arg/flag=}"
+
+		        elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
+                                # argument is group
+			        if (( ${GroupDepths[$arg]} != 0 )); then
+				        std::die 3 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" "${subcommand}" \
+                                                 "cannot remove group" \
+                                                 "${arg}"
+			        fi
+                                local var="PMODULES_LOADED_${arg^^}"
+                                if [[ -n "${!var}" ]]; then
+                                        std::die 3 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" "${subcommand}" \
+                                                 "cannot remove group due to loaded modules" \
+                                                 "${arg}"
+                                fi
+			        std::remove_path UsedGroups "${arg}"
+			        std::remove_path MODULEPATH "${modulefiles_dir}"
+                                
+		        elif [[ -d ${arg} ]]; then
+                                # argument is a modulepath
+			        local normalized_dir=$(cd "${arg}" && pwd)
+                                std::remove_path MODULEPATH "${normalized_dir}"
+                                
+		        elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
+                                # argument looks like a group in our root
+			        std::die 3 "%s %s: %s -- %s\n." \
+                                         "${CMD}" "${subcommand}" \
+                                         "illegal directory" \
+                                         "${arg}"
+                                
+		        else
+                                # oops
+			        std::die 3 "%s %s: %s -- %s\n" \
+                                         "${CMD}" "${subcommand}" \
+                                         "not a valid argument" \
+                                         "${arg}"
+                                
+		        fi
+		        shift
+	        done
+                g_env_must_be_saved='yes'
+                export_env "${g_shell}" 'MODULEPATH'
+        }
+        
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
@@ -1120,51 +1180,11 @@ subcommand_unuse() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         'missing argument'
 	fi
-
-        local arg
-        for arg in "${args[@]}"; do
-		# if is release
-		# ...
-		# elif is group
-		# ...
-		# elif matches modulepath root
-		# ...
-		# elif is directory
-		# ...
-		local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
-		if is_release "${arg}"; then
-			std::remove_path UsedReleases "${arg}"
-                        g_env_must_be_saved='yes'
-		elif [[ "${arg}" =~ "flag=" ]]; then
-			std::remove_path UseFlags "${arg/flag=}"
-                        g_env_must_be_saved='yes'
-		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
-			if (( ${GroupDepths[$arg]} != 0 )); then
-				std::die 3 "%s %s: %s" \
-                                         "${CMD}" "${FUNCNAME[0]##*_}" \
-                                         "cannot remove group from module path -- %s\n" \
-                                         "${arg}"
-			fi
-			std::remove_path UsedGroups "${arg}"
-                        g_env_must_be_saved='yes'
-			std::remove_path MODULEPATH "${modulefiles_dir}"
-		elif [[ -d ${arg} ]]; then
-			local normalized_dir=$(cd "${arg}" && pwd)
-                        std::remove_path MODULEPATH "${normalized_dir}"
-			dirs_to_remove+=( ${normalized_dir} )
-		elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
-			std::die 3 "%s %s: illegal directory -- %s\n." \
-                                 "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
-		else
-			std::die 3 "%s %s: not a directory -- %s\n" \
-                                 "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
-		fi
-		shift
-	done
-        export_env "${g_shell}" 'MODULEPATH'
+        unuse "${args[@]}"
 }
 
 ##############################################################################
