@@ -100,7 +100,7 @@ trap 'save_env ${g_shell} GroupDepths UsedReleases UseFlags UsedGroups PMODULES_
 # get release of module
 # Note:
 # - the release of a modulefile outside ${PMODULES_ROOT} is 'stable'
-# - the release of a modulefile inside ${PMODULES_ROOT} without a 
+# - the release of a modulefile inside ${PMODULES_ROOT} without a
 #   coresponding release file is 'unstable'
 #
 # Args:
@@ -122,7 +122,7 @@ get_release() {
 		# read releasefile, remove empty lines, spaces etc
 		local -r data=$( < "${releasefile}" )
 		std::upvar $1 "${data}"
-	else	
+	else
 		std::upvar $1 'unstable'
 	fi
 	return 0
@@ -246,7 +246,7 @@ subcommand_generic1plus() {
 ##############################################################################
 #
 # load [-fsvw] <module>
-# 
+#
 # $1: module to load
 #
 Subcommands[add]='load'
@@ -257,7 +257,7 @@ USAGE:
         module add     modulefile...
         module load    modulefile...
                 Load modulefile(s) into the shell environment. Loading a
-		'group-head' will extend the MODULEPATH. E.g.: loading a 
+		'group-head' will extend the MODULEPATH. E.g.: loading a
 		compiler makes additional modules like openmpi and libraries
 		compiled with this compiler available.
 '
@@ -269,7 +269,7 @@ subcommand_load() {
 	local prefix=''
 	local m=''
 
-	local saved_IFS="${IFS}"; 
+	local saved_IFS="${IFS}";
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
@@ -311,8 +311,8 @@ subcommand_load() {
 		# prefix of the module to ${array[1]}.
 		#
 		# The trick with the first line matching "_PREFIX" is not
-		# 100% reliable: One of the Pmodules extensions must be 
-		# called before something like 
+		# 100% reliable: One of the Pmodules extensions must be
+		# called before something like
 		#   setenv FOO_PREFIX bar
 		# can be used.
 		#
@@ -488,7 +488,7 @@ subcommand_load() {
                 # :FIXME: Not sure whether this is now correct!
                 # The idea is to supress the error messages from the Tcl modulecmd, but not
                 # the output to stderr coded in a modulefile.
-                
+
 		local error=$( < "${tmpfile}")
 		if [[ "${error}" =~ ":ERROR:" ]]; then
                         local s=${error%%$'\n'*}
@@ -699,14 +699,14 @@ USAGE:
 		is searched for modulefiles whose pathname match the argument.
 
 		This command does *not* display all installed modules on the
-		system. Only *loadable* modules are listed.  The list of 
+		system. Only *loadable* modules are listed.  The list of
 		available modules may change either by loading other modules,
 		e.g. a compiler, or with the sub-command 'use'.
 
 SWITCHES:
         -a|--all||--all-releases
 		List all available modules independend of the release.
-		
+
 	-t|--terse
 		Output in short format.
 
@@ -724,7 +724,7 @@ subcommand_avail() {
 	# use this variable in the output functions
 	local -a mods=()
 	local dir=''
-	
+
 	# get number of columns of terminal
 	cols=$(tput cols)
 
@@ -861,7 +861,7 @@ subcommand_avail() {
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
-	local saved_IFS=${IFS}; 
+	local saved_IFS=${IFS};
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
@@ -913,14 +913,14 @@ get_group_depths () {
 # re-scan available groups.
 #
 # Note:
-# Removing groups is not supported for the time being. Be aware, that 
+# Removing groups is not supported for the time being. Be aware, that
 # a user might have a module loaded from this group. This cannot be checked.
 #
 # $1: root of modulefile hierarchy
 rescan_groups() {
 	local -r root="$1"
 	{
-		cd "${root}" 
+		cd "${root}"
 		# for some unknown reason [A-Z]* doesn't work with some bash versions
 		for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
 			if [[ -z "${GroupDepths[${group}]}" ]]; then
@@ -948,7 +948,7 @@ USAGE:
 		prepended or appended to the module search path. The default
 		is to prepend the directory.
 
-		With a group as argument, the modules in this group will 
+		With a group as argument, the modules in this group will
 		be made available.
 
 		With a release as argument, this modules with this release
@@ -962,7 +962,7 @@ SWITCHES:
 
 subcommand_use() {
         local -r subcommand='use'
-	local saved_IFS=${IFS}; 
+	local saved_IFS=${IFS};
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	IFS=${saved_IFS}
@@ -983,7 +983,7 @@ subcommand_use() {
 			    std::info "\t${_group}\n"
 			fi
 		done
-		
+
 		std::info "\nUsed releases:\n"
 		for r in ${UsedReleases//:/ }; do
 			std::info "\t${r}\n"
@@ -1032,7 +1032,7 @@ subcommand_use() {
 			if is_release "${arg}"; then
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
-                               
+
 			elif [[ "${arg}" =~ "flag=" ]]; then
 				std::append_path UseFlags "${arg/flag=}"
 
@@ -1138,33 +1138,33 @@ subcommand_unuse() {
                                 fi
 			        std::remove_path UsedGroups "${arg}"
 			        std::remove_path MODULEPATH "${modulefiles_dir}"
-                                
+
 		        elif [[ -d ${arg} ]]; then
                                 # argument is a modulepath
 			        local normalized_dir=$(cd "${arg}" && pwd)
                                 std::remove_path MODULEPATH "${normalized_dir}"
-                                
+
 		        elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
                                 # argument looks like a group in our root
 			        std::die 3 "%s %s: %s -- %s\n." \
                                          "${CMD}" "${subcommand}" \
                                          "illegal directory" \
                                          "${arg}"
-                                
+
 		        else
                                 # oops
 			        std::die 3 "%s %s: %s -- %s\n" \
                                          "${CMD}" "${subcommand}" \
                                          "not a valid argument" \
                                          "${arg}"
-                                
+
 		        fi
 		        shift
 	        done
                 g_env_must_be_saved='yes'
                 export_env "${g_shell}" 'MODULEPATH'
         }
-        
+
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
@@ -1431,7 +1431,7 @@ USAGE:
 		Search installed modules. If an argument is given, search
 		for modules whose name match the argument.
 
-SWITCHES: 
+SWITCHES:
         --no-header
 		Suppress output of a header.
 
@@ -1442,7 +1442,7 @@ SWITCHES:
 
         -a|--all-releases
 		Search within all releases.
-		
+
         --with=STRING
 		Search for modules compiled with modules matching string. The
 		command
@@ -1559,7 +1559,7 @@ subcommand_search() {
 		print_result "${tmpfile}"
 		rm -f "${tmpfile}"
 	}
-	
+
 	while (( $# > 0 )); do
 		case $1 in
                         -H | --help )
@@ -1624,11 +1624,11 @@ subcommand_search() {
 	if [[ -z "${src_prefix}" ]]; then
 	        src_prefix="${PMODULES_ROOT}"
 	fi
-	
+
 	if [[ "${opt_use_releases}" == ":" ]]; then
                 opt_use_releases=":${UsedReleases}:"
 	fi
-	
+
 	if [[ ${#modules[@]} == 0 ]]; then
 		modules+=( '' )
 	fi
@@ -1781,7 +1781,7 @@ USAGE:
                             .zlogin(.ext)
 
                 If a 'module load' line is found in any of these files, the
-                modulefile(s) is(are) appended to any existing list of 
+                modulefile(s) is(are) appended to any existing list of
                 modulefiles.  The 'module load' line must be located in at
                 least one of the files listed above for any of the 'init'
                 sub-commands to work properly.  If the 'module load' line
