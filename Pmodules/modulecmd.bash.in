@@ -77,7 +77,10 @@ export_env() {
 	done
 }
 
+declare g_env_must_be_saved='no'
+
 save_env() {
+        [[ ${g_env_must_be_saved} == 'no' ]] && return 0
 	local -r shell="$1"
 	shift
 	local s=''
@@ -447,6 +450,7 @@ subcommand_load() {
                                         std::die 3 "%s %s: illegal release name -- %s\n" \
                                                  "${CMD}" 'load' "${release}"
 				std::append_path UsedReleases "${release}"
+                                g_env_must_be_saved='yes'
 			fi
 		fi
 		local found=''
@@ -888,7 +892,8 @@ get_group_depth () {
 	# instead of 0
 	# :FIXME: better solution?
 	(( depth == -4 )) && (( depth = 0 ))
-	GroupDepths[$group]=${depth} 
+	GroupDepths[$group]=${depth}
+        g_env_must_be_saved='yes'
 }
 
 #
@@ -1031,15 +1036,17 @@ subcommand_use() {
 			if is_release "${arg}"; then
 			        # releases are always *appended*
 			        std::append_path UsedReleases "${arg}"
+                                g_env_must_be_saved='yes'
 			elif [[ "${arg}" =~ "flag=" ]]; then
 				std::append_path UseFlags "${arg/flag=}"
+                                g_env_must_be_saved='yes'
 			elif [[ ! ${arg} =~ */* ]] && [[ -d ${modulefiles_dir} ]]; then
 				if (( ${GroupDepths[$arg]} != 0 )); then
 					std::die 3 "%s %s: cannot add group to module path -- %s\n" \
                                                  "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
 				fi
 				std::append_path UsedGroups "${arg}"
-			       	dirs_to_add+=( ${modulefiles_dir} )
+                                ${add2path_func} MODULEPATH "${modulefiles_dir}"
 			elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
 				std::die 3 "%s %s: illegal directory -- %s\n" \
                                          "${CMD}" "${FUNCNAME[0]##*_}" "${arg}"
@@ -1052,7 +1059,7 @@ subcommand_use() {
 			shift
 		done
 
-		export_env ${g_shell} MODULEPATH UsedGroups
+		export_env ${g_shell} MODULEPATH
 	}
 
 	local -a args=()
@@ -1130,8 +1137,10 @@ subcommand_unuse() {
 		local modulefiles_dir="${PMODULES_ROOT}/${arg}/${PMODULES_MODULEFILES_DIR}"
 		if is_release "${arg}"; then
 			std::remove_path UsedReleases "${arg}"
+                        g_env_must_be_saved='yes'
 		elif [[ "${arg}" =~ "flag=" ]]; then
 			std::remove_path UseFlags "${arg/flag=}"
+                        g_env_must_be_saved='yes'
 		elif [[ ! ${arg} =~ */* ]] &&  [[ -d ${modulefiles_dir} ]]; then
 			if (( ${GroupDepths[$arg]} != 0 )); then
 				std::die 3 "%s %s: %s" \
@@ -1140,9 +1149,11 @@ subcommand_unuse() {
                                          "${arg}"
 			fi
 			std::remove_path UsedGroups "${arg}"
-			dirs_to_remove+=( ${modulefiles_dir} )
+                        g_env_must_be_saved='yes'
+			std::remove_path MODULEPATH "${modulefiles_dir}"
 		elif [[ -d ${arg} ]]; then
 			local normalized_dir=$(cd "${arg}" && pwd)
+                        std::remove_path MODULEPATH "${normalized_dir}"
 			dirs_to_remove+=( ${normalized_dir} )
 		elif [[ ${arg} =~ ^${PMODULES_ROOT} ]]; then
 			std::die 3 "%s %s: illegal directory -- %s\n." \
@@ -1153,13 +1164,7 @@ subcommand_unuse() {
 		fi
 		shift
 	done
-
-	declare -g UsedGroups
-	export_env ${g_shell} UsedGroups
-	[[ ${#dirs_to_remove[@]} == 0 ]] && return
-	for dir in "${dirs_to_remove[@]}"; do
-                "${modulecmd}" "${g_shell}" "${subcommand}" "${dir}"
-	done
+        export_env "${g_shell}" 'MODULEPATH'
 }
 
 ##############################################################################
@@ -1215,6 +1220,7 @@ reset_used_groups() {
         for group in ${PMODULES_DEFAULT_GROUPS}; do
                 std::append_path UsedGroups "${group}"
         done
+        g_env_must_be_saved='yes'
 }
 
 reset_used_releases() {
@@ -1222,6 +1228,7 @@ reset_used_releases() {
 	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
 		std::append_path UsedReleases "${r}"
 	done
+        g_env_must_be_saved='yes'
 }
 
 init_path() {
@@ -1304,7 +1311,7 @@ subcommand_purge() {
 	"${modulecmd}" "${g_shell}" "${subcommand}"
         reset_modulepath
         reset_used_groups
-	export_env ${g_shell} MODULEPATH UsedGroups
+	export_env ${g_shell} MODULEPATH
 }
 
 ##############################################################################
