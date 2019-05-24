@@ -1055,7 +1055,9 @@ subcommand_use() {
                            (( ${GroupDepths[${arg}]} == 0 )); then
                         # argument is group in our root with depth 0
 			std::append_path UsedGroups "${arg}"
-                        ${add2path_func} MODULEPATH "${modulefiles_dir}"
+                        local dir="${PMODULES_ROOT}/${arg}/"
+                        dir+="${PMODULES_MODULEFILES_DIR}"
+                        ${add2path_func} MODULEPATH "${dir}"
                         return
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
@@ -1159,7 +1161,9 @@ subcommand_unuse() {
                                          "${arg}"
                         fi
                         std::remove_path UsedGroups "${arg}"
-			std::remove_path MODULEPATH "${modulefiles_dir}"
+                        local dir="${PMODULES_ROOT}/${arg}/"
+                        dir+="${PMODULES_MODULEFILES_DIR}"
+			std::remove_path MODULEPATH "${dir}"
                         return
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
