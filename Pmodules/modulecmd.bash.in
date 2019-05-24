@@ -78,20 +78,16 @@ declare g_env_must_be_saved='no'
 
 save_env() {
         [[ ${g_env_must_be_saved} == 'no' ]] && return 0
-	local -r shell="$1"
-	shift
-	local s=''
-	local tmp
-	while (( $# > 0 )); do
-		tmp="$( typeset -p $1 2> /dev/null)"
-		[[ -n "${tmp}" ]] && s+="${tmp};"
-		shift
-	done
+        local vars=( GroupDepths UsedReleases UseFlags UsedGroups )
+        vars+=( PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES )
+        vars+=( PMODULES_DEFAULT_RELEASES )
+        
+	local s=$(typeset -p ${vars[@]})
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
-	export_env ${shell} PMODULES_ENV
+	export_env ${g_shell} PMODULES_ENV
 }
 
-trap 'save_env ${g_shell} GroupDepths UsedReleases UseFlags UsedGroups PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES PMODULES_DEFAULT_RELEASES' EXIT
+trap 'save_env ' EXIT
 
 #
 # get release of module
