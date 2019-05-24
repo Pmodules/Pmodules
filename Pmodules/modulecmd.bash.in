@@ -947,9 +947,6 @@ subcommand_avail() {
 		esac
 		shift
 	done
-	if [[ "${opt_all_groups}" = 'yes' ]]; then
-		rescan_groups "${!Overlays[@]}"
-	fi
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
