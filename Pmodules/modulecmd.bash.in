@@ -38,9 +38,7 @@ declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 shopt -s nullglob
 
 declare -A GroupDepths='()'
-declare current_modulefile=''
-declare g_shell=''
-
+declare    Shell=''
 declare -A Subcommands
 declare -A Options
 declare -A Help
@@ -56,9 +54,7 @@ print_help() {
 }
 
 export_env() {
-	local -r shell="$1"
-	shift
-	case "${shell}" in
+	case "${Shell}" in
 	bash | zsh )
 		local -r fmt="export %s=\"%s\"; "
 		;;
@@ -66,7 +62,7 @@ export_env() {
 		local -r fmt="setenv %s \"%s\"; "
 		;;
 	* )
-		std::die 1 "Unsupported shell -- ${shell}\n"
+		std::die 1 "Unsupported shell -- ${Shell}\n"
 		;;
 	esac
 
@@ -93,7 +89,7 @@ save_env() {
 
 	local s=$(typeset -p ${vars[@]})
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
-	export_env ${g_shell} PMODULES_ENV
+	export_env 'PMODULES_ENV'
 }
 
 trap 'save_env ' EXIT
@@ -182,7 +178,7 @@ subcommand_generic0() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowed"
         fi
-	"${modulecmd}" "${g_shell}" "${subcommand}"
+	"${modulecmd}" "${Shell}" "${subcommand}"
 }
 
 subcommand_generic1() {
@@ -212,7 +208,7 @@ subcommand_generic1() {
                          "${CMD}" "${subcommand}" \
                          "only one argument allowed"
 	fi
-	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
 }
 
 subcommand_generic1plus() {
@@ -238,7 +234,7 @@ subcommand_generic1plus() {
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	fi
-	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
 }
 
 ##############################################################################
@@ -288,7 +284,8 @@ subcommand_load() {
 	# - specified with name only (without version, like gcc).
 	#   The module can be either in- or outside our hierarchy.
 	#
-	# - directory in- or outsite our hierarchy (not supported by modulecmd.tcl!)
+	# - directory in- or outsite our hierarchy (not supported by
+        #   modulecmd.tcl!)
 	#
 	# arguments:
 	# 	$1: module name or file
@@ -314,7 +311,7 @@ subcommand_load() {
 		#   setenv FOO_PREFIX bar
 		# can be used.
 		#
-		mapfile -t array  < <("${modulecmd}" "${shell}" show "$m" 2>&1 | \
+		mapfile -t array  < <("${modulecmd}" 'bash' show "$m" 2>&1 | \
 			awk 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
@@ -357,15 +354,18 @@ subcommand_load() {
 			[[ -z ${dep} ]] && continue
 			[[ ${dep:0:1} == \# ]] && continue
 			module_is_loaded "${dep}" && continue
-			local output=$( subcommand_load --internal "${dep}")
-			echo ${output}
+			local output=$( subcommand_load 'bash' "${dep}")
 			eval ${output}
+                        if [[ "${Shell}" == "bash" ]]; then
+                                echo ${output}
+                        else
+                                subcommand_load "${Shell}" "${dep}"
+                        fi
 		done < "${fname}"
 	}
 
 	local args=()
 	opts=()
-	local shell="${g_shell}"
 	while (($# > 0)); do
 		case $1 in
                         -H | --help )
@@ -382,9 +382,6 @@ subcommand_load() {
 				;;
 			-w | --warn )
 				verbosity_lvl='warn'
-				;;
-			-i | --internal )
-				shell='bash'
 				;;
 			-- )
 				;;
@@ -492,9 +489,8 @@ subcommand_load() {
 		fi
 		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
                     || std::die 1 "Oops: unable to create tmp file!\n"
-		local output=$("${modulecmd}" "${shell}" ${opts} 'load' \
+		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
-		echo "${output}"
 		eval "${output}"
 
                 # we do not want to print the error message we got from
@@ -515,14 +511,20 @@ subcommand_load() {
                                  "${CMD}" "${subcommand}" \
                                  "${error_txt}" \
                                  "${m}"
-		elif [[ -n ${error} ]]; then
-                        echo "${error}" 1>&2
-		fi
+                fi
+                if [[ "${Shell}" == "bash" ]]; then
+                        echo "${output}"
+                        echo "${error}"
+                else
+                        "${modulecmd}" "${Shell}" ${opts} 'load' \
+                                       "${current_modulefile}"
+                fi
+
 		if [[ ${verbosity_lvl} != silent ]] && \
                            [[ ${release} != stable ]]; then
 			std::info "%s %s: %s -- %s\n" \
                                   "${CMD}" 'load' \
-                                  "${release} module has been loaded"
+                                  "${release} module has been loaded" \
                                   "${m}"
 		fi
 	done
@@ -533,7 +535,7 @@ subcommand_load() {
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
 	done <<< "${MODULEPATH//:/$'\n'}"
-	export_env "${g_shell}" LOADEDMODULES
+	export_env 'LOADEDMODULES'
 }
 
 ##############################################################################
@@ -580,9 +582,13 @@ subcommand_unload() {
 
         local arg
 	for arg in "${args[@]}"; do
-	        local output=$("${modulecmd}" "${g_shell}" 'unload' "${arg}")
-                echo "${output}"
+	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
                 eval "${output}"
+                if [[ "${Shell}" == "bash" ]]; then
+                        echo "${output}"
+                else
+                        "${modulecmd}" "${Shell}" 'unload' "${arg}"
+                fi
 	done
 }
 
@@ -680,7 +686,7 @@ subcommand_show() {
 
         local arg
 	for arg in "${args[@]}"; do
-	        "${modulecmd}" "${g_shell}" "${subcommand}" "${arg}"
+	        "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
 	done
 }
 
@@ -1120,7 +1126,7 @@ subcommand_use() {
 		use "${arg}"
         done
         g_env_must_be_saved='yes'
-	export_env ${g_shell} 'MODULEPATH'
+	export_env 'MODULEPATH'
 }
 
 ##############################################################################
@@ -1221,7 +1227,7 @@ subcommand_unuse() {
                 unuse "${args[@]}"
         done
         g_env_must_be_saved='yes'
-        export_env "${g_shell}" 'MODULEPATH'
+        export_env 'MODULEPATH'
 }
 
 ##############################################################################
@@ -1327,7 +1333,7 @@ pmodules_init() {
         reset_used_releases
         init_path
         init_manpath
-        export_env "${g_shell}" \
+        export_env \
                    LOADEDMODULES \
                    _LMFILES_ \
                    MODULEPATH \
@@ -1368,10 +1374,10 @@ subcommand_purge() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
-	"${modulecmd}" "${g_shell}" "${subcommand}"
+	"${modulecmd}" "${Shell}" "${subcommand}"
         reset_modulepath
         reset_used_groups
-	export_env ${g_shell} MODULEPATH
+	export_env MODULEPATH
 }
 
 ##############################################################################
@@ -1417,7 +1423,7 @@ subcommand_list() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
-	"${modulecmd}" "${g_shell}" list "${opts[@]}"
+	"${modulecmd}" "${Shell}" list "${opts[@]}"
 }
 
 
@@ -1457,7 +1463,7 @@ subcommand_clear() {
                          "no arguments allowed"
         fi
 	pmodules_init
-	export_env ${g_shell} LOADEDMODULES MODULEPATH _LMFILES_
+	export_env LOADEDMODULES MODULEPATH _LMFILES_
 }
 
 ##############################################################################
@@ -1762,7 +1768,7 @@ subcommand_help() {
                 else
 		        # :FIXME: print help of newest *available* module
 		        # (respecting UsedReleases)
-                        "${modulecmd}" "${g_shell}" "${subcommand}" "${arg}"
+                        "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
 	        fi
         done
 }
@@ -1912,7 +1918,7 @@ subcommand_initswitch() {
                          "${CMD}" "${subcommand}" \
                          "two arguments required not less not more"
 	fi
-	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
 }
 
 ##############################################################################
@@ -1955,10 +1961,10 @@ subcommand_initclear() {
 #
 case "$1" in
 	bash | zsh )
-		declare g_shell="$1"
+		declare Shell="$1"
 		;;
 	csh | tcsh )
-		declare g_shell='csh'
+		declare Shell='csh'
 		;;
 	* )
 		std::die 1 "${CMD}: unsupported shell -- $1\n"
