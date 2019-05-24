@@ -885,9 +885,6 @@ subcommand_avail() {
 		esac
 		shift
 	done
-	if [[ "${opt_all_groups}" = 'yes' ]]; then
-		rescan_groups "${PMODULES_ROOT}"
-	fi
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
@@ -918,6 +915,7 @@ compute_group_depth () {
 	test -d "${dir}" || return 1
         local group=${dir%/*}
         local group=${group##*/}
+        [[ -n "${GroupDepths[${group}]}" ]] && return 0
 	local -i depth=$(find "${dir}" -depth \( -type f -o -type l \) \
                           -printf "%d" -quit 2>/dev/null)
 	(( depth-=2 ))
@@ -939,16 +937,6 @@ scan_groups () {
 	local moduledir
 	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
 		compute_group_depth "${moduledir}"
-	done
-}
-
-rescan_groups() {
-	local -r root="$1"
-	local moduledir
-	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
-		if [[ -z "${GroupDepths[${group}]}" ]]; then
-		        compute_group_depth "${moduledir}"
-                fi
 	done
 }
 
