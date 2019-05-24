@@ -31,9 +31,6 @@ else
 	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
 fi
 
-# required for pre 0.99.3 modulefiles
-declare -rx PSI_LIBMODULES="${TCLLIBPATH}/libmodules.tcl"
-
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 shopt -s nullglob
