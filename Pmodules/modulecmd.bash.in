@@ -178,8 +178,9 @@ subcommand_generic0() {
 		esac
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: no arguments allowed\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "no arguments allowed"
         fi
 	"${modulecmd}" "${g_shell}" "${subcommand}"
 }
@@ -203,11 +204,13 @@ subcommand_generic1() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "missing argument"
 	elif (( ${#args[@]} > 1 )); then
-	        std::die 3 "%s %s: only one argument allowed\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "only one argument allowed"
 	fi
 	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
@@ -231,8 +234,9 @@ subcommand_generic1plus() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "missing argument"
 	fi
 	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
@@ -391,7 +395,9 @@ subcommand_load() {
 			shift
 	done
 	if (( ${#args[@]} == 0 )); then
-		std::die 2 "${CMD} load: No module specified\n"
+                std::die 2 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+		         "No module specified"
 	fi
 	for m in "${args[@]}"; do
 		if [[ "$m" =~ ":" ]]; then
@@ -434,19 +440,26 @@ subcommand_load() {
 			fi
 			if [[ -n ${group} ]]; then
 				is_group "${group}" || \
-                                        std::die 3 "%s %s: illegal group name -- %s\n" \
-                                                 "${CMD}" 'load' "${group}"
+                                        std::die 3 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" "${subcommand}" \
+                                                 "illegal group name" \
+                                                 "${group}"
 				local -i depth=${GroupDepths[${group}]}
 				(( depth != 0 )) && \
-                                        std::die 3 "%s %s: illegal group name -- %s\n" \
-                                                 "${CMD}" 'load' "${group}"
-				MODULEPATH="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+                                        std::die 3 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" "${subcommand}" \
+                                                 "illegal group name" \
+                                                 "${group}"
+				MODULEPATH="${PMODULES_ROOT}/${group}/"
+                                MODULEPATH+="${PMODULES_MODULEFILES_DIR}"
 				modulepath=( ${MODULEPATH} )
 			fi
 			if [[ -n ${release} ]]; then
 			        is_release "${release}" || \
-                                        std::die 3 "%s %s: illegal release name -- %s\n" \
-                                                 "${CMD}" 'load' "${release}"
+                                        std::die 3 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" "${subcommand}" \
+                                                 "illegal release name"
+                                                 "${release}"
 				std::append_path UsedReleases "${release}"
                                 g_env_must_be_saved='yes'
 			fi
@@ -466,8 +479,10 @@ subcommand_load() {
 			std::die 3 ""
 		fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
-			std::die 3 "%s %s: module conflicts with already loaded module -- %s\n" \
-                                 "${CMD}" 'load' "${m}"
+			std::die 3 "%s %s: %s -- %s\n" \
+                                 "${CMD}" "${subcommand}" \
+                                 "module conflicts with already loaded module" \
+                                 "${m}"
 		fi
 		if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]]; then
 			# modulefile is in our hierarchy
@@ -477,15 +492,17 @@ subcommand_load() {
 		fi
 		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
                     || std::die 1 "Oops: unable to create tmp file!\n"
-		local output=$("${modulecmd}" "${shell}" ${opts} 'load' "${current_modulefile}" 2> "${tmpfile}")
+		local output=$("${modulecmd}" "${shell}" ${opts} 'load' \
+                                              "${current_modulefile}" 2> "${tmpfile}")
 		echo "${output}"
 		eval "${output}"
 
                 # we do not want to print the error message we got from
                 # modulecmd, they are a bit ugly
                 # :FIXME: Not sure whether this is now correct!
-                # The idea is to supress the error messages from the Tcl modulecmd, but not
-                # the output to stderr coded in a modulefile.
+                # The idea is to supress the error messages from the Tcl
+                # modulecmd, but not the output to stderr coded in a
+                # modulefile.
 
 		local error=$( < "${tmpfile}")
 		if [[ "${error}" =~ ":ERROR:" ]]; then
@@ -495,13 +512,18 @@ subcommand_load() {
                                 error_txt='conflicts with already loaded modules'
                         fi
 			std::die 3 "%s %s: %s -- %s\n" \
-                                  "${CMD}" 'load' "${error_txt}" "${m}"
+                                 "${CMD}" "${subcommand}" \
+                                 "${error_txt}" \
+                                 "${m}"
 		elif [[ -n ${error} ]]; then
                         echo "${error}" 1>&2
 		fi
-		if [[ ${verbosity_lvl} != silent ]] && [[ ${release} != stable ]]; then
-			std::info "%s %s: a %s module has been loaded -- %s\n" \
-                                  "${CMD}" 'load' ${release} "${m}"
+		if [[ ${verbosity_lvl} != silent ]] && \
+                           [[ ${release} != stable ]]; then
+			std::info "%s %s: %s -- %s\n" \
+                                  "${CMD}" 'load' \
+                                  "${release} module has been loaded"
+                                  "${m}"
 		fi
 	done
 	# fix LOADEDMODULES
@@ -532,10 +554,10 @@ USAGE:
 
 subcommand_unload() {
         local -r subcommand='unload'
-	# :FIXME: add dependency tests: don't unload if module is required be
-	#	  another module.
-        #         For the time being the modules requiring this module will be
-        #         unloaded too.
+	# :FIXME: add dependency tests: don't unload if module is required
+        #         be another module.
+        #         For the time being the modules requiring this module will
+        #         be unloaded too.
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -551,8 +573,9 @@ subcommand_unload() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" 'unload'
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "missing argument"
 	fi
 
         local arg
@@ -596,11 +619,13 @@ subcommand_swap() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" 'swap'
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "missing argument"
         elif (( ${#args[@]} > 2 )); then
-                std::die 3 "%s %s: too many arguments\n" \
-                         "${CMD}" 'swap'
+                std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "too many arguments"
 	fi
         if (( ${#args[@]} == 1 )); then
                 local -r module_to_load=${args[0]}
@@ -648,8 +673,9 @@ subcommand_show() {
 		shift
 	done
         if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: missing argument\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "missing argument"
 	fi
 
         local arg
@@ -1198,7 +1224,9 @@ subcommand_unuse() {
 #
 # update
 #
-# :FIXME: either compile Modules with --enable-beginenv or remove the sub-command
+# :FIXME:
+# either compile Modules with --enable-beginenv or remove the
+# sub-command
 #
 Subcommands[update]='update'
 Options[update]='-o H -l help'
@@ -1332,8 +1360,9 @@ subcommand_purge() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: no arguments allowd\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "no arguments allowd"
         fi
 	"${modulecmd}" "${g_shell}" "${subcommand}"
         reset_modulepath
@@ -1380,8 +1409,9 @@ subcommand_list() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: no arguments allowd\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "no arguments allowd"
         fi
 	"${modulecmd}" "${g_shell}" list "${opts[@]}"
 }
@@ -1418,8 +1448,9 @@ subcommand_clear() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: no arguments allowed\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "no arguments allowed"
         fi
 	pmodules_init
 	export_env ${g_shell} LOADEDMODULES MODULEPATH _LMFILES_
@@ -1503,13 +1534,16 @@ subcommand_search() {
 				done
 				out+="${line[0]}"
 				std::info "${out}\n"
-			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
+                                         awk "${with_modules}")
 		elif [[ "${opt_print_csv}" == "yes" ]]; then
 			while read -a toks; do
 				:
-			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}")
+			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
+                                         awk "${with_modules}")
 		else
-			"${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | awk "${with_modules}" 1>&2
+			"${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
+                                awk "${with_modules}" 1>&2
 		fi
 	}
 	#.....................................................................
@@ -1551,7 +1585,8 @@ subcommand_search() {
 
 				# get and print all available modules in $mpath
 				# with respect to the requested releases
-				# tmpfile: module/version release group group-dependencies...
+				# tmpfile: module/version release group group-
+                                # dependencies...
 				local mods=( $( get_available_modules \
 						    "${mpath}" \
 						    "${module}" \
@@ -1591,8 +1626,10 @@ subcommand_search() {
                                         local arg=${1/--release=}
                                 fi
 				is_release "${arg}" || \
-				        std::die 1 "%s %s: illegal release name -- %s\n" \
-                                                 "${CMD}" 'search' "${arg}"
+				        std::die 1 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" 'search' \
+                                                 "illegal release name" \
+                                                 "${arg}"
 				opt_use_releases+="${arg}:"
 				;;
 			--with | --with=* )
@@ -1603,8 +1640,10 @@ subcommand_search() {
                                         local arg=${1/--with=}
                                 fi
 				if [[ -z ${arg} ]] || [[ "${arg}" =~ "-*" ]]; then
-				        std::die 1 "%s %s: illegal value for --with option -- %s\n" \
-                                                 "${CMD}" 'search' "${arg}"
+				        std::die 1 "%s %s: %s -- %s\n" \
+                                                 "${CMD}" 'search' \
+                                                 "illegal value for --with option" \
+                                                 "${arg}"
 				fi
                                 arg=${arg//:/ }
                                 arg=${arg//,/ }
@@ -1640,7 +1679,8 @@ subcommand_search() {
 		modules+=( '' )
 	fi
 
-	if (( ${#GroupDepths[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
+	if (( ${#GroupDepths[@]} == 0 )) || \
+                   [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
 		scan_groups "${src_prefix}"
 	fi
 
@@ -1842,7 +1882,8 @@ Options[initswitch]='-o H -l help'
 Help[initswitch]="
 USAGE:
         module initswitch modulefile1 modulefile2
-		Switch modulefile1 with modulefile2 in the shell's initialization files.
+		Switch modulefile1 with modulefile2 in the shell's
+                initialization files.
 "
 
 subcommand_initswitch() {
@@ -1863,8 +1904,9 @@ subcommand_initswitch() {
 		shift
 	done
 	if (( ${#args[@]} != 2 )); then
-	        std::die 3 "%s %s: two arguments required not less not more\n" \
-                         "${CMD}" "${subcommand}"
+	        std::die 3 "%s %s: %s\n" \
+                         "${CMD}" "${subcommand}" \
+                         "two arguments required not less not more"
 	fi
 	"${modulecmd}" "${g_shell}" "${subcommand}" "${args[@]}"
 }
@@ -1878,7 +1920,8 @@ Options[initlist]='-o H -l help'
 Help[initlist]="
 USAGE:
         module initlist
-		List all of the modulefiles loaded from the shell's initialization file.
+		List all of the modulefiles loaded from the shell's
+                initialization file.
 "
 
 subcommand_initlist() {
@@ -1894,7 +1937,8 @@ Options[initclear]='-o H -l help'
 Help[initclear]="
 USAGE:
 	module initclear
-		Clear all of the modulefiles from the shell's initialization files.
+		Clear all of the modulefiles from the shell's
+                initialization files.
 "
 
 subcommand_initclear() {
