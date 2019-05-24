@@ -22,6 +22,8 @@ declare -r getopt="${sbindir}/getopt"
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
+: ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
+
 declare -r  version='@PMODULES_VERSION@'
 
 if [[ ${PMODULES_PURETCL} == yes ]]; then
@@ -74,6 +76,13 @@ export_env() {
 	done
 }
 
+#
+# Save/cache some variables.
+# This function is called on exit via a trap handler.
+#
+# Args;
+#       none
+#
 declare g_env_must_be_saved='no'
 
 save_env() {
@@ -121,31 +130,23 @@ get_release() {
 	return 0
 }
 
-: ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
-
 is_release() {
 	[[ ${PMODULES_DEFINED_RELEASES} =~ :$1: ]]
 }
 
-is_used_release() {
-	[[ ":${UsedReleases}:" =~ :$1: ]]
-}
-
+#
+# Check whether argument is a group
+#
+# Args:
+#       $1: string
+#
 is_group () {
 	local -r group="$1"
 	# arg isn't emtpy and group already in cache
 	[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]] && return 0
-
-	# not yet cached or not a group
-	get_group_depths "${PMODULES_ROOT}" "${group}"
-}
-
-is_used_group() {
-	[[ :${UsedGroups}: =~ :$1: ]]
-}
-
-module_is_loaded() {
-	[[ :${LOADEDMODULES}: =~ :$1: ]]
+        local moduledir="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+        [[ -d "${moduledir}" ]] || return 1
+	compute_group_depth "${moduledir}"
 }
 
 #
@@ -341,6 +342,10 @@ subcommand_load() {
  			std::die 3 "${output}\n"
 		fi
 	}
+
+        module_is_loaded() {
+	        [[ :${LOADEDMODULES}: =~ :$1: ]]
+        }
 
 	load_dependencies() {
 		local -r fname="$1"
@@ -861,7 +866,9 @@ subcommand_avail() {
         local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules "${dir}" "${string}" "${opt_use_releases}" ) )
+			mods=( $( get_available_modules \
+                                          "${dir}" "${string}" \
+                                          "${opt_use_releases}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 			${output_function}
 		done
@@ -869,58 +876,48 @@ subcommand_avail() {
 }
 
 #
-# compute depths of group passed as argument
-# Note: cwd must be Pmodules root directory
-# $1: group
+# compute depth of modulefile directory.
 #
-get_group_depth () {
-	local -r group="$1"
-	local -r dir="${group}/${PMODULES_MODULEFILES_DIR}"
+# Args:
+#       $1: absolute path of a modulefile directory
+#
+compute_group_depth () {
+        local -r dir=$1
 	test -d "${dir}" || return 1
-	local  tmp=$(find "${dir}" -depth -type f -o -type l 2>/dev/null| head -1)
-	local -a tmp2=( ${tmp//\// } )
-	local depth=${#tmp2[@]}
-	(( depth-=4 ))
-	# if a group doesn't contain a module yet, depth would be -4
-	# instead of 0
+        local group=${dir%/*}
+        local group=${group##*/}
+	local -i depth=$(find "${dir}" -depth \( -type f -o -type l \) \
+                          -printf "%d" -quit 2>/dev/null)
+	(( depth-=2 ))
+	# if a group doesn't contain a modulefile, depth is negativ
 	# :FIXME: better solution?
-	(( depth == -4 )) && (( depth = 0 ))
+	(( depth < 0 )) && (( depth = 0 ))
 	GroupDepths[$group]=${depth}
         g_env_must_be_saved='yes'
 }
 
 #
-# Compute depth for all known groups
-# $1: root of modulefile hierarchy
-get_group_depths () {
+# (Re-)Scan available groups in given root and compute group depth's
+#
+# Args:
+#       $1: root of modulefile hierarchy
+#
+scan_groups () {
 	local -r root="$1"
-	{
-		cd "${root}"
-		local group
-		for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
-			get_group_depth "${group}"
-		done
-	};
+	local moduledir
+	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
+		compute_group_depth "${moduledir}"
+	done
 }
 
-# re-scan available groups.
-#
-# Note:
-# Removing groups is not supported for the time being. Be aware, that
-# a user might have a module loaded from this group. This cannot be checked.
-#
-# $1: root of modulefile hierarchy
 rescan_groups() {
 	local -r root="$1"
-	{
-		cd "${root}"
-		# for some unknown reason [A-Z]* doesn't work with some bash versions
-		for group in [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*; do
-			if [[ -z "${GroupDepths[${group}]}" ]]; then
-				get_group_depth "${group}"
-			fi
-		done
-	};
+	local moduledir
+	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
+		if [[ -z "${GroupDepths[${group}]}" ]]; then
+		        compute_group_depth "${moduledir}"
+                fi
+	done
 }
 
 ##############################################################################
@@ -961,6 +958,14 @@ subcommand_use() {
 	IFS=${saved_IFS}
         local add2path_func='std::append_path'
 
+        group_is_used() {
+	        [[ :${UsedGroups}: =~ :$1: ]]
+        }
+
+        release_is_used() {
+	        [[ ":${UsedReleases}:" =~ :$1: ]]
+        }
+
 	print_info() {
 		local f
 		local r
@@ -972,7 +977,7 @@ subcommand_use() {
 		local _group
 		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
-			if ! is_used_group "${_group}" && (( depth == 0 )); then
+			if ! group_is_used "${_group}" && (( depth == 0 )); then
 			    std::info "\t${_group}\n"
 			fi
 		done
@@ -983,7 +988,7 @@ subcommand_use() {
 		done
 		std::info "\nUnused releases:\n"
 		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
-			if ! is_used_release $r; then
+			if ! release_is_used $r; then
 				std::info "\t${r}\n"
 			fi
 		done
@@ -1627,7 +1632,7 @@ subcommand_search() {
 	fi
 
 	if (( ${#GroupDepths[@]} == 0 )) || [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
-		get_group_depths "${src_prefix}"
+		scan_groups "${src_prefix}"
 	fi
 
 	local module
@@ -1945,7 +1950,7 @@ else
 fi
 
 if (( ${#GroupDepths[@]} == 0 )); then
-	get_group_depths "${PMODULES_ROOT}"
+	scan_groups "${PMODULES_ROOT}"
 fi
 
 declare options
