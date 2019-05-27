@@ -24,6 +24,9 @@ source libstd.bash    || {
         echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3;
 }
 
+source libpbuild.bash    || \
+        std::die 3 "Oops: Cannot source library -- '$_'"
+
 # save arguments, (still) required for building dependencies
 declare -r ARGS="$@"
 
@@ -376,9 +379,6 @@ else
 fi
 source "${build_config}" || \
         std::die 3 "Oops: Cannot source configuration file -- '${build_config}'"
-source libpbuild.bash    || \
-        std::die 3 "Oops: Cannot source library -- '$_'"
-
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
