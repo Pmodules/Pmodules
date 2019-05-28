@@ -24,6 +24,9 @@ source libstd.bash    || {
         echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3;
 }
 
+source libpbuild.bash    || \
+        std::die 3 "Oops: Cannot source library -- '$_'"
+
 # save arguments, (still) required for building dependencies
 declare -r ARGS="$@"
 
