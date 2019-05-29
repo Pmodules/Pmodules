@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash --
 #
 # The following build specific variables are set and used in libpbuild.bash:
 #       ARGS
@@ -228,6 +228,9 @@ parse_args() {
 		--update-modulefiles )
 			pbuild.update_modulefiles 'yes'
 			;;
+                -- )
+                        :
+                        ;;
 		-* )
 			std::die 1 "Invalid option -- '$1'"
 			;;
