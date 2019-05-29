@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash --
 #
 # The following build specific variables are set and used in libpbuild.bash:
 #       ARGS
@@ -236,6 +236,8 @@ parse_args() {
                         ;;
                 --overlay=* )
                         overlay=${1*=}
+                -- )
+                        :
                         ;;
 		-* )
 			std::die 1 "Invalid option -- '$1'"
