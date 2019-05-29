@@ -63,8 +63,8 @@ unset	F90
 declare	SOURCE_URLS=()
 declare SOURCE_SHA256_SUMS=()
 declare SOURCE_NAMES=()
+declare -A SOURCE_UNPACK_DIRS
 
-declare	SOURCE_FILE=()
 declare	CONFIGURE_ARGS=()
 declare SUPPORTED_SYSTEMS=()
 declare PATCH_FILES=()
@@ -312,6 +312,10 @@ pbuild::set_sha256sum() {
 	SOURCE_SHA256_SUMS+=("$1")
 }
 
+pbuild::set_unpack_dir() {
+        SOURCE_UNPACK_DIRS[$1]=$2
+}
+
 pbuild::use_cc() {
 	[[ -x "$1" ]] || std::die 3 \
                                   "%s " "${module_name}/${module_version}:" \
@@ -338,11 +342,6 @@ pbuild::prep() {
         #......................................................................
         #
         # Find/download tarball for given module.
-        # If the source URL is given, we look for the file-name specified in
-        # the URL. Otherwise we test for several possible names/extensions.
-        #
-        # The downloaded file will be stored with the name "${module_name}-${module_version}" and extension
-        # derived from URL. The download directory is the first directory passed.
         #
         # Arguments:
         #   $1:	    store file name with upvar here
@@ -435,7 +434,7 @@ pbuild::prep() {
 
         unpack() {
 		local -r file="$1"
-		local -r dir="$2"
+		local -r dir="${2:-${SRC_DIR}}"
 		(
 			if [[ -n "${dir}" ]]; then
 				mkdir -p "${dir}"
@@ -463,9 +462,10 @@ pbuild::prep() {
                          "Download source not set!"
         mkdir -p "${PMODULES_DISTFILESDIR}"
         local i=0
+        local source_fname
 	for ((i = 0; i < ${#SOURCE_URLS[@]}; i++)); do
 		download_source_file \
-		    SOURCE_FILE \
+		    source_fname \
 		    "${SOURCE_URLS[i]}" \
 		    "${SOURCE_NAMES[i]}" \
 		    "${PMODULES_DISTFILESDIR}" \
@@ -473,7 +473,7 @@ pbuild::prep() {
 		        std::die 4 \
                                  "%s " "${module_name}/${module_version}:" \
                                  "sources for not found."
-		unpack "${SOURCE_FILE}" "${SRC_DIR}"
+		unpack "${source_fname}" "${SOURCE_UNPACK_DIRS[${source_fname##*/}]}"
 	done
 	patch_sources
 	# create build directory
@@ -1217,7 +1217,6 @@ pbuild.init_env() {
         SOURCE_SHA256_SUMS=()
         SOURCE_NAMES=()
         
-        SOURCE_FILE=()
         CONFIGURE_ARGS=()
         SUPPORTED_SYSTEMS=()
         PATCH_FILES=()
