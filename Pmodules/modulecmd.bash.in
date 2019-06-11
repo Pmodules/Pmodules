@@ -385,6 +385,10 @@ subcommand_load() {
 			if [[ ! ":${UsedReleases}:" =~ "${release}" ]]; then
 				output+="module use ${release}; "
 			fi
+			local group=${line[2]}
+	        	if [[ ! ":${UsedGroups}:" =~ ":${group}:" ]]; then
+				output+="module use ${group}; "
+			fi
 			output+="module load ${line[@]:3} ${line[0]}\n"
 		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
 		if [[ -n "${output}" ]]; then
