@@ -337,7 +337,8 @@ subcommand_load() {
 				output+="module use ${release}; "
 			fi
 			local group=${line[2]}
-	        	if [[ ! ":${UsedGroups}:" =~ ":${group}:" ]]; then
+	        	if [[ ! ":${UsedGroups}:" =~ ":${group}:" ]] && \
+                           (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "
 			fi
 			output+="module load ${line[@]:3} ${line[0]}\n"
