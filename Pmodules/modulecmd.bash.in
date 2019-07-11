@@ -1698,7 +1698,7 @@ subcommand_search() {
 # help [module|sub-command]
 #
 Subcommands[help]='help'
-Options[help]='-o hHV? -l version -l help'
+Options[help]='-o hHV\? -l version -l help'
 Help[help]='
 USAGE:
         module [ switches ] [ subcommand ] [subcommand-args ]
