@@ -575,7 +575,7 @@ subcommand_load() {
                 fi
                 if [[ "${Shell}" == "bash" ]]; then
                         echo "${output}"
-                        echo "${error}"
+                        echo "${error}" 1>&2
                 else
                         "${modulecmd}" "${Shell}" ${opts} 'load' \
                                        "${current_modulefile}"
