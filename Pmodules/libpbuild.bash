@@ -76,59 +76,48 @@ declare bootstrap='no'
 
 #..............................................................................
 # global variables
-declare force_rebuild='no'
 pbuild.force_rebuild() {
-	force_rebuild="$1"
+	declare -gr force_rebuild="$1"
 }
 
-declare dry_run='no'
 pbuild.dry_run() {
-	dry_run="$1"
+	declare -gr dry_run="$1"
 }
 
-declare enable_cleanup_build='yes'
 pbuild.enable_cleanup_build() {
-	enable_cleanup_build="$1"
+	declare -gr enable_cleanup_build="$1"
 }
 
-declare enable_cleanup_src='yes'
 pbuild.enable_cleanup_src() {
-	enable_cleanup_src="$1"
+	declare -gr enable_cleanup_src="$1"
 }
 
-declare build_target='all'
 pbuild.build_target() {
-	build_target="$1"
+	declare -gr build_target="$1"
 }
 
-declare opt_update_modulefiles='no'
 pbuild.update_modulefiles() {
-	opt_update_modulefiles="$1"
+	declare -gr opt_update_modulefiles="$1"
 }
 
 # number of parallel make jobs
-declare -i  JOBS=3
 pbuild.jobs() {
-        JOBS="$1"
+        declare -gr JOBS="$1"
 }
 
-declare system=$(uname -s)
 pbuild.system() {
-        system="$1"
+        declare -gr system="$1"
 }
 
-declare TEMP_DIR="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
 pbuild.temp_dir() {
-        TEMP_DIR="$1"
+        declare -gr TEMP_DIR="$1"
 }
 
-declare PMODULES_DISTFILESDIR="${PMODULES_ROOT}/var/distfiles"
 pbuild.pmodules_distfilesdir() {
-        PMODULES_DISTFILESDIR="$1"
+        declare -gr PMODULES_DISTFILESDIR="$1"
 }
-declare verbose='no'
 pbuild.verbose() {
-        verbose='yes'
+        declare -gr verbose="$1"
 }
 
 # module name including path in hierarchy and version
@@ -156,10 +145,7 @@ declare -r  _DOCDIR='share/doc'
 # install prefix of module.
 declare -x  PREFIX=''
 
-# :FIXME:
-# OS is still used in some build-scripts. We have to implement a getter
-# and use this getter in the build-scripts.
-declare -r  OS="${system}"
+declare -r  OS=$(uname -s)
 
 
 ##############################################################################
@@ -206,7 +192,9 @@ set_full_module_name_and_prefix() {
 		echo "$*"
 	}
 
-	[[ -n ${GROUP} ]] || std::die 1 "${module_name}/${module_version}: group not set."
+	[[ -n ${GROUP} ]] || std::die 1 \
+                                      "${module_name}/${module_version}:" \
+                                      "group not set."
 	
 	# build module name
 	# :FIXME: this should be read from a configuration file
@@ -327,12 +315,10 @@ pbuild::use_cc() {
 pbuild::pre_prep() {
 	:
 }
-eval "pbuild::pre_prep_${system}() { :; }"
 
 pbuild::post_prep() {
 	:
 }
-eval "pbuild::post_prep_${system}() { :; }"
 
 ###############################################################################
 #
@@ -488,7 +474,6 @@ pbuild::add_patch() {
 	PATCH_FILES+=( "$1" )
 	PATCH_STRIPS+=( "$2" )
 }
-eval "pbuild::add_patch_${system}() { pbuild::add_patch \"\$@\"; }"
 
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || \
@@ -509,7 +494,6 @@ pbuild::use_flag() {
 pbuild::pre_configure() {
 	:
 }
-eval "pbuild::pre_configure_${system}() { :; }"
 
 pbuild::set_configure_args() {
 	CONFIGURE_ARGS+=( "$@" )
@@ -575,12 +559,10 @@ pbuild::configure() {
 pbuild::post_configure() {
 	:
 }
-eval "pbuild::post_configure_${system}() { :; }"
 
 pbuild::pre_compile() {
 	:
 }
-eval "pbuild::pre_compile_${system}() { :; }"
 
 pbuild::compile() {
 	make -j${JOBS}
@@ -589,12 +571,10 @@ pbuild::compile() {
 pbuild::post_compile() {
 	:
 }
-eval "pbuild::post_compile_${system}() { :; }"
 
 pbuild::pre_install() {
 	:
 }
-eval "pbuild::pre_install_${system}() { :; }"
 
 pbuild::install() {
 	make install
@@ -636,8 +616,6 @@ pbuild::install_shared_libs() {
 pbuild::post_install() {
 	:
 }
-eval "pbuild::post_install_${system}() { :; }"
-
 
 #
 # The 'do it all' function.

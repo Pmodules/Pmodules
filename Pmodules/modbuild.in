@@ -1,4 +1,4 @@
-#!/usr/bin/env bash --
+#!/usr/bin/env bash
 #
 # The following build specific variables are set and used in libpbuild.bash:
 #       ARGS
@@ -21,11 +21,11 @@ PATH+=":${mydir}"
 PATH+=":${mydir}/../lib:${mydir}/../config"
 
 source libstd.bash    || {
-        echo "Oops: library '$_' cannot be loaded!" 1>&2; exit 3;
+        echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
 
 source libpbuild.bash    || \
-        std::die 3 "Oops: Cannot source library -- '$_'"
+        std::die 3 "Oops: cannot source library -- '$_'"
 
 # save arguments, (still) required for building dependencies
 declare -r ARGS="$@"
@@ -127,30 +127,40 @@ MISCELLANEOUS OPTIONS:
 declare -a      versions=()
 declare         opt_all_variants='no'
 declare         opt_bootstrap='no'
+declare 	opt_build_config='modbuild.conf'
+declare         opt_build_target='all'
+declare         opt_distfiles_dir="${PMODULES_ROOT}/var/distfiles"
+declare         opt_dry_run='no'
+declare         opt_enable_cleanup_build='yes'
+declare         opt_enable_cleanup_src='yes'
+declare         opt_force_rebuild='no'
+declare -i      opt_jobs=3
+declare         opt_update_modulefiles='no'
+declare         opt_system=''
+declare         opt_temp_dir="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
+declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
-declare 	build_config='modbuild.conf'
-declare         system="$(uname -s)"
 
 parse_args() {
 	while (( $# > 0 )); do
 		case $1 in
 		-j )
-			pbuild.jobs "$2"
+                        opt_jobs="$2"
 			shift
 			;;
 		--jobs=[0-9]* )
-			pbuild.jobs "${1/--jobs=}"
+			opt_jobs="${1/--jobs=}"
 			;;
 		-v | --verbose )
 			trap 'echo "$BASH_COMMAND"' DEBUG
-                        pbuild.verbose 'yes'
+                        opt_verbose='yes'
 			;;
 		--debug )
 			set -x
 			;;
 		-f | --force-rebuild )
-			pbuild.force_rebuild 'yes'
+                        opt_force_rebuild='yes'
 			;;
 		-\? | -h | --help )
 			usage
@@ -159,57 +169,55 @@ parse_args() {
                         std::die 0  "\nPmodules version ${VERSION}\nCopyright GNU GPL v2\n"
                         ;;
 		--dry-run )
-			pbuild.dry_run 'yes'
+			opt_dry_run='yes'
 			;;
 		--config )
-			build_config="$2"
+			opt_build_config="$2"
 			shift 1
 			;;
 		--config=* )
-			build_config="${1#*=}"
+			opt_build_config="${1#*=}"
 			;;
 		--enable-cleanup )
-			pbuild.enable_cleanup_build 'yes'
-			pbuild.enable_cleanup_src 'yes'
+			opt_enable_cleanup_build 'yes'
+			opt_enable_cleanup_src 'yes'
 			;;
 		--disable-cleanup )
-			pbuild.enable_cleanup_build 'no'
-			pbuild.enable_cleanup_src 'no'
+			opt_enable_cleanup_build 'no'
+			opt_enable_cleanup_src 'no'
 			;;
 		--enable-cleanup-build )
-			pbuild.enable_cleanup_build 'yes'
+			opt_enable_cleanup_build 'yes'
 			;;
 		--disable-cleanup-build )
-			pbuild.enable_cleanup_build 'no'
+			opt_enable_cleanup_build 'no'
 			;;
 		--enable-cleanup-src )
-			pbuild.enable_cleanup_src 'yes'
+			opt_enable_cleanup_src 'yes'
 			;;
 		--disable-cleanup-src )
-			pbuild.enable_cleanup_src 'no'
+			opt_enable_cleanup_src 'no'
 			;;
 		--distdir )
-			pbuild.pmodules_distfilesdir "$2"
+			opt_distfiles_dir "$2"
 			shift
 			;;
 		--distdir=* )
-			pbuild.pmodules_distfilesdir "${1/--distdir=}"
+			opt_distfiles_dir "${1/--distdir=}"
 			;;
 		--tmpdir )
-			pbuild.temp_dir "$2"
+                        opt_temp_dir="$2"
 			shift
 			;;
 		--tmpdir=* )
-			pbuilf.temp_dir "${1/--tmpdir=}"
+			opt_temp_dir="${1/--tmpdir=}"
 			;;
 		--system )
-			system=".$2"
-                        pbuild.system "${system}"
+			opt_system="$2"
 			shift
 			;;
 		--system=* )
-			system=".${1/*=}"
-                        pbuild.system "${system}"
+			opt_system="${1/*=}"
 			;;
 		--with )
 			opt_with_modules+=( "$2" )
@@ -220,13 +228,13 @@ parse_args() {
 			opt_with_modules+=( ${m} )
 			;;
 		--prep | --configure | --compile | --install | --all )
-			pbuild.build_target ${1:2}
+			opt_build_target=${1:2}
 			;;
 		--bootstrap )
 			opt_bootstrap='yes'
 			;;
 		--update-modulefiles )
-			pbuild.update_modulefiles 'yes'
+			opt_update_modulefiles='yes'
 			;;
                 -- )
                         :
@@ -263,10 +271,13 @@ find_variants_files(){
         shopt -q nullglob || :
         local -i nullglob_set=$?
         shopt -s nullglob
-	local files=( "${BUILDBLOCK_DIR}"/*/variants.${system} )
+        local files=( "${BUILDBLOCK_DIR}"/*/variants.${opt_system} )
+        files+=( "${BUILDBLOCK_DIR}"/*/variants.$(uname -s) )
         local f
 	for f in "${BUILDBLOCK_DIR}"/*/variants; do
-		[[ -e "${f}.${system}" ]] || files+=( "$f" )
+		[[ -e "${f}.${opt_system}" ]] \
+                        || [[ -e "${f}.$(uname -s)" ]] \
+                        || files+=( "$f" )
 	done
         (( nullglob_set == 1 )) && shopt -u nullglob
 	std::upvar "$1" "${files[@]}"
@@ -373,6 +384,25 @@ build_modules() {
 
 parse_args "$@"
 
+if [[ -z "${opt_system}" ]]; then
+        opt_system=$(std::get_os_release)
+fi
+
+pbuild.jobs "${opt_jobs}"
+pbuild.force_rebuild "${opt_force_rebuild}"
+pbuild.build_target "${opt_build_target}"
+pbuild.dry_run "${opt_dry_run}"
+pbuild.enable_cleanup_build "${opt_enable_cleanup_build}"
+pbuild.enable_cleanup_src "${opt_enable_cleanup_src}"
+pbuild.pmodules_distfilesdir "${opt_distfiles_dir}"
+pbuild.update_modulefiles "${opt_update_modulefiles}"
+pbuild.temp_dir "${opt_temp_dir}"
+pbuild.system "${opt_system}"
+pbuild.verbose "${opt_verbose}"
+
+source libpbuild_dyn.bash    || \
+        std::die 3 "Oops: cannot source library -- '$_'"
+
 # source build configuration,
 # must be done before sourcing libpbuild!
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
@@ -380,8 +410,8 @@ if [[ "${opt_bootstrap}" == 'yes' ]]; then
 else
         test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 fi
-source "${build_config}" || \
-        std::die 3 "Oops: Cannot source configuration file -- '${build_config}'"
+source "${opt_build_config}" || \
+        std::die 3 "Oops: Cannot source configuration file -- '$_'"
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
