@@ -271,6 +271,31 @@ There is NO WARRANTY, to the extent permitted by law."
     done
 }
 
+std.get_os_release_linux() {
+	source /etc/os-release
+	case "${ID}" in
+		science | rhel | centos | fedora )
+			echo "rhel${VERSION_ID%.*}"
+			;;
+		* )
+			echo "Unknown"
+			exit 1
+			;;
+	esac
+}
+std.get_os_release_macos() {
+	VERSION_ID=$(sw_vers -productVersion)
+	echo "macOS${VERSION_ID%.*}"
+}
+
+std::get_os_release() {
+	local -r OS=$(uname -s)
+	local -A func_map;
+	func_map['Linux']=std.get_os_release_linux
+	func_map['Darwin']=std.get_os_release_macos
+	${func_map[${OS}]}
+}
+
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
