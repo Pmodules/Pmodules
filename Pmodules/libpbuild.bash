@@ -983,9 +983,9 @@ pbuild::make_all() {
                         return 0
                 fi
 		local targets=()
-		targets+=( "pre_${target}_${system}" "pre_${target}" )
+		targets+=( "pre_${target}_${system}" "pre_${target}_${OS}" "pre_${target}" )
 		targets+=( "${target}" )
-		targets+=( "post_${target}_${system}" "post_${target}" )
+		targets+=( "post_${target}_${system}" "post_${target}_${OS}" "post_${target}" )
 
 		for t in "${targets[@]}"; do
 			# We cd into the dir before calling the function -
