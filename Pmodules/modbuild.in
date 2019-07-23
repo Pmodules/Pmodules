@@ -16,7 +16,13 @@ declare -r  mydir=$(cd ${mydir} && pwd -P)
 # initialize PATH,
 # add library installation directories to the PATH,
 # so 'source' is able find them
-PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
+if [[ $(uname -s) == 'Darwin' ]]; then
+        PATH='/usr/local/bin:'
+else
+        PATH=''
+fi
+PATH+='/usr/bin:/bin:/usr/sbin:/sbin'
 PATH+=":${mydir}"
 PATH+=":${mydir}/../lib:${mydir}/../config"
 
@@ -179,31 +185,31 @@ parse_args() {
 			opt_build_config="${1#*=}"
 			;;
 		--enable-cleanup )
-			opt_enable_cleanup_build 'yes'
-			opt_enable_cleanup_src 'yes'
+			opt_enable_cleanup_build='yes'
+			opt_enable_cleanup_src='yes'
 			;;
 		--disable-cleanup )
-			opt_enable_cleanup_build 'no'
-			opt_enable_cleanup_src 'no'
+			opt_enable_cleanup_build='no'
+			opt_enable_cleanup_src='no'
 			;;
 		--enable-cleanup-build )
-			opt_enable_cleanup_build 'yes'
+			opt_enable_cleanup_build='yes'
 			;;
 		--disable-cleanup-build )
-			opt_enable_cleanup_build 'no'
+			opt_enable_cleanup_build='no'
 			;;
 		--enable-cleanup-src )
-			opt_enable_cleanup_src 'yes'
+			opt_enable_cleanup_src='yes'
 			;;
 		--disable-cleanup-src )
-			opt_enable_cleanup_src 'no'
+			opt_enable_cleanup_src='no'
 			;;
 		--distdir )
-			opt_distfiles_dir "$2"
+			opt_distfiles_dir="$2"
 			shift
 			;;
 		--distdir=* )
-			opt_distfiles_dir "${1/--distdir=}"
+			opt_distfiles_dir="${1/--distdir=}"
 			;;
 		--tmpdir )
                         opt_temp_dir="$2"
@@ -408,8 +414,14 @@ source libpbuild_dyn.bash    || \
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
         test -d "${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
 else
-        test -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+        # Please note: if we trap DEBUG a statement like
+        #              test -d ... && PATH+=$_
+        #              does not work (at least on macOS with bash 4 and 5)
+        if [[ -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" ]]; then
+                PATH+=":${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}"
+        fi
 fi
+echo PATH=$PATH
 source "${opt_build_config}" || \
         std::die 3 "Oops: Cannot source configuration file -- '$_'"
 

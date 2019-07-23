@@ -289,7 +289,6 @@ std.get_os_release_macos() {
 }
 
 std::get_os_release() {
-	local -r OS=$(uname -s)
 	local -A func_map;
 	func_map['Linux']=std.get_os_release_linux
 	func_map['Darwin']=std.get_os_release_macos
