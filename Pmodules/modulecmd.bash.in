@@ -294,8 +294,10 @@ subcommand_load() {
 	# 	0: module is loadable
 	# 	1: either not a modulefile or unsused release
 	#
-	# Notes:
-	#	The variable 'release' in function 'subcommand_load()' will be set.
+	# The following variables in the enclosing function are set:
+        #       current_modulefile
+        #       prefix
+	#	release
 	#
 	is_available() {
 		local  m=$1
@@ -359,13 +361,7 @@ subcommand_load() {
 			[[ -z ${dep} ]] && continue
 			[[ ${dep:0:1} == \# ]] && continue
 			module_is_loaded "${dep}" && continue
-			local output=$( subcommand_load 'bash' "${dep}")
-			eval ${output}
-                        if [[ "${Shell}" == "bash" ]]; then
-                                echo ${output}
-                        else
-                                subcommand_load "${Shell}" "${dep}"
-                        fi
+                        subcommand_load "${dep}"
 		done < "${fname}"
 	}
 
@@ -468,6 +464,8 @@ subcommand_load() {
 		fi
 		local found=''
 		for flag in "${UseFlags[@]/#/_}" ""; do
+                        # :FIXME: this doesn't work if ${m} is a
+                        #         modulename without version
 			if is_available "${m}${flag}"; then
 				m+="${flag}"
 				found=':'
@@ -480,11 +478,12 @@ subcommand_load() {
 			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
 			std::die 3 ""
 		fi
+                if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]] \
+                           && [[ ! ${m} =~ / ]]; then
+                        m+="/${current_modulefile##*/}"
+                fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "module conflicts with already loaded module" \
-                                 "${m}"
+                        continue
 		fi
 		if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]]; then
 			# modulefile is in our hierarchy
@@ -519,7 +518,9 @@ subcommand_load() {
                 fi
                 if [[ "${Shell}" == "bash" ]]; then
                         echo "${output}"
-                        echo "${error}" 1>&2
+			if [[ -n "${error}" ]]; then
+                        	echo "${error}" 1>&2
+			fi
                 else
                         "${modulecmd}" "${Shell}" ${opts} 'load' \
                                        "${current_modulefile}"
@@ -1050,6 +1051,10 @@ subcommand_use() {
 			std::append_path UseFlags "${arg/flag=}"
                         return
                 fi
+                if [[ -z ${GroupDepths[${arg}]} ]] && [[ -d "${PMODULES_ROOT}/${arg}" ]]; then
+			scan_groups "${PMODULES_ROOT}"
+		fi
+		
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
                            (( ${GroupDepths[${arg}]} == 0 )); then
                         # argument is group in our root with depth 0
