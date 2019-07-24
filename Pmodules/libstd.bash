@@ -272,9 +272,21 @@ There is NO WARRANTY, to the extent permitted by law."
 }
 
 std.get_os_release_linux() {
-	source /etc/os-release
+        local lsb_release=$(which lsb_release)
+        local ID=''
+        local VERSION_ID=''
+
+        if [[ -n $(which lsb_release) ]]; then
+                ID=$(lsb_release -is)
+                VERSION_ID=$(lsb_release -rs)
+        elif [[ -r '/etc/os-release' ]]; then
+	        source /etc/os-release
+        else
+                std::die 4 "Cannot determin OS release!\n"
+        fi
+
 	case "${ID}" in
-		science | rhel | centos | fedora )
+		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
 			echo "rhel${VERSION_ID%.*}"
 			;;
 		* )
