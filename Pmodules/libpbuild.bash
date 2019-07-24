@@ -76,48 +76,60 @@ declare bootstrap='no'
 
 #..............................................................................
 # global variables
+declare force_rebuild=''
 pbuild.force_rebuild() {
-	declare -gr force_rebuild="$1"
+	declare -r force_rebuild="$3"
 }
 
+declare dry_run=''
 pbuild.dry_run() {
-	declare -gr dry_run="$1"
+	declare -r dry_run="$1"
 }
 
+declare enable_cleanup_build=''
 pbuild.enable_cleanup_build() {
-	declare -gr enable_cleanup_build="$1"
+	declare -r enable_cleanup_build="$1"
 }
 
+declare enable_cleanup_src=''
 pbuild.enable_cleanup_src() {
-	declare -gr enable_cleanup_src="$1"
+	declare -r enable_cleanup_src="$1"
 }
 
+declare build_target=''
 pbuild.build_target() {
-	declare -gr build_target="$1"
+	declare -r build_target="$1"
 }
 
+declare opt_update_modulefiles=''
 pbuild.update_modulefiles() {
-	declare -gr opt_update_modulefiles="$1"
+	declare -r opt_update_modulefiles="$1"
 }
 
 # number of parallel make jobs
+declare -i JOBS=3
 pbuild.jobs() {
-        declare -gr JOBS="$1"
+        declare -r JOBS="$1"
 }
 
+declare system=''
 pbuild.system() {
-        declare -gr system="$1"
+        declare -r system="$1"
 }
 
+declare TEMP_DIR=''
 pbuild.temp_dir() {
-        declare -gr TEMP_DIR="$1"
+        declare -r TEMP_DIR="$1"
 }
 
+declare PMODULES_DISTFILESDIR=''
 pbuild.pmodules_distfilesdir() {
-        declare -gr PMODULES_DISTFILESDIR="$1"
+        declare -r PMODULES_DISTFILESDIR="$1"
 }
+
+declare verbose=''
 pbuild.verbose() {
-        declare -gr verbose="$1"
+        declare -r verbose="$1"
 }
 
 # module name including path in hierarchy and version
