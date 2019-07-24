@@ -286,7 +286,7 @@ std.get_os_release_linux() {
         fi
 
 	case "${ID}" in
-		science | rhel | centos | fedora )
+		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
 			echo "rhel${VERSION_ID%.*}"
 			;;
 		* )
