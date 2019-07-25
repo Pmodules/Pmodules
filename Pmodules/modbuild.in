@@ -421,7 +421,6 @@ else
                 PATH+=":${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}"
         fi
 fi
-echo PATH=$PATH
 source "${opt_build_config}" || \
         std::die 3 "Oops: Cannot source configuration file -- '$_'"
 
