@@ -728,7 +728,7 @@ pbuild::make_all() {
 		post_install_linux() {
 			std::info \
                                 "%s " "${module_name}/${module_version}:" \
-                                "running post-installation for ${system} ..."
+                                "running post-installation for ${OS} ..."
 			cd "${PREFIX}"
 			# solve multilib problem with LIBRARY_PATH
                         # on 64bit Linux
@@ -737,7 +737,7 @@ pbuild::make_all() {
 		}
 
 		cd "${BUILD_DIR}"
-		[[ "${system}" == "Linux" ]] && post_install_linux
+		[[ "${OS}" == "Linux" ]] && post_install_linux
 		install_doc
 		install_pmodules_files
 		write_runtime_dependencies
