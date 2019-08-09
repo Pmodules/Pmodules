@@ -634,6 +634,7 @@ pbuild::post_install() {
 #
 pbuild::make_all() {
 	local -a runtime_dependencies=()
+        source "${BUILD_SCRIPT}"
 
 	#
 	# everything set up?
@@ -657,158 +658,6 @@ pbuild::make_all() {
 		std::die 1 \
                          "%s " "${module_name}/${module_version}:" \
                          "Not available for ${system}."
-	}
-
-	#......................................................................
-	#
-	# test whether a module is loaded or not
-	#
-	# $1: module name
-	#
-	is_loaded() {
-		[[ :${LOADEDMODULES}: =~ :$1: ]]
-	}
-
- 	#......................................................................
-	#
-	# build a dependency
-	#
-	# $1: name of module to build
-	#
-	# :FIXME: needs testing
-	#
-	build_dependency() {
-		#..............................................................
-		#
-		# Test whether a module with the given name already exists.
-		#
-		# Arguments:
-		#   $1: module name
-		#
-		# Notes:
-		#   The passed module name should be NAME/VERSION
-		#   :FIXME: this does not really work in a hierarchical group
-                #           without adding the dependencies...
-		#
-		module_exists() {
-			[[ -n $("${MODULECMD}" bash search -a --no-header "$1" \
-					       2>&1 1>/dev/null) ]]
-		}
-
-
-		local -r m=$1
-		std::debug "${m}: module not available"
-		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
-		[[ ${dry_run} == yes ]] && \
-			std::die 1 \
-                                 "%s " \
-				 "${m}: module does not exist," \
-				 "cannot continue with dry run..."
-
-		std::info "$m: module does not exist, trying to build it..."
-		local args=( '' )
-		set -- ${ARGS[@]}
-		while (( $# > 0 )); do
-			case $1 in
-				-j )
-					args+=( "-j $2" )
-					shift
-					;;
-				--jobs=[0-9]* )
-					args+=( $1 )
-					;;
-				-v | --verbose)
-					args+=( $1 )
-					;;
-				--with=*/* )
-					args+=( $1 )
-					;;
-			esac
-			shift
-		done
-
-		find_build_script(){
-			local p=$1
-			local script=$(find "${BUILDBLOCK_DIR}/../.." -path "*/$p/build")
-			std::get_abspath "${script}"
-		}
-		local buildscript=$(find_build_script "${m%/*}")
-		[[ -x "${buildscript}" ]] || \
-                        std::die 1 \
-                                 "$m: build-block not found!"
-		"${buildscript}" "${m#*/}" ${args[@]}
-		module_exists "$m" || \
-                        std::die 1 \
-                                 "$m: oops: build failed..."
-	}
-	
-	#......................................................................
-	#
-	# Load build- and run-time dependencies.
-	#
-	# Arguments:
-	#   none
-	#
-	# Variables
-	#   [r] module_release	    set if defined in a variants file
-	#   runtime_dependencies    runtime dependencies from variants added
-	#
-	load_build_dependencies() {
-                local m=''
-		for m in "${with_modules[@]}"; do
-
-			# module name prefixes in dependency declarations:
-			# 'b:' this is a build dependency
-			# 'r:' this a run-time dependency, *not* required for
-                        #      building
-                        # without prefix: this is a build and
-                        #      run-time dependency
-			if [[ "${m:0:2}" == "b:" ]]; then
-				m=${m#*:}   # remove 'b:'
-			elif [[ "${m:0:2}" == "r:" ]]; then
-				m=${m#*:}   # remove 'r:'
-				runtime_dependencies+=( "$m" )
-			else
-				runtime_dependencies+=( "$m" )
-			fi
-			is_loaded "$m" && continue
-
-			# 'module avail' might output multiple matches if module 
-			# name and version are not fully specified or in case
-			# modules with and without a release number exist.
-                        # Example:
-			# mpc/1.1.0 and mpc/1.1.0-1. Since we get a sorted list 
-			# from 'module avail' and the full version should be set
-			# in the variants file, we look for the first exact
-                        # match.
-                        local release_of_dependency=''
-                        if ! pbuild::module_is_avail "$m" release_of_dependency; then
-			        build_dependency "$m"
-                                pbuild::module_is_avail "$m" release_of_dependency || \
-                                        std::die 6 "Oops"
-			fi
-                        # should be set, just in case it is not...
-		        : ${release_of_dependency:='unstable'}
-
-                        # for a stable module all dependencies must be stable
-			if [[ "${module_release}" == 'stable' ]] \
-                                   && [[ "${release_of_dependency}" != 'stable' ]]; then
-                                std::die 5 \
-                                         "%s " "${module_name}/${module_version}:" \
-                                         "release cannot be set to '${module_release}'" \
-                                         "since the dependency '$m' is ${release_of_dependency}"
-                        # for a unstable module no dependency must be deprecated
-                        elif [[ "${module_release}" == 'unstable' ]] \
-                                     && [[ "${release_of_dependency}" == 'deprecated' ]]; then
-                                std::die 5 \
-                                         "%s " "${module_name}/${module_version}:" \
-                                         "release cannot be set to '${module_release}'" \
-                                         "since the dependency '$m' is ${release_of_dependency}"
-			fi
-			
-			echo "Loading module: ${m}"
-			module load "${m}"
-		done
 	}
 
 	#......................................................................
@@ -1104,7 +953,6 @@ pbuild::make_all() {
 	# setup module specific environment
 	if [[ "${bootstrap}" == 'no' ]]; then
 		check_supported_systems
-		load_build_dependencies
 		set_full_module_name_and_prefix
 		if [[ "${module_release}" == 'removed' ]]; then
 			remove_module
@@ -1224,6 +1072,158 @@ pbuild.build_module() {
         shift 3
         with_modules=( "$@" )
 
+	#......................................................................
+	#
+	# test whether a module is loaded or not
+	#
+	# $1: module name
+	#
+	is_loaded() {
+		[[ :${LOADEDMODULES}: =~ :$1: ]]
+	}
+
+ 	#......................................................................
+	#
+	# build a dependency
+	#
+	# $1: name of module to build
+	#
+	# :FIXME: needs testing
+	#
+	build_dependency() {
+		#..............................................................
+		#
+		# Test whether a module with the given name already exists.
+		#
+		# Arguments:
+		#   $1: module name
+		#
+		# Notes:
+		#   The passed module name should be NAME/VERSION
+		#   :FIXME: this does not really work in a hierarchical group
+                #           without adding the dependencies...
+		#
+		module_exists() {
+			[[ -n $("${MODULECMD}" bash search -a --no-header "$1" \
+					       2>&1 1>/dev/null) ]]
+		}
+
+
+		local -r m=$1
+		std::debug "${m}: module not available"
+		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
+		[[ ${dry_run} == yes ]] && \
+			std::die 1 \
+                                 "%s " \
+				 "${m}: module does not exist," \
+				 "cannot continue with dry run..."
+
+		std::info "$m: module does not exist, trying to build it..."
+		local args=( '' )
+		set -- ${ARGS[@]}
+		while (( $# > 0 )); do
+			case $1 in
+				-j )
+					args+=( "-j $2" )
+					shift
+					;;
+				--jobs=[0-9]* )
+					args+=( $1 )
+					;;
+				-v | --verbose)
+					args+=( $1 )
+					;;
+				--with=*/* )
+					args+=( $1 )
+					;;
+			esac
+			shift
+		done
+
+		find_build_script(){
+			local p=$1
+			local script=$(find "${BUILDBLOCK_DIR}/../.." -path "*/$p/build")
+			std::get_abspath "${script}"
+		}
+		local buildscript=$(find_build_script "${m%/*}")
+		[[ -x "${buildscript}" ]] || \
+                        std::die 1 \
+                                 "$m: build-block not found!"
+		"${buildscript}" "${m#*/}" ${args[@]}
+		module_exists "$m" || \
+                        std::die 1 \
+                                 "$m: oops: build failed..."
+	}
+	
+	#......................................................................
+	#
+	# Load build- and run-time dependencies.
+	#
+	# Arguments:
+	#   none
+	#
+	# Variables
+	#   [r] module_release	    set if defined in a variants file
+	#   runtime_dependencies    runtime dependencies from variants added
+	#
+	load_build_dependencies() {
+                local m=''
+		for m in "${with_modules[@]}"; do
+
+			# module name prefixes in dependency declarations:
+			# 'b:' this is a build dependency
+			# 'r:' this a run-time dependency, *not* required for
+                        #      building
+                        # without prefix: this is a build and
+                        #      run-time dependency
+			if [[ "${m:0:2}" == "b:" ]]; then
+				m=${m#*:}   # remove 'b:'
+			elif [[ "${m:0:2}" == "r:" ]]; then
+				m=${m#*:}   # remove 'r:'
+				runtime_dependencies+=( "$m" )
+			else
+				runtime_dependencies+=( "$m" )
+			fi
+			is_loaded "$m" && continue
+
+			# 'module avail' might output multiple matches if module 
+			# name and version are not fully specified or in case
+			# modules with and without a release number exist.
+                        # Example:
+			# mpc/1.1.0 and mpc/1.1.0-1. Since we get a sorted list 
+			# from 'module avail' and the full version should be set
+			# in the variants file, we look for the first exact
+                        # match.
+                        local release_of_dependency=''
+                        if ! pbuild::module_is_avail "$m" release_of_dependency; then
+			        build_dependency "$m"
+                                pbuild::module_is_avail "$m" release_of_dependency || \
+                                        std::die 6 "Oops"
+			fi
+                        # should be set, just in case it is not...
+		        : ${release_of_dependency:='unstable'}
+
+                        # for a stable module all dependencies must be stable
+			if [[ "${module_release}" == 'stable' ]] \
+                                   && [[ "${release_of_dependency}" != 'stable' ]]; then
+                                std::die 5 \
+                                         "%s " "${module_name}/${module_version}:" \
+                                         "release cannot be set to '${module_release}'" \
+                                         "since the dependency '$m' is ${release_of_dependency}"
+                        # for a unstable module no dependency must be deprecated
+                        elif [[ "${module_release}" == 'unstable' ]] \
+                                     && [[ "${release_of_dependency}" == 'deprecated' ]]; then
+                                std::die 5 \
+                                         "%s " "${module_name}/${module_version}:" \
+                                         "release cannot be set to '${module_release}'" \
+                                         "since the dependency '$m' is ${release_of_dependency}"
+			fi
+			
+			echo "Loading module: ${m}"
+			module load "${m}"
+		done
+	}
+
         MODULECMD="${PMODULES_HOME}/bin/modulecmd"
         [[ -x ${MODULECMD} ]] || \
 	        std::die 2 "No such file or executable -- '${MODULECMD}'"
@@ -1231,12 +1231,14 @@ pbuild.build_module() {
         eval $( "${MODULECMD}" bash use unstable )
         eval $( "${MODULECMD}" bash use deprecated )
 	eval $( "${MODULECMD}" bash purge )
+
 	# :FIXME: this is a hack!!!
 	# shouldn't this be set in the build-script?
 	eval $( "${MODULECMD}" bash use Libraries )
 
+	load_build_dependencies
+
         pbuild.init_env "${module_name}" "${module_version}"
-        source "${BUILD_SCRIPT}"
         pbuild::make_all
 }
 
@@ -1262,7 +1264,6 @@ pbuild.bootstrap() {
 
 	PATH+=":${PREFIX}/bin"
 	PATH+=":${PREFIX}/sbin"
-        source "${BUILD_SCRIPT}"
         pbuild::make_all
 }
 
