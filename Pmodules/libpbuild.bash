@@ -635,6 +635,7 @@ pbuild::post_install() {
 pbuild::make_all() {
 	local -a runtime_dependencies=()
         source "${BUILD_SCRIPT}"
+        local -r logfile="${BUILD_DIR}/pbuild.log"
 
 	#
 	# everything set up?
@@ -856,7 +857,13 @@ pbuild::make_all() {
 			# work because in some function global variables 
 			# might/need to be set.
 			#
-			cd "${dir}" && "pbuild::$t" || std::die 42 "Aborting ..."
+			cd "${dir}"
+                        if [[ "${verbose}" = 'yes' ]]; then
+                                "pbuild::$t" 2>&1 | tee -a "${logfile}"
+                        else
+                                { "pbuild::$t" >> "${logfile}"; } 2>&1 | tee -a "${logfile}"
+                        fi
+                        (( ${PIPESTATUS[0]} == 0 )) || std::die 42 "Aborting ..."
 		done
 		touch "${BUILD_DIR}/.${target}"
 	}
@@ -864,12 +871,6 @@ pbuild::make_all() {
 	#......................................................................
 	# build module ${module_name}/${module_version}
 	build_module() {
-                local -r logfile="${BUILD_DIR}/pbuild.log"
-                if [[ "${verbose}" = 'yes' ]]; then
-                        local -r output="/dev/fd/1"
-                else
-                        local -r output="/dev/null"
-                fi
  		std::info \
                         "%s " "${module_name}/${module_version}:" \
                         "start building ..."
@@ -878,29 +879,33 @@ pbuild::make_all() {
 		mkdir -p "${SRC_DIR}"
 		mkdir -p "${BUILD_DIR}"
 
+                echo -n > "${logfile}"
+
  		std::info \
                         "%s " "${module_name}/${module_version}:" \
                         "preparing sources ..."
-		build_target "${SRC_DIR}" prep | tee "${logfile}" > ${output}
+                # write stdout and stderr to logfile, stderr to terminal
+                # write all to logfile and terminal
+		build_target "${SRC_DIR}" prep
 		[[ "${build_target}" == "prep" ]] && return 0
 
  		std::info \
                         "%s " "${module_name}/${module_version}:" \
                         "configuring ..."
-		build_target "${BUILD_DIR}" configure | tee "${logfile}" >> ${output}
+		build_target "${BUILD_DIR}" configure
 		[[ "${build_target}" == "configure" ]] && return 0
 
  		std::info \
                         "%s " "${module_name}/${module_version}:" \
                         "compiling ..."
-		build_target "${BUILD_DIR}" compile | tee "${logfile}" >> ${output}
+		build_target "${BUILD_DIR}" compile
 		[[ "${build_target}" == "compile" ]] && return 0
 
  		std::info \
                         "%s " "${module_name}/${module_version}:" \
                         "installing ..."
                 mkdir -p "${PREFIX}"
-		build_target "${BUILD_DIR}" install | tee "${logfile}" >> ${output}
+		build_target "${BUILD_DIR}" install
 		post_install
 
 		[[ "${build_target}" == "install" ]] && return 0
