@@ -21,6 +21,7 @@ unset __path
 #.............................................................................
 # disable auto-echo feature of 'cd'
 unset CDPATH
+declare -A SOURCE_UNPACK_DIRS
 
 #.............................................................................
 #
@@ -38,41 +39,7 @@ error_handler() {
 
 trap "error_handler" ERR
 
-###############################################################################
-#
-# unset environment variables used for compiling
-unset	C_INCLUDE_PATH
-unset	CPLUS_INCLUDE_PATH
-unset	CPP_INCLUDE_PATH
-unset	LIBRARY_PATH
-unset	LD_LIBRARY_PATH
-unset	DYLD_LIBRARY_PATH
-
-unset	CFLAGS
-unset	CPPFLAGS
-unset	CXXFLAGS
-unset	LIBS
-unset	LDFLAGS
-
-unset	CC
-unset	CXX
-unset	FC
-unset	F77
-unset	F90
-
-declare	SOURCE_URLS=()
-declare SOURCE_SHA256_SUMS=()
-declare SOURCE_NAMES=()
-declare -A SOURCE_UNPACK_DIRS
-
-declare	CONFIGURE_ARGS=()
-declare SUPPORTED_SYSTEMS=()
-declare PATCH_FILES=()
-declare PATCH_STRIPS=()
-declare PATCH_STRIP_DEFAULT='1'
 declare configure_with='undef'	
-
-declare bootstrap='no'
 
 #..............................................................................
 # global variables
@@ -1037,29 +1004,9 @@ pbuild.init_env() {
         V="${module_version}"        
 	parse_version "${module_version}"
 
-        unset	C_INCLUDE_PATH
-        unset	CPLUS_INCLUDE_PATH
-        unset	CPP_INCLUDE_PATH
-        unset	LIBRARY_PATH
-        unset	LD_LIBRARY_PATH
-        unset	DYLD_LIBRARY_PATH
-
-        unset	CFLAGS
-        unset	CPPFLAGS
-        unset	CXXFLAGS
-        unset	LIBS
-        unset	LDFLAGS
-
-        unset	CC
-        unset	CXX
-        unset	FC
-        unset	F77
-        unset	F90
-
         SOURCE_URLS=()
         SOURCE_SHA256_SUMS=()
         SOURCE_NAMES=()
-        
         CONFIGURE_ARGS=()
         SUPPORTED_SYSTEMS=()
         PATCH_FILES=()
@@ -1240,6 +1187,25 @@ pbuild.build_module() {
 	# :FIXME: this is a hack!!!
 	# shouldn't this be set in the build-script?
 	eval $( "${MODULECMD}" bash use Libraries )
+
+        unset	C_INCLUDE_PATH
+        unset	CPLUS_INCLUDE_PATH
+        unset	CPP_INCLUDE_PATH
+        unset	LIBRARY_PATH
+        unset	LD_LIBRARY_PATH
+        unset	DYLD_LIBRARY_PATH
+
+        unset	CFLAGS
+        unset	CPPFLAGS
+        unset	CXXFLAGS
+        unset	LIBS
+        unset	LDFLAGS
+
+        unset	CC
+        unset	CXX
+        unset	FC
+        unset	F77
+        unset	F90
 
 	load_build_dependencies
 
