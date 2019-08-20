@@ -447,7 +447,8 @@ pbuild::prep() {
                 local i=0
 		for ((_i = 0; _i < ${#PATCH_FILES[@]}; _i++)); do
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "Appling patch '${PATCH_FILES[_i]}' ..."
 			local -i strip_val="${PATCH_STRIPS[_i]:-${PATCH_STRIP_DEFAULT}}"
 			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}"
@@ -563,7 +564,8 @@ pbuild::configure() {
                                  "cmake failed"
 	else
 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "${FUNCNAME[0]}: skipping..."
 	fi
 }
@@ -635,7 +637,21 @@ pbuild::post_install() {
 pbuild::make_all() {
 	local -a runtime_dependencies=()
         source "${BUILD_SCRIPT}"
-        local -r logfile="${BUILD_DIR}/pbuild.log"
+
+	set -e 
+        local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
+
+	#
+	# To be able to set environment variables in one of the 'pbuild::TARGET'
+	# function we cannot use PIPE's like
+	#     pbuild::configure | tee -a ...
+	#
+	if [[ "${verbose}" == 'yes' ]]; then
+		exec  > >(tee -a "${logfile}")
+	else 
+		exec > >(cat >> "${logfile}")
+	fi
+	exec 2> >(tee -a "${logfile}" >&2)
 
 	#
 	# everything set up?
@@ -669,7 +685,8 @@ pbuild::make_all() {
 			local -r docdir="${PREFIX}/${_DOCDIR}/${module_name}"
 
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "Installing documentation to ${docdir}"
 			install -m 0755 -d \
                                 "${docdir}"
@@ -708,7 +725,8 @@ pbuild::make_all() {
 		write_runtime_dependencies() {
 			local -r fname="${PREFIX}/.dependencies"
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "writing run-time dependencies to ${fname} ..."
 			local dep
 			echo -n "" > "${fname}"
@@ -728,7 +746,8 @@ pbuild::make_all() {
 		# sometimes we need an system depended post-install
 		post_install_linux() {
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "running post-installation for ${OS} ..."
 			cd "${PREFIX}"
 			# solve multilib problem with LIBRARY_PATH
@@ -751,7 +770,8 @@ pbuild::make_all() {
 		local -r src="${BUILDBLOCK_DIR}/modulefile"
 		if [[ ! -r "${src}" ]]; then
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "skipping modulefile installation ..."
 			return
 		fi
@@ -765,7 +785,8 @@ pbuild::make_all() {
  		local -r dstdir=${dst%/*}
 
 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "installing modulefile in '${dstdir}' ..."
 		mkdir -p "${dstdir}"
 		install -m 0444 "${src}" "${dst}"
@@ -788,14 +809,16 @@ pbuild::make_all() {
                         read release < "${release_file}"
                         if [[ "${release}" != "${module_release}" ]]; then
 		                std::info \
-                                        "%s " "${module_name}/${module_version}:" \
+                                        "%s %s %s\n" \
+					"${module_name}/${module_version}:" \
                                         "changing release from" \
                                         "'${release}' to '${module_release}' ..."
 		                echo "${module_release}" > "${release_file}"
                         fi
                 else
 		        std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "setting release to '${module_release}' ..."
                         echo "${module_release}" > "${release_file}"
                 fi
@@ -813,7 +836,8 @@ pbuild::make_all() {
 			     	         "BUILD_DIR is set to '/'"
 
 		        std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "Cleaning up '${BUILD_DIR}'..."
 		        rm -rf "${BUILD_DIR##*/}"
 	        };
@@ -830,7 +854,8 @@ pbuild::make_all() {
                                          "Oops: internal error:" \
 			     	         "SRC_DIR is set to '/'"
 		        std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "Cleaning up '${SRC_DIR}'..."
 		        rm -rf "${SRC_DIR##*/}"
    	        };
@@ -858,12 +883,7 @@ pbuild::make_all() {
 			# might/need to be set.
 			#
 			cd "${dir}"
-                        if [[ "${verbose}" = 'yes' ]]; then
-                                "pbuild::$t" 2>&1 | tee -a "${logfile}"
-                        else
-                                { "pbuild::$t" >> "${logfile}"; } 2>&1 | tee -a "${logfile}"
-                        fi
-                        (( ${PIPESTATUS[0]} == 0 )) || std::die 42 "Aborting ..."
+                        "pbuild::$t"
 		done
 		touch "${BUILD_DIR}/.${target}"
 	}
@@ -871,18 +891,19 @@ pbuild::make_all() {
 	#......................................................................
 	# build module ${module_name}/${module_version}
 	build_module() {
+		echo C_INCLUDE_PATH=$C_INCLUDE_PATH
  		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "start building ..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 
 		mkdir -p "${SRC_DIR}"
 		mkdir -p "${BUILD_DIR}"
 
-                echo -n > "${logfile}"
-
  		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "preparing sources ..."
                 # write stdout and stderr to logfile, stderr to terminal
                 # write all to logfile and terminal
@@ -890,19 +911,22 @@ pbuild::make_all() {
 		[[ "${build_target}" == "prep" ]] && return 0
 
  		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "configuring ..."
 		build_target "${BUILD_DIR}" configure
 		[[ "${build_target}" == "configure" ]] && return 0
 
  		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "compiling ..."
 		build_target "${BUILD_DIR}" compile
 		[[ "${build_target}" == "compile" ]] && return 0
 
  		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "installing ..."
                 mkdir -p "${PREFIX}"
 		build_target "${BUILD_DIR}" install
@@ -914,13 +938,17 @@ pbuild::make_all() {
                 install_release_file
 	        cleanup_build
 		cleanup_src
-                std::info "%s" "${module_name}/${module_version}: Done ..."
+                std::info \
+			"%s %s\n" \
+			"${module_name}/${module_version}:" \
+			"Done ..."
 		return 0
 	}
 	remove_module() {
 		if [[ -d "${PREFIX}" ]]; then
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "removing all files in '${PREFIX}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -rf ${PREFIX}
 		fi
@@ -936,14 +964,16 @@ pbuild::make_all() {
 
 		if [[ -e "${dst}" ]]; then
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "removing modulefile '${dst}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -v "${dst}"
 		fi
 		local release_file="${dstdir}/.release-${module_version}"
 		if [[ -e "${release_file}" ]]; then
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "removing release file '${release_file}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
 		fi
@@ -966,7 +996,8 @@ pbuild::make_all() {
 			build_module
 		else
  			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "already exists, not rebuilding ..."
 			if [[ "${opt_update_modulefiles}" == "yes" ]]; then
 				install_modulefile
@@ -1069,13 +1100,15 @@ pbuild.init_env() {
         configure_with='undef'
 }
 
-
 pbuild.build_module() {
         module_name="$1"
         module_version="$2"
         module_release="$3"
         shift 3
         with_modules=( "$@" )
+
+        # used in pbuild::make_all
+	declare bootstrap='no'
 
 	#......................................................................
 	#
@@ -1123,7 +1156,8 @@ pbuild.build_module() {
 				 "${m}: module does not exist," \
 				 "cannot continue with dry run..."
 
-		std::info "$m: module does not exist, trying to build it..."
+		std::info "%s\n" \
+			$m: module does not exist, trying to build it..."
 		local args=( '' )
 		set -- ${ARGS[@]}
 		while (( $# > 0 )); do
