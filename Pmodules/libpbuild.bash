@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #.............................................................................
@@ -1104,7 +1103,7 @@ pbuild.build_module() {
 				 "cannot continue with dry run..."
 
 		std::info "%s\n" \
-			$m: module does not exist, trying to build it..."
+			"$m: module does not exist, trying to build it..."
 		local args=( '' )
 		set -- ${ARGS[@]}
 		while (( $# > 0 )); do
