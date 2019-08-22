@@ -1220,6 +1220,7 @@ pbuild.build_module() {
 	# :FIXME: this is a hack!!!
 	# shouldn't this be set in the build-script?
 	eval $( "${MODULECMD}" bash use Libraries )
+        eval $( "${MODULECMD}" bash use System )
 
         unset	C_INCLUDE_PATH
         unset	CPLUS_INCLUDE_PATH
