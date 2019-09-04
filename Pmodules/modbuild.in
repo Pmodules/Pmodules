@@ -273,11 +273,12 @@ parse_args() {
 	(( ${#versions[@]} > 0)) || std::die 1 "Module version not specified!"
 }
 
+shopt -s nocaseglob
 find_variants_files(){
         shopt -q nullglob || :
         local -i nullglob_set=$?
         shopt -s nullglob
-        local files=( "${BUILDBLOCK_DIR}"/*/variants.${opt_system} )
+        local files=( "${BUILDBLOCK_DIR}"/*/variants\.${opt_system} )
         files+=( "${BUILDBLOCK_DIR}"/*/variants.$(uname -s) )
         local f
 	for f in "${BUILDBLOCK_DIR}"/*/variants; do
