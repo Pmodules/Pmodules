@@ -212,10 +212,10 @@ set_full_module_name_and_prefix() {
 	# set full module name
 	fully_qualified_module_name=$( join_by '/' "${name[@]}" )
 	# set PREFIX of module
-	PREFIX="${PMODULES_ROOT}/${GROUP}/"
+	PREFIX="${PMODULES_ROOT}/${GROUP}"
         local -i i=0
 	for ((i=${#name[@]}-1; i >= 0; i--)); do
-		PREFIX+="${name[i]}/"
+		PREFIX+="/${name[i]}"
 	done
 }
 
