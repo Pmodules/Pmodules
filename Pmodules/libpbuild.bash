@@ -943,7 +943,7 @@ pbuild::make_all() {
                                 "removing release file '${release_file}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
 		fi
-		rmdir -p --ignore-fail-on-non-empty "${dstdir}" 2>/dev/null
+		rmdir -p "${dstdir}" 2>/dev/null || :
 	}
 
 	########################################################################
