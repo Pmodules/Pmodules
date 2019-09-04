@@ -837,7 +837,13 @@ pbuild::make_all() {
                 fi
 		local targets=()
 		targets+=( "pre_${target}_${system}" "pre_${target}_${OS}" "pre_${target}" )
-		targets+=( "${target}" )
+		if typeset -F pbuild::${target}_${system} 1>/dev/null 2>&1; then
+			targets+=( "${target}_${system}" )
+		elif typeset -F pbuild::${target}_${OS} 1>/dev/null 2>&1; then
+			targets+=( "${target}_${OS}" )
+		else
+			targets+=( "${target}" )
+		fi
 		targets+=( "post_${target}_${system}" "post_${target}_${OS}" "post_${target}" )
 
 		for t in "${targets[@]}"; do
