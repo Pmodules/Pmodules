@@ -601,7 +601,6 @@ pbuild::post_install() {
 # The 'do it all' function.
 #
 pbuild::make_all() {
-	local -a runtime_dependencies=()
         source "${BUILD_SCRIPT}"
 
 	set -e 
@@ -612,6 +611,7 @@ pbuild::make_all() {
 	# function we cannot use PIPE's like
 	#     pbuild::configure | tee -a ...
 	#
+	rm -f "${logfile}"
 	if [[ "${verbose}" == 'yes' ]]; then
 		exec  > >(tee -a "${logfile}")
 	else 
@@ -863,7 +863,6 @@ pbuild::make_all() {
 	#......................................................................
 	# build module ${module_name}/${module_version}
 	build_module() {
-		echo C_INCLUDE_PATH=$C_INCLUDE_PATH
  		std::info \
                         "%s %s\n" \
 			"${module_name}/${module_version}:" \
@@ -1061,6 +1060,7 @@ pbuild.build_module() {
 
         # used in pbuild::make_all
 	declare bootstrap='no'
+	declare -a runtime_dependencies=()
 
 	#......................................................................
 	#
