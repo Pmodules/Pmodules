@@ -41,7 +41,32 @@ trap "error_handler" ERR
 declare configure_with='undef'	
 
 #..............................................................................
-# global variables
+#
+# The following variables are available in build-blocks and set read-only
+# :FIXME: do we have to export them?
+
+# install prefix of module.
+declare -x  PREFIX=''
+
+declare -r  OS=$(uname -s)
+
+pbuild::get_num_cores() {
+	case "${OS}" in
+	Linux )
+		echo $(grep -c ^processor /proc/cpuinfo)
+		;;
+	Darwin )
+		echo $(sysctl -n hw.ncpu)
+		;;
+	* )
+		std::die 1 "OS ${OS} is not supported\n"
+		;;
+	esac
+}
+
+#..............................................................................
+# global variables which can be set/overwritten by command line args
+
 declare force_rebuild=''
 pbuild.force_rebuild() {
 	force_rebuild="$1"
@@ -73,9 +98,13 @@ pbuild.update_modulefiles() {
 }
 
 # number of parallel make jobs
-declare -i JOBS=3
+declare -i JOBS=$(pbuild::get_num_cores)
 pbuild.jobs() {
-        JOBS="$1"
+	if (( $1 == 0 )); then
+		JOBS=$(pbuild::get_num_cores)
+	else
+        	JOBS="$1"
+	fi
 }
 
 declare system=''
@@ -113,18 +142,6 @@ declare	-x  module_release=''
 # relative path of documentation
 # abs. path is "${PREFIX}/${_docdir}/${module_name}"
 declare -r  _DOCDIR='share/doc'
-
-#..............................................................................
-#
-# The following variables are available in build-blocks and set read-only
-# :FIXME: do we have to export them?
-#
-
-# install prefix of module.
-declare -x  PREFIX=''
-
-declare -r  OS=$(uname -s)
-
 
 ##############################################################################
 #
