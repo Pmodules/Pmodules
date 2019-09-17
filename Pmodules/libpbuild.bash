@@ -159,12 +159,36 @@ pbuild::compile_in_sourcetree() {
 # Check whether the script is running on a supported OS.
 #
 # Arguments:
-#   $@: supported opertating systems (as printed by 'uname -s')
+#   $@: supported opertating systems (something like RHEL6, macOS10.14, ...).
+#       Default is all.
 #
 pbuild::supported_systems() {
 	SUPPORTED_SYSTEMS+=( "$@" )
 }
 
+##############################################################################
+#
+# Check whether the script is running on a supported OS.
+#
+# Arguments:
+#   $@: supported opertating systems (like Linux, Darwin).
+#       Default is all.
+#
+pbuild::supported_os() {
+	SUPPORTED_OS+=( "$@" )
+}
+
+##############################################################################
+#
+# Check whether the loaded compiler is supported.
+#
+# Arguments:
+#   $@: supported compiler (like GCC, Intel, PGI).
+#       Default is all.
+#
+pbuild::supported_compiler() {
+	SUPPORTED_COMPILERS+=( "$@" )
+}
 #......................................................................
 #
 # compute full module name and installation prefix
@@ -653,11 +677,33 @@ pbuild::make_all() {
 	check_supported_systems() {
 		[[ -z "${SUPPORTED_SYSTEMS}" ]] && return 0
 		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-			[[ ${sys} == ${system} ]] && return 0
+			[[ ${sys,,} == ${system,,} ]] && return 0
 		done
 		std::die 1 \
                          "%s " "${module_name}/${module_version}:" \
                          "Not available for ${system}."
+	}
+
+	#......................................................................
+	check_supported_os() {
+		[[ -z "${SUPPORTED_OS}" ]] && return 0
+		for os in "${SUPPORTED_OS[@]}"; do
+			[[ ${os,,} == ${OS,,} ]] && return 0
+		done
+		std::die 1 \
+                         "%s " "${module_name}/${module_version}:" \
+                         "Not available for ${OS}."
+	}
+
+	#......................................................................
+	check_supported_compilers() {
+		[[ -z "${SUPPORTED_COMPILERS}" ]] && return 0
+		for compiler in "${SUPPORTED_COMPILERS[@]}"; do
+			[[ ${compiler,,} == ${COMPILER,,} ]] && return 0
+		done
+		std::die 1 \
+                         "%s " "${module_name}/${module_version}:" \
+                         "Not available for ${COMPILER}."
 	}
 
 	#......................................................................
@@ -976,6 +1022,8 @@ pbuild::make_all() {
 	# setup module specific environment
 	if [[ "${bootstrap}" == 'no' ]]; then
 		check_supported_systems
+		check_supported_os
+		check_supported_compilers
 		set_full_module_name_and_prefix
 		if [[ "${module_release}" == 'removed' ]]; then
 			remove_module
@@ -1061,6 +1109,8 @@ pbuild.init_env() {
         SOURCE_NAMES=()
         CONFIGURE_ARGS=()
         SUPPORTED_SYSTEMS=()
+	SUPPORTED_OS=()
+	SUPPORTED_COMPILERS=()
         PATCH_FILES=()
         PATCH_STRIPS=()
         PATCH_STRIP_DEFAULT='1'
