@@ -186,7 +186,7 @@ pbuild::supported_os() {
 #   $@: supported compiler (like GCC, Intel, PGI).
 #       Default is all.
 #
-pbuild::supported_compiler() {
+pbuild::supported_compilers() {
 	SUPPORTED_COMPILERS+=( "$@" )
 }
 #......................................................................
