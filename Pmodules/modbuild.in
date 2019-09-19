@@ -248,7 +248,7 @@ parse_args() {
 		-* )
 			std::die 1 "Invalid option -- '$1'"
 			;;
-		[=0-9]* )
+		[=0-9]* | '.*' )
 			versions+=( "$1" )
 			;;
 		'')	
