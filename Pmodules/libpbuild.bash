@@ -102,6 +102,7 @@ declare -i JOBS=$(pbuild::get_num_cores)
 pbuild.jobs() {
 	if (( $1 == 0 )); then
 		JOBS=$(pbuild::get_num_cores)
+		(( JOBS > 10 )) && JOBS=10 || :
 	else
         	JOBS="$1"
 	fi
