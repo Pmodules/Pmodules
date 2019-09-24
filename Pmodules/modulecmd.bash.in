@@ -526,13 +526,15 @@ subcommand_load() {
                                        "${current_modulefile}"
                 fi
 
-		if [[ ${verbosity_lvl} != silent ]] && \
-                           [[ ${release} != stable ]]; then
-			std::info "%s %s: %s -- %s\n" \
+		local msg=$(printf "%s %s: %s -- %s\n" \
                                   "${CMD}" 'load' \
                                   "${release} module has been loaded" \
-                                  "${m}"
+                                  "${m}")
+		if [[ ${verbosity_lvl} != silent ]] && \
+                           [[ ${release} != stable ]]; then
+			std::info "${msg}"
 		fi
+		logger "${msg}"
 	done
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
