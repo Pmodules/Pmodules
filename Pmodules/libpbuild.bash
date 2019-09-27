@@ -113,16 +113,6 @@ pbuild.system() {
         system="$1"
 }
 
-declare TEMP_DIR=''
-pbuild.temp_dir() {
-        TEMP_DIR="$1"
-}
-
-declare PMODULES_DISTFILESDIR=''
-pbuild.pmodules_distfilesdir() {
-        PMODULES_DISTFILESDIR="$1"
-}
-
 declare verbose=''
 pbuild.verbose() {
         verbose="$1"
@@ -1097,8 +1087,8 @@ pbuild.init_env() {
         local -r module_name="$1"
         local -r module_version="$2"
 
-        SRC_DIR="${TEMP_DIR}/${module_name}-${module_version}/src"
-        BUILD_DIR="${TEMP_DIR}/${module_name}-${module_version}/build"
+        SRC_DIR="${PMODULES_TMPDIR}/${module_name}-${module_version}/src"
+        BUILD_DIR="${PMODULES_TMPDIR}/${module_name}-${module_version}/build"
 
         # P and V can be used in the build-script, so we have to set them here
         P="${module_name}"

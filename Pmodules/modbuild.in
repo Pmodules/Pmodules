@@ -30,6 +30,10 @@ source libstd.bash    || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
 
+# can be set in the configuration file
+declare         PMODULES_DISTFILESDIR=''
+declare         PMODULES_TMPDIR=''
+
 source libpbuild.bash    || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
@@ -128,14 +132,15 @@ MISCELLANEOUS OPTIONS:
 #
 # parse options and arguments
 #
+# command line arguments are taken first
+# then configuration file
+# last default
 
-# multiple version can be passed via comand line
+# versions to be build, '.*' or none means all
 declare -a      versions=()
-declare         opt_all_variants='no'
 declare         opt_bootstrap='no'
 declare 	opt_build_config='modbuild.conf'
 declare         opt_build_target='all'
-declare         opt_distfiles_dir="${PMODULES_ROOT}/var/distfiles"
 declare         opt_dry_run='no'
 declare         opt_enable_cleanup_build='yes'
 declare         opt_enable_cleanup_src='yes'
@@ -143,7 +148,6 @@ declare         opt_force_rebuild='no'
 declare -i      opt_jobs=0
 declare         opt_update_modulefiles='no'
 declare         opt_system=''
-declare         opt_temp_dir="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
@@ -205,18 +209,18 @@ parse_args() {
 			opt_enable_cleanup_src='no'
 			;;
 		--distdir )
-			opt_distfiles_dir="$2"
+			PMODULES_DISTFILESDIR="$2"
 			shift
 			;;
 		--distdir=* )
-			opt_distfiles_dir="${1/--distdir=}"
+			PMODULES_DISTFILESDIR="${1/--distdir=}"
 			;;
 		--tmpdir )
-                        opt_temp_dir="$2"
+                        PMODULES_TMPDIR="$2"
 			shift
 			;;
 		--tmpdir=* )
-			opt_temp_dir="${1/--tmpdir=}"
+			PMODULES_TMPDIR="${1/--tmpdir=}"
 			;;
 		--system )
 			opt_system="$2"
@@ -270,7 +274,7 @@ parse_args() {
 		shift
 	done	
 	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
-	(( ${#versions[@]} > 0)) || std::die 1 "Module version not specified!"
+	(( ${#versions[@]} > 0)) || versions+=( '.*' )
 }
 
 shopt -s nocaseglob
@@ -401,9 +405,7 @@ pbuild.build_target "${opt_build_target}"
 pbuild.dry_run "${opt_dry_run}"
 pbuild.enable_cleanup_build "${opt_enable_cleanup_build}"
 pbuild.enable_cleanup_src "${opt_enable_cleanup_src}"
-pbuild.pmodules_distfilesdir "${opt_distfiles_dir}"
 pbuild.update_modulefiles "${opt_update_modulefiles}"
-pbuild.temp_dir "${opt_temp_dir}"
 pbuild.system "${opt_system}"
 pbuild.verbose "${opt_verbose}"
 
@@ -413,7 +415,7 @@ source libpbuild_dyn.bash    || \
 # source build configuration,
 # must be done before sourcing libpbuild!
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
-        test -d "${BUILDBLOCK_DIR}/../../${PMODULES_CONFIG_DIR}" && PATH+=":$_"
+        test -d "${BUILDBLOCK_DIR}/../../config" && PATH+=":$_"
 else
         # Please note: if we trap DEBUG a statement like
         #              test -d ... && PATH+=$_
@@ -424,6 +426,9 @@ else
 fi
 source "${opt_build_config}" || \
         std::die 3 "Oops: Cannot source configuration file -- '$_'"
+
+: ${PMODULES_DISTFILESDIR:=${PMODULES_ROOT}/var/distfiles}
+: ${PMODULES_TMPDIR:=/var/tmp/${USER}}
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
