@@ -526,13 +526,13 @@ subcommand_load() {
                                        "${current_modulefile}"
                 fi
 
-		local msg=$(printf "%s %s: %s -- %s\n" \
+		local msg=$(printf "%s %s: %s -- %s" \
                                   "${CMD}" 'load' \
                                   "${release} module has been loaded" \
                                   "${m}")
 		if [[ ${verbosity_lvl} != silent ]] && \
                            [[ ${release} != stable ]]; then
-			std::info "${msg}"
+		        std::info "%s\n" "${msg}"
 		fi
 		logger "${msg}"
 	done
