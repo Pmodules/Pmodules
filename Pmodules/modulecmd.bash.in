@@ -55,7 +55,7 @@ print_help() {
 
 export_env() {
 	case "${Shell}" in
-	bash | zsh )
+	sh | bash | zsh )
 		local -r fmt="export %s=\"%s\"; "
 		;;
 	csh | tcsh )
@@ -1960,8 +1960,8 @@ subcommand_initclear() {
 # main
 #
 case "$1" in
-	bash | zsh )
-		declare Shell="$1"
+	sh | bash | zsh )
+		declare Shell="sh"
 		;;
 	csh | tcsh )
 		declare Shell='csh'
