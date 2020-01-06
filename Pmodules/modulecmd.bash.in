@@ -495,7 +495,6 @@ subcommand_load() {
                     || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
-		eval "${output}"
 
                 # we do not want to print the error message we got from
                 # modulecmd, they are a bit ugly
@@ -516,15 +515,18 @@ subcommand_load() {
                                  "${error_txt}" \
                                  "${m}"
                 fi
-                if [[ "${Shell}" == "bash" ]]; then
+                if [[ "${Shell}" == "sh" ]]; then
+			# for sh-like shells just echo 
                         echo "${output}"
-			if [[ -n "${error}" ]]; then
-                        	echo "${error}" 1>&2
-			fi
                 else
+			# re-run with right shell
                         "${modulecmd}" "${Shell}" ${opts} 'load' \
                                        "${current_modulefile}"
                 fi
+		eval "${output}"
+		if [[ -n "${error}" ]]; then
+                       	echo "${error}" 1>&2
+		fi
 
 		local msg=$(printf "%s %s: %s -- %s" \
                                   "${CMD}" 'load' \
