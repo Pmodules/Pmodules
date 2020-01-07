@@ -593,21 +593,21 @@ pbuild::install() {
 }
 
 pbuild::install_shared_libs() {
-	local -r binary="${PREFIX}/$1"
-	local -r pattern="${2//\//\\/}" # escape slash
-	local -r dstdir="${3:-${PREFIX}/lib}"
+	local -r binary="$1"
+	local -r dstdir="$2"
+	local -r pattern="${3//\//\\/}" # escape slash
 
         install_shared_libs_Linux() {
                 local libs=( $(ldd "${binary}" | \
                                        awk "/ => \// && /${pattern}/ {print \$3}") )
-	        cp -avL "${libs[@]}" "${dstdir}"
+	        [[ -n "${libs}" ]] && cp -vL "${libs[@]}" "${dstdir}"
         }
 
         install_shared_libs_Darwin() {
                 # https://stackoverflow.com/questions/33991581/install-name-tool-to-update-a-executable-to-search-for-dylib-in-mac-os-x
                 local libs=( $(otool -L "${binary}" | \
                                          awk "/${pattern}/ {print \$1}"))
-	        cp -avL "${libs[@]}" "${dstdir}"
+	        [[ -n "${libs}" ]] && cp -vL "${libs[@]}" "${dstdir}"
         }
 
 	test -e "${binary}" || \
@@ -1268,7 +1268,7 @@ pbuild.build_module() {
                                          "since the dependency '$m' is ${release_of_dependency}"
 			fi
 			
-			echo "Loading module: ${m}"
+			std::info "Loading module: ${m}\n"
 			module load "${m}"
 		done
 	}
