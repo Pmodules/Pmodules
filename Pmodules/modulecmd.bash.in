@@ -594,11 +594,14 @@ subcommand_unload() {
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
                 eval "${output}"
-                if [[ "${Shell}" == "bash" ]]; then
+		case ${Shell} in
+		sh | bash | zsh )
                         echo "${output}"
-                else
+			;;
+                * )
                         "${modulecmd}" "${Shell}" 'unload' "${arg}"
-                fi
+                	;;
+		esac
 	done
 }
 
