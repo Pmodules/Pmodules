@@ -1,0 +1,20 @@
+Changes in version 1.0.0rc5 (since 1.0.0rc2)
+  - build-system
+    * lot of cleanup, refactoring and bugfixes
+    * '.*' is now a valid version argument
+    * 'system' isn't a synonym for OS/kernel any more. It defines a target operating system like RHEL6, macOS1014. 
+    * checks for supported system, OS and compiler
+    * compute default for the number of parallel make jobs
+    * calling pbuild::make_all in a build-script is now deprecate
+
+  - modulecmd
+    * --with option of sub-command search now accepts a comma separated list of strings
+    * better load hints
+    * log modules loaded to syslog
+    * PMODULES_ENV is exported only on content changes
+    * bugfixes and cleanup
+
+1.0.0rc4
+  - never tagged
+1.0.0rc3
+  - never tagged

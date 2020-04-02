@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #.............................................................................
@@ -21,6 +20,7 @@ unset __path
 #.............................................................................
 # disable auto-echo feature of 'cd'
 unset CDPATH
+declare -A SOURCE_UNPACK_DIRS
 
 #.............................................................................
 #
@@ -38,97 +38,84 @@ error_handler() {
 
 trap "error_handler" ERR
 
-###############################################################################
-#
-# unset environment variables used for compiling
-unset	C_INCLUDE_PATH
-unset	CPLUS_INCLUDE_PATH
-unset	CPP_INCLUDE_PATH
-unset	LIBRARY_PATH
-unset	LD_LIBRARY_PATH
-unset	DYLD_LIBRARY_PATH
-
-unset	CFLAGS
-unset	CPPFLAGS
-unset	CXXFLAGS
-unset	LIBS
-unset	LDFLAGS
-
-unset	CC
-unset	CXX
-unset	FC
-unset	F77
-unset	F90
-
-declare	SOURCE_URLS=()
-declare SOURCE_SHA256_SUMS=()
-declare SOURCE_NAMES=()
-declare -A SOURCE_UNPACK_DIRS
-
-declare	CONFIGURE_ARGS=()
-declare SUPPORTED_SYSTEMS=()
-declare PATCH_FILES=()
-declare PATCH_STRIPS=()
-declare PATCH_STRIP_DEFAULT='1'
 declare configure_with='undef'	
 
-declare bootstrap='no'
+#..............................................................................
+#
+# The following variables are available in build-blocks and set read-only
+# :FIXME: do we have to export them?
+
+# install prefix of module.
+declare -x  PREFIX=''
+
+declare -r  OS=$(uname -s)
+
+pbuild::get_num_cores() {
+	case "${OS}" in
+	Linux )
+		echo $(grep -c ^processor /proc/cpuinfo)
+		;;
+	Darwin )
+		echo $(sysctl -n hw.ncpu)
+		;;
+	* )
+		std::die 1 "OS ${OS} is not supported\n"
+		;;
+	esac
+}
 
 #..............................................................................
-# global variables
-declare force_rebuild='no'
+# global variables which can be set/overwritten by command line args
+
+declare force_rebuild=''
 pbuild.force_rebuild() {
 	force_rebuild="$1"
 }
 
-declare dry_run='no'
+declare dry_run=''
 pbuild.dry_run() {
 	dry_run="$1"
 }
 
-declare enable_cleanup_build='yes'
+declare enable_cleanup_build=''
 pbuild.enable_cleanup_build() {
 	enable_cleanup_build="$1"
 }
 
-declare enable_cleanup_src='yes'
+declare enable_cleanup_src=''
 pbuild.enable_cleanup_src() {
 	enable_cleanup_src="$1"
 }
 
-declare build_target='all'
+declare build_target=''
 pbuild.build_target() {
 	build_target="$1"
 }
 
-declare opt_update_modulefiles='no'
+declare opt_update_modulefiles=''
 pbuild.update_modulefiles() {
 	opt_update_modulefiles="$1"
 }
 
 # number of parallel make jobs
-declare -i  JOBS=3
+declare -i JOBS=$(pbuild::get_num_cores)
 pbuild.jobs() {
-        JOBS="$1"
+	if (( $1 == 0 )); then
+		JOBS=$(pbuild::get_num_cores)
+		(( JOBS > 10 )) && JOBS=10 || :
+	else
+        	JOBS="$1"
+	fi
 }
 
-declare system=$(uname -s)
+declare system=''
 pbuild.system() {
         system="$1"
 }
 
-declare TEMP_DIR="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
-pbuild.temp_dir() {
-        TEMP_DIR="$1"
-}
-
-declare PMODULES_DISTFILESDIR="${PMODULES_ROOT}/var/distfiles"
-pbuild.pmodules_distfilesdir() {
-        PMODULES_DISTFILESDIR="$1"
-}
-declare verbose='no'
+declare verbose=''
 pbuild.verbose() {
-        verbose='yes'
+        verbose="$1"
 }
 
 # module name including path in hierarchy and version
@@ -147,21 +134,6 @@ declare	-x  module_release=''
 # abs. path is "${PREFIX}/${_docdir}/${module_name}"
 declare -r  _DOCDIR='share/doc'
 
-#..............................................................................
-#
-# The following variables are available in build-blocks and set read-only
-# :FIXME: do we have to export them?
-#
-
-# install prefix of module.
-declare -x  PREFIX=''
-
-# :FIXME:
-# OS is still used in some build-scripts. We have to implement a getter
-# and use this getter in the build-scripts.
-declare -r  OS="${system}"
-
-
 ##############################################################################
 #
 # Set flag to build module in source tree.
@@ -178,12 +150,36 @@ pbuild::compile_in_sourcetree() {
 # Check whether the script is running on a supported OS.
 #
 # Arguments:
-#   $@: supported opertating systems (as printed by 'uname -s')
+#   $@: supported opertating systems (something like RHEL6, macOS10.14, ...).
+#       Default is all.
 #
 pbuild::supported_systems() {
 	SUPPORTED_SYSTEMS+=( "$@" )
 }
 
+##############################################################################
+#
+# Check whether the script is running on a supported OS.
+#
+# Arguments:
+#   $@: supported opertating systems (like Linux, Darwin).
+#       Default is all.
+#
+pbuild::supported_os() {
+	SUPPORTED_OS+=( "$@" )
+}
+
+##############################################################################
+#
+# Check whether the loaded compiler is supported.
+#
+# Arguments:
+#   $@: supported compiler (like GCC, Intel, PGI).
+#       Default is all.
+#
+pbuild::supported_compilers() {
+	SUPPORTED_COMPILERS+=( "$@" )
+}
 #......................................................................
 #
 # compute full module name and installation prefix
@@ -206,7 +202,9 @@ set_full_module_name_and_prefix() {
 		echo "$*"
 	}
 
-	[[ -n ${GROUP} ]] || std::die 1 "${module_name}/${module_version}: group not set."
+	[[ -n ${GROUP} ]] || std::die 1 \
+                                      "${module_name}/${module_version}:" \
+                                      "group not set."
 	
 	# build module name
 	# :FIXME: this should be read from a configuration file
@@ -249,7 +247,7 @@ set_full_module_name_and_prefix() {
 	PREFIX="${overlay}/${GROUP}/"
         local -i i=0
 	for ((i=${#name[@]}-1; i >= 0; i--)); do
-		PREFIX+="${name[i]}/"
+		PREFIX+="/${name[i]}"
 	done
 }
 
@@ -327,12 +325,10 @@ pbuild::use_cc() {
 pbuild::pre_prep() {
 	:
 }
-eval "pbuild::pre_prep_${system}() { :; }"
 
 pbuild::post_prep() {
 	:
 }
-eval "pbuild::post_prep_${system}() { :; }"
 
 ###############################################################################
 #
@@ -449,7 +445,8 @@ pbuild::prep() {
                 local i=0
 		for ((_i = 0; _i < ${#PATCH_FILES[@]}; _i++)); do
 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
                                 "Appling patch '${PATCH_FILES[_i]}' ..."
 			local -i strip_val="${PATCH_STRIPS[_i]:-${PATCH_STRIP_DEFAULT}}"
 			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}"
@@ -488,7 +485,6 @@ pbuild::add_patch() {
 	PATCH_FILES+=( "$1" )
 	PATCH_STRIPS+=( "$2" )
 }
-eval "pbuild::add_patch_${system}() { pbuild::add_patch \"\$@\"; }"
 
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || \
@@ -509,7 +505,6 @@ pbuild::use_flag() {
 pbuild::pre_configure() {
 	:
 }
-eval "pbuild::pre_configure_${system}() { :; }"
 
 pbuild::set_configure_args() {
 	CONFIGURE_ARGS+=( "$@" )
@@ -567,7 +562,8 @@ pbuild::configure() {
                                  "cmake failed"
 	else
 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
                         "${FUNCNAME[0]}: skipping..."
 	fi
 }
@@ -575,12 +571,10 @@ pbuild::configure() {
 pbuild::post_configure() {
 	:
 }
-eval "pbuild::post_configure_${system}() { :; }"
 
 pbuild::pre_compile() {
 	:
 }
-eval "pbuild::pre_compile_${system}() { :; }"
 
 pbuild::compile() {
 	make -j${JOBS}
@@ -589,33 +583,31 @@ pbuild::compile() {
 pbuild::post_compile() {
 	:
 }
-eval "pbuild::post_compile_${system}() { :; }"
 
 pbuild::pre_install() {
 	:
 }
-eval "pbuild::pre_install_${system}() { :; }"
 
 pbuild::install() {
 	make install
 }
 
 pbuild::install_shared_libs() {
-	local -r binary="${PREFIX}/$1"
-	local -r pattern="${2//\//\\/}" # escape slash
-	local -r dstdir="${3:-${PREFIX}/lib}"
+	local -r binary="$1"
+	local -r dstdir="$2"
+	local -r pattern="${3//\//\\/}" # escape slash
 
         install_shared_libs_Linux() {
                 local libs=( $(ldd "${binary}" | \
                                        awk "/ => \// && /${pattern}/ {print \$3}") )
-	        cp -avL "${libs[@]}" "${dstdir}"
+	        [[ -n "${libs}" ]] && cp -vL "${libs[@]}" "${dstdir}"
         }
 
         install_shared_libs_Darwin() {
                 # https://stackoverflow.com/questions/33991581/install-name-tool-to-update-a-executable-to-search-for-dylib-in-mac-os-x
                 local libs=( $(otool -L "${binary}" | \
                                          awk "/${pattern}/ {print \$1}"))
-	        cp -avL "${libs[@]}" "${dstdir}"
+	        [[ -n "${libs}" ]] && cp -vL "${libs[@]}" "${dstdir}"
         }
 
 	test -e "${binary}" || \
@@ -636,14 +628,28 @@ pbuild::install_shared_libs() {
 pbuild::post_install() {
 	:
 }
-eval "pbuild::post_install_${system}() { :; }"
-
 
 #
 # The 'do it all' function.
 #
 pbuild::make_all() {
-	local -a runtime_dependencies=()
+        source "${BUILD_SCRIPT}"
+
+	set -e 
+        local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
+
+	#
+	# To be able to set environment variables in one of the 'pbuild::TARGET'
+	# function we cannot use PIPE's like
+	#     pbuild::configure | tee -a ...
+	#
+	rm -f "${logfile}"
+	if [[ "${verbose}" == 'yes' ]]; then
+		exec  > >(tee -a "${logfile}")
+	else 
+		exec > >(cat >> "${logfile}")
+	fi
+	exec 2> >(tee -a "${logfile}" >&2)
 
 	#
 	# everything set up?
@@ -662,12 +668,457 @@ pbuild::make_all() {
 	check_supported_systems() {
 		[[ -z "${SUPPORTED_SYSTEMS}" ]] && return 0
 		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-			[[ ${sys} == ${system} ]] && return 0
+			[[ ${sys,,} == ${system,,} ]] && return 0
 		done
 		std::die 1 \
                          "%s " "${module_name}/${module_version}:" \
                          "Not available for ${system}."
 	}
+
+	#......................................................................
+	check_supported_os() {
+		[[ -z "${SUPPORTED_OS}" ]] && return 0
+		for os in "${SUPPORTED_OS[@]}"; do
+			[[ ${os,,} == ${OS,,} ]] && return 0
+		done
+		std::die 1 \
+                         "%s " "${module_name}/${module_version}:" \
+                         "Not available for ${OS}."
+	}
+
+	#......................................................................
+	check_supported_compilers() {
+		[[ -z "${SUPPORTED_COMPILERS}" ]] && return 0
+		for compiler in "${SUPPORTED_COMPILERS[@]}"; do
+			[[ ${compiler,,} == ${COMPILER,,} ]] && return 0
+		done
+		std::die 1 \
+                         "%s " "${module_name}/${module_version}:" \
+                         "Not available for ${COMPILER}."
+	}
+
+	#......................................................................
+	# non-redefinable post-install
+	post_install() {
+		install_doc() {
+			test -n "${MODULE_DOCFILES}" || return 0
+			local -r docdir="${PREFIX}/${_DOCDIR}/${module_name}"
+
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "Installing documentation to ${docdir}"
+			install -m 0755 -d \
+                                "${docdir}"
+			install -m0444 \
+                                "${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
+				"${docdir}"
+			return 0
+		}
+
+		#..............................................................
+		# install build-block
+		# Skip installation if modulefile does not exist.
+		install_pmodules_files() {
+			test -r "${BUILDBLOCK_DIR}/modulefile" || return 0
+
+			local -r target_dir="${PREFIX}/share/$GROUP/${module_name}"
+			install -m 0756 \
+                                -d "${target_dir}/files"
+			install -m0444 \
+                                "${BUILD_SCRIPT}" \
+                                "${target_dir}"
+			install -m0444 \
+                                "${BUILDBLOCK_DIR}/modulefile" \
+                                "${target_dir}"
+			#install -m0444 \
+                        #        "${variants_file}" \
+                        #        "${target_dir}/files"
+
+			local -r fname="${target_dir}/dependencies"
+			"${MODULECMD}" bash list -t 2>&1 1>/dev/null | \
+					grep -v "Currently Loaded" > "${fname}" || :
+		}
+
+		#..............................................................
+		# write run time dependencies to file
+		write_runtime_dependencies() {
+			local -r fname="${PREFIX}/.dependencies"
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "writing run-time dependencies to ${fname} ..."
+			local dep
+			echo -n "" > "${fname}"
+			for dep in "${runtime_dependencies[@]}"; do
+				[[ -z $dep ]] && continue
+				if [[ ! $dep =~ .*/.* ]]; then
+					# no version given: derive the version
+					# from the currently loaded module
+					dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null \
+							| grep "^${dep}/" )
+				fi
+				echo "${dep}" >> "${fname}"
+			done
+		}
+
+
+		# sometimes we need an system depended post-install
+		post_install_linux() {
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "running post-installation for ${OS} ..."
+			cd "${PREFIX}"
+			# solve multilib problem with LIBRARY_PATH
+                        # on 64bit Linux
+			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
+			return 0
+		}
+
+		cd "${BUILD_DIR}"
+		[[ "${OS}" == "Linux" ]] && post_install_linux
+		install_doc
+		install_pmodules_files
+		write_runtime_dependencies
+		return 0
+	}
+
+ 	#......................................................................
+	# Install modulefile
+	install_modulefile() {
+		local -r src="${BUILDBLOCK_DIR}/modulefile"
+		if [[ ! -r "${src}" ]]; then
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "skipping modulefile installation ..."
+			return
+		fi
+		# assemble name of modulefile
+		local dst="${overlay}/"
+		dst+="${GROUP}/"
+		dst+="${PMODULES_MODULEFILES_DIR}/"
+		dst+="${fully_qualified_module_name}"
+
+		# directory where to install modulefile
+ 		local -r dstdir=${dst%/*}
+
+		std::info \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
+                        "installing modulefile in '${dstdir}' ..."
+		mkdir -p "${dstdir}"
+		install -m 0444 "${src}" "${dst}"
+	}
+
+        install_release_file() {
+		local dst="${overlay}/"
+		dst+="${GROUP}/"
+		dst+="${PMODULES_MODULEFILES_DIR}/"
+		dst+="${fully_qualified_module_name}"
+
+		# directory where to install release file
+                local -r dstdir=${dst%/*}
+                mkdir -p "${dstdir}"
+                
+ 		local -r release_file="${dst%/*}/.release-${module_version}"
+
+                if [[ -r "${release_file}" ]]; then
+                        local release
+                        read release < "${release_file}"
+                        if [[ "${release}" != "${module_release}" ]]; then
+		                std::info \
+                                        "%s %s %s\n" \
+					"${module_name}/${module_version}:" \
+                                        "changing release from" \
+                                        "'${release}' to '${module_release}' ..."
+		                echo "${module_release}" > "${release_file}"
+                        fi
+                else
+		        std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "setting release to '${module_release}' ..."
+                        echo "${module_release}" > "${release_file}"
+                fi
+        }
+
+        cleanup_build() {
+                [[ ${enable_cleanup_build} == yes ]] || return 0
+	        [[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
+	        {
+		        cd "/${BUILD_DIR}/.." || std::die 42 "Internal error"
+		        [[ "$(pwd)" == "/" ]] && \
+		                std::die 1 \
+                                         "%s " "${module_name}/${module_version}:" \
+                                         "Oops: internal error:" \
+			     	         "BUILD_DIR is set to '/'"
+
+		        std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "Cleaning up '${BUILD_DIR}'..."
+		        rm -rf "${BUILD_DIR##*/}"
+	        };
+	        return 0
+        }
+
+        cleanup_src() {
+                [[ ${enable_cleanup_src} == yes ]] || return 0
+    	        {
+		        cd "/${SRC_DIR}/.." || std::die 42 "Internal error"
+		        [[ $(pwd) == / ]] && \
+		                std::die 1 \
+                                         "%s " "${module_name}/${module_version}:" \
+                                         "Oops: internal error:" \
+			     	         "SRC_DIR is set to '/'"
+		        std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "Cleaning up '${SRC_DIR}'..."
+		        rm -rf "${SRC_DIR##*/}"
+   	        };
+	        return 0
+        }
+        
+	build_target() {
+		local dir="$1"
+		local target="$2"
+		if [[ -e "${BUILD_DIR}/.${target}" ]] && \
+			   [[ ${force_rebuild} != 'yes' ]]; then
+                        return 0
+                fi
+		local targets=()
+		targets+=( "pre_${target}_${system}" "pre_${target}_${OS}" "pre_${target}" )
+		if typeset -F pbuild::${target}_${system} 1>/dev/null 2>&1; then
+			targets+=( "${target}_${system}" )
+		elif typeset -F pbuild::${target}_${OS} 1>/dev/null 2>&1; then
+			targets+=( "${target}_${OS}" )
+		else
+			targets+=( "${target}" )
+		fi
+		targets+=( "post_${target}_${system}" "post_${target}_${OS}" "post_${target}" )
+
+		for t in "${targets[@]}"; do
+			# We cd into the dir before calling the function -
+			# just to be sure we are in the right directory.
+			# 
+			# Executing the function in a sub-process doesn't
+			# work because in some function global variables 
+			# might/need to be set.
+			#
+			cd "${dir}"
+                        "pbuild::$t"
+		done
+		touch "${BUILD_DIR}/.${target}"
+	}
+
+	#......................................................................
+	# build module ${module_name}/${module_version}
+	build_module() {
+ 		std::info \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
+                        "start building ..."
+		[[ ${dry_run} == yes ]] && std::die 0 ""
+
+		mkdir -p "${SRC_DIR}"
+		mkdir -p "${BUILD_DIR}"
+
+ 		std::info \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
+                        "preparing sources ..."
+                # write stdout and stderr to logfile, stderr to terminal
+                # write all to logfile and terminal
+		build_target "${SRC_DIR}" prep
+		[[ "${build_target}" == "prep" ]] && return 0
+
+ 		std::info \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
+                        "configuring ..."
+		build_target "${BUILD_DIR}" configure
+		[[ "${build_target}" == "configure" ]] && return 0
+
+ 		std::info \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
+                        "compiling ..."
+		build_target "${BUILD_DIR}" compile
+		[[ "${build_target}" == "compile" ]] && return 0
+
+ 		std::info \
+                        "%s %s\n" \
+			"${module_name}/${module_version}:" \
+                        "installing ..."
+                mkdir -p "${PREFIX}"
+		build_target "${BUILD_DIR}" install
+		post_install
+
+		[[ "${build_target}" == "install" ]] && return 0
+
+		install_modulefile
+                install_release_file
+	        cleanup_build
+		cleanup_src
+                std::info \
+			"%s %s\n" \
+			"${module_name}/${module_version}:" \
+			"Done ..."
+		return 0
+	}
+	remove_module() {
+		if [[ -d "${PREFIX}" ]]; then
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "removing all files in '${PREFIX}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -rf ${PREFIX}
+		fi
+
+		# assemble name of modulefile
+		local dst="${overlay}/"
+		dst+="${GROUP}/"
+		dst+="${PMODULES_MODULEFILES_DIR}/"
+		dst+="${fully_qualified_module_name}"
+
+		# directory where to install modulefile
+ 		local -r dstdir=${dst%/*}
+
+		if [[ -e "${dst}" ]]; then
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "removing modulefile '${dst}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -v "${dst}"
+		fi
+		local release_file="${dstdir}/.release-${module_version}"
+		if [[ -e "${release_file}" ]]; then
+			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "removing release file '${release_file}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
+		fi
+		rmdir -p "${dstdir}" 2>/dev/null || :
+	}
+
+	########################################################################
+	#
+	# here we really start with make_all()
+	#
+
+	# setup module specific environment
+	if [[ "${bootstrap}" == 'no' ]]; then
+		check_supported_systems
+		check_supported_os
+		check_supported_compilers
+		set_full_module_name_and_prefix
+		if [[ "${module_release}" == 'removed' ]]; then
+			remove_module
+		elif [[ ! -d "${PREFIX}" ]] || \
+                             [[ "${force_rebuild}" == 'yes' ]]; then
+			build_module
+		else
+ 			std::info \
+                                "%s %s\n" \
+				"${module_name}/${module_version}:" \
+                                "already exists, not rebuilding ..."
+			if [[ "${opt_update_modulefiles}" == "yes" ]]; then
+				install_modulefile
+			fi
+                        install_release_file
+		fi
+	else
+		build_module
+	fi
+	return 0
+}
+
+pbuild.init_env() {
+        #......................................................................
+        #
+        # parse the passed version string
+        #
+        # the following global variables will be set in this function:
+        #       V_MAJOR
+        #       V_MINOR
+        #       V_PATCHLVL
+        #       V_RELEASE
+        #       USE_FLAGS
+        #
+        parse_version() {
+	        local v="$1"
+	        V_MAJOR=''		# first number in version string
+	        V_MINOR=''		# second number in version string (or empty)
+	        V_PATCHLVL=''		# third number in version string (or empty)
+	        V_RELEASE=''		# module release (or empty)
+	        USE_FLAGS=''		# architectures (or empty)
+                
+	        local tmp=''
+	
+	        if [[ "$v" =~ "_" ]]; then
+		        tmp="${v#*_}"
+		        USE_FLAGS=":${tmp//_/:}:"
+		        v="${v%%_*}"
+	        fi
+	        V_PKG="${v%%-*}"	# version without the release number
+	        V_RELEASE="${v#*-}"	# release number 
+                
+	        case "${V_PKG}" in
+		        *.*.* )
+			        V_MAJOR="${V_PKG%%.*}"
+			        tmp="${V_PKG#*.}"
+			        V_MINOR="${tmp%%.*}"
+			        V_PATCHLVL="${tmp#*.}"
+			        ;;
+		        *.* )
+			        V_MAJOR="${V_PKG%.*}"
+			        V_MINOR="${V_PKG#*.}"
+			        ;;
+		        * )
+			        V_MAJOR="${V_PKG}"
+			        ;;
+	        esac
+        }
+
+        local -r module_name="$1"
+        local -r module_version="$2"
+
+        SRC_DIR="${PMODULES_TMPDIR}/${module_name}-${module_version}/src"
+        BUILD_DIR="${PMODULES_TMPDIR}/${module_name}-${module_version}/build"
+
+        # P and V can be used in the build-script, so we have to set them here
+        P="${module_name}"
+        V="${module_version}"        
+	parse_version "${module_version}"
+
+        SOURCE_URLS=()
+        SOURCE_SHA256_SUMS=()
+        SOURCE_NAMES=()
+        CONFIGURE_ARGS=()
+        SUPPORTED_SYSTEMS=()
+	SUPPORTED_OS=()
+	SUPPORTED_COMPILERS=()
+        PATCH_FILES=()
+        PATCH_STRIPS=()
+        PATCH_STRIP_DEFAULT='1'
+        MODULE_DOCFILES=()
+        configure_with='undef'
+}
+
+pbuild.build_module() {
+        module_name="$1"
+        module_version="$2"
+        module_release="$3"
+        shift 3
+        with_modules=( "$@" )
+
+        # used in pbuild::make_all
+	declare bootstrap='no'
+	declare -a runtime_dependencies=()
 
 	#......................................................................
 	#
@@ -715,7 +1166,8 @@ pbuild::make_all() {
 				 "${m}: module does not exist," \
 				 "cannot continue with dry run..."
 
-		std::info "$m: module does not exist, trying to build it..."
+		std::info "%s\n" \
+			"$m: module does not exist, trying to build it..."
 		local args=( '' )
 		set -- ${ARGS[@]}
 		while (( $# > 0 )); do
@@ -816,383 +1268,23 @@ pbuild::make_all() {
                                          "since the dependency '$m' is ${release_of_dependency}"
 			fi
 			
-			echo "Loading module: ${m}"
+			std::info "Loading module: ${m}\n"
 			module load "${m}"
 		done
 	}
 
-	#......................................................................
-	# non-redefinable post-install
-	post_install() {
-		install_doc() {
-			test -n "${MODULE_DOCFILES}" || return 0
-			local -r docdir="${PREFIX}/${_DOCDIR}/${module_name}"
+        MODULECMD="${PMODULES_HOME}/bin/modulecmd"
+        [[ -x ${MODULECMD} ]] || \
+	        std::die 2 "No such file or executable -- '${MODULECMD}'"
 
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "Installing documentation to ${docdir}"
-			install -m 0755 -d \
-                                "${docdir}"
-			install -m0444 \
-                                "${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
-				"${docdir}"
-			return 0
-		}
+        eval $( "${MODULECMD}" bash use unstable )
+        eval $( "${MODULECMD}" bash use deprecated )
+	eval $( "${MODULECMD}" bash purge )
 
-		#..............................................................
-		# install build-block
-		# Skip installation if modulefile does not exist.
-		install_pmodules_files() {
-			test -r "${BUILDBLOCK_DIR}/modulefile" || return 0
-
-			local -r target_dir="${PREFIX}/share/$GROUP/${module_name}"
-			install -m 0756 \
-                                -d "${target_dir}/files"
-			install -m0444 \
-                                "${BUILD_SCRIPT}" \
-                                "${target_dir}"
-			install -m0444 \
-                                "${BUILDBLOCK_DIR}/modulefile" \
-                                "${target_dir}"
-			#install -m0444 \
-                        #        "${variants_file}" \
-                        #        "${target_dir}/files"
-
-			local -r fname="${target_dir}/dependencies"
-			"${MODULECMD}" bash list -t 2>&1 1>/dev/null | \
-					grep -v "Currently Loaded" > "${fname}" || :
-		}
-
-		#..............................................................
-		# write run time dependencies to file
-		write_runtime_dependencies() {
-			local -r fname="${PREFIX}/.dependencies"
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "writing run-time dependencies to ${fname} ..."
-			local dep
-			echo -n "" > "${fname}"
-			for dep in "${runtime_dependencies[@]}"; do
-				[[ -z $dep ]] && continue
-				if [[ ! $dep =~ .*/.* ]]; then
-					# no version given: derive the version
-					# from the currently loaded module
-					dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null \
-							| grep "^${dep}/" )
-				fi
-				echo "${dep}" >> "${fname}"
-			done
-		}
-
-
-		# sometimes we need an system depended post-install
-		post_install_linux() {
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "running post-installation for ${system} ..."
-			cd "${PREFIX}"
-			# solve multilib problem with LIBRARY_PATH
-                        # on 64bit Linux
-			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
-			return 0
-		}
-
-		cd "${BUILD_DIR}"
-		[[ "${system}" == "Linux" ]] && post_install_linux
-		install_doc
-		install_pmodules_files
-		write_runtime_dependencies
-		return 0
-	}
-
- 	#......................................................................
-	# Install modulefile
-	install_modulefile() {
-		local -r src="${BUILDBLOCK_DIR}/modulefile"
-		if [[ ! -r "${src}" ]]; then
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "skipping modulefile installation ..."
-			return
-		fi
-		# assemble name of modulefile
-		local dst="${overlay}/"
-		dst+="${GROUP}/"
-		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${fully_qualified_module_name}"
-
-		# directory where to install modulefile
- 		local -r dstdir=${dst%/*}
-
-		std::info \
-                        "%s " "${module_name}/${module_version}:" \
-                        "installing modulefile in '${dstdir}' ..."
-		mkdir -p "${dstdir}"
-		install -m 0444 "${src}" "${dst}"
-	}
-
-        install_release_file() {
-		local dst="${overlay}/"
-		dst+="${GROUP}/"
-		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${fully_qualified_module_name}"
-
-		# directory where to install release file
-                local -r dstdir=${dst%/*}
-                mkdir -p "${dstdir}"
-                
- 		local -r release_file="${dst%/*}/.release-${module_version}"
-
-                if [[ -r "${release_file}" ]]; then
-                        local release
-                        read release < "${release_file}"
-                        if [[ "${release}" != "${module_release}" ]]; then
-		                std::info \
-                                        "%s " "${module_name}/${module_version}:" \
-                                        "changing release from" \
-                                        "'${release}' to '${module_release}' ..."
-		                echo "${module_release}" > "${release_file}"
-                        fi
-                else
-		        std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "setting release to '${module_release}' ..."
-                        echo "${module_release}" > "${release_file}"
-                fi
-        }
-
-        cleanup_build() {
-                [[ ${enable_cleanup_build} == yes ]] || return 0
-	        [[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
-	        {
-		        cd "/${BUILD_DIR}/.." || std::die 42 "Internal error"
-		        [[ "$(pwd)" == "/" ]] && \
-		                std::die 1 \
-                                         "%s " "${module_name}/${module_version}:" \
-                                         "Oops: internal error:" \
-			     	         "BUILD_DIR is set to '/'"
-
-		        std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "Cleaning up '${BUILD_DIR}'..."
-		        rm -rf "${BUILD_DIR##*/}"
-	        };
-	        return 0
-        }
-
-        cleanup_src() {
-                [[ ${enable_cleanup_src} == yes ]] || return 0
-    	        {
-		        cd "/${SRC_DIR}/.." || std::die 42 "Internal error"
-		        [[ $(pwd) == / ]] && \
-		                std::die 1 \
-                                         "%s " "${module_name}/${module_version}:" \
-                                         "Oops: internal error:" \
-			     	         "SRC_DIR is set to '/'"
-		        std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "Cleaning up '${SRC_DIR}'..."
-		        rm -rf "${SRC_DIR##*/}"
-   	        };
-	        return 0
-        }
-        
-	build_target() {
-		local dir="$1"
-		local target="$2"
-		if [[ -e "${BUILD_DIR}/.${target}" ]] && \
-			   [[ ${force_rebuild} != 'yes' ]]; then
-                        return 0
-                fi
-		local targets=()
-		targets+=( "pre_${target}_${system}" "pre_${target}" )
-		targets+=( "${target}" )
-		targets+=( "post_${target}_${system}" "post_${target}" )
-
-		for t in "${targets[@]}"; do
-			# We cd into the dir before calling the function -
-			# just to be sure we are in the right directory.
-			# 
-			# Executing the function in a sub-process doesn't
-			# work because in some function global variables 
-			# might/need to be set.
-			#
-			cd "${dir}" && "pbuild::$t" || std::die 42 "Aborting ..."
-		done
-		touch "${BUILD_DIR}/.${target}"
-	}
-
-	#......................................................................
-	# build module ${module_name}/${module_version}
-	build_module() {
-                local -r logfile="${BUILD_DIR}/pbuild.log"
-                if [[ "${verbose}" = 'yes' ]]; then
-                        local -r output="/dev/fd/1"
-                else
-                        local -r output="/dev/null"
-                fi
- 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
-                        "start building ..."
-		[[ ${dry_run} == yes ]] && std::die 0 ""
-
-		mkdir -p "${SRC_DIR}"
-		mkdir -p "${BUILD_DIR}"
-
- 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
-                        "preparing sources ..."
-		build_target "${SRC_DIR}" prep | tee "${logfile}" > ${output}
-		[[ "${build_target}" == "prep" ]] && return 0
-
- 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
-                        "configuring ..."
-		build_target "${BUILD_DIR}" configure | tee "${logfile}" >> ${output}
-		[[ "${build_target}" == "configure" ]] && return 0
-
- 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
-                        "compiling ..."
-		build_target "${BUILD_DIR}" compile | tee "${logfile}" >> ${output}
-		[[ "${build_target}" == "compile" ]] && return 0
-
- 		std::info \
-                        "%s " "${module_name}/${module_version}:" \
-                        "installing ..."
-                mkdir -p "${PREFIX}"
-		build_target "${BUILD_DIR}" install | tee "${logfile}" >> ${output}
-		post_install
-
-		[[ "${build_target}" == "install" ]] && return 0
-
-		install_modulefile
-                install_release_file
-	        cleanup_build
-		cleanup_src
-                std::info "%s" "${module_name}/${module_version}: Done ..."
-		return 0
-	}
-	remove_module() {
-		if [[ -d "${PREFIX}" ]]; then
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "removing all files in '${PREFIX}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -rf ${PREFIX}
-		fi
-
-		# assemble name of modulefile
-		local dst="${overlay}/"
-		dst+="${GROUP}/"
-		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${fully_qualified_module_name}"
-
-		# directory where to install modulefile
- 		local -r dstdir=${dst%/*}
-
-		if [[ -e "${dst}" ]]; then
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "removing modulefile '${dst}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -v "${dst}"
-		fi
-		local release_file="${dstdir}/.release-${module_version}"
-		if [[ -e "${release_file}" ]]; then
-			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "removing release file '${release_file}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
-		fi
-		rmdir -p --ignore-fail-on-non-empty "${dstdir}" 2>/dev/null
-	}
-
-	########################################################################
-	#
-	# here we really start with make_all()
-	#
-
-	# setup module specific environment
-	if [[ "${bootstrap}" == 'no' ]]; then
-		check_supported_systems
-		load_build_dependencies
-		set_full_module_name_and_prefix
-		if [[ "${module_release}" == 'removed' ]]; then
-			remove_module
-		elif [[ ! -d "${PREFIX}" ]] || \
-                             [[ "${force_rebuild}" == 'yes' ]]; then
-			build_module
-		else
- 			std::info \
-                                "%s " "${module_name}/${module_version}:" \
-                                "already exists, not rebuilding ..."
-			if [[ "${opt_update_modulefiles}" == "yes" ]]; then
-				install_modulefile
-			fi
-                        install_release_file
-		fi
-	else
-		build_module
-	fi
-	return 0
-}
-
-pbuild.init_env() {
-        #......................................................................
-        #
-        # parse the passed version string
-        #
-        # the following global variables will be set in this function:
-        #       V_MAJOR
-        #       V_MINOR
-        #       V_PATCHLVL
-        #       V_RELEASE
-        #       USE_FLAGS
-        #
-        parse_version() {
-	        local v="$1"
-	        V_MAJOR=''		# first number in version string
-	        V_MINOR=''		# second number in version string (or empty)
-	        V_PATCHLVL=''		# third number in version string (or empty)
-	        V_RELEASE=''		# module release (or empty)
-	        USE_FLAGS=''		# architectures (or empty)
-                
-	        local tmp=''
-	
-	        if [[ "$v" =~ "_" ]]; then
-		        tmp="${v#*_}"
-		        USE_FLAGS=":${tmp//_/:}:"
-		        v="${v%%_*}"
-	        fi
-	        V_PKG="${v%%-*}"	# version without the release number
-	        V_RELEASE="${v#*-}"	# release number 
-                
-	        case "${V_PKG}" in
-		        *.*.* )
-			        V_MAJOR="${V_PKG%%.*}"
-			        tmp="${V_PKG#*.}"
-			        V_MINOR="${tmp%%.*}"
-			        V_PATCHLVL="${tmp#*.}"
-			        ;;
-		        *.* )
-			        V_MAJOR="${V_PKG%.*}"
-			        V_MINOR="${V_PKG#*.}"
-			        ;;
-		        * )
-			        V_MAJOR="${V_PKG}"
-			        ;;
-	        esac
-        }
-
-        local -r module_name="$1"
-        local -r module_version="$2"
-
-        SRC_DIR="${TEMP_DIR}/${module_name}-${module_version}/src"
-        BUILD_DIR="${TEMP_DIR}/${module_name}-${module_version}/build"
-
-        # P and V can be used in the build-script, so we have to set them here
-        P="${module_name}"
-        V="${module_version}"        
-	parse_version "${module_version}"
+	# :FIXME: this is a hack!!!
+	# shouldn't this be set in the build-script?
+	eval $( "${MODULECMD}" bash use Libraries )
+        eval $( "${MODULECMD}" bash use System )
 
         unset	C_INCLUDE_PATH
         unset	CPLUS_INCLUDE_PATH
@@ -1213,40 +1305,9 @@ pbuild.init_env() {
         unset	F77
         unset	F90
 
-        SOURCE_URLS=()
-        SOURCE_SHA256_SUMS=()
-        SOURCE_NAMES=()
-        
-        CONFIGURE_ARGS=()
-        SUPPORTED_SYSTEMS=()
-        PATCH_FILES=()
-        PATCH_STRIPS=()
-        PATCH_STRIP_DEFAULT='1'
-        MODULE_DOCFILES=()
-        configure_with='undef'
-}
-
-
-pbuild.build_module() {
-        module_name="$1"
-        module_version="$2"
-        module_release="$3"
-        shift 3
-        with_modules=( "$@" )
-
-        MODULECMD="${PMODULES_HOME}/bin/modulecmd"
-        [[ -x ${MODULECMD} ]] || \
-	        std::die 2 "No such file or executable -- '${MODULECMD}'"
-
-        eval $( "${MODULECMD}" bash use unstable )
-        eval $( "${MODULECMD}" bash use deprecated )
-	eval $( "${MODULECMD}" bash purge )
-	# :FIXME: this is a hack!!!
-	# shouldn't this be set in the build-script?
-	eval $( "${MODULECMD}" bash use Libraries )
+	load_build_dependencies
 
         pbuild.init_env "${module_name}" "${module_version}"
-        source "${BUILD_SCRIPT}"
         pbuild::make_all
 }
 
@@ -1272,7 +1333,6 @@ pbuild.bootstrap() {
 
 	PATH+=":${PREFIX}/bin"
 	PATH+=":${PREFIX}/sbin"
-        source "${BUILD_SCRIPT}"
         pbuild::make_all
 }
 

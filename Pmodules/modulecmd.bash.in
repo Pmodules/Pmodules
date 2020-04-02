@@ -55,7 +55,7 @@ print_help() {
 
 export_env() {
 	case "${Shell}" in
-	bash | zsh )
+	sh | bash | zsh )
 		local -r fmt="export %s=\"%s\"; "
 		;;
 	csh | tcsh )
@@ -343,8 +343,10 @@ subcommand_load() {
 	# 	0: module is loadable
 	# 	1: either not a modulefile or unsused release
 	#
-	# Notes:
-	#	The variable 'release' in function 'subcommand_load()' will be set.
+	# The following variables in the enclosing function are set:
+        #       current_modulefile
+        #       prefix
+	#	release
 	#
 	is_available() {
 		local  m=$1
@@ -408,13 +410,7 @@ subcommand_load() {
 			[[ -z ${dep} ]] && continue
 			[[ ${dep:0:1} == \# ]] && continue
 			module_is_loaded "${dep}" && continue
-			local output=$( subcommand_load 'bash' "${dep}")
-			eval ${output}
-                        if [[ "${Shell}" == "bash" ]]; then
-                                echo ${output}
-                        else
-                                subcommand_load "${Shell}" "${dep}"
-                        fi
+                        subcommand_load "${dep}"
 		done < "${fname}"
 	}
 
@@ -521,6 +517,8 @@ subcommand_load() {
 		fi
 		local found=''
 		for flag in "${UseFlags[@]/#/_}" ""; do
+                        # :FIXME: this doesn't work if ${m} is a
+                        #         modulename without version
 			if is_available "${m}${flag}"; then
 				m+="${flag}"
 				found=':'
@@ -533,11 +531,12 @@ subcommand_load() {
 			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
 			std::die 3 ""
 		fi
+                if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]] \
+                           && [[ ! ${m} =~ / ]]; then
+                        m+="/${current_modulefile##*/}"
+                fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "module already loaded" \
-                                 "${m}"
+                        continue
 		fi
                 for root in "${!Overlays[@]}"; do
 		        if [[ ${current_modulefile} =~ ${root} ]]; then
@@ -552,7 +551,6 @@ subcommand_load() {
                     || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
-		eval "${output}"
 
                 # we do not want to print the error message we got from
                 # modulecmd, they are a bit ugly
@@ -573,21 +571,28 @@ subcommand_load() {
                                  "${error_txt}" \
                                  "${m}"
                 fi
-                if [[ "${Shell}" == "bash" ]]; then
+                if [[ "${Shell}" == "sh" ]]; then
+			# for sh-like shells just echo 
                         echo "${output}"
-                        echo "${error}" 1>&2
                 else
+			# re-run with right shell
                         "${modulecmd}" "${Shell}" ${opts} 'load' \
                                        "${current_modulefile}"
                 fi
+		eval "${output}"
+		if [[ -n "${error}" ]]; then
+                       	echo "${error}" 1>&2
+		fi
 
-		if [[ ${verbosity_lvl} != silent ]] && \
-                           [[ ${release} != stable ]]; then
-			std::info "%s %s: %s -- %s\n" \
+		local msg=$(printf "%s %s: %s -- %s" \
                                   "${CMD}" 'load' \
                                   "${release} module has been loaded" \
-                                  "${m}"
+                                  "${m}")
+		if [[ ${verbosity_lvl} != silent ]] && \
+                           [[ ${release} != stable ]]; then
+		        std::info "%s\n" "${msg}"
 		fi
+		logger "${msg}"
 	done
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
@@ -645,11 +650,14 @@ subcommand_unload() {
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
                 eval "${output}"
-                if [[ "${Shell}" == "bash" ]]; then
+		case ${Shell} in
+		sh | bash | zsh )
                         echo "${output}"
-                else
+			;;
+                * )
                         "${modulecmd}" "${Shell}" 'unload' "${arg}"
-                fi
+                	;;
+		esac
 	done
 }
 
@@ -1160,6 +1168,9 @@ subcommand_use() {
                                 done
                         fi
                 fi
+                if [[ -z ${GroupDepths[${arg}]} ]] && [[ -d "${PMODULES_ROOT}/${arg}" ]]; then
+			scan_groups "${PMODULES_ROOT}"
+		fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
                            (( ${GroupDepths[${arg}]} == 0 )); then
                         # argument is group in our root with depth 0
@@ -1851,7 +1862,7 @@ subcommand_search() {
 # help [module|sub-command]
 #
 Subcommands[help]='help'
-Options[help]='-o hHV? -l version -l help'
+Options[help]='-o hHV\? -l version -l help'
 Help[help]='
 USAGE:
         module [ switches ] [ subcommand ] [subcommand-args ]
@@ -2106,8 +2117,8 @@ subcommand_initclear() {
 # main
 #
 case "$1" in
-	bash | zsh )
-		declare Shell="$1"
+	sh | bash | zsh )
+		declare Shell="sh"
 		;;
 	csh | tcsh )
 		declare Shell='csh'

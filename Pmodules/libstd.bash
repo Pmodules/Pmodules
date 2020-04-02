@@ -271,6 +271,42 @@ There is NO WARRANTY, to the extent permitted by law."
     done
 }
 
+std.get_os_release_linux() {
+        local lsb_release=$(which lsb_release)
+        local ID=''
+        local VERSION_ID=''
+
+        if [[ -n $(which lsb_release) ]]; then
+                ID=$(lsb_release -is)
+                VERSION_ID=$(lsb_release -rs)
+        elif [[ -r '/etc/os-release' ]]; then
+	        source /etc/os-release
+        else
+                std::die 4 "Cannot determin OS release!\n"
+        fi
+
+	case "${ID}" in
+		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
+			echo "rhel${VERSION_ID%.*}"
+			;;
+		* )
+			echo "Unknown"
+			exit 1
+			;;
+	esac
+}
+std.get_os_release_macos() {
+	VERSION_ID=$(sw_vers -productVersion)
+	echo "macOS${VERSION_ID%.*}"
+}
+
+std::get_os_release() {
+	local -A func_map;
+	func_map['Linux']=std.get_os_release_linux
+	func_map['Darwin']=std.get_os_release_macos
+	${func_map[${OS}]}
+}
+
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
