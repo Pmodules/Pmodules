@@ -302,8 +302,9 @@ pmodules::install() {
 	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" || \
 		install -m 0755 "${config_file}" "$_"
 
-	mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
 	mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
+	mkdir -p "${PMODULES_ROOT}/Programming/modulefiles"
+	mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
 	test -e "${PMODULES_DISTFILESDIR}" || mkdir -p "$_"
 
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
