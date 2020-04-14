@@ -274,6 +274,10 @@ proc ModulesHelp { } {
 proc _find_overlay { modulefile_components } {
         debug "_is_in_overlay"
         foreach overlay $::PmodulesOverlays  {
+                debug "$overlay"
+                if { [string range $overlay end end] == "/" } {
+                        set overlay [string range $overlay 0 end-1]
+                }
                 set	overlay_components	[file split $overlay]
                 set	overlay_num_components	[llength $overlay_components]
                 set	modulefile_root	[file join \
