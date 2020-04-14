@@ -42,6 +42,62 @@ declare configure_with='undef'
 
 #..............................................................................
 #
+# compare to version numbers
+#
+# original implementation found on stackoverflow:
+# https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash
+#
+pbuild::version_compare () {
+        is_uint() {
+                [[ $1 =~ ^[0-9]+$ ]]
+        }
+
+        [[ $1 == $2 ]] && return 0
+        local IFS=.
+        local i ver1=($1) ver2=($2)
+        
+        # fill empty fields in ver1 with zeros
+        for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+                ver1[i]=0
+        done
+        for ((i=0; i<${#ver1[@]}; i++)); do
+                [[ -z ${ver2[i]} ]] && ver2[i]=0
+                if is_uint ${ver1[i]} && is_uint ${ver2[i]}; then
+                        ((10#${ver1[i]} > 10#${ver2[i]})) && return 1
+                        ((10#${ver1[i]} < 10#${ver2[i]})) && return 2
+                else
+                        [[ ${ver1[i]} > ${ver2[i]} ]] && return 1
+                        [[ ${ver1[i]} < ${ver2[i]} ]] && return 2
+                fi
+        done
+        return 0
+}
+
+pbuild::version_lt() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 2 ))
+}
+
+pbuild::version_le() {
+        pbuild::version_compare "$1" "$2"
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code = 2 )) 
+}
+
+
+pbuild::version_gt() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 1 ))
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code = 1 )) 
+}
+
+pbuild::version_eq() {
+        pbuild::version_compare "$1" "$2"
+}
+
+#..............................................................................
+#
 # The following variables are available in build-blocks and set read-only
 # :FIXME: do we have to export them?
 
