@@ -119,7 +119,7 @@ MISCELLANEOUS OPTIONS:
 	remove all files created during building.
 
 --distdir
-	Directory wwhere to store and lookup downloaded files.
+	Directory where to store and lookup downloaded files.
 
 --tmpdir
         Directory used for building a module.
@@ -255,7 +255,8 @@ parse_args() {
                         overlay=$2
                         ;;
                 --overlay=* )
-                        overlay=${1*=}
+                        overlay=${1/*=}
+                        ;;
                 -- )
                         :
                         ;;
