@@ -1168,20 +1168,8 @@ subcommand_use() {
 	}
 
 	use () {
-		local arg=$1
-
-		if is_release "${arg}"; then
-                        # argument is release
-			std::append_path UsedReleases "${arg}"
-                        return
-                fi
-		if [[ "${arg}" =~ "flag=" ]]; then
-                        # argument is flag
-			std::append_path UseFlags "${arg/flag=}"
-                        return
-                fi
-                if [[ "${arg}" =~ "overlay=" ]]; then
-                        local overlay="${arg/overlay=}"
+                use_overlay() {
+                        local overlay="$1"
                         [[ -d "${overlay}" ]] || \
                                 std::die 3 "%s %s: %s -- %s\n" \
                                         "${CMD}" "${subcommand}" \
@@ -1207,6 +1195,37 @@ subcommand_use() {
                                         "overlay already in use" \
                                         "${overlay}"
                         fi
+                }
+
+                use_group() {
+			std::append_path UsedGroups "$1"
+                        local overlay group
+                        for overlay in "${!Overlays[@]}"; do
+                                for group in ${UsedGroups//:/ }; do
+                                        local dir="${overlay}/"
+                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                        if [[ -d "${dir}" ]]; then
+                                                std::prepend_path MODULEPATH "${dir}"
+                                        fi
+                                done
+                        done
+                }
+                
+		local arg=$1
+
+		if is_release "${arg}"; then
+                        # argument is release
+			std::append_path UsedReleases "${arg}"
+                        return
+                fi
+		if [[ "${arg}" =~ "flag=" ]]; then
+                        # argument is flag
+			std::append_path UseFlags "${arg/flag=}"
+                        return
+                fi
+                if [[ "${arg}" =~ "overlay=" ]]; then
+                        local overlay="${arg/overlay=}"
+                        use_overlay "${overlay}"
                         return
                 fi
 
@@ -1222,17 +1241,7 @@ subcommand_use() {
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
                            (( ${GroupDepths[${arg}]} == 0 )); then
                         # argument is group with depth 0
-			std::append_path UsedGroups "${arg}"
-                        local overlay group
-                        for overlay in "${!Overlays[@]}"; do
-                                for group in ${UsedGroups//:/ }; do
-                                        local dir="${overlay}/"
-                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
-                                        if [[ -d "${dir}" ]]; then
-                                                std::prepend_path MODULEPATH "${dir}"
-                                        fi
-                                done
-                        done
+			use_group "${arg}"
                         return
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
