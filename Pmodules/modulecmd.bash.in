@@ -1778,7 +1778,11 @@ subcommand_search() {
 
                 print_default() {
                         fmt="%-20s %-10s %-12s %-s\n"
-                        func_print_header='print_header_default'
+                        if [[ ${opt_print_header} == 'yes' ]]; then
+                                func_print_header='print_header_default'
+                        else
+                                func_print_header='print_header_none'
+                        fi
                         func_print_line='print_line_default'
                 }
 
