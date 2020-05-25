@@ -394,6 +394,7 @@ subcommand_load() {
 		local output=''
 		local release=''
 		while read -a line; do
+                        [[ -z ${line} ]] && continue
 			release=${line[1]}
 			if [[ ! ":${UsedReleases}:" =~ "${release}" ]]; then
 				output+="module use ${release}; "
