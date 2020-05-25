@@ -747,7 +747,8 @@ get_available_modules() {
                         # implementations.
                         if [[ -n ${dirs} ]]; then
                         	while read mod; do
-			                get_release release "${dir}/${mod}" "${releases}" || continue
+			                get_release release "${dir}/${mod}" "${releases}" || \
+                                                continue
                                         if [[ -z ${dict[${mod}]} ]]; then
 			                        mods+=( "${mod}" ${release} )
                                                 dict[${mod}]=1
