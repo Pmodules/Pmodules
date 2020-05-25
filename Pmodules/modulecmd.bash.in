@@ -124,7 +124,12 @@ get_release() {
 		std::upvar $1 'stable'
 		return 0
 	fi
-
+        #
+        # In an overlay the name of the module-file is something like
+        #   dir/modulefiles/name/version
+        # the corresponding release file is
+        #   dir/modulefiles/name/.release-version
+        #
 	local -r releasefile="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${releasefile} ]]; then
 		# read releasefile, remove empty lines, spaces etc
