@@ -516,7 +516,8 @@ subcommand_load() {
 				MODULEPATH=""
 				modulepath=()
                                 for overlay in "${!Overlays[@]}"; do
-                                        MODULEPATH+=":${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
+                                        MODULEPATH+=":${overlay}/${group}/"
+                                        MODULEPATH+="${PMODULES_MODULEFILES_DIR}"
 				        modulepath+=( ${MODULEPATH} )
                                 done
 			fi
