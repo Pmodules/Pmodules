@@ -1588,8 +1588,6 @@ subcommand_purge() {
                          "no arguments allowd"
         fi
 	"${modulecmd}" "${Shell}" "${subcommand}"
-        reset_modulepath
-        reset_used_groups
 	export_env MODULEPATH
 }
 
