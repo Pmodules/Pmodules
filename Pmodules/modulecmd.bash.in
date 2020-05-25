@@ -1324,21 +1324,13 @@ unuse directory|group|release...
 
 subcommand_unuse() {
         local -r subcommand='unuse'
-        unuse() {
-                local arg=$1
+        local saved_IFS=${IFS};
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${saved_IFS}
 
-                if is_release "${arg}"; then
-                        # argument is release
-			std::remove_path UsedReleases "${arg}"
-                        return
-                fi
-		if [[ "${arg}" =~ "flag=" ]]; then
-                        # argument is flag
-			std::remove_path UseFlags "${arg/flag=}"
-                        return
-                fi
-                if [[ ${arg} =~ ^overlay= ]]; then
-                        local overlay="${arg/overlay=}"
+        unuse() {
+                unuse_overlay() {
                         [[ -d "${overlay}" ]] || \
                                 std::die 3 "%s %s: %s -- %s\n" \
                                          "${CMD}" "${subcommand}" \
@@ -1366,11 +1358,9 @@ subcommand_unuse() {
                                         fi
                                 done
                         fi
-                        return
-                fi
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} == 0 )); then
-                        # argument is group in our root with depth 0
+                }
+
+                unuse_group() {
                         local var="PMODULES_LOADED_${arg^^}"
                         if [[ -n "${!var}" ]]; then
                                 std::die 3 "%s %s: %s -- %s\n" \
@@ -1384,6 +1374,29 @@ subcommand_unuse() {
                                 local dir="${overlay}/${arg}/${PMODULES_MODULEFILES_DIR}"
 			        std::remove_path MODULEPATH "${dir}"
                         done
+                }
+
+                local arg=$1
+
+                if is_release "${arg}"; then
+                        # argument is release
+			std::remove_path UsedReleases "${arg}"
+                        return
+                fi
+		if [[ "${arg}" =~ "flag=" ]]; then
+                        # argument is flag
+			std::remove_path UseFlags "${arg/flag=}"
+                        return
+                fi
+                if [[ ${arg} =~ ^overlay= ]]; then
+                        local overlay="${arg/overlay=}"
+                        unuse_overlay "${overlay}"
+                        return
+                fi
+                if [[ -n ${GroupDepths[${arg}]} ]] &&
+                           (( ${GroupDepths[${arg}]} == 0 )); then
+                        # argument is group in our root with depth 0
+                        unuse_group "${arg}"
                         return
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
