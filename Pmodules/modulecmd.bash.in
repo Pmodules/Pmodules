@@ -318,68 +318,6 @@ USAGE:
 
 subcommand_load() {
         local -r subcommand='load'
-	local release='undef'
-	local current_modulefile=''
-	local prefix=''
-	local m=''
-
-	local saved_IFS="${IFS}";
-	IFS=':'
-	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
-
-	#
-	# Test whether a given module is available.
-	# The passed module-name can be
-	#
-	# - an absolute file- or link-name.
-	#   The module can be either in- or outside our hierarchy.
-	#
-	# - a relative file- or link-name.
-	#   The module can be either in- or outside out hierarchy.
-	#
-	# - specified with name and version (like gcc/5.2.0).
-	#   The module can be either in- or outside our hierarchy.
-	#
-	# - specified with name only (without version, like gcc).
-	#   The module can be either in- or outside our hierarchy.
-	#
-	# - directory in- or outsite our hierarchy (not supported by
-        #   modulecmd.tcl!)
-	#
-	# arguments:
-	# 	$1: module name or file
-	#
-	# possible return values:
-	# 	0: module is loadable
-	# 	1: either not a modulefile or unsused release
-	#
-	# The following variables in the enclosing function are set:
-        #       current_modulefile
-        #       prefix
-	#	release
-	#
-	is_available() {
-		local  m=$1
-		local -a array
-		#
-		# the next command assigns the absolute modulefile path
-		# to ${arry[0]} and if FOO_PREFIX or FOO_HOME is set, the
-		# value set there to ${array[1]}.
-		#
-		# The trick with the first line matching "_PREFIX" is not
-		# 100% reliable: One of the Pmodules extensions must be
-		# called before something like
-		#   setenv FOO_PREFIX bar
-		# can be used.
-		#
-		mapfile -t array  < <("${modulecmd}" 'bash' show "$m" 2>&1 | \
-			awk 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
-		current_modulefile="${array[0]}"
-		prefix="${array[1]}"
-		test -n "${current_modulefile}" || return 1
-		get_release release "${current_modulefile}" "${UsedReleases}"
-	}
 
 	#
 	# output load 'hints'
@@ -459,6 +397,13 @@ subcommand_load() {
                          "${CMD}" "${subcommand}" \
 		         "No module specified"
 	fi
+
+        local saved_IFS="${IFS}";
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${saved_IFS}
+
+        local m=''
 	for m in "${args[@]}"; do
 		if [[ "$m" =~ ":" ]]; then
 
@@ -531,48 +476,32 @@ subcommand_load() {
                                 g_env_must_be_saved='yes'
 			fi
 		fi
-		local found=''
-		for flag in "${UseFlags[@]/#/_}" ""; do
-                        # :FIXME: this doesn't work if ${m} is a
-                        #         modulename without version
-			if is_available "${m}${flag}"; then
-				m+="${flag}"
-				found=':'
-				break
-			fi
-		done
-		if [[ ! "${found}" ]]; then
-			std::info "%s %s: module unavailable -- %s\n" \
-                                  "${CMD}" 'load' "${m}"
-			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
-			std::die 3 ""
-		fi
-                #
-                # if the name of module to load is in an overlay and no version
-                # number is given - like in 'module load git', add the version
-                # number we get from 'module show $m'.
-                #
-                if [[ ! ${m} =~ / ]]; then
-                        for overlay in "${!Overlays[@]}"; do
-                                if [[ ${current_modulefile} =~ ^${overlay}/ ]]; then
-                                           m+="/${current_modulefile##*/}"
-                                fi
-                        done
+	        local current_modulefile=''
+                local release=''
+                if ! find_module current_modulefile release "${MODULEPATH}" "${m}"; then
+                        if [[ -z ${current_modulefile} ]]; then
+	                        std::info "%s %s: module does not exist -- %s\n" \
+                                          "${CMD}" 'load' "${m}"
+	                        std::die 3 ""
+                        else
+	                        std::info "%s %s: module unavailable -- %s\n" \
+                                          "${CMD}" 'load' "${m}"
+	                        [[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
+	                        std::die 3 ""
+                        fi
                 fi
-		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
+                if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
                         # already loaded
                         continue
 		fi
-                for overlay in "${!Overlays[@]}"; do
-		        if [[ ${current_modulefile} =~ ^${overlay}/ ]]; then
-			        # modulefile is in our hierarchy
-			        # ${prefix} was set in is_available()
-                                # called before!
-                                test -r "${prefix}/.info" && cat "$_" 1>&2
-			        test -r "${prefix}/.dependencies" && load_dependencies "$_"
-                                break
-		        fi
-                done
+
+                local prefix=$("${modulecmd}" 'bash' 'show' "${current_modulefile}" 2>&1 | \
+                                       awk '/_PREFIX |_HOME / {print $3; exit}')
+                if [[ -n ${prefix} ]]; then
+                        test -r "${prefix}/.info" && cat "$_" 1>&2
+			test -r "${prefix}/.dependencies" && load_dependencies "$_"
+                fi
+
 		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
                     || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
@@ -829,6 +758,92 @@ get_available_modules() {
 	        }
         done
 	echo "${mods[@]}"
+}
+
+#
+# find module(file) to load. Input arguments are
+#       $1      upvar: return module file
+#       $2      upvar: return module release
+#       $3      a modulepath (usually MODULEPATH)
+#       $4      module to load
+#
+# The module name can be
+#       name
+#       name/version
+#       name/version_flag
+#
+# Return
+#       return code 0 and modulefile in first argument
+#       return code 1 and modulefile in first argument
+#               if module
+#       return code 2
+#               if no modulefile could be found
+#       
+find_module() {
+	local saved_IFS=${IFS}; 
+	IFS=':'
+	local -a dirs=($3)
+	IFS=${saved_IFS}
+	local -r module="$4"
+
+        for dir in "${dirs[@]}"; do
+                test -d "${dir}" || continue
+                local -i col=$((${#dir} + 2 ))
+                local -a modules
+                local -a releases
+                if [[ ${module} == */* ]]; then
+                        # a version number has been specified. But we still might
+                        # have the same module/version with different use flags.
+                        # Releases we ignore in this case.
+                        modules=$(find "${dir}" -type f -not -name ".*" \
+                                       -ipath "${dir}/${module}*" \
+                                          | cut -b${col}-)
+                        for mod in "${modules[@]}"; do
+                                #
+                                # loop over all used flags. If a module with
+                                # a used flag is available load this module.
+		                for flag in "${UseFlags[@]/#/_}" ""; do
+                                        if [[ ${mod} == ${module}${flag} ]]; then
+                                                std::upvar $1 "${dir}/${mod}"
+                                                get_release release \
+                                                            "${dir}/${mod}" \
+                                                            "${UsedReleases}"
+                                                std::upvar $2 "${release}"
+                                                return 0
+                                        fi
+                                done
+                        done
+                else
+                        # no version has been specified. This makes it more
+                        # difficult. We have to load the newest version taking
+                        # the used releases and flags into account.
+                        (( col += ${#module} + 1 ))
+                        modules=( $(find "${dir}" -type f -not -name ".*" \
+                                         -ipath "${dir}/${module}/*"  \
+                                            | cut -b${col}- \
+                                            | sort -rV ) )
+                        modules=( "${modules[@]/#/${module}/}" )
+                        releases=":${UsedReleases}:"
+                        for mod in "${modules[@]}"; do
+                                #
+                                # loop over all used flags. If a module with
+                                # a used flag is available load this module.
+                                local release=''
+		                for flag in "${UseFlags[@]/#/_}" ""; do
+                                        if [[ ${mod} == ${module}/*${flag} ]]; then
+                                                std::upvar $1 "${dir}/${mod}"
+                                                get_release release \
+                                                            "${dir}/${mod}" \
+                                                            "${UsedReleases}"
+                                                std::upvar $2 "${release}"
+                                                [[ :${release}: =~ :${UsedReleases}: ]] && \
+                                                        return 0
+                                        fi
+                                done
+                        done
+                fi
+        done
+        return 1
 }
 
 ##############################################################################
