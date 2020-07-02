@@ -56,7 +56,7 @@ SELECT VARIANT TO BUILD:
 
 --system
         Specify the system for selecting a variants. Defaults to the
-	output of 'uname -s'.
+	OS version and release like 'rhel6'.
 
 --with=P/V
         Select variant to compile. Use multiple '--with' arguments
@@ -293,10 +293,10 @@ find_variants_files(){
         shopt -q nullglob || :
         local -i nullglob_set=$?
         shopt -s nullglob
-        local files=( "${BUILDBLOCK_DIR}"/*/variants\.${opt_system} )
-        files+=( "${BUILDBLOCK_DIR}"/*/variants.$(uname -s) )
+        local files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"\.${opt_system} )
+        files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
         local f
-	for f in "${BUILDBLOCK_DIR}"/*/variants; do
+	for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
 		[[ -e "${f}.${opt_system}" ]] \
                         || [[ -e "${f}.$(uname -s)" ]] \
                         || files+=( "$f" )
@@ -328,7 +328,7 @@ expand_variants_file(){
 		# skip empty and comment lines
 		[[ -z ${toks} ]] && continue
 		[[ ${toke:0:1} == '#' ]] && continue
-
+                # ignore first (module/version) and second (release) token
 		deps=( ${toks[*]:2} )
 		expand_deps "${toks[0]} ${toks[1]}" "${deps[@]}"
 	done < "${input}"
