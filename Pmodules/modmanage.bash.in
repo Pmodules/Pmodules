@@ -573,12 +573,15 @@ subcommand_install() {
 		# compute filename with dependencies of given module
 		local -i i=0 n=0
 		std::split_fname items n "${modulefile}"
-		local fname_dependencies="${src_prefix}/${items[0]}"
+		local prefix="${src_prefix}/${items[0]}"
 		for (( i = n-2; i >= 2; i-=2 )); do
-			fname_dependencies+="/${items[$i]}/${items[i+1]}"
+			prefix+="/${items[$i]}/${items[i+1]}"
 		done
-		fname_dependencies+='/.dependencies'
-		[[ -r ${fname_dependencies} ]] || return 0
+                local tmpfile=$(mktemp /tmp/Pmodules_XXXXXX)
+
+		local fname_dependencies="${prefix}/.dependencies"
+		[[ -r "${prefix}/.dependencies" ]] && cat "$_" > "${tmpfile}"
+                [[ -r "${prefix}/.install_dependencies" ]] && cat "$_" >> "${tmpfile}"
 
 		# loop over all dependecies
 		local dep
@@ -588,7 +591,8 @@ subcommand_install() {
 			[[ -z ${dep} ]] && continue
 
 			# search for module with current modulepath and remember
-			local modulename=$(find "${modulepath[@]}" -path "*/${dep}" 2>/dev/null | head -n 1 )
+			local modulename=$(find "${modulepath[@]}" -path "*/${dep}" \
+                                                2>/dev/null | head -n 1 )
 			[[ -n ${modulename} ]] || \
 			        std::die 3 "Oops: required module '${dep}' not found!"
 			modulename=${modulename/${src_prefix}\/}
@@ -596,11 +600,13 @@ subcommand_install() {
 			resolve_dependencies_of_module "${modulename}"
 			# append new node in hierarchy to modulepath
 			if [[ -n ${map_to_family[${dep}]} ]]; then
-				local path="${src_prefix}/${map_to_family[${dep}]}/${PMODULES_MODULEFILES_DIR}/"
+				local path="${src_prefix}/${map_to_family[${dep}]}/"
+                                path+="${PMODULES_MODULEFILES_DIR}/"
 				path+="${modulename/*\/${PMODULES_MODULEFILES_DIR}\/}"
 				modulepath+=( "${path}" )
 			fi
-		done < "${fname_dependencies}"
+		done < "${tmpfile}"
+                rm "${tmpfile}"
 	}
 
 	#......................................................................
