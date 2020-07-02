@@ -20,6 +20,15 @@ unset __path
 #.............................................................................
 # disable auto-echo feature of 'cd'
 unset CDPATH
+
+#.............................................................................
+# define constants
+declare -r BNAME_VARIANTS='variants'
+declare -r FNAME_RDEPS='.dependencies'
+declare -r FNAME_IDEPS='.install_dependencies'
+declare -r FNAME_BDEPS='.build_dependencies'
+
+#.............................................................................
 declare -A SOURCE_UNPACK_DIRS
 
 #.............................................................................
@@ -749,16 +758,17 @@ pbuild::make_all() {
 		#..............................................................
 		# write run time dependencies to file
 		write_runtime_dependencies() {
-			local -r fname="${PREFIX}/.dependencies"
+			local -r fname="$1"
+                        shift
 			std::info \
                                 "%s %s\n" \
 				"${module_name}/${module_version}:" \
                                 "writing run-time dependencies to ${fname} ..."
 			local dep
 			echo -n "" > "${fname}"
-			for dep in "${runtime_dependencies[@]}"; do
+			for dep in "$@"; do
 				[[ -z $dep ]] && continue
-				if [[ ! $dep =~ .*/.* ]]; then
+				if [[ ! $dep == */* ]]; then
 					# no version given: derive the version
 					# from the currently loaded module
 					dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null \
@@ -786,7 +796,16 @@ pbuild::make_all() {
 		[[ "${OS}" == "Linux" ]] && post_install_linux
 		install_doc
 		install_pmodules_files
-		write_runtime_dependencies
+                if [[ -n "${runtime_dependencies}" ]]; then
+		        write_runtime_dependencies \
+                                "${PREFIX}/${FNAME_RDEPS}" \
+                                "${runtime_dependencies[@]}"
+                fi
+                if [[ -n "${install_dependencies}" ]]; then
+		        write_runtime_dependencies \
+                                "${PREFIX}/${FNAME_IDEPS}" \
+                                "${install_dependencies[@]}"
+                fi
 		return 0
 	}
 
@@ -1125,6 +1144,7 @@ pbuild.build_module() {
         # used in pbuild::make_all
 	declare bootstrap='no'
 	declare -a runtime_dependencies=()
+        declare -a install_dependencies=()
 
 	#......................................................................
 	#
@@ -1236,6 +1256,10 @@ pbuild.build_module() {
 			elif [[ "${m:0:2}" == "r:" ]]; then
 				m=${m#*:}   # remove 'r:'
 				runtime_dependencies+=( "$m" )
+			elif [[ "${m:0:2}" == "R:" ]]; then
+                                m=${m#*:}   # remove 'R:'
+                                install_dependencies+=( "$m" )
+                                continue
 			else
 				runtime_dependencies+=( "$m" )
 			fi
