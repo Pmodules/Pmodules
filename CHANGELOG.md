@@ -12,6 +12,20 @@
 
 **Fixed bugs:**
 
+## Version 1.0.0rc7 (not yet released)
+
+**Added features:**
+
+- Support of run-time dependencies which are required but must not be loaded
+
+**Changed:**
+
+- Update to BASH 5.0
+- Update to Tcl 8.6.10
+
+**Fixed bugs:
+
+- installation of fallback shared libraries
 
 ## Version 1.0.0rc6
 
