@@ -307,9 +307,9 @@ pbuild::module_is_avail() {
 	local output=( $("${MODULECMD}" bash avail -a -m "$1" \
                                         2>&1 1>/dev/null) )
 	local i
-	for (( i=0; i+=2; i < ${#output[@]})); do
-		if [[ "${output[0]}" == "$1" ]]; then
-			std::upvar "${uvar}" "${output[1]}"
+	for (( i = 0; i < ${#output[@]}; i += 2 )); do
+		if [[ "${output[$i]}" == "$1" ]]; then
+			std::upvar "${uvar}" "${output[i+1]}"
 			return 0
 		fi
 	done
