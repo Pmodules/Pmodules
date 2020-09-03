@@ -1033,7 +1033,7 @@ subcommand_use() {
 		done
 
 		std::info "\nUsed flags:\n"
-		for flag in "${UseFlags//:/ }"; do
+		for flag in "${!UseFlags[@]}"; do
 			std::info "\t${flag}\n"
 		done
 
@@ -1061,7 +1061,7 @@ subcommand_use() {
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
-			std::append_path UseFlags "${arg/flag=}"
+			UseFlags["${arg/flag=}"]=1
                         return
                 fi
                 if [[ -z ${GroupDepths[${arg}]} ]] && [[ -d "${PMODULES_ROOT}/${arg}" ]]; then
@@ -1164,7 +1164,7 @@ subcommand_unuse() {
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
-			std::remove_path UseFlags "${arg/flag=}"
+			unset UseFlags["${arg/flag=}"]
                         return
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
@@ -1338,7 +1338,7 @@ pmodules_init() {
 	declare -gx MODULEPATH=''
 
 	declare -Ag GroupDepths='()'
-	declare -g  UseFlags=()
+	declare -Ag  UseFlags=()
         reset_modulepath
         reset_used_groups
         reset_used_releases
