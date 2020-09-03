@@ -971,8 +971,9 @@ pbuild::make_all() {
 	}
 	
 	build_target() {
-		local dir="$1"
-		local target="$2"
+		local dir="$1"		# src or build directory, depends on target
+		local target="$2"	# prep, configure, compile or install
+
 		if [[ -e "${BUILD_DIR}/.${target}" ]] && \
 			   [[ ${force_rebuild} != 'yes' ]]; then
 			return 0

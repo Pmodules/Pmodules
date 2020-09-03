@@ -55,15 +55,15 @@ print_help() {
 
 export_env() {
 	case "${Shell}" in
-	sh | bash | zsh )
-		local -r fmt="export %s=\"%s\"; "
-		;;
-	csh | tcsh )
-		local -r fmt="setenv %s \"%s\"; "
-		;;
-	* )
-		std::die 1 "Unsupported shell -- ${Shell}\n"
-		;;
+		sh | bash | zsh )
+			local -r fmt="export %s=\"%s\"; "
+			;;
+		csh | tcsh )
+			local -r fmt="setenv %s \"%s\"; "
+			;;
+		* )
+			std::die 1 "Unsupported shell -- ${Shell}\n"
+			;;
 	esac
 
 	while (( $# > 0 )); do
@@ -339,7 +339,7 @@ subcommand_load() {
 			fi
 			local group=${line[2]}
 	        	if [[ ! ":${UsedGroups}:" =~ ":${group}:" ]] && \
-                           (( ${GroupDepths[${group}]} == 0 )); then
+				   (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "
 			fi
 			output+="module load ${line[@]:3} ${line[0]}\n"
@@ -389,8 +389,8 @@ subcommand_load() {
 			* )
 				args+=( $1 )
 				;;
-			esac
-			shift
+		esac
+		shift
 	done
 	if (( ${#args[@]} == 0 )); then
                 std::die 2 "%s %s: %s\n" \
@@ -471,7 +471,7 @@ subcommand_load() {
                                         std::die 3 "%s %s: %s -- %s\n" \
                                                  "${CMD}" "${subcommand}" \
                                                  "illegal release name"
-                                                 "${release}"
+                                "${release}"
 				std::append_path UsedReleases "${release}"
                                 g_env_must_be_saved='yes'
 			fi
@@ -503,7 +503,7 @@ subcommand_load() {
                 fi
 
 		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-                    || std::die 1 "Oops: unable to create tmp file!\n"
+			|| std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
 
@@ -540,9 +540,9 @@ subcommand_load() {
 		fi
 
 		local msg=$(printf "%s %s: %s -- %s" \
-                                  "${CMD}" 'load' \
-                                  "${release} module has been loaded" \
-                                  "${m}")
+                                   "${CMD}" 'load' \
+                                   "${release} module has been loaded" \
+                                   "${m}")
 		if [[ ${verbosity_lvl} != silent ]] && \
                            [[ ${release} != stable ]]; then
 		        std::info "%s\n" "${msg}"
@@ -606,12 +606,12 @@ subcommand_unload() {
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
                 eval "${output}"
 		case ${Shell} in
-		sh | bash | zsh )
-                        echo "${output}"
-			;;
-                * )
-                        "${modulecmd}" "${Shell}" 'unload' "${arg}"
-                	;;
+			sh | bash | zsh )
+				echo "${output}"
+				;;
+			* )
+				"${modulecmd}" "${Shell}" 'unload' "${arg}"
+                		;;
 		esac
 	done
 }
@@ -1065,7 +1065,7 @@ compute_group_depth () {
         local group=${group##*/}
         [[ -n "${GroupDepths[${group}]}" ]] && return 0
 	local -i depth=$(find "${dir}" -depth \( -type f -o -type l \) \
-                          -printf "%d" -quit 2>/dev/null)
+                              -printf "%d" -quit 2>/dev/null)
 	(( depth-=2 ))
 	# if a group doesn't contain a modulefile, depth is negativ
 	# :FIXME: better solution?
@@ -1149,7 +1149,7 @@ subcommand_use() {
 		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
 			if ! group_is_used "${_group}" && (( depth == 0 )); then
-			    std::info "\t${_group}\n"
+				std::info "\t${_group}\n"
 			fi
 		done
 
@@ -1165,7 +1165,7 @@ subcommand_use() {
 		done
 
 		std::info "\nUsed flags:\n"
-		for flag in "${UseFlags//:/ }"; do
+		for flag in "${!UseFlags[@]}"; do
 			std::info "\t${flag}\n"
 		done
 
@@ -1195,9 +1195,9 @@ subcommand_use() {
                         local overlay="$1"
                         [[ -d "${overlay}" ]] || \
                                 std::die 3 "%s %s: %s -- %s\n" \
-                                        "${CMD}" "${subcommand}" \
-                                        "is not an overlay directory" \
-                                        "${overlay}"
+                                         "${CMD}" "${subcommand}" \
+                                         "is not an overlay directory" \
+                                         "${overlay}"
                         if [[ ! ${Overlays[${overlay}]} ]]; then
                                 Overlays[${overlay}]=1
                                 PMODULES_OVERLAYS+=:${overlay}
@@ -1214,9 +1214,9 @@ subcommand_use() {
                                 done
                         else
                                 std::info "%s %s: %s -- %s\n" \
-                                        "${CMD}" "${subcommand}" \
-                                        "overlay already in use" \
-                                        "${overlay}"
+                                          "${CMD}" "${subcommand}" \
+                                          "overlay already in use" \
+                                          "${overlay}"
                         fi
                 }
 
@@ -1243,7 +1243,7 @@ subcommand_use() {
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
-			std::append_path UseFlags "${arg/flag=}"
+			UseFlags["${arg/flag=}"]=1
                         return
                 fi
                 if [[ "${arg}" =~ "overlay=" ]]; then
@@ -1408,7 +1408,7 @@ subcommand_unuse() {
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
-			std::remove_path UseFlags "${arg/flag=}"
+			unset UseFlags["${arg/flag=}"]
                         return
                 fi
                 if [[ ${arg} =~ ^overlay= ]]; then
@@ -1584,7 +1584,7 @@ pmodules_init() {
 	declare -g  UsedGroups=''
 	declare -gx MODULEPATH=''
 	declare -Ag GroupDepths='()'
-	declare -g  UseFlags=()
+	declare -Ag  UseFlags=()
         reset_modulepath
         reset_used_groups
         reset_used_releases
@@ -1892,7 +1892,7 @@ subcommand_search() {
 		local -r module=$1
 		# write results to a temporary file for later processing
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-		    || std::die 1 "Oops: unable to create tmp file!\n"
+			|| std::die 1 "Oops: unable to create tmp file!\n"
 		local group
 		# loop over all groups
 		for group in "${!GroupDepths[@]}"; do
@@ -1900,10 +1900,10 @@ subcommand_search() {
 			# MODULEPATH inside current group
 			local depth=${GroupDepths[${group}]}
 			local mpaths=( $(find \
-					     "${src_prefix[@]/%//${group}/modulefiles}" \
-					     -type d \
-					     -mindepth ${depth} -maxdepth ${depth} \
-					     2>/dev/null))
+						 "${src_prefix[@]/%//${group}/modulefiles}" \
+						 -type d \
+						 -mindepth ${depth} -maxdepth ${depth} \
+						 2>/dev/null))
 			local mpath
                         local overlay
                         local unused
@@ -1924,9 +1924,9 @@ subcommand_search() {
 				# tmpfile: module/version release group group-
                                 # dependencies...
 				local mods=( $( get_available_modules \
-						    "${mpath}" \
-						    "${module}" \
-						    "${opt_use_releases}" ) )
+							"${mpath}" \
+							"${module}" \
+							"${opt_use_releases}" ) )
 				[[ ${#mods[@]} == 0 ]] && continue
 				for (( i=0; i<${#mods[@]}; i+=2 )); do
 					echo ${mods[i]} ${mods[i+1]} \
