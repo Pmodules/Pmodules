@@ -463,15 +463,21 @@ subcommand_load() {
 			fi
 		fi
 		local found=''
-		for flag in "${UseFlags[@]/#/_}" ""; do
-                        # :FIXME: this doesn't work if ${m} is a
-                        #         modulename without version
-			if is_available "${m}${flag}"; then
-				m+="${flag}"
+		for flag in "${!UseFlags[@]}"; do
+               	        # :FIXME: this doesn't work if ${m} is a
+                       	#         modulename without version
+			if is_available "${m}_${flag}"; then
+				m+="_${flag}"
 				found=':'
 				break
 			fi
 		done
+		if [[ ! "${found}" ]]; then
+			# no use-flags set
+			if is_available "${m}"; then
+				found=':'
+			fi
+		fi
 		if [[ ! "${found}" ]]; then
 			std::info "%s %s: module unavailable -- %s\n" \
                                   "${CMD}" 'load' "${m}"
