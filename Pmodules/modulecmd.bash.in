@@ -5,7 +5,7 @@
 # we have to unset CDPATH, otherwise 'cd' prints the directoy!
 unset CDPATH
 
-# used for some output only
+# used in some output messages only
 declare -r  CMD='module'
 
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
