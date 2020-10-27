@@ -289,6 +289,9 @@ std.get_os_release_linux() {
 		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
 			echo "rhel${VERSION_ID%.*}"
 			;;
+		Ubuntu )
+			echo "Ubuntu${VERSION_ID%.*}"
+			;;
 		* )
 			echo "Unknown"
 			exit 1
