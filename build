@@ -42,6 +42,70 @@ build [OPTIONS] configure|compile|install
 
 #-----------------------------------------------------------------------------
 #
+
+pmodules::help_help() {
+	echo "Usage: 
+$(basename $0) help help|configure|compile|install
+"
+	std::die 1 ""
+}
+
+pmodules::help() {
+	if (( $# > 1 )); then
+		pmodules::help_help
+	fi
+	case $1 in
+		help|configure|compile|install )
+			pmodules::help_$1
+			;;
+		* )
+			pmodules::help_help
+			;;
+	esac
+}
+
+#-----------------------------------------------------------------------------
+#
+pmodules::help_configure() {
+	echo "
+Usage: $(basename $0) configure [OPTION...]
+
+Configure and setup a new Pmodules environment. You need permissions
+to write to the installation root.
+
+Options:
+--config=FILE
+	Specify a different configuration filename to create. This option
+	can be used if you want to install multiple Pmodules environments
+	on the same system. The file will actually be created as a sym-
+	bolic link in
+       	  '${BOOTSSTRAP_DIR}/config'
+	 to
+	  '\${PMODULES_ROOT}/config/modbuild.conf'
+	Whereby '\${PMODULES_ROOT}' is the root of the Pmodules environment.
+       	The default is '${DEFAULT_MODBUILD_CONFIG}'.
+
+--pmodules-root=DIR
+	Root of the Pmodules environment installation. Everything will be
+	installed in a directory hierarchy with 'DIR' as prefix.
+       	The default is '${DEFAULT_PMODULES_ROOT}'.
+
+--distfilesdir=DIR
+	Directory where downloaded files are stored.
+	The default is '${DEFAULT_PMODULES_DISTFILESDIR}' in the 
+	Pmodules root directory.
+
+--tmpdir=DIR
+	Directory for temporary files.
+	The default is '${DEFAULT_PMODULES_TMPDIR}'
+
+--help
+	Print this help text.
+
+" 1>&2
+	std::die 1 ""
+}
+
 pmodules::configure() {
 	local install_root="${DEFAULT_PMODULES_ROOT}"
 	local distfilesdir="${DEFAULT_PMODULES_DISTFILESDIR}"
@@ -78,6 +142,9 @@ pmodules::configure() {
 			--tmpdir=* )
 				tmpdir="${1#*=}"
 				;;
+			--help | -h | -\? )
+				pmodules::help_configure
+				;;
 			-* )
 				std::die 1 "$1: illegal option"
 				;;
@@ -98,6 +165,13 @@ pmodules::configure() {
 
 #-----------------------------------------------------------------------------
 #
+pmodules::help_compile() {
+	echo "Usage: 
+$(basename $0) compile [OPTION...]
+"
+	std::die 1 ""
+}
+
 pmodules::compile() {
 	build () {
 		local -r name="$1"
@@ -188,6 +262,13 @@ pmodules::compile() {
 
 #-----------------------------------------------------------------------------
 #
+pmodules::help_install() {
+	echo "Usage: 
+$(basename $0) install [OPTION...]
+"
+	std::die 1 ""
+}
+
 pmodules::install() {
 	local opt_force='no'
 	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
@@ -344,7 +425,7 @@ while (( $# > 0 )); do
 		-* )
 			std::die 1 "$1: illegal option"
 			;;
-		configure | compile | install )
+		help | configure | compile | install )
 			subcmd="$1"
 			shift 1
 			subcmd_args=( "$@" )
