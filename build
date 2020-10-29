@@ -13,13 +13,14 @@ unset PMODULES_ROOT
 unset PMODULES_HOME
 unset PMODULES_DISTFILESDIR
 
+declare -rx CONFIG_DIR='config'
+declare -rx CONFIG_FILE='modbuild.conf'
+
 # defaults
 declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
 declare -rx DEFAULT_PMODULES_DISTFILESDIR="${DEFAULT_PMODULES_ROOT}/var/distfiles"
-declare -rx DEFAULT_MODBUILD_CONFIG='config/modbuild.conf'
-declare -rx DEFAULT_VERSIONS_CONFIG='config/versions.conf'
+declare -rx DEFAULT_VERSIONS_CONFIG="${CONFIG_DIR}/versions.conf"
 declare -rx DEFAULT_PMODULES_TMPDIR='/var/tmp/${USER}'
-
 
 #-----------------------------------------------------------------------------
 #
@@ -43,10 +44,11 @@ build [OPTIONS] configure|compile|install
 #-----------------------------------------------------------------------------
 #
 pmodules::configure() {
-	local install_root="${DEFAULT_PMODULES_ROOT}"
+	local pmodules_root="${DEFAULT_PMODULES_ROOT}"
 	local distfilesdir="${DEFAULT_PMODULES_DISTFILESDIR}"
 	local tmpdir="${DEFAULT_PMODULES_TMPDIR}"
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
+	local config_file=''
+	local opt_force='no'
 
 	while (( $# > 0 )); do
 		case "$1" in
@@ -57,12 +59,12 @@ pmodules::configure() {
 			--config=* )
 				config_file="${1#*=}"
 				;;
-			--install-root )
-				install_root="$2"
+			--pmodules-root )
+				pmodules_root="$2"
 				shift 1
 				;;
-			--install-root=* )
-				install_root="${1#*=}"
+			--pmodules-root=* )
+				pmodules_root="${1#*=}"
 				;;
 			--distfilesdir )
 				distfilesdir="$2"
@@ -70,6 +72,9 @@ pmodules::configure() {
 				;;
 			--distfilesdir=* )
 				distfilesdir="${1#*=}"
+				;;
+			-f | --force )
+				opt_force='yes'
 				;;
 			--tmpdir )
 				tmpdir="$2"
@@ -87,13 +92,52 @@ pmodules::configure() {
 		esac
 		shift 1
 	done
+	if [[ -n "${config_file}" ]]; then
+		config_file=$(std::abspath "${config_file}")
+		if [[ $(dirname "${config_file}" != "${BOOTSTRAP_DIR}/${CONFIG_DIR}" ]]; then
+			echo "Invalid directory for The configuration file." 1>&2
+			std::die 1 "The configuration file must be in '${BOOTSTRAP_DIR}/${CONFIG_DIR}'!"
+		fi
+	else
+		config_file="${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}"
+	fi
+	if [[ ! -d ${pmodules_root} ]]; then
+		echo "The root directory '${pmodules_root}' does not exist, trying to create it..."
+		if ! mkdir -p "${pmodules_root}"; then
+			std::die 1 "Creating the root directory failed!\nAborting..."
+		fi
+	fi
+	if [[ ! -w ${pmodules_root} ]]; then
+		std::die 1 "The root directory '${pmodules_root}' is not writable!\nAborting..."
+	fi
+	mkdir -p "${pmodules_root}/${CONFIG_DIR}" || \
+		std::die 1 "Aborting..."
 
-	sed_cmd="s:@PMODULES_ROOT@:${install_root}:g;"
+	if [[ "${opt_force}" == 'yes' ]]; then
+		rm -f "${BOOTSTRAP_DIR}/${CONFIG_DIR}/${config_file}"
+	fi
+
+	if [[ -L ${BOOTSTRAP_DIR}/${CONFIG_DIR}/${config_file} ]]; then
+		std::die 1 "The Pmodules environment has already been configured!
+Use the option --force to override.\nAborting..."
+	fi
+	sed_cmd="s:@PMODULES_ROOT@:${pmodules_root}:g;"
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
         sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
         
-	sed "${sed_cmd}" "${DEFAULT_MODBUILD_CONFIG}.in" > "${config_file}"
+	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}.in" \
+		> "${pmodules_root}/${CONFIG_DIR}/${CONFIG_FILE}" || \
+		std::die 1 "Cannot create configuration file in Pmodules root\nAborting..."
+	ln -s "${pmodules_root}/${CONFIG_DIR}/${CONFIG_FILE}" \
+		"${BOOTSTRAP_DIR}/${CONFIG_DIR}/${config_file}"
+
+	install -d -m 0755 "${PMODULES_HOME}/bin"
+	install -d -m 0755 "${PMODULES_HOME}/config"
+	install -d -m 0755 "${PMODULES_HOME}/init"
+	install -d -m 0755 "${PMODULES_HOME}/lib"
+	install -d -m 0755 "${PMODULES_HOME}/libexec"
+	install -d -m 0755 "${PMODULES_HOME}/sbin"
 }
 
 #-----------------------------------------------------------------------------
@@ -105,7 +149,6 @@ pmodules::compile() {
 		shift
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
-			"--debug" \
 			"--config=${config_file}" \
 			"--enable-cleanup" \
 			"--force-rebuild" \
@@ -115,7 +158,7 @@ pmodules::compile() {
 	}
 
 	local force='no'
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
+	local config_file=''
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -132,11 +175,11 @@ pmodules::compile() {
 			--config=* )
 				config_file=$(std::get_abspath "${1#*=}")
 				;;
-			--install-root )
+			--pmodules-root )
 				PMODULES_ROOT="$2"
 				shift 1
 				;;
-			--install-root=* )
+			--pmodules-root=* )
 				PMODULES_ROOT="${1#*=}"
 				;;
 			-f | --force )
@@ -152,13 +195,28 @@ pmodules::compile() {
 		shift 1
 	done
 
-	source "${config_file}"
-	install -d -m 0755 "${PMODULES_HOME}/bin"
-	install -d -m 0755 "${PMODULES_HOME}/config"
-	install -d -m 0755 "${PMODULES_HOME}/init"
-	install -d -m 0755 "${PMODULES_HOME}/lib"
-	install -d -m 0755 "${PMODULES_HOME}/libexec"
-	install -d -m 0755 "${PMODULES_HOME}/sbin"
+	if [[ -n "${config_file}" ]] && [[ -n "${PMODULES_ROOT}" ]]; then
+		std::die 1 "You cannot use the options '--config' and '--pmodules-root at the same time!"
+	fi
+	if [[ -n "${PMODULES_ROOT}" ]]; then
+		config_file="${PMODULES_ROOT}/${CONFIG_DIR}/${CONFIG_FILE}"
+	elif [[ -z "${config_file}" ]]; then
+		config_file="${BOOTSTRAP_DIR}/${CONFIG_DIR}/$(basename ${config_file})"
+	fi
+	if [[ ! -r "${config_file}" ]]; then
+		std::die 1 "Configuration file '${config_file}' does not exist or is not readable!"
+	fi
+	source "${config_file}" || std::die 1 "Cannot read configuration file '${config_file}'"
+
+	if [[ -z "${PMODULES_ROOT}" ]]; then
+		std::die 1 "Error in configuration file '${config_file}': PMODULE_ROOT not defined!"
+	fi
+	if [[ -z "${PMODULES_DISTFILESDIR}" ]]; then
+		std::die 1 "Error in configuration file '${config_file}': PMODULES_DISTFILESDIR not defined!"
+	fi
+	if [[ -z "${PMODULES_TMPDIR}" ]]; then
+		std::die 1 "Error in configuration file '${config_file}': PMODULE_TMPDIR not defined!"
+	fi
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/base64" ]] || [[ ${force} == 'yes' ]]; then
 		build coreutils
@@ -207,11 +265,11 @@ pmodules::install() {
 			--debug )
 				set -x
 				;;
-			--install-root )
+			--pmodules-root )
 				PMODULES_ROOT="$2"
 				shift 1
 				;;
-			--install-root=* )
+			--pmodules-root=* )
 				PMODULES_ROOT="${1#*=}"
 				;;
 			-f | --force )
