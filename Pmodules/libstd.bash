@@ -57,7 +57,7 @@ std::get_YN_answer() {
 # $1: filename
 std::get_abspath() {
 	local -r fname=$1
-	[[ -r "${fname}" ]] || return 1
+	#[[ -r "${fname}" ]] || return 1
 	if [[ -d ${fname} ]]; then
 		echo $(cd "${fname}" && pwd)
 	else

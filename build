@@ -1,4 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+	echo "BASH version >= 4 is required and must be available in PATH!" 1>&2
+	exit 1
+fi
 
 declare	BOOTSTRAP_DIR=$(dirname "$0")
 source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash" || { echo "Oops!" 1>&2; exit 42; }
@@ -6,20 +11,20 @@ source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash" || { echo "Oops!" 1>&2; exit 42; 
 declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
-# not used here
-unset PMODULES_ROOT
+# these variables need to be defined but must be initialized with an empty string
+declare -x PMODULES_ROOT=''
+PMODULES_HOME=''
+declare -x PMODULES_DISTFILESDIR=''
+declare -x PMODULES_TMPDIR=''
 
-# these variables are re-declared and set in the configuration file
-unset PMODULES_HOME
-unset PMODULES_DISTFILESDIR
+declare -rx CONFIG_DIR='config'
+declare -rx CONFIG_FILE='modbuild.conf'
 
 # defaults
 declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
-declare -rx DEFAULT_PMODULES_DISTFILESDIR="${DEFAULT_PMODULES_ROOT}/var/distfiles"
-declare -rx DEFAULT_MODBUILD_CONFIG='config/modbuild.conf'
-declare -rx DEFAULT_VERSIONS_CONFIG='config/versions.conf'
-declare -rx DEFAULT_PMODULES_TMPDIR='/var/tmp/${USER}'
-
+declare -rx DEFAULT_DISTFILES_DIR="var/distfiles"
+declare -rx DEFAULT_VERSIONS_CONFIG="${CONFIG_DIR}/versions.conf"
+declare -rx DEFAULT_TMPDIR='var/tmp/${USER}'
 
 #-----------------------------------------------------------------------------
 #
@@ -42,7 +47,6 @@ build [OPTIONS] configure|compile|install
 
 #-----------------------------------------------------------------------------
 #
-
 pmodules::help_help() {
 	echo "Usage: 
 $(basename $0) help help|configure|compile|install
@@ -50,6 +54,8 @@ $(basename $0) help help|configure|compile|install
 	std::die 1 ""
 }
 
+#-----------------------------------------------------------------------------
+#
 pmodules::help() {
 	if (( $# > 1 )); then
 		pmodules::help_help
@@ -62,6 +68,49 @@ pmodules::help() {
 			pmodules::help_help
 			;;
 	esac
+}
+
+#-----------------------------------------------------------------------------
+#
+read_config_file() {
+	local var="$1"
+	local fname="${!var}"
+	if [[ -n "${fname}" ]] && [[ -n "${PMODULES_ROOT}" ]]; then
+		std::die 1 "You cannot use the options '--config' and '--pmodules-root at the same time!"
+	fi
+	if [[ -n "${PMODULES_ROOT}" ]]; then
+		fname="${PMODULES_ROOT}/${CONFIG_DIR}/${CONFIG_FILE}"
+	elif [[ -n "${fname}" ]]; then
+		:
+	else
+		fname="${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}"
+	fi
+	if [[ ! -r "${fname}" ]]; then
+		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
+	fi
+
+	source "${fname}" || std::die 1 "Cannot read configuration file '${fname}'"
+
+	# we have to make these variables global, otherwise they are not set
+	# in the calling function
+	declare -g PMODULES_ROOT="${PMODULES_ROOT}"
+	declare -g PMODULES_HOME="${PMODULES_HOME}"
+	declare -g PMODULES_DISTFILESDIR="${PMODULES_DISTFILESDIR}"
+	declare -g PMODULES_TMPDIR="${PMODULES_TMPDIR}"
+
+	if [[ -z "${PMODULES_ROOT}" ]]; then
+		std::die 1 "Error in configuration file '${fname}': PMODULE_ROOT not defined!"
+	fi
+	if [[ -z "${PMODULES_VERSION}" ]]; then
+		std::die 1 "Error in configuration file '${fname}': PMODULE_VERSION not defined!"
+	fi
+	if [[ -z "${PMODULES_DISTFILESDIR}" ]]; then
+		std::die 1 "Error in configuration file '${fname}': PMODULES_DISTFILESDIR not defined!"
+	fi
+	if [[ -z "${PMODULES_TMPDIR}" ]]; then
+		std::die 1 "Error in configuration file '${fname}': PMODULE_TMPDIR not defined!"
+	fi
+	std::upvar "${var}" "${fname}"
 }
 
 #-----------------------------------------------------------------------------
@@ -106,11 +155,14 @@ Options:
 	std::die 1 ""
 }
 
+#-----------------------------------------------------------------------------
+#
 pmodules::configure() {
-	local install_root="${DEFAULT_PMODULES_ROOT}"
-	local distfilesdir="${DEFAULT_PMODULES_DISTFILESDIR}"
-	local tmpdir="${DEFAULT_PMODULES_TMPDIR}"
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
+	local pmodules_root="${DEFAULT_PMODULES_ROOT}"
+	local distfilesdir=''
+	local tmpdir=''
+	local config_file=''
+	local opt_force='no'
 
 	while (( $# > 0 )); do
 		case "$1" in
@@ -121,12 +173,12 @@ pmodules::configure() {
 			--config=* )
 				config_file="${1#*=}"
 				;;
-			--install-root )
-				install_root="$2"
+			--pmodules-root )
+				pmodules_root="$2"
 				shift 1
 				;;
-			--install-root=* )
-				install_root="${1#*=}"
+			--pmodules-root=* )
+				pmodules_root="${1#*=}"
 				;;
 			--distfilesdir )
 				distfilesdir="$2"
@@ -134,6 +186,9 @@ pmodules::configure() {
 				;;
 			--distfilesdir=* )
 				distfilesdir="${1#*=}"
+				;;
+			-f | --force )
+				opt_force='yes'
 				;;
 			--tmpdir )
 				tmpdir="$2"
@@ -154,13 +209,64 @@ pmodules::configure() {
 		esac
 		shift 1
 	done
+	if [[ -n "${config_file}" ]]; then
+		config_file=$(std::get_abspath "${config_file}")
+		if [[ $(dirname "${config_file}") != "${BOOTSTRAP_DIR}/${CONFIG_DIR}" ]]; then
+			echo "Invalid directory for The configuration file." 1>&2
+			std::die 1 "The configuration file must be in '${BOOTSTRAP_DIR}/${CONFIG_DIR}'!"
+		fi
+	else
+		config_file="${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}"
+	fi
+	if [[ ! -d ${pmodules_root} ]]; then
+		echo "The root directory '${pmodules_root}' does not exist, trying to create it..."
+		if ! mkdir -p "${pmodules_root}"; then
+			std::die 1 "Creating the root directory failed!\nAborting..."
+		fi
+	fi
+	if [[ ! -w ${pmodules_root} ]]; then
+		std::die 1 "The root directory '${pmodules_root}' is not writable!\nAborting..."
+	fi
+	mkdir -p "${pmodules_root}/${CONFIG_DIR}" || \
+		std::die 1 "Aborting..."
 
-	sed_cmd="s:@PMODULES_ROOT@:${install_root}:g;"
+	if [[ "${opt_force}" == 'yes' ]]; then
+		rm -f "${config_file}"
+	fi
+
+	if [[ -L "${config_file}" ]]; then
+		std::die 1 "The Pmodules environment has already been configured!
+Use the option --force to override.\nAborting..."
+	fi
+
+	[[ -z "${distfilesdir}" ]] && distfilesdir="${pmodules_root}/${DEFAULT_DISTFILES_DIR}"
+	[[ -z "${tmpdir}" ]] && tmpdir="${pmodules_root}/${DEFAULT_TMPDIR}"
+
+	sed_cmd="s:@PMODULES_ROOT@:${pmodules_root}:g;"
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
         sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
         
-	sed "${sed_cmd}" "${DEFAULT_MODBUILD_CONFIG}.in" > "${config_file}"
+	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}.in" \
+		> "${pmodules_root}/${CONFIG_DIR}/${CONFIG_FILE}" || \
+		std::die 1 "Cannot create configuration file in Pmodules root\nAborting..."
+	ln -s "${pmodules_root}/${CONFIG_DIR}/${CONFIG_FILE}" \
+		"${config_file}" || \
+		std::die 1 "Aborting..."
+
+	read_config_file 'config_file'
+	install -d -m 0755 "${PMODULES_HOME}/bin"
+	install -d -m 0755 "${PMODULES_HOME}/config"
+	install -d -m 0755 "${PMODULES_HOME}/init"
+	install -d -m 0755 "${PMODULES_HOME}/lib"
+	install -d -m 0755 "${PMODULES_HOME}/libexec"
+	install -d -m 0755 "${PMODULES_HOME}/sbin"
+	echo "Configuration:"
+	echo "  root of Pmodules environment: ${pmodules_root}"
+	echo "  Pmodule prefix:               ${PMODULES_HOME}"
+	echo "  tmp directory:                ${tmpdir}"
+	echo "  store for downloaded files:   ${distfilesdir}"
+	echo "Done..."
 }
 
 #-----------------------------------------------------------------------------
@@ -179,7 +285,6 @@ pmodules::compile() {
 		shift
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
-			"--debug" \
 			"--config=${config_file}" \
 			"--enable-cleanup" \
 			"--force-rebuild" \
@@ -188,8 +293,8 @@ pmodules::compile() {
 			std::die 3 "Compiling '${name}' failed!"
 	}
 
-	local force='no'
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
+	local opt_force='no'
+	local config_file=''
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -206,15 +311,15 @@ pmodules::compile() {
 			--config=* )
 				config_file=$(std::get_abspath "${1#*=}")
 				;;
-			--install-root )
+			--pmodules-root )
 				PMODULES_ROOT="$2"
 				shift 1
 				;;
-			--install-root=* )
+			--pmodules-root=* )
 				PMODULES_ROOT="${1#*=}"
 				;;
 			-f | --force )
-				force='yes'
+				opt_force='yes'
 				;;
 			-* )
 				std::die 1 "$1: illegal option"
@@ -226,35 +331,33 @@ pmodules::compile() {
 		shift 1
 	done
 
-	source "${config_file}"
-	install -d -m 0755 "${PMODULES_HOME}/bin"
-	install -d -m 0755 "${PMODULES_HOME}/config"
-	install -d -m 0755 "${PMODULES_HOME}/init"
-	install -d -m 0755 "${PMODULES_HOME}/lib"
-	install -d -m 0755 "${PMODULES_HOME}/libexec"
-	install -d -m 0755 "${PMODULES_HOME}/sbin"
+	echo "Configuration:"
+	echo "  root of Pmodules environment: ${pmodules_root}"
+	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 
-	if [[ ! -f "${PMODULES_HOME}/sbin/base64" ]] || [[ ${force} == 'yes' ]]; then
+	read_config_file config_file
+
+	if [[ ! -f "${PMODULES_HOME}/sbin/base64" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build coreutils
 	fi
 
-	if [[ ! -f "${PMODULES_HOME}/sbin/xgettext" ]] || [[ ${force} == 'yes' ]]; then
+	if [[ ! -f "${PMODULES_HOME}/sbin/xgettext" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build gettext
 	fi
 
-	if [[ ! -f "${PMODULES_HOME}/sbin/getopt" ]] || [[ ${force} == 'yes' ]]; then
+	if [[ ! -f "${PMODULES_HOME}/sbin/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build getopt
 	fi
 
-	if [[ ! -f "${PMODULES_HOME}/sbin/bash" ]] || [[ ${force} == 'yes' ]]; then
+	if [[ ! -f "${PMODULES_HOME}/sbin/bash" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build bash
 	fi
 
-	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${force} == 'yes' ]]; then
+	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build Tcl
 	fi
 
-	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${force} == 'yes' ]]; then
+	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build modules
 	fi
 	echo "Done..."
@@ -270,8 +373,8 @@ $(basename $0) install [OPTION...]
 }
 
 pmodules::install() {
+	local config_file=''
 	local opt_force='no'
-	local config_file="${BOOTSTRAP_DIR}/${DEFAULT_MODBUILD_CONFIG}"
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -288,11 +391,11 @@ pmodules::install() {
 			--debug )
 				set -x
 				;;
-			--install-root )
+			--pmodules-root )
 				PMODULES_ROOT="$2"
 				shift 1
 				;;
-			--install-root=* )
+			--pmodules-root=* )
 				PMODULES_ROOT="${1#*=}"
 				;;
 			-f | --force )
@@ -308,26 +411,15 @@ pmodules::install() {
 		shift 1
 	done
 
-	source "${config_file}"
-
-	if [[ ! -d "${PMODULES_ROOT}" ]]; then
-		read -p "The requested root directory does not exist. Create it? [y|N] " -n 1 ans
-		case ${ans} in 
-		y | Y )
-			mkdir -p "${PMODULES_ROOT}"
-			;;
-		* )
-			echo "Aborting ..." 1>&2
-			exit 2
-			;;
-		esac
-	fi
+	read_config_file 'config_file'
 
 	###
 	#
 	# begin installation
 	#
-	echo "Installing to ${PMODULES_HOME} ..."
+	echo "Configuration:"
+	echo "  root of Pmodules environment: ${PMODULES_ROOT}"
+	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 	sed_cmd="s:@PMODULES_HOME@:${PMODULES_HOME}:g;"
 	sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g;"
 	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
@@ -342,50 +434,31 @@ pmodules::install() {
 	sed_cmd+="s:@initdir@:${PMODULES_HOME}/init:g;"
 	sed_cmd+="s:@MODULES_RELEASE@:${PMODULES_VERSION}:g;"
 	
-	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in"   > "${SRC_DIR}/modulecmd.bash"
-	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${SRC_DIR}/modulecmd.tcl"
-        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in"         > "${SRC_DIR}/modbuild"
-	chmod 0755 "${SRC_DIR}/modbuild"
-	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${SRC_DIR}/modmanage.bash"
-	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in"     > "${SRC_DIR}/profile.bash"
-	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in"      > "${SRC_DIR}/profile.csh"
-	sed "${sed_cmd}" "${SRC_DIR}/profile.zsh.in"      > "${SRC_DIR}/profile.zsh"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in"     > "${PMODULES_ROOT}/${CONFIG_DIR}/profile.bash-${PMODULES_VERSION}"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in"      > "${PMODULES_ROOT}/${CONFIG_DIR}/profile.csh-${PMODULES_VERSION}"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.zsh.in"      > "${PMODULES_ROOT}/${CONFIG_DIR}/profile.zsh-${PMODULES_VERSION}"
+	chmod 0644 "${PMODULES_ROOT}/${CONFIG_DIR}"/*-${PMODULES_VERSION}
 
-	install -d -m 0755 "${PMODULES_HOME}/bin"
-	install -d -m 0755 "${PMODULES_HOME}/config"
-	install -d -m 0755 "${PMODULES_HOME}/init"
-	install -d -m 0755 "${PMODULES_HOME}/lib"
-	install -d -m 0755 "${PMODULES_HOME}/libexec"
-	install -d -m 0755 "${PMODULES_HOME}/sbin"
+	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/profile.bash" || \
+		install -m 0644 "$_-${PMODULES_VERSION}" "$_"
+
+	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/profile.csh" || \
+		install -m 0644 "$_-${PMODULES_VERSION}" "$_"
+
+	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/profile.zsh" || \
+		install -m 0644 "$_-${PMODULES_VERSION}" "$_"
+
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in"   > "${PMODULES_HOME}/libexec/modulecmd.bash"
+	chmod 0755 "${PMODULES_HOME}/libexec/modulecmd.bash"
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${PMODULES_HOME}/libexec/modulecmd.tcl"
+	chmod 0755 "${PMODULES_HOME}/libexec/modulecmd.tcl"
+        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in"         > "${PMODULES_HOME}/bin/modbuild"
+	chmod 0755 "${PMODULES_HOME}/bin/modbuild"
+	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${PMODULES_HOME}/libexec/modmanage.bash"
+	chmod 0755 "${PMODULES_HOME}/libexec/modmanage.bash"
 
 	install -m 0755 "${SRC_DIR}/modulecmd"		"${PMODULES_HOME}/bin"
-	install -m 0755 "${SRC_DIR}/modulecmd.bash"	"${PMODULES_HOME}/libexec"
-	install -m 0755 "${SRC_DIR}/modulecmd.tcl"	"${PMODULES_HOME}/libexec"
 	install -m 0755 "${SRC_DIR}/modmanage"		"${PMODULES_HOME}/bin"
-	install -m 0755 "${SRC_DIR}/modmanage.bash"	"${PMODULES_HOME}/libexec"
-	install -m 0755 "${SRC_DIR}/modbuild"		"${PMODULES_HOME}/bin"
-
-	install -m 0755 "${SRC_DIR}/profile.bash"	"${PMODULES_HOME}/config/profile.bash.sample"
-	install -m 0755 "${SRC_DIR}/profile.csh"	"${PMODULES_HOME}/config/profile.csh.sample"
-	install -m 0755 "${SRC_DIR}/profile.zsh"	"${PMODULES_HOME}/config/profile.zsh.sample"
-
-	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" || mkdir -p "$_"
-
-	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.bash" || \
-		install -m 0755 "${SRC_DIR}/profile.bash"	"$_"
-
-	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.csh" || \
-		install -m 0755 "${SRC_DIR}/profile.csh"	"$_"
-
-	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/profile.zsh" || \
-		install -m 0755 "${SRC_DIR}/profile.zsh"	"$_"
-
-	test -e "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modbuild.conf" || \
-		install -m 0755 "${config_file}" "$_"
-
-	mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
-	mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
-	test -e "${PMODULES_DISTFILESDIR}" || mkdir -p "$_"
 
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
@@ -400,9 +473,15 @@ pmodules::install() {
 	install -m 0644 "${SRC_DIR}/libmodules.tcl"	"${PMODULES_HOME}/lib/Pmodules"
 
 	{
+		PATH="${PMODULES_HOME}/sbin:${PATH}"
 		cd "${PMODULES_HOME}/lib/Pmodules"
 		"${BOOTSTRAP_DIR}/mkindex.tcl"
 	}
+
+	mkdir -p "${PMODULES_ROOT}/Tools/modulefiles"
+	mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
+
+	echo "Done..."
 }
 
 #=============================================================================
