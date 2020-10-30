@@ -1,7 +1,7 @@
 #!/usr/bin/env modbuild
 
 pbuild::set_download_url "ftp://ftp.tcl.tk/pub/tcl/tcl8_6/tcl$V-src.tar.gz"
-pbuild::install_docfiles 'license.terms' 'README*'
+pbuild::install_docfiles 'license.terms' 'README.md'
 
 pbuild::configure() {
 	case ${OS} in
