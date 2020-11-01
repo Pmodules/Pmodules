@@ -12,8 +12,7 @@ declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
 # these variables need to be defined but must be initialized with an empty string
-declare -x PMODULES_ROOT=''
-PMODULES_HOME=''
+declare -x PMODULES_HOME=''
 declare -x PMODULES_DISTFILESDIR=''
 declare -x PMODULES_TMPDIR=''
 
@@ -35,14 +34,46 @@ get_version() {
 
 declare -rx PMODULES_VERSION=$(get_version 'Pmodules')
 
-
 #-----------------------------------------------------------------------------
 #
 usage() {
+	local prog=$(basename $0)
 	echo "
-build [OPTIONS] configure|compile|install
+Usage: ${prog} help|configure|compile|install
+
+This script must be used to
+- Bootstrap/configure a new Pmodules environment,
+- compile and install the required tools
+- install a new Pmodules version
+
+Run
+
+    ${prog} help configure|compile|install
+
+or
+
+    ${prog} configure|compile|install --help
+
+to get help for a specific sub-command.
 "
 	std::die 1 ""
+}
+
+#-----------------------------------------------------------------------------
+#
+pmodules::help() {
+	if (( $# > 1 )); then
+		usage
+	fi
+	case $1 in
+		configure|compile|install )
+			pmodules::help_$1
+			;;
+		* )
+			echo -en "$1 - invalid sub-command!\n" 1>&2
+			usage
+			;;
+	esac
 }
 
 #-----------------------------------------------------------------------------
@@ -50,28 +81,11 @@ build [OPTIONS] configure|compile|install
 read_config_file() {
 	local var="$1"
 	local fname="${!var}"
-	if [[ -n "${fname}" ]] && [[ -n "${PMODULES_ROOT}" ]]; then
-		std::die 1 "You cannot use the options '--config' and '--pmodules-root at the same time!"
-	fi
-	if [[ -n "${PMODULES_ROOT}" ]]; then
-		fname="${PMODULES_ROOT}/${CONFIG_DIR}/${CONFIG_FILE}"
-	elif [[ -n "${fname}" ]]; then
-		:
-	else
-		fname="${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}"
-	fi
 	if [[ ! -r "${fname}" ]]; then
 		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
 	fi
 
 	source "${fname}" || std::die 1 "Cannot read configuration file '${fname}'"
-
-	# we have to make these variables global, otherwise they are not set
-	# in the calling function
-	declare -g PMODULES_ROOT="${PMODULES_ROOT}"
-	declare -g PMODULES_HOME="${PMODULES_HOME}"
-	declare -g PMODULES_DISTFILESDIR="${PMODULES_DISTFILESDIR}"
-	declare -g PMODULES_TMPDIR="${PMODULES_TMPDIR}"
 
 	if [[ -z "${PMODULES_ROOT}" ]]; then
 		std::die 1 "Error in configuration file '${fname}': PMODULE_ROOT not defined!"
@@ -85,13 +99,52 @@ read_config_file() {
 	if [[ -z "${PMODULES_TMPDIR}" ]]; then
 		std::die 1 "Error in configuration file '${fname}': PMODULE_TMPDIR not defined!"
 	fi
+
+	# we have to make these variables global, otherwise they are not set
+	# in the calling function
+	declare -g PMODULES_ROOT="${PMODULES_ROOT}"
+	declare -g PMODULES_HOME="${PMODULES_HOME}"
+	declare -g PMODULES_DISTFILESDIR="${PMODULES_DISTFILESDIR}"
+	declare -g PMODULES_TMPDIR="${PMODULES_TMPDIR}"
+
 	std::upvar "${var}" "${fname}"
 }
 
 #-----------------------------------------------------------------------------
 #
+pmodules::help_configure() {
+	echo "
+Usage: $(basename $0) configure [OPTION...]
+
+Configure and setup a new Pmodules environment. You need permissions
+to write to the installation root.
+
+Options:
+--prefix=DIR
+	Root of the Pmodules environment installation. Everything will be
+	installed in a directory hierarchy with 'DIR' as prefix.
+       	The default is '${DEFAULT_PMODULES_ROOT}'.
+
+--distfilesdir=DIR
+	Directory where downloaded files are stored.
+	The default is '${DEFAULT_PMODULES_DISTFILESDIR}' in the 
+	Pmodules root directory.
+
+--tmpdir=DIR
+	Directory for temporary files.
+	The default is '${DEFAULT_PMODULES_TMPDIR}'
+
+--help
+	Print this help text.
+
+" 1>&2
+	std::die 1 ""
+}
+
+#-----------------------------------------------------------------------------
+#
 pmodules::configure() {
-	local pmodules_root="${DEFAULT_PMODULES_ROOT}"
+	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
 	local distfilesdir=''
 	local tmpdir=''
 	local config_file=''
@@ -99,19 +152,12 @@ pmodules::configure() {
 
 	while (( $# > 0 )); do
 		case "$1" in
-			--config )
-				config_file="$2"
+			--prefix )
+				prefix="$2"
 				shift 1
 				;;
-			--config=* )
-				config_file="${1#*=}"
-				;;
-			--pmodules-root )
-				pmodules_root="$2"
-				shift 1
-				;;
-			--pmodules-root=* )
-				pmodules_root="${1#*=}"
+			--prefix=* )
+				prefix="${1#*=}"
 				;;
 			--distfilesdir )
 				distfilesdir="$2"
@@ -130,6 +176,9 @@ pmodules::configure() {
 			--tmpdir=* )
 				tmpdir="${1#*=}"
 				;;
+			--help | -h | -\? )
+				pmodules::help_configure
+				;;
 			-* )
 				std::die 1 "$1: illegal option"
 				;;
@@ -139,50 +188,39 @@ pmodules::configure() {
 		esac
 		shift 1
 	done
-	if [[ -n "${config_file}" ]]; then
-		config_file=$(std::get_abspath "${config_file}")
-		if [[ $(dirname "${config_file}") != "${BOOTSTRAP_DIR}/${CONFIG_DIR}" ]]; then
-			echo "Invalid directory for The configuration file." 1>&2
-			std::die 1 "The configuration file must be in '${BOOTSTRAP_DIR}/${CONFIG_DIR}'!"
-		fi
-	else
-		config_file="${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}"
-	fi
-	if [[ ! -d ${pmodules_root} ]]; then
-		echo "The root directory '${pmodules_root}' does not exist, trying to create it..."
-		if ! mkdir -p "${pmodules_root}"; then
+	if [[ ! -d ${prefix} ]]; then
+		echo "The root directory '${prefix}' does not exist, trying to create it..."
+		if ! mkdir -p "${prefix}"; then
 			std::die 1 "Creating the root directory failed!\nAborting..."
 		fi
 	fi
-	if [[ ! -w ${pmodules_root} ]]; then
-		std::die 1 "The root directory '${pmodules_root}' is not writable!\nAborting..."
+	if [[ ! -w ${prefix} ]]; then
+		std::die 1 "The root directory '${prefix}' is not writable!\nAborting..."
 	fi
-	mkdir -p "${pmodules_root}/${CONFIG_DIR}" || \
+	mkdir -p "${prefix}/${CONFIG_DIR}" || \
 		std::die 1 "Aborting..."
 
+	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
 	if [[ "${opt_force}" == 'yes' ]]; then
 		rm -f "${config_file}"
 	fi
 
-	if [[ -L "${config_file}" ]]; then
+	if [[ -e "${config_file}" ]]; then
 		std::die 1 "The Pmodules environment has already been configured!
 Use the option --force to override.\nAborting..."
 	fi
 
-	[[ -z "${distfilesdir}" ]] && distfilesdir="${pmodules_root}/${DEFAULT_DISTFILES_DIR}"
-	[[ -z "${tmpdir}" ]] && tmpdir="${pmodules_root}/${DEFAULT_TMPDIR}"
+	[[ -z "${distfilesdir}" ]] && distfilesdir="${prefix}/${DEFAULT_DISTFILES_DIR}"
+	[[ -z "${tmpdir}" ]] && tmpdir="${prefix}/${DEFAULT_TMPDIR}"
 
-	sed_cmd="s:@PMODULES_ROOT@:${pmodules_root}:g;"
+	sed_cmd="s:@PMODULES_ROOT@:${prefix}:g;"
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
         sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
         
 	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}.in" \
-		> "${pmodules_root}/${CONFIG_DIR}/${CONFIG_FILE}" || \
+		> "${config_file}" || \
 		std::die 1 "Cannot create configuration file in Pmodules root\nAborting..."
-	ln -s "${pmodules_root}/${CONFIG_DIR}/${CONFIG_FILE}" \
-		"${config_file}" || \
-		std::die 1 "Aborting..."
 
 	read_config_file 'config_file'
 	install -d -m 0755 "${PMODULES_HOME}/bin"
@@ -192,7 +230,7 @@ Use the option --force to override.\nAborting..."
 	install -d -m 0755 "${PMODULES_HOME}/libexec"
 	install -d -m 0755 "${PMODULES_HOME}/sbin"
 	echo "Configuration:"
-	echo "  root of Pmodules environment: ${pmodules_root}"
+	echo "  root of Pmodules environment: ${prefix}"
 	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 	echo "  tmp directory:                ${tmpdir}"
 	echo "  store for downloaded files:   ${distfilesdir}"
@@ -201,6 +239,37 @@ Use the option --force to override.\nAborting..."
 
 #-----------------------------------------------------------------------------
 #
+pmodules::help_compile() {
+	echo "
+Usage: $(basename $0) compile [OPTION...]
+
+Compile and install the required tools for a new Pmodules environment.
+ou need the permissions to write to the installation root.
+
+Options:
+--prefix=DIR
+	Root of the Pmodules environment installation. The root of the
+       	installation must be either specified via this option or the
+	environment variable PMODULES_ROOT. If this option is used and
+	the PMODULES_ROOT is set, the directory specified with this 
+	option will be used.
+
+--debug
+	Enable verbose/debug output.
+
+--disable-cleanup )
+	Do not cleanup the tmp directory after compilation and installation.
+
+--force | -f
+	Force compilation.
+
+--help
+	Print this help text.
+
+" 1>&2
+	std::die 1 ""
+}
+
 pmodules::compile() {
 	build () {
 		local -r name="$1"
@@ -216,33 +285,30 @@ pmodules::compile() {
 			std::die 3 "Compiling '${name}' failed!"
 	}
 
+	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
 	local opt_force='no'
 	local config_file=''
 
 	while (( $# > 0 )); do
 		case $1 in
+			--prefix )
+				prefix="$2"
+				shift 1
+				;;
+			--prefix=* )
+				prefix="${1#*=}"
+				;;
 			--disable-cleanup )
 				build_opts+=( "$1" )
 				;;
 			--debug )
 				build_opts+=( "$1" )
 				;;
-			--config )
-				config_file=$(std::get_abspath "$2")
-				shift 1
-				;;
-			--config=* )
-				config_file=$(std::get_abspath "${1#*=}")
-				;;
-			--pmodules-root )
-				PMODULES_ROOT="$2"
-				shift 1
-				;;
-			--pmodules-root=* )
-				PMODULES_ROOT="${1#*=}"
-				;;
 			-f | --force )
 				opt_force='yes'
+				;;
+			--help | -h | -\? )
+				pmodules::help_compile
 				;;
 			-* )
 				std::die 1 "$1: illegal option"
@@ -254,11 +320,12 @@ pmodules::compile() {
 		shift 1
 	done
 
-	echo "Configuration:"
-	echo "  root of Pmodules environment: ${pmodules_root}"
-	echo "  Pmodule prefix:               ${PMODULES_HOME}"
-
+	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
 	read_config_file config_file
+
+	echo "Configuration:"
+	echo "  root of Pmodules environment: ${prefix}"
+	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/base64" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build coreutils
@@ -288,7 +355,38 @@ pmodules::compile() {
 
 #-----------------------------------------------------------------------------
 #
+pmodules::help_install() {
+	echo "
+Usage: $(basename $0) install [OPTION...]
+
+Install a new Pmodules version.
+
+Options:
+--prefix=DIR
+	Root of the Pmodules environment installation. The root of the
+       	installation must be either specified via this option or the
+	environment variable PMODULES_ROOT. If this option is used and
+	the PMODULES_ROOT is set, the directory specified with this 
+	option will be used.
+
+--debug
+	Enable verbose/debug output.
+
+--disable-cleanup )
+	Do not cleanup the tmp directory after compilation and installation.
+
+--force | -f
+	Force compilation.
+
+--help
+	Print this help text.
+
+" 1>&2
+	std::die 1 ""
+}
+
 pmodules::install() {
+	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
 	local config_file=''
 	local opt_force='no'
 
@@ -297,25 +395,18 @@ pmodules::install() {
 			--debug )
 				set -x
 				;;
-			--config )
-				config_file="$2"
+			--prefix )
+				prefix="$2"
 				shift 1
 				;;
-			--config=* )
-				config_file="${1#*=}"
-				;;
-			--debug )
-				set -x
-				;;
-			--pmodules-root )
-				PMODULES_ROOT="$2"
-				shift 1
-				;;
-			--pmodules-root=* )
-				PMODULES_ROOT="${1#*=}"
+			--prefix=* )
+				prefix="${1#*=}"
 				;;
 			-f | --force )
 				opt_force='yes'
+				;;
+			--help | -h | -\? )
+				pmodules::help_install
 				;;
 			-* )
 				std::die 1 "$1: illegal option"
@@ -327,6 +418,7 @@ pmodules::install() {
 		shift 1
 	done
 
+	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
 	read_config_file 'config_file'
 
 	###
@@ -344,7 +436,7 @@ pmodules::install() {
 	sed_cmd+="s:@TCLSHDIR@:${PMODULES_HOME}/sbin:g;"
 	sed_cmd+="s:@pager@::g;"
 	sed_cmd+="s:@pageropts@::g;"
-	sed_cmd+="s:@etcdir@:/opt/psi/config:g;"
+	sed_cmd+="s:@etcdir@:${PMODULES_ROOT}/${CONFIG_DIR}:g;"
 	sed_cmd+="s:@VERSIONING@:#:g;"
 	sed_cmd+="s:@prefix@:${PMODULES_HOME}:g;"
 	sed_cmd+="s:@initdir@:${PMODULES_HOME}/init:g;"
@@ -420,25 +512,20 @@ while (( $# > 0 )); do
 		-* )
 			std::die 1 "$1: illegal option"
 			;;
-		configure | compile | install )
+		help | configure | compile | install )
 			subcmd="$1"
 			shift 1
 			subcmd_args=( "$@" )
 			shift $#
 			;;
 		* )
-			std::die 1 "$1: Unknown sub-command."
+			std::die 1 "Invalid sub-command '$1'.\n\nUse 'build --help' to get help..."
 			;;
 	esac
 	shift 1
 done
 
-[[ -n "${subcmd}" ]] || std::die 1 "Missing sub-command.\n\nUse 'build --help' to get some help..."
-
-if [[ "${SRC_DIR}/modbuild" -ot "${SRC_DIR}/modbuild.in" ]]; then
-        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" > "${SRC_DIR}/modbuild"
-	chmod 0755 "${SRC_DIR}/modbuild"
-fi
+[[ -n "${subcmd}" ]] || std::die 1 "Missing sub-command.\n\nUse 'build --help' to get help..."
 
 pmodules::${subcmd} "${subcmd_args[@]}"
 
