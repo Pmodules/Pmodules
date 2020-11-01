@@ -22,6 +22,9 @@
 
 - Update to BASH 5.0
 - Update to Tcl 8.6.10
+- bootstrap/build script reviewed, `--config` option removed, help for all  
+  sub-commands added
+  
 
 **Fixed bugs:
 
