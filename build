@@ -127,12 +127,12 @@ Options:
 
 --distfilesdir=DIR
 	Directory where downloaded files are stored.
-	The default is '${DEFAULT_PMODULES_DISTFILESDIR}' in the 
+	The default is 'PREFIX/${DEFAULT_DISTFILES_DIR}' in the 
 	Pmodules root directory.
 
 --tmpdir=DIR
 	Directory for temporary files.
-	The default is '${DEFAULT_PMODULES_TMPDIR}'
+	The default is 'PREFIX/${DEFAULT_TMPDIR}'
 
 --help
 	Print this help text.
@@ -283,6 +283,8 @@ pmodules::compile() {
 			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
 			"${build_opts[@]}" "$@" "${version}" || \
 			std::die 3 "Compiling '${name}' failed!"
+		# :FIXME: this must be fixed in modbuild!
+		rm -f "${BOOTSTRAP_DIR}/Tools/modulefiles/.release-$V"
 	}
 
 	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
@@ -341,6 +343,10 @@ pmodules::compile() {
 
 	if [[ ! -f "${PMODULES_HOME}/sbin/bash" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build bash
+	fi
+
+	if [[ ! -f "${PMODULES_HOME}/sbin/find" ]] || [[ ${opt_force} == 'yes' ]]; then
+		build findutils
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
@@ -531,3 +537,8 @@ done
 
 pmodules::${subcmd} "${subcmd_args[@]}"
 
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
