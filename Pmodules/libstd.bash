@@ -57,7 +57,7 @@ std::get_YN_answer() {
 # $1: filename
 std::get_abspath() {
 	local -r fname=$1
-	[[ -r "${fname}" ]] || return 1
+	#[[ -r "${fname}" ]] || return 1
 	if [[ -d ${fname} ]]; then
 		echo $(cd "${fname}" && pwd)
 	else
@@ -288,6 +288,9 @@ std.get_os_release_linux() {
 	case "${ID}" in
 		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
 			echo "rhel${VERSION_ID%.*}"
+			;;
+		Ubuntu )
+			echo "Ubuntu${VERSION_ID%.*}"
 			;;
 		* )
 			echo "Unknown"
