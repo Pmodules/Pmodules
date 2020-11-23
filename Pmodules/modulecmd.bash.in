@@ -115,13 +115,7 @@ get_release() {
 	local -r moduledir=$2
 	local -r name=$3
 	local -r modulefile="$2/$3"
-        local overlay
         
-	# is modulefile in an used overlay?
-	if [[ -z "${MapDirsToOverlays[${dir}]}" ]]; then
-		std::upvar $1 'stable'  # it is stable be default
-		return 0
-	fi
         #
         # In an overlay the name of the module-file is something like
         #   dir/modulefiles/name/version
@@ -155,17 +149,18 @@ find_overlay () {
         local "$1"
         local "$2"
         local -r path=$3
-        local overlay
-        for overlay in "${!Overlays[@]}"; do
-                if [[ ${path}/ =~ ^${overlay}/ ]]; then
-                        std::upvar $1 "${overlay}"
-                        local group="${path#${overlay}/}"
-                        group=${group%%/*}
-                        std::upvar $2 "${group}"
-                        return 0
-                fi
-        done
-        return 1
+        local overlay=${MapDirsToOverlays[${path}]}
+	if [[ -z "${overlay}" ]]; then
+		for overlay in "${!Overlays[@]}" 'ZZZZZZ'; do
+			[[ ${path}/ =~ ^${overlay}/ ]] && break
+		done
+		[[ "${overlay}" == 'ZZZZZZ' ]] && return 1
+	fi
+        std::upvar $1 "${overlay}"
+        local group="${path#${overlay}/}"
+        group=${group%%/*}
+        std::upvar $2 "${group}"
+        return 0
 }
 
 module_is_loaded() {
@@ -295,7 +290,8 @@ subcommand_load() {
 	#
 	# Args:
 	#	none
-	output_load_hints() {
+	get_load_hints() {
+		local "$1"
 		local output=''
 		local release=''
 		while read -a line; do
@@ -309,12 +305,10 @@ subcommand_load() {
 				   (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "
 			fi
-			output+="module load ${line[@]:3} ${line[0]}\n"
-		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
-		if [[ -n "${output}" ]]; then
-			std::info "\nTry with one of the following command(s):\n"
- 			std::die 3 "${output}\n"
-		fi
+			local -i n=$(( ${GroupDepths[${group}]}/2 ))
+			output+="module load ${line[@]:3:$n} ${line[0]}\n"
+		done < <(set +x; subcommand_search  "${m}" -a --no-header 2>&1)
+		std::upvar $1 "${output}"
 	}
 
         module_is_loaded() {
@@ -500,15 +494,20 @@ subcommand_load() {
 		fi # handle extended module names
 	        local current_modulefile=''
                 local release=''
-                if ! find_module current_modulefile release "${MODULEPATH}" "${m}"; then
-                        if [[ -z ${current_modulefile} ]]; then
-	                        std::info "%s %s: module does not exist -- %s\n" \
+                find_module current_modulefile release "${MODULEPATH}" "${m}"
+                if [[ -z ${current_modulefile} ]]; then
+			local text=''
+			get_load_hints text
+			if [[ -z "${text}" ]]; then
+	                        std::die 3 "%s %s: module does not exist -- %s\n" \
                                           "${CMD}" 'load' "${m}"
-	                        std::die 3 ""
-                        else
+			else
 	                        std::info "%s %s: module unavailable -- %s\n" \
                                           "${CMD}" 'load' "${m}"
-	                        [[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
+				if [[ ${verbosity_lvl} == 'verbose' ]]; then
+					std::info "\nTry with one of the following command(s):\n"
+ 					std::info "${text}\n"
+				fi
 	                        std::die 3 ""
                         fi
                 fi
@@ -541,7 +540,7 @@ subcommand_load() {
                         local s=${error%%$'\n'*}
                         local error_txt='failed'
                         if [[ "$s" =~ ' conflicts ' ]]; then
-                                error_txt='conflicts with already loaded modules'
+                                error_txt="conflicts with already loaded module(s): ${s#*module(s) }"
                         fi
 			std::die 3 "%s %s: %s -- %s\n" \
                                  "${CMD}" "${subcommand}" \
@@ -767,12 +766,9 @@ get_available_modules() {
 			# - after loading the parent of a hierarchical group
 			# - if we do a search
 			# - if we create a new hierarchical group
-			local overlay=${MapDirsToOverlays[${dir}]}
-			if [[ -z ${overlay} ]]; then
-				local group
-				find_overlay overlay group "${dir}"
-				MapDirsToOverlays[${dir}]=${overlay}
-			fi
+			local group
+			find_overlay overlay group "${dir}"
+
                         # if no modules are installed in ${dir}, '*' expands to
                         # the empty string! Using '*' in the find command below
                         # would cause problems with some non-GNU find
