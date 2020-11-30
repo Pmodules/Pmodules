@@ -280,6 +280,8 @@ pmodules::compile() {
 			"--config=${config_file}" \
 			"--enable-cleanup" \
 			"--force-rebuild" \
+			"--debug" \
+			"--verbose" \
 			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
 			"${build_opts[@]}" "$@" "${version}" || \
 			std::die 3 "Compiling '${name}' failed!"
