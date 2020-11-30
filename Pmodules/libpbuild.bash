@@ -723,9 +723,9 @@ pbuild::make_all() {
 	find_modulefile() {
 		local "$1"
 		local fnames=()
-		fnames+=( "modulefile-${V_MAJOR}" )
-		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}" )
 		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}" )
+		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}" )
+		fnames+=( "modulefile-${V_MAJOR}" )
 		fnames+=( "modulefile" )
 		local fname=''
 		local modulefile=''
