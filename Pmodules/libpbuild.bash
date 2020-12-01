@@ -47,7 +47,7 @@ error_handler() {
 
 trap "error_handler" ERR
 
-declare configure_with='undef'	
+declare configure_with='undef'
 
 #..............................................................................
 #
@@ -270,7 +270,7 @@ set_full_module_name_and_prefix() {
 	[[ -n ${GROUP} ]] || std::die 1 \
                                       "${module_name}/${module_version}:" \
                                       "group not set."
-	
+
 	# build module name
 	# :FIXME: this should be read from a configuration file
 	local name=()
@@ -354,7 +354,7 @@ pbuild::install_docfiles() {
 #   $2: optional variable name to return release via upvar
 #
 # Notes:
-#   The passed module name must be NAME/VERSION! 
+#   The passed module name must be NAME/VERSION!
 #
 pbuild::module_is_avail() {
 	local "$2"
@@ -413,7 +413,7 @@ pbuild::prep() {
 	#
 	# Arguments:
 	#   $1:	    store file name with upvar here
-	#   $2:	    download URL 
+	#   $2:	    download URL
 	#   $3:	    output filename (can be empty string)
 	#   $4...:  download directories
 	#
@@ -434,7 +434,7 @@ pbuild::prep() {
 				"${url}"
 		fi
 	}
-	
+
 	check_hash_sum() {
 		local -r fname="$1"
 		local -r expected_hash_sum="$2"
@@ -713,7 +713,7 @@ pbuild::post_install() {
 pbuild::make_all() {
 	source "${BUILD_SCRIPT}"
 
-	set -e 
+	set -e
 	local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
 
 	#
@@ -724,7 +724,7 @@ pbuild::make_all() {
 	rm -f "${logfile}"
 	if [[ "${verbose}" == 'yes' ]]; then
 		exec  > >(tee -a "${logfile}")
-	else 
+	else
 		exec > >(cat >> "${logfile}")
 	fi
 	exec 2> >(tee -a "${logfile}" >&2)
@@ -776,8 +776,31 @@ pbuild::make_all() {
 	}
 
 	#......................................................................
+	find_modulefile() {
+		local "$1"
+		local fnames=()
+		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}" )
+		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}" )
+		fnames+=( "modulefile-${V_MAJOR}" )
+		fnames+=( "modulefile" )
+		local fname=''
+		local modulefile=''
+		for fname in "${fnames[@]}"; do
+			if [[ -r "${BUILDBLOCK_DIR}/${fname}" ]]; then
+				modulefile="${BUILDBLOCK_DIR}/${fname}"
+				break;
+			fi
+		done
+		std::upvar $1 "${modulefile}"
+		[[ -n "${modulefile}" ]]
+	}
+
+	#......................................................................
 	# non-redefinable post-install
 	post_install() {
+		#..............................................................
+		# install the doc-files specified in the build-script
+		#
 		install_doc() {
 			test -n "${MODULE_DOCFILES}" || return 0
 			local -r docdir="${PREFIX}/${_DOCDIR}/${module_name}"
@@ -795,20 +818,27 @@ pbuild::make_all() {
 		}
 
 		#..............................................................
-		# install build-block
+		# install build-block files
+		# - modulefile
+		# - build-script
+		# - build dependencies
+		#
 		# Skip installation if modulefile does not exist.
+		#
 		install_pmodules_files() {
-			test -r "${BUILDBLOCK_DIR}/modulefile" || return 0
+			local modulefile=''
+			find_modulefile modulefile || return 0
 
 			local -r target_dir="${PREFIX}/share/$GROUP/${module_name}"
-			install -m 0756 \
-				-d "${target_dir}/files"
+			mkdir -p "${target_dir}"
 			install -m0444 \
 				"${BUILD_SCRIPT}" \
 				"${target_dir}"
 			install -m0444 \
-				"${BUILDBLOCK_DIR}/modulefile" \
+				"${modulefile}" \
 				"${target_dir}"
+			#install -m 0755 \
+			#	-d "${target_dir}/files"
 			#install -m0444 \
 				#        "${variants_file}" \
 				#        "${target_dir}/files"
@@ -841,20 +871,20 @@ pbuild::make_all() {
 			done
 		}
 
-
-		# sometimes we need an system depended post-install
+		#..............................................................
+		# for Linux we need a special post-install to solve the
+		# multilib problem with LIBRARY_PATH on 64-bit systems
 		post_install_linux() {
 			std::info \
 				"%s %s\n" \
 				"${module_name}/${module_version}:" \
 				"running post-installation for ${OS} ..."
 			cd "${PREFIX}"
-			# solve multilib problem with LIBRARY_PATH
-			# on 64bit Linux
 			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
 			return 0
 		}
 
+		#..............................................................
 		cd "${BUILD_DIR}"
 		[[ "${OS}" == "Linux" ]] && post_install_linux
 		install_doc
@@ -869,14 +899,26 @@ pbuild::make_all() {
 				"${PREFIX}/${FNAME_IDEPS}" \
 				"${install_dependencies[@]}"
 		fi
+		if [[ "${bootstrap}" == 'no' ]]; then
+			install_modulefile
+			install_release_file
+		fi
+		cleanup_build
+		cleanup_src
+		std::info \
+			"%s %s\n" \
+			"${module_name}/${module_version}:" \
+			"Done ..."
 		return 0
 	}
 
  	#......................................................................
 	# Install modulefile
 	install_modulefile() {
-		local -r src="${BUILDBLOCK_DIR}/modulefile"
-		if [[ ! -r "${src}" ]]; then
+
+		local src=''
+		find_modulefile src
+		if (( $? != 0 )); then
 			std::info \
 				"%s %s\n" \
 				"${module_name}/${module_version}:" \
@@ -909,7 +951,7 @@ pbuild::make_all() {
 		# directory where to install release file
 		local -r dstdir=${dst%/*}
 		mkdir -p "${dstdir}"
-		
+
  		local -r release_file="${dst%/*}/.release-${module_version}"
 
 		if [[ -r "${release_file}" ]]; then
@@ -969,7 +1011,7 @@ pbuild::make_all() {
    		};
 		return 0
 	}
-	
+
 	build_target() {
 		local dir="$1"		# src or build directory, depends on target
 		local target="$2"	# prep, configure, compile or install
@@ -992,9 +1034,9 @@ pbuild::make_all() {
 		for t in "${targets[@]}"; do
 			# We cd into the dir before calling the function -
 			# just to be sure we are in the right directory.
-			# 
+			#
 			# Executing the function in a sub-process doesn't
-			# work because in some function global variables 
+			# work because in some function global variables
 			# might/need to be set.
 			#
 			cd "${dir}"
@@ -1045,19 +1087,8 @@ pbuild::make_all() {
 		mkdir -p "${PREFIX}"
 		build_target "${BUILD_DIR}" install
 		post_install
-
-		[[ "${build_target}" == "install" ]] && return 0
-
-		install_modulefile
-		install_release_file
-		cleanup_build
-		cleanup_src
-		std::info \
-			"%s %s\n" \
-			"${module_name}/${module_version}:" \
-			"Done ..."
-		return 0
 	}
+
 	remove_module() {
 		if [[ -d "${PREFIX}" ]]; then
 			std::info \
@@ -1145,17 +1176,17 @@ pbuild.init_env() {
 		V_PATCHLVL=''		# third number in version string (or empty)
 		V_RELEASE=''		# module release (or empty)
 		USE_FLAGS=''		# architectures (or empty)
-		
+
 		local tmp=''
-		
+
 		if [[ "$v" =~ "_" ]]; then
 			tmp="${v#*_}"
 			USE_FLAGS=":${tmp//_/:}:"
 			v="${v%%_*}"
 		fi
 		V_PKG="${v%%-*}"	# version without the release number
-		V_RELEASE="${v#*-}"	# release number 
-		
+		V_RELEASE="${v#*-}"	# release number
+
 		case "${V_PKG}" in
 			*.*.* )
 				V_MAJOR="${V_PKG%%.*}"
@@ -1181,7 +1212,7 @@ pbuild.init_env() {
 
 	# P and V can be used in the build-script, so we have to set them here
 	P="${module_name}"
-	V="${module_version}"        
+	V="${module_version}"
 	parse_version "${module_version}"
 
 	SOURCE_URLS=()
@@ -1293,7 +1324,7 @@ pbuild.build_module() {
 			std::die 1 \
 				 "$m: oops: build failed..."
 	}
-	
+
 	#......................................................................
 	#
 	# Load build- and run-time dependencies.
@@ -1329,11 +1360,11 @@ pbuild.build_module() {
 			fi
 			is_loaded "$m" && continue
 
-			# 'module avail' might output multiple matches if module 
+			# 'module avail' might output multiple matches if module
 			# name and version are not fully specified or in case
 			# modules with and without a release number exist.
 			# Example:
-			# mpc/1.1.0 and mpc/1.1.0-1. Since we get a sorted list 
+			# mpc/1.1.0 and mpc/1.1.0-1. Since we get a sorted list
 			# from 'module avail' and the full version should be set
 			# in the variants file, we look for the first exact
 			# match.
@@ -1361,7 +1392,7 @@ pbuild.build_module() {
 					 "release cannot be set to '${module_release}'" \
 					 "since the dependency '$m' is ${release_of_dependency}"
 			fi
-			
+
 			std::info "Loading module: ${m}\n"
 			module load "${m}"
 		done
@@ -1416,7 +1447,7 @@ pbuild.bootstrap() {
 	bootstrap='yes'
 
 	pbuild.init_env "${module_name}" "${module_version}"
-	
+
 	MODULECMD=$(which true)
 	GROUP='Tools'
 	PREFIX="${overlay}/${GROUP}/Pmodules/${PMODULES_VERSION}"
