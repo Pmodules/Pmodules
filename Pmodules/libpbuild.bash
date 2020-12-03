@@ -787,7 +787,7 @@ pbuild::make_all() {
 		local "$1"
 		local fname=''
 		local modulefile=''
-		for fname in "${VERSIONS[@]/#/modulefile-}"; do
+		for fname in "${VERSIONS[@]/#/modulefile-}" 'modulefile'; do
 			if [[ -r "${BUILDBLOCK_DIR}/${fname}" ]]; then
 				modulefile="${BUILDBLOCK_DIR}/${fname}"
 				break;
