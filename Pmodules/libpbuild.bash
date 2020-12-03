@@ -51,6 +51,62 @@ declare configure_with='undef'
 
 #..............................................................................
 #
+# compare two version numbers
+#
+# original implementation found on stackoverflow:
+# https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash
+#
+pbuild::version_compare () {
+        is_uint() {
+                [[ $1 =~ ^[0-9]+$ ]]
+        }
+
+        [[ $1 == $2 ]] && return 0
+        local IFS=.
+        local i ver1=($1) ver2=($2)
+
+        # fill empty fields in ver1 with zeros
+        for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+                ver1[i]=0
+        done
+        for ((i=0; i<${#ver1[@]}; i++)); do
+                [[ -z ${ver2[i]} ]] && ver2[i]=0
+                if is_uint ${ver1[i]} && is_uint ${ver2[i]}; then
+                        ((10#${ver1[i]} > 10#${ver2[i]})) && return 1
+                        ((10#${ver1[i]} < 10#${ver2[i]})) && return 2
+                else
+                        [[ ${ver1[i]} > ${ver2[i]} ]] && return 1
+                        [[ ${ver1[i]} < ${ver2[i]} ]] && return 2
+                fi
+        done
+        return 0
+}
+
+pbuild::version_lt() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 2 ))
+}
+
+pbuild::version_le() {
+        pbuild::version_compare "$1" "$2"
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code = 2 ))
+}
+
+
+pbuild::version_gt() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 1 ))
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code = 1 ))
+}
+
+pbuild::version_eq() {
+        pbuild::version_compare "$1" "$2"
+}
+
+#..............................................................................
+#
 # The following variables are available in build-blocks and set read-only
 # :FIXME: do we have to export them?
 
@@ -468,7 +524,14 @@ pbuild::prep() {
 			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}"
 		done
 	}
-
+	if [[ -z "${SOURCE_URLS}" ]]; then
+		for fname in ${VERSIONS[@]/#/pbuild::set_download_url_}; do
+			if typeset -F ${fname} 2>/dev/null; then
+				$f
+				break
+			fi
+		done
+	fi
 	[[ -z "${SOURCE_URLS}" ]] && \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
@@ -722,14 +785,9 @@ pbuild::make_all() {
 	#......................................................................
 	find_modulefile() {
 		local "$1"
-		local fnames=()
-		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}" )
-		fnames+=( "modulefile-${V_MAJOR}.${V_MINOR}" )
-		fnames+=( "modulefile-${V_MAJOR}" )
-		fnames+=( "modulefile" )
 		local fname=''
 		local modulefile=''
-		for fname in "${fnames[@]}"; do
+		for fname in "${VERSIONS[@]/#/modulefile-}" 'modulefile'; do
 			if [[ -r "${BUILDBLOCK_DIR}/${fname}" ]]; then
 				modulefile="${BUILDBLOCK_DIR}/${fname}"
 				break;
@@ -746,7 +804,16 @@ pbuild::make_all() {
 		# install the doc-files specified in the build-script
 		#
 		install_doc() {
-			test -n "${MODULE_DOCFILES}" || return 0
+			if [[ -z "${MODULE_DOCFILES}" ]]; then
+				for f in ${VERSIONS[@]/#/pbuild::install_docfiles_}; do
+					if typeset -F "$f" 2>/dev/null; then
+						$f
+						break
+					fi
+				done
+
+			fi
+			[[ -n "${MODULE_DOCFILES}" ]] || return 0
 			local -r docdir="${PREFIX}/${_DOCDIR}/${module_name}"
 
 			std::info \
@@ -965,15 +1032,23 @@ pbuild::make_all() {
 			return 0
 		fi
 		local targets=()
-		targets+=( "pre_${target}_${system}" "pre_${target}_${OS}" "pre_${target}" )
-		if typeset -F pbuild::${target}_${system} 1>/dev/null 2>&1; then
-			targets+=( "${target}_${system}" )
-		elif typeset -F pbuild::${target}_${OS} 1>/dev/null 2>&1; then
-			targets+=( "${target}_${OS}" )
-		else
-			targets+=( "${target}" )
-		fi
-		targets+=( "post_${target}_${system}" "post_${target}_${OS}" "post_${target}" )
+		targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_${system}_} )
+		targets+=( pbuild::pre_${target}_${system} )
+		targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_${OS}_} )
+		targets+=( pbuild::pre_${target}_${OS} )
+		targets+=( pbuild::pre_${target} )
+
+		targets+=( ${VERSIONS[@]/#/pbuild::${target}_${system}_} )
+		targets+=( pbuild::${target}_${system} )
+		targets+=( ${VERSIONS[@]/#/pbuild::${target}_${OS}_} )
+		targets+=( pbuild::${target}_${OS} )
+		targets+=( pbuild::${target} )
+
+		targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_${system}_} )
+		targets+=( pbuild::post_${target}_${system} )
+		targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_${OS}_} )
+		targets+=( pbuild::post_${target}_${OS} )
+		targets+=( pbuild::post_${target} )
 
 		for t in "${targets[@]}"; do
 			# We cd into the dir before calling the function -
@@ -984,7 +1059,7 @@ pbuild::make_all() {
 			# might/need to be set.
 			#
 			cd "${dir}"
-			"pbuild::$t"
+			typeset -F "$t" 2>/dev/null && "$t" || :
 		done
 		touch "${BUILD_DIR}/.${target}"
 	}
@@ -1129,8 +1204,11 @@ pbuild.init_env() {
 			v="${v%%_*}"
 		fi
 		V_PKG="${v%%-*}"	# version without the release number
-		V_RELEASE="${v#*-}"	# release number
-
+		if [[ $v == *-* ]]; then
+			V_RELEASE="${v#*-}"	# release number
+		else
+			V_RELEASE=''
+		fi
 		case "${V_PKG}" in
 			*.*.* )
 				V_MAJOR="${V_PKG%%.*}"
@@ -1146,6 +1224,17 @@ pbuild.init_env() {
 				V_MAJOR="${V_PKG}"
 				;;
 		esac
+
+		VERSIONS=( ${V_MAJOR} )
+		if [[ -n ${V_MINOR} ]]; then
+			VERSIONS=( ${V_MAJOR}.${V_MINOR} ${VERSIONS[@]} )
+		fi
+		if [[ -n ${V_PATCHLVL} ]]; then
+			VERSIONS=( ${V_MAJOR}.${V_MINOR}.${V_PATCHLVL} ${VERSIONS[@]} )
+		fi
+		if [[ -n ${V_RELEASE} ]]; then
+			VERSIONS=( ${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}-${V_RELEASE} ${VERSIONS[@]} )
+		fi
 	}
 
 	local -r module_name="$1"
