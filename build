@@ -276,7 +276,7 @@ pmodules::compile() {
 		local -r version=$(get_version "${name}")
 		shift
 
-		"${BOOTSTRAP_DIR}/Pmodules/modbuild" \
+		"${BOOTSTRAP_DIR}/Pmodules/modbuild.in" \
 			"--config=${config_file}" \
 			"--enable-cleanup" \
 			"--force-rebuild" \
