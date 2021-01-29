@@ -758,6 +758,7 @@ get_available_modules() {
 
         local -A dict
 	local -A modulenames
+	local dir
         for dir in "${dirs[@]}"; do
                 test -d "${dir}" || continue
 	        {
@@ -766,6 +767,7 @@ get_available_modules() {
 			# - after loading the parent of a hierarchical group
 			# - if we do a search
 			# - if we create a new hierarchical group
+			local overlay
 			local group
 			find_overlay overlay group "${dir}"
 
