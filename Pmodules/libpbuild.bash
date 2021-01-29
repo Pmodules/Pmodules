@@ -1036,18 +1036,21 @@ pbuild::make_all() {
 		targets+=( pbuild::pre_${target}_${system} )
 		targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_${OS}_} )
 		targets+=( pbuild::pre_${target}_${OS} )
+		targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_} )
 		targets+=( pbuild::pre_${target} )
 
 		targets+=( ${VERSIONS[@]/#/pbuild::${target}_${system}_} )
 		targets+=( pbuild::${target}_${system} )
 		targets+=( ${VERSIONS[@]/#/pbuild::${target}_${OS}_} )
 		targets+=( pbuild::${target}_${OS} )
+		targets+=( ${VERSIONS[@]/#/pbuild::${target}_} )
 		targets+=( pbuild::${target} )
 
 		targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_${system}_} )
 		targets+=( pbuild::post_${target}_${system} )
 		targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_${OS}_} )
 		targets+=( pbuild::post_${target}_${OS} )
+		targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_} )
 		targets+=( pbuild::post_${target} )
 
 		for t in "${targets[@]}"; do
