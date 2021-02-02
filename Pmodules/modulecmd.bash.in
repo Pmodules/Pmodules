@@ -1276,7 +1276,7 @@ subcommand_use() {
                         if [[ ! ${Overlays[${overlay}]} ]]; then
                                 Overlays[${overlay}]=${modifier}
 
-                                PMODULES_OVERLAYS+=":${overlay}""
+                                PMODULES_OVERLAYS+=":${overlay}"
                                 export_env PMODULES_OVERLAYS
                                 g_env_must_be_saved='yes'
 	                        scan_groups "${!Overlays[@]}"
