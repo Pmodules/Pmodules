@@ -1087,7 +1087,9 @@ subcommand_avail() {
                 group='other'
                 find_overlay overlay group "${dir}"
                 if [[ ${modulepath_of_group[${group}]} ]]; then
-                        modulepath_of_group[${group}]+=:${dir}
+			if [[ "${Overlays[${overlay}]}" != "g" ]]
+                           modulepath_of_group[${group}]+=:${dir}
+			fi
                 else
                         modulepath_of_group[${group}]=${dir}
                         groups+=( "${group}" )
@@ -1255,7 +1257,7 @@ subcommand_use() {
 				modifier=${1##*:}
 				overlay=${1%:*}
 				case ${modifier} in
-					h )
+					g | h )
 						:
 						;;
 					* )
