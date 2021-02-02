@@ -280,6 +280,7 @@ USAGE:
 
 subcommand_load() {
         local -r subcommand='load'
+	local current_modulefile=''
 
 	#
 	# output load 'hints'
@@ -492,7 +493,6 @@ subcommand_load() {
 				UsedReleases=( "${release}" )
 			fi
 		fi # handle extended module names
-	        local current_modulefile=''
                 local release=''
                 find_module current_modulefile release "${MODULEPATH}" "${m}"
                 if [[ -z ${current_modulefile} ]]; then
