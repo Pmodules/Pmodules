@@ -278,7 +278,7 @@ pmodules::compile() {
 
 		"${BOOTSTRAP_DIR}/Pmodules/modbuild.in" \
 			"--config=${config_file}" \
-			"--enable-cleanup" \
+			"--disable-cleanup" \
 			"--force-rebuild" \
 			"--debug" \
 			"--verbose" \
