@@ -1087,9 +1087,7 @@ subcommand_avail() {
                 group='other'
                 find_overlay overlay group "${dir}"
                 if [[ ${modulepath_of_group[${group}]} ]]; then
-			if [[ "${Overlays[${overlay}]}" != "g" ]]; then
                            modulepath_of_group[${group}]+=:${dir}
-			fi
                 else
                         modulepath_of_group[${group}]=${dir}
                         groups+=( "${group}" )
@@ -1251,6 +1249,12 @@ subcommand_use() {
 
 	use () {
                 use_overlay() {
+			if [[ -n "${_LMFILES_}" ]]; then
+				std::die 3 "%s %s: %s -- %s\n" \
+					 "${CMD}" "${subcommand}" \
+					 "overlays can be added as long as no modules are loaded!" \
+					 "${overlay}"
+			fi
 			local overlay=''
 			local modifier='0'
 			if [[ $1 == *:* ]]; then
@@ -1263,7 +1267,8 @@ subcommand_use() {
 					* )
 						std::die 3 "%s %s: %s -- %s\n" \
 							 "${CMD}" "${subcommand}" \
-							 "invalid modifier '${modifier}!"
+							 "invalid modifier '${modifier}!" \
+							 "${overlay}"
 						;;
 				esac
 			else
@@ -1275,28 +1280,45 @@ subcommand_use() {
                                          "${CMD}" "${subcommand}" \
                                          "is not an overlay directory" \
                                          "${overlay}"
-                        if [[ ! ${Overlays[${overlay}]} ]]; then
-                                Overlays[${overlay}]=${modifier}
-
-                                PMODULES_OVERLAYS+=":${overlay}"
-                                export_env PMODULES_OVERLAYS
-                                g_env_must_be_saved='yes'
-	                        scan_groups "${!Overlays[@]}"
-                                local group
-                                for group in ${UsedGroups//:/ }; do
-                                        local dir="${overlay}/"
-                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
-                                        if [[ -d "${dir}" ]]; then
-                                                std::prepend_path MODULEPATH "${dir}"
-						MapDirsToOverlays[${dir}]=${overlay}
-                                        fi
-                                done
-                        else
+                        if [[ -n "${Overlays[${overlay}]}" ]]; then
                                 std::info "%s %s: %s -- %s\n" \
                                           "${CMD}" "${subcommand}" \
                                           "overlay already in use" \
                                           "${overlay}"
-                        fi
+				return 0
+			fi  
+				
+			if [[ "${modifier}" == "g" ]]; then
+				# if this overlay hides groups, we have to remove
+				# the modules made available by other overlays
+				for group in ${UsedGroups//:/ }; do
+					# first test whether this group is in the to be added overlay
+                                        local dir="${overlay}/"
+                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                        [[ -d "${dir}" ]] || continue  # no
+					
+					for dir in "${!Overlays[@]}"; do
+						dir+="/${group}/${PMODULES_MODULEFILES_DIR}"
+						std::remove_path MODULEPATH "${dir}"
+					done
+				done
+			fi
+
+                        for group in ${UsedGroups//:/ }; do
+                                local dir="${overlay}/"
+                                dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                if [[ -d "${dir}" ]]; then
+                                        std::prepend_path MODULEPATH "${dir}"
+					MapDirsToOverlays[${dir}]=${overlay}
+                                fi
+                        done
+
+                        Overlays[${overlay}]=${modifier}
+                        PMODULES_OVERLAYS+=":${overlay}"
+                        export_env PMODULES_OVERLAYS
+                        g_env_must_be_saved='yes'
+	                scan_groups "${!Overlays[@]}"
+                        local group
                 }
 
                 use_group() {
@@ -1434,6 +1456,12 @@ subcommand_unuse() {
 
         unuse() {
                 unuse_overlay() {
+		        [[ -n "${_LMFILES_}" ]] && \
+				std::die 3 "%s %s: %s -- %s\n" \
+					 "${CMD}" "${subcommand}" \
+					 "overlays can be removed as long as modules are loaded!" \
+					 "${overlay}"
+
 			overlay=${overlay%:*}  # ignore any modifier
 			overlay=${overlay%/} # remove trailing '/' if there is one
                         [[ -d "${overlay}" ]] || \
@@ -1446,23 +1474,38 @@ subcommand_unuse() {
                                          "${CMD}" "${subcommand}" \
                                          "cannot remove root overlay" \
                                          "${overlay}"
-                        if [[ ${Overlays[${overlay}]} ]]; then
-                                [[ "${_LMFILES_}" =~ "${overlay}" ]] && \
-                                        std::die 3 "%s %s: %s -- %s\n" \
-                                                 "${CMD}" "${subcommand}" \
-                                                 "cannot remove overlay" \
-                                                 "${overlay}"
-                                unset "Overlays[${overlay}]"
-                                std::remove_path PMODULES_OVERLAYS "${overlay}"
-                                g_env_must_be_saved='yes'
-                                export_env PMODULES_OVERLAYS
-                                local dir
-                                for dir in "${modulepath[@]}"; do
-                                        if [[ "${dir}" =~ "${overlay}" ]]; then
-                                                std::remove_path MODULEPATH "${dir}"
-                                        fi
-                                done
-                        fi
+                        [[ -z ${Overlays[${overlay}]} ]] && \
+                                std::die 3 "%s %s: %s -- %s\n" \
+                                         "${CMD}" "${subcommand}" \
+                                         "not an used overlay" \
+                                         "${overlay}"
+				
+			if [[ "${modifier}" == 'g' ]]; then
+				# if this overlay hides groups, we have to re-add
+				# the modules made available by other overlays
+				for group in ${UsedGroups//:/ }; do
+					# first test whether this group is in the to be added overlay
+                                        local dir="${overlay}/"
+                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                        [[ -d "${dir}" ]] || continue  # no
+					
+					for dir in "${!Overlays[@]}"; do
+						dir+="/${group}/${PMODULES_MODULEFILES_DIR}"
+						std::remove_path MODULEPATH "${dir}"
+					done
+				done
+			fi
+
+                        unset "Overlays[${overlay}]"
+                        std::remove_path PMODULES_OVERLAYS "${overlay}"
+                        g_env_must_be_saved='yes'
+                        export_env PMODULES_OVERLAYS
+                        local dir
+                        for dir in "${modulepath[@]}"; do
+                                if [[ "${dir}" =~ "${overlay}" ]]; then
+                                        std::remove_path MODULEPATH "${dir}"
+                                fi
+                        done
                 }
 
                 unuse_group() {
