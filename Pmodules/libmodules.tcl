@@ -3,6 +3,7 @@
 # switch/swap
 # unload modules if parent removed
 #
+package require base64
 
 if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 	proc debug {msg} {
@@ -20,7 +21,21 @@ if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 	proc debug {msg} {}
 }
 
+puts stderr "loading libmodules"
 debug "loading libmodules"
+
+proc _pmodules_parse_pmodules_env { } {
+	foreach line [split [base64::decode $::env(PMODULES_ENV)] "\n"] {
+		if { ![regexp -- {.* -[aA] (.*)=\((.*)\)} $line -> name value] } {
+			continue
+		}
+		switch $name {
+			Overlays {
+				array set ::Overlays [regsub -all  {[]=[]} $value " "]
+			}
+		}
+	}
+}
 
 proc module-addgroup { group } {
 	global env
@@ -40,15 +55,27 @@ proc module-addgroup { group } {
 
         debug "mode=[module-info mode]"
 	if { [module-info mode load] } {
-                foreach overlay $::PmodulesOverlays {
-                        set dir [file join \
-                                     $overlay \
-                                     $group \
-                                     $::PmodulesModulfilesDir \
-                                     {*}$::variant]
-                        if { [file isdirectory $dir] } {
-                                prepend-path MODULEPATH $dir
-                        }
+		array set overlayed_groups {}
+		foreach overlay [lreverse_n $::PmodulesOverlays 1] {
+			debug "overlay=$overlay"
+			if {![info exists overlayed_groups($group)]}	{
+				set dir [file join \
+					     $overlay \
+					     $group \
+					     $::PmodulesModulfilesDir \
+					     {*}$::variant]
+				if { [file isdirectory $dir] } {
+					prepend-path MODULEPATH $dir
+				}
+			}
+			# don't add if overlayed
+			if { [string compare $::Overlays($overlay) "g"] == 0 } {
+				# get groups in this overlay
+				set dirs [glob -directory $overlay -type d {[A-Z]*}]
+				foreach dir $dirs {
+					set overlayed_groups([lindex [file split $dir] end]) 1
+				}
+			}
                 }
 		prepend-path UsedGroups $group
 		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
@@ -338,6 +365,7 @@ if { [info exists ::whatis] } {
 	module-whatis	"$whatis"
 }
 
+_pmodules_parse_pmodules_env
 _pmodules_init_global_vars 
 
 #
