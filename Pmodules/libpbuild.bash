@@ -1430,7 +1430,7 @@ pbuild.build_module() {
 			fi
 
 			std::info "Loading module: ${m}\n"
-			module load "${m}"
+			eval $( "${MODULECMD}" bash load "${m}" )
 		done
 	}
 
