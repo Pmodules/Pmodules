@@ -346,7 +346,7 @@ subcommand_load() {
 			output+="module load ${line[@]:3} ${line[0]}\n"
 		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
 		if [[ -n "${output}" ]]; then
-			std::info "\nTry with one of the following command(s):\n"
+			std::info "\nTry with one of the following command(s):"
  			std::die 3 "${output}\n"
 		fi
 	}
@@ -479,7 +479,7 @@ subcommand_load() {
 			fi
 		fi
 		if [[ ! "${found}" ]]; then
-			std::info "%s %s: module unavailable -- %s\n" \
+			std::info "%s %s: module unavailable -- %s" \
                                   "${CMD}" 'load' "${m}"
 			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
 			std::die 3 ""
@@ -540,7 +540,7 @@ subcommand_load() {
                                   "${m}")
 		if [[ ${verbosity_lvl} != silent ]] && \
                            [[ ${release} != stable ]]; then
-		        std::info "%s\n" "${msg}"
+		        std::info "%s" "${msg}"
 		fi
 		logger "${msg}"
 	done
@@ -803,7 +803,7 @@ subcommand_avail() {
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
 		done
-		std::info "\n"
+		std::info ""
 	}
 
 	machine_output() {
@@ -829,7 +829,7 @@ subcommand_avail() {
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
 		done
-		std::info "\n"
+		std::info ""
 	}
 
 	human_readable_output() {
@@ -1008,47 +1008,47 @@ subcommand_use() {
 	print_info() {
 		local f
 		local r
-		std::info "Used groups:\n"
+		std::info "Used groups:"
 		for f in ${UsedGroups//:/ }; do
-			std::info "\t${f}\n"
+			std::info "\t${f}"
 		done
-		std::info "\nUnused groups:\n"
+		std::info "\nUnused groups:"
 		local _group
 		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
 			if ! group_is_used "${_group}" && (( depth == 0 )); then
-			    std::info "\t${_group}\n"
+			    std::info "\t${_group}"
 			fi
 		done
 
-		std::info "\nUsed releases:\n"
+		std::info "\nUsed releases:"
 		for r in ${UsedReleases//:/ }; do
-			std::info "\t${r}\n"
+			std::info "\t${r}"
 		done
-		std::info "\nUnused releases:\n"
+		std::info "\nUnused releases:"
 		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
 			if ! release_is_used $r; then
-				std::info "\t${r}\n"
+				std::info "\t${r}"
 			fi
 		done
 
-		std::info "\nUsed flags:\n"
+		std::info "\nUsed flags:"
 		for flag in "${!UseFlags[@]}"; do
-			std::info "\t${flag}\n"
+			std::info "\t${flag}"
 		done
 
-		std::info "\nAdditonal directories in MODULEPATH:\n"
+		std::info "\nAdditonal directories in MODULEPATH:"
 		let n=0
 		for (( i=0; i<${#modulepath[@]}; i++)); do
 			if [[ ! ${modulepath[i]} =~ ${PMODULES_ROOT} ]]; then
-			        std::info "\t${modulepath[i]}\n"
+			        std::info "\t${modulepath[i]}"
 			        let n+=1
 			fi
 		done
 		if (( n == 0 )); then
-		        std::info "\tnone\n"
+		        std::info "\tnone"
 		fi
-		std::info "\n"
+		std::info ""
 	}
 
 	use () {
@@ -1554,7 +1554,7 @@ subcommand_search() {
 					out+="$d/"
 				done
 				out+="${line[0]}"
-				std::info "${out}\n"
+				std::info "${out}"
 			done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
                                          awk "${with_modules}")
 		elif [[ "${opt_print_csv}" == "yes" ]]; then
