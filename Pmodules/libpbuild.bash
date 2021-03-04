@@ -517,7 +517,7 @@ pbuild::prep() {
 		local i=0
 		for ((_i = 0; _i < ${#PATCH_FILES[@]}; _i++)); do
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"Appling patch '${PATCH_FILES[_i]}' ..."
 			local -i strip_val="${PATCH_STRIPS[_i]:-${PATCH_STRIP_DEFAULT}}"
@@ -641,7 +641,7 @@ pbuild::configure() {
 				 "cmake failed"
 	else
 		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"${FUNCNAME[0]}: skipping..."
 	fi
@@ -817,7 +817,7 @@ pbuild::make_all() {
 			local -r docdir="${PREFIX}/${_DOCDIR}/${module_name}"
 
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"Installing documentation to ${docdir}"
 			install -m 0755 -d \
@@ -865,7 +865,7 @@ pbuild::make_all() {
 			local -r fname="$1"
 			shift
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"writing run-time dependencies to ${fname} ..."
 			local dep
@@ -887,7 +887,7 @@ pbuild::make_all() {
 		# multilib problem with LIBRARY_PATH on 64-bit systems
 		post_install_linux() {
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"running post-installation for ${OS} ..."
 			cd "${PREFIX}"
@@ -917,7 +917,7 @@ pbuild::make_all() {
 		cleanup_build
 		cleanup_src
 		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"Done ..."
 		return 0
@@ -931,7 +931,7 @@ pbuild::make_all() {
 		find_modulefile src
 		if (( $? != 0 )); then
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"skipping modulefile installation ..."
 			return
@@ -946,7 +946,7 @@ pbuild::make_all() {
  		local -r dstdir=${dst%/*}
 
 		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"installing modulefile in '${dstdir}' ..."
 		mkdir -p "${dstdir}"
@@ -970,7 +970,7 @@ pbuild::make_all() {
 			read release < "${release_file}"
 			if [[ "${release}" != "${module_release}" ]]; then
 				std::info \
-					"%s %s %s\n" \
+					"%s " \
 					"${module_name}/${module_version}:" \
 					"changing release from" \
 					"'${release}' to '${module_release}' ..."
@@ -978,7 +978,7 @@ pbuild::make_all() {
 			fi
 		else
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"setting release to '${module_release}' ..."
 			echo "${module_release}" > "${release_file}"
@@ -997,7 +997,7 @@ pbuild::make_all() {
 			     		 "BUILD_DIR is set to '/'"
 
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"Cleaning up '${BUILD_DIR}'..."
 			rm -rf "${BUILD_DIR##*/}"
@@ -1015,7 +1015,7 @@ pbuild::make_all() {
 					 "Oops: internal error:" \
 			     		 "SRC_DIR is set to '/'"
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"Cleaning up '${SRC_DIR}'..."
 			rm -rf "${SRC_DIR##*/}"
@@ -1071,16 +1071,18 @@ pbuild::make_all() {
 	# build module ${module_name}/${module_version}
 	build_module() {
  		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
-			"start building ..."
+			"start building" \
+			${with_modules:+with ${with_modules[@]}} \
+			"..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 
 		mkdir -p "${SRC_DIR}"
 		mkdir -p "${BUILD_DIR}"
 
  		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"preparing sources ..."
 		# write stdout and stderr to logfile, stderr to terminal
@@ -1089,21 +1091,21 @@ pbuild::make_all() {
 		[[ "${build_target}" == "prep" ]] && return 0
 
  		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"configuring ..."
 		build_target "${BUILD_DIR}" configure
 		[[ "${build_target}" == "configure" ]] && return 0
 
  		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"compiling ..."
 		build_target "${BUILD_DIR}" compile
 		[[ "${build_target}" == "compile" ]] && return 0
 
  		std::info \
-			"%s %s\n" \
+			"%s " \
 			"${module_name}/${module_version}:" \
 			"installing ..."
 		mkdir -p "${PREFIX}"
@@ -1114,7 +1116,7 @@ pbuild::make_all() {
 	remove_module() {
 		if [[ -d "${PREFIX}" ]]; then
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing all files in '${PREFIX}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -rf ${PREFIX}
@@ -1131,7 +1133,7 @@ pbuild::make_all() {
 
 		if [[ -e "${dst}" ]]; then
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing modulefile '${dst}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -v "${dst}"
@@ -1139,7 +1141,7 @@ pbuild::make_all() {
 		local release_file="${dstdir}/.release-${module_version}"
 		if [[ -e "${release_file}" ]]; then
 			std::info \
-				"%s %s\n" \
+				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing release file '${release_file}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
@@ -1323,7 +1325,7 @@ pbuild.build_module() {
 				 "${m}: module does not exist," \
 				 "cannot continue with dry run..."
 
-		std::info "%s\n" \
+		std::info "%s " \
 			  "$m: module does not exist, trying to build it..."
 		local args=( '' )
 		set -- ${ARGS[@]}
@@ -1429,11 +1431,16 @@ pbuild.build_module() {
 					 "since the dependency '$m' is ${release_of_dependency}"
 			fi
 
-			std::info "Loading module: ${m}\n"
+			std::info "Loading module: ${m}"
 			eval $( "${MODULECMD}" bash load "${m}" )
 		done
 	}
 
+	std::info \
+		"%s " \
+		"${module_name}/${module_version}:" \
+		${with_modules:+with ${with_modules[@]}} \
+		"building ..."
 	MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	[[ -x ${MODULECMD} ]] || \
 		std::die 2 "No such file or executable -- '${MODULECMD}'"
@@ -1470,6 +1477,12 @@ pbuild.build_module() {
 
 	pbuild.init_env "${module_name}" "${module_version}"
 	pbuild::make_all
+	std::info \
+		"%s " \
+		"${module_name}/${module_version}:" \
+		${with_modules:+with ${with_modules[@]}} \
+		"done!"
+	std::info "* * * * *\n"
 }
 
 pbuild.bootstrap() {
