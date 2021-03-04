@@ -1160,20 +1160,31 @@ pbuild::make_all() {
 		check_supported_os
 		check_supported_compilers
 		set_full_module_name_and_prefix
-		if [[ "${module_release}" == 'removed' ]]; then
-			remove_module
-		elif [[ ! -d "${PREFIX}" ]] || \
-			     [[ "${force_rebuild}" == 'yes' ]]; then
-			build_module
-		else
- 			std::info \
-				"%s %s\n" \
-				"${module_name}/${module_version}:" \
-				"already exists, not rebuilding ..."
-			if [[ "${opt_update_modulefiles}" == "yes" ]]; then
-				install_modulefile
+		if module_exists "${module_name}/${module_version}" \
+			&& [[ ${forece_rebuild} != 'yes' ]]; then
+			if [[ "${module_release}" == 'removed' ]]; then
+				remove_module
+			else
+ 				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					${with_modules:+with ${with_modules[@]}} \
+					"already exists, not rebuilding ..."
+				if [[ "${opt_update_modulefiles}" == "yes" ]]; then
+					install_modulefile
+				fi
+				install_release_file
 			fi
-			install_release_file
+		else
+			if [[ "${module_release}" == 'deprecated' ]]; then
+				std::info \
+					"%s " "${module_name}/${module_version}:" \
+					${with_modules:+with ${with_modules[@]}} \
+					"is deprecated, skiping!"
+				install_release_file
+			else
+				build_module
+			fi
 		fi
 	else
 		build_module
@@ -1267,6 +1278,18 @@ pbuild.init_env() {
 	configure_with='undef'
 }
 
+#..............................................................
+#
+# Test whether a module with the given name already exists.
+#
+# Arguments:
+#   $1: module name/version
+#
+module_exists() {
+	[[ -n $("${MODULECMD}" bash avail -m "$1" \
+			       2>&1 1>/dev/null) ]]
+}
+
 pbuild.build_module() {
 	module_name="$1"
 	module_version="$2"
@@ -1298,24 +1321,6 @@ pbuild.build_module() {
 	# :FIXME: needs testing
 	#
 	build_dependency() {
-		#..............................................................
-		#
-		# Test whether a module with the given name already exists.
-		#
-		# Arguments:
-		#   $1: module name
-		#
-		# Notes:
-		#   The passed module name should be NAME/VERSION
-		#   :FIXME: this does not really work in a hierarchical group
-		#           without adding the dependencies...
-		#
-		module_exists() {
-			[[ -n $("${MODULECMD}" bash search -a --no-header "$1" \
-					       2>&1 1>/dev/null) ]]
-		}
-
-
 		local -r m=$1
 		std::debug "${m}: module not available"
 		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
@@ -1357,10 +1362,10 @@ pbuild.build_module() {
 		[[ -x "${buildscript}" ]] || \
 			std::die 1 \
 				 "$m: build-block not found!"
-		"${buildscript}" "${m#*/}" ${args[@]}
-		module_exists "$m" || \
+		if ! "${buildscript}" "${m#*/}" ${args[@]}; then
 			std::die 1 \
 				 "$m: oops: build failed..."
+		fi
 	}
 
 	#......................................................................
