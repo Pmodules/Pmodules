@@ -566,7 +566,7 @@ subcommand_load() {
                                    "${m}")
 		if [[ ${verbosity_lvl} != silent ]] && \
                            [[ ${release} != stable ]]; then
-		        std::info "%s\n" "${msg}"
+		        std::info "%s" "${msg}"
 		fi
 		logger "${msg}"
 	done
@@ -969,7 +969,7 @@ subcommand_avail() {
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
 		done
-		std::info "\n"
+		std::info ""
 	}
 
 	machine_output() {
@@ -995,7 +995,7 @@ subcommand_avail() {
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
 		done
-		std::info "\n"
+		std::info ""
 	}
 
 	human_readable_output() {
@@ -1195,11 +1195,11 @@ subcommand_use() {
 	print_info() {
 		local f
 		local r
-		std::info "Used groups:\n"
+		std::info "Used groups:"
 		for f in ${UsedGroups//:/ }; do
-			std::info "\t${f}\n"
+			std::info "\t${f}"
 		done
-		std::info "\nUnused groups:\n"
+		std::info "\nUnused groups:"
 		local _group
 		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
@@ -1208,20 +1208,20 @@ subcommand_use() {
 			fi
 		done
 
-		std::info "\nUsed releases:\n"
+		std::info "\nUsed releases:"
 		for r in ${UsedReleases//:/ }; do
-			std::info "\t${r}\n"
+			std::info "\t${r}"
 		done
-		std::info "\nUnused releases:\n"
+		std::info "\nUnused releases:"
 		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
 			if ! release_is_used $r; then
-				std::info "\t${r}\n"
+				std::info "\t${r}"
 			fi
 		done
 
-		std::info "\nUsed flags:\n"
+		std::info "\nUsed flags:"
 		for flag in "${!UseFlags[@]}"; do
-			std::info "\t${flag}\n"
+			std::info "\t${flag}"
 		done
 
                 local overlay
@@ -1242,9 +1242,9 @@ subcommand_use() {
 			fi
 		done
 		if (( n == 0 )); then
-		        std::info "\tnone\n"
+		        std::info "\tnone"
 		fi
-		std::info "\n"
+		std::info ""
 	}
 
 	use () {
