@@ -64,7 +64,7 @@ export_env() {
 			local -r fmt="setenv %s \"%s\"; "
 			;;
 		* )
-			std::die 1 "Unsupported shell -- ${Shell}\n"
+			std::die 1 "Unsupported shell -- ${Shell}"
 			;;
 	esac
 
@@ -196,7 +196,7 @@ subcommand_generic0() {
 		esac
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "no arguments allowed"
         fi
@@ -222,11 +222,11 @@ subcommand_generic1() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	elif (( ${#args[@]} > 1 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "only one argument allowed"
 	fi
@@ -252,7 +252,7 @@ subcommand_generic1plus() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	fi
@@ -397,7 +397,7 @@ subcommand_load() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-                std::die 2 "%s %s: %s\n" \
+                std::die 2 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
 		         "No module specified"
 	fi
@@ -466,13 +466,13 @@ subcommand_load() {
 			fi
 			if [[ -n ${group} ]]; then
 				is_group "${group}" || \
-                                        std::die 3 "%s %s: %s -- %s\n" \
+                                        std::die 3 "%s %s: %s -- %s" \
                                                  "${CMD}" "${subcommand}" \
                                                  "illegal group name" \
                                                  "${group}"
 				local -i depth=${GroupDepths[${group}]}
 				(( depth != 0 )) && \
-                                        std::die 3 "%s %s: %s -- %s\n" \
+                                        std::die 3 "%s %s: %s -- %s" \
                                                  "${CMD}" "${subcommand}" \
                                                  "illegal group name" \
                                                  "${group}"
@@ -486,7 +486,7 @@ subcommand_load() {
 			fi
 			if [[ -n ${release} ]]; then
 			        is_release "${release}" || \
-                                        std::die 3 "%s %s: %s -- %s\n" \
+                                        std::die 3 "%s %s: %s -- %s" \
                                                  "${CMD}" "${subcommand}" \
                                                  "illegal release name"
                                 "${release}"
@@ -499,14 +499,15 @@ subcommand_load() {
 			local text=''
 			get_load_hints text
 			if [[ -z "${text}" ]]; then
-	                        std::die 3 "%s %s: module does not exist -- %s\n" \
+	                        std::die 3 "%s %s: module does not exist -- %s" \
                                           "${CMD}" 'load' "${m}"
 			else
-	                        std::info "%s %s: module unavailable -- %s\n" \
+	                        std::info "%s %s: module unavailable -- %s" \
                                           "${CMD}" 'load' "${m}"
 				if [[ ${verbosity_lvl} == 'verbose' ]]; then
-					std::info "\nTry with one of the following command(s):\n"
- 					std::info "${text}\n"
+				      	std::info ''
+					std::info "Try with one of the following command(s):"
+ 					std::info "${text}"
 				fi
 	                        std::die 3 ""
                         fi
@@ -524,7 +525,7 @@ subcommand_load() {
                 fi
 
 		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-			|| std::die 1 "Oops: unable to create tmp file!\n"
+			|| std::die 1 "Oops: unable to create tmp file!"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
 
@@ -542,7 +543,7 @@ subcommand_load() {
                         if [[ "$s" =~ ' conflicts ' ]]; then
                                 error_txt="conflicts with already loaded module(s): ${s#*module(s) }"
                         fi
-			std::die 3 "%s %s: %s -- %s\n" \
+			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
                                  "${error_txt}" \
                                  "${m}"
@@ -617,7 +618,7 @@ subcommand_unload() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	fi
@@ -670,11 +671,11 @@ subcommand_swap() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "missing argument"
         elif (( ${#args[@]} > 2 )); then
-                std::die 3 "%s %s: %s\n" \
+                std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "too many arguments"
 	fi
@@ -724,7 +725,7 @@ subcommand_show() {
 		shift
 	done
         if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	fi
@@ -1199,45 +1200,51 @@ subcommand_use() {
 		for f in ${UsedGroups//:/ }; do
 			std::info "\t${f}"
 		done
-		std::info "\nUnused groups:"
+		std::info ''
+		std::info "Unused groups:"
 		local _group
 		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
 			if ! group_is_used "${_group}" && (( depth == 0 )); then
-				std::info "\t${_group}\n"
+				std::info "\t${_group}"
 			fi
 		done
 
-		std::info "\nUsed releases:"
+		std::info ''
+		std::info "Used releases:"
 		for r in ${UsedReleases//:/ }; do
 			std::info "\t${r}"
 		done
-		std::info "\nUnused releases:"
+		std::info ''
+		std::info "Unused releases:"
 		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
 			if ! release_is_used $r; then
 				std::info "\t${r}"
 			fi
 		done
 
-		std::info "\nUsed flags:"
+		std::info ''
+		std::info "Used flags:"
 		for flag in "${!UseFlags[@]}"; do
 			std::info "\t${flag}"
 		done
 
                 local overlay
-                std::info "\nUsed overlays:\n"
+		std::info ''
+                std::info "Used overlays:"
                 for overlay in "${!Overlays[@]}"; do
 			local hiding=''
 			[[ "${Overlays[${overlay}]}" != '0' ]] && hiding=' (hiding)'
-                        std::info "\t${overlay}${hiding}\n"
+                        std::info "\t${overlay}${hiding}"
                 done
 
-		std::info "\nAdditonal directories in MODULEPATH:\n"
+		std::info ''
+		std::info "Additonal directories in MODULEPATH:"
 		let n=0
                 local group
 		for (( i=0; i<${#modulepath[@]}; i++)); do
 			if ! find_overlay overlay group "${modulepath[i]}"; then
-			        std::info "\t${modulepath[i]}\n"
+			        std::info "\t${modulepath[i]}"
 			        let n+=1
 			fi
 		done
@@ -1250,7 +1257,7 @@ subcommand_use() {
 	use () {
                 use_overlay() {
 			if [[ -n "${_LMFILES_}" ]]; then
-				std::die 3 "%s %s: %s -- %s\n" \
+				std::die 3 "%s %s: %s -- %s" \
 					 "${CMD}" "${subcommand}" \
 					 "overlays can be added as long as no modules are loaded!" \
 					 "${overlay}"
@@ -1265,7 +1272,7 @@ subcommand_use() {
 						:
 						;;
 					* )
-						std::die 3 "%s %s: %s -- %s\n" \
+						std::die 3 "%s %s: %s -- %s" \
 							 "${CMD}" "${subcommand}" \
 							 "invalid modifier '${modifier}!" \
 							 "${overlay}"
@@ -1276,12 +1283,12 @@ subcommand_use() {
 			fi
                         overlay=${overlay%/} # remove trailing '/' if there is one
                         [[ -d "${overlay}" ]] || \
-                                std::die 3 "%s %s: %s -- %s\n" \
+                                std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "is not an overlay directory" \
                                          "${overlay}"
                         if [[ -n "${Overlays[${overlay}]}" ]]; then
-                                std::info "%s %s: %s -- %s\n" \
+                                std::info "%s %s: %s -- %s" \
                                           "${CMD}" "${subcommand}" \
                                           "overlay already in use" \
                                           "${overlay}"
@@ -1372,7 +1379,7 @@ subcommand_use() {
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
                            (( ${GroupDepths[${arg}]} > 0 )); then
                         # argument is a hierarchical group in our root
-			std::die 3 "%s %s: %s -- %s\n" \
+			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
                                  "illegal group" \
                                  "${arg}"
@@ -1380,7 +1387,7 @@ subcommand_use() {
                 fi
                 # arg must be a directory!
 		if [[ ! -d ${arg} ]]; then
-			std::die 3 "%s %s: %s -- %s\n" \
+			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
                                  "illegal argument" \
                                  "${arg}"
@@ -1392,7 +1399,7 @@ subcommand_use() {
                 for overlay in "${!Overlays[@]}"; do
                         if [[ ${dir}/ =~ ^${overlay}/ ]]; then
                                 # dir is in one of our used overlays
-			        std::die 3 "%s %s: %s -- %s\n" \
+			        std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "illegal argument" \
                                          "${arg}"
@@ -1457,7 +1464,7 @@ subcommand_unuse() {
         unuse() {
                 unuse_overlay() {
 		        [[ -n "${_LMFILES_}" ]] && \
-				std::die 3 "%s %s: %s -- %s\n" \
+				std::die 3 "%s %s: %s -- %s" \
 					 "${CMD}" "${subcommand}" \
 					 "overlays can be removed as long as modules are loaded!" \
 					 "${overlay}"
@@ -1465,17 +1472,17 @@ subcommand_unuse() {
 			overlay=${overlay%:*}  # ignore any modifier
 			overlay=${overlay%/} # remove trailing '/' if there is one
                         [[ -d "${overlay}" ]] || \
-                                std::die 3 "%s %s: %s -- %s\n" \
+                                std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "is not an overlay directory" \
                                          "${overlay}"
                         [[ "${overlay}" == "${PMODULES_ROOT}" ]] && \
-                                std::die 3 "%s %s: %s -- %s\n" \
+                                std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "cannot remove root overlay" \
                                          "${overlay}"
                         [[ -z ${Overlays[${overlay}]} ]] && \
-                                std::die 3 "%s %s: %s -- %s\n" \
+                                std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "not an used overlay" \
                                          "${overlay}"
@@ -1511,7 +1518,7 @@ subcommand_unuse() {
                 unuse_group() {
                         local var="PMODULES_LOADED_${arg^^}"
                         if [[ -n "${!var}" ]]; then
-                                std::die 3 "%s %s: %s -- %s\n" \
+                                std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "cannot remove group due to loaded modules" \
                                          "${arg}"
@@ -1550,7 +1557,7 @@ subcommand_unuse() {
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
                            (( ${GroupDepths[${arg}]} > 0 )); then
                         # argument is a hierarchical group in our root
-			std::die 3 "%s %s: %s -- %s\n" \
+			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
                                  "illegal group" \
                                  "${arg}"
@@ -1558,7 +1565,7 @@ subcommand_unuse() {
                 fi
                 # user wants to append a directory to MODULEPATH
 		if [[ ! -d ${arg} ]]; then
-			std::die 3 "%s %s: %s -- %s\n" \
+			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
                                  "illegal argument" \
                                  "${arg}"
@@ -1570,7 +1577,7 @@ subcommand_unuse() {
                 for overlay in "${!Overlays[@]}"; do
                         if [[ ${dir}/ =~ ^${overlay}/ ]]; then
                                 # dir is in one of our used overlays
-			        std::die 3 "%s %s: %s -- %s\n" \
+			        std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "illegal argument" \
                                          "${arg}"
@@ -1597,7 +1604,7 @@ subcommand_unuse() {
 		shift
 	done
 	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          'missing argument'
 	fi
@@ -1757,7 +1764,7 @@ subcommand_purge() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
@@ -1804,7 +1811,7 @@ subcommand_list() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
@@ -1843,7 +1850,7 @@ subcommand_clear() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "no arguments allowed"
         fi
@@ -1918,10 +1925,10 @@ subcommand_search() {
                 
                 # no args
                 print_header_default() {
-		        std::info '\n'
+		        std::info ''
 		        std::info "${fmt}" "Module" "Release" "Group" "Requires"
 		        std::info '-%.0s' {1..60}
-		        std::info '\n'
+		        std::info ''
 	        }
 
                 print_line_default() {
@@ -1930,7 +1937,7 @@ subcommand_search() {
                 }
 
                 print_default() {
-                        fmt="%-20s %-10s %-12s %-s\n"
+                        fmt="%-20s %-10s %-12s %-s"
                         if [[ ${opt_print_header} == 'yes' ]]; then
                                 func_print_header='print_header_default'
                         else
@@ -1940,10 +1947,10 @@ subcommand_search() {
                 }
 
                 print_header_verbose() {
-		        std::info '\n'
+		        std::info ''
 		        std::info "${fmt}" "Module" "Release" "Group" "Overlay" "Requires"
 		        std::info '-%.0s' {1..79}
-		        std::info '\n'
+		        std::info ''
 	        }
 
                 print_line_verbose() {
@@ -1951,7 +1958,7 @@ subcommand_search() {
                 }
 
                 print_verbose() {
-                        fmt="%-20s %-10s %-12s %-20s %-s\n"
+                        fmt="%-20s %-10s %-12s %-20s %-s"
                         func_print_header='print_header_verbose'
                         func_print_line='print_line_verbose'
                 }
@@ -1970,7 +1977,7 @@ subcommand_search() {
 				out+="$d/"
 			done
 			out+="${line[0]}"
-			std::info "${out}\n"
+			std::info "${out}"
                 }
 
                 # print full modulefile names only
@@ -2030,7 +2037,7 @@ subcommand_search() {
 		local -r module=$1
 		# write results to a temporary file for later processing
 		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-			|| std::die 1 "Oops: unable to create tmp file!\n"
+			|| std::die 1 "Oops: unable to create tmp file!"
 		local group
 		# loop over all groups
 		for group in "${!GroupDepths[@]}"; do
@@ -2100,7 +2107,7 @@ subcommand_search() {
                                         local arg=${1/--release=}
                                 fi
 				is_release "${arg}" || \
-				        std::die 1 "%s %s: %s -- %s\n" \
+				        std::die 1 "%s %s: %s -- %s" \
                                                  "${CMD}" 'search' \
                                                  "illegal release name" \
                                                  "${arg}"
@@ -2114,7 +2121,7 @@ subcommand_search() {
                                         local arg=${1/--with=}
                                 fi
 				if [[ -z ${arg} ]] || [[ "${arg}" =~ "-*" ]]; then
-				        std::die 1 "%s %s: %s -- %s\n" \
+				        std::die 1 "%s %s: %s -- %s" \
                                                  "${CMD}" 'search' \
                                                  "illegal value for --with option" \
                                                  "${arg}"
@@ -2385,7 +2392,7 @@ subcommand_initswitch() {
 		shift
 	done
 	if (( ${#args[@]} != 2 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "two arguments required not less not more"
 	fi
@@ -2438,7 +2445,7 @@ case "$1" in
 		declare Shell='csh'
 		;;
 	* )
-		std::die 1 "${CMD}: unsupported shell -- $1\n"
+		std::die 1 "${CMD}: unsupported shell -- $1"
 		;;
 esac
 shift
@@ -2470,11 +2477,11 @@ while (( $# > 0 )); do
 done
 
 if [[ -z "${subcommand}" ]]; then
-	std::die 1 "${CMD}: no sub-command specified.\n"
+	std::die 1 "${CMD}: no sub-command specified."
 fi
 
 if [[ -z "${Subcommands[${subcommand}]}" ]]; then
-	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}\n"
+	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
 
 if [[ -n ${PMODULES_ENV} ]]; then
