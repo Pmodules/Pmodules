@@ -18,6 +18,7 @@ declare -r base64="${sbindir}/base64"
 declare -r mktemp="${sbindir}/mktemp"
 declare -r sort="${sbindir}/sort"
 declare -r getopt="${sbindir}/getopt"
+declare -r find="${sbindir}/find"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
@@ -34,6 +35,10 @@ else
 fi
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
+
+# we use newline as internal field separator
+IFS=$' \t\n'
+declare -r __IFS=${IFS}	# used to restore IFS
 
 shopt -s nullglob
 
@@ -263,10 +268,9 @@ subcommand_load() {
 	local prefix=''
 	local m=''
 
-	local saved_IFS="${IFS}";
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
 
 	#
 	# Test whether a given module is available.
@@ -407,10 +411,9 @@ subcommand_load() {
 			# - release:group:name or
 			# - name:release
 
-			local save_ifs=${IFS}
 			IFS=':'
 			local -a toks=($m)
-			IFS=${save_ifs}
+			IFS=${__IFS}
 			local group=''
 			local release=''
 			if is_group "${toks[0]}"; then
@@ -715,12 +718,11 @@ subcommand_show() {
 #	modulename1 release1 modulename2 release2 ...
 #
 get_available_modules() {
-	local saved_IFS=${IFS}; 
-	IFS=':'
-	local -a dirs=($1)
-	IFS=${saved_IFS}
-	local -r module="$2"
-	local -r use_releases="${3:-${UsedReleases}}"
+	local -r module="$1"
+	local -r use_releases="${2:-${UsedReleases}}"
+	shift 2
+	local -a dirs=( "$@" )
+
 	local -a mods=()
 	local    release
 	local dir=''
@@ -735,7 +737,7 @@ get_available_modules() {
 				if [[ :${use_releases}: =~ :${release}: ]]; then
 					mods+=( "${mod}" ${release} "${dir}/${mod}")
 				fi
-			done < <(find * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
+			done < <(${find} * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
 		}
 	done
 	echo "${mods[@]}"
@@ -914,16 +916,16 @@ subcommand_avail() {
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
-	local saved_IFS=${IFS};
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
         local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
 			mods=( $( get_available_modules \
-                                          "${dir}" "${string}" \
-                                          "${opt_use_releases}" ) )
+                                          "${string}" \
+                                          "${opt_use_releases}" \
+					  "${dir}" ) )
 			[[ ${#mods[@]} == 0 ]] && continue
 			${output_function}
 		done
@@ -942,7 +944,7 @@ compute_group_depth () {
         local group=${dir%/*}
         local group=${group##*/}
         [[ -n "${GroupDepths[${group}]}" ]] && return 0
-	local -i depth=$(find "${dir}" -depth \( -type f -o -type l \) \
+	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
                           -printf "%d" -quit 2>/dev/null)
 	(( depth-=2 ))
 	# if a group doesn't contain a modulefile, depth is negativ
@@ -998,10 +1000,9 @@ SWITCHES:
 
 subcommand_use() {
         local -r subcommand='use'
-	local saved_IFS=${IFS};
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
         local add2path_func='std::append_path'
 
         group_is_used() {
@@ -1491,7 +1492,8 @@ subcommand_clear() {
 Subcommands[search]='search'
 Options[search]='-o aH -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release: -l with: -l all-releases -l src: -l print-csv '
-Options[search]+='-l verbose'
+Options[search]+='-l verbose '
+Options[search]+='-l all-deps -l wrap'
 Help[search]='
 USAGE:
         module search [switches] string...
@@ -1520,18 +1522,25 @@ SWITCHES:
 
         --verbose
                 vebose output
+
+        --wrap
+                wrap output
 '
 
 subcommand_search() {
 	local -r subcommand='search'
 	local modules=()
 	local with_modules='//'
+	local -ir cols=$(tput cols)	# get number of columns of terminal
+	local -i max_len_modulename=0
 	local src_prefix=()
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
 	local opt_print_csv='no'
         local opt_print_verbose='no'
 	local opt_use_releases=':'
+	local opt_all_deps='no'
+	local opt_wrap='no'
 
 	#.....................................................................
 	#
@@ -1549,21 +1558,8 @@ subcommand_search() {
                 local func_print_line=''
                 local fmt=''
                 
-                # no args
-                print_header_default() {
-		        std::info ''
-		        std::info "${fmt}" "Module" "Release" "Group" "Requires"
-		        std::info '-%.0s' {1..60}
-		        std::info ''
-	        }
-
-                print_line_default() {
-			local deps="${@:5}"
-                        std::info "${fmt}" "$1" "$2" "$3" "${deps}"
-                }
-
                 print_default() {
-                        fmt="%-20s %-10s %-12s %-s"
+			fmt="%-${max_len_modulename}s %-10s %-12s %-s"
                         if [[ ${opt_print_header} == 'yes' ]]; then
                                 func_print_header='print_header_default'
                         else
@@ -1572,23 +1568,64 @@ subcommand_search() {
                         func_print_line='print_line_default'
                 }
 
-                print_header_verbose() {
+                print_header_default() {
 		        std::info ''
-		        std::info "${fmt}" "Module" "Release" "Group" "Overlay" "Requires"
-		        std::info '-%.0s' {1..79}
-		        std::info ''
+		        std::info "${fmt}" "Module" "Release" "Group" "Requires"
+		        std::info '-%.0s' $(seq 1 ${cols})
 	        }
 
-                print_line_verbose() {
-                        std::info "${fmt}" "$@"
+                print_line_default() {
+			write_line() {
+				local str="$1"
+				if (( ${#str} >= cols )); then
+					str="${str:0:$((cols-1))}>"
+				fi
+				std::info "${str}"
+			}
+			if [[ "${opt_wrap}" == 'no' ]]; then
+				local deps="${@:5}"
+				local str=$(printf "${fmt}"  "$1" "$2" "$3" "${deps[@]}")
+				write_line "${str}"
+			else
+				local deps=( "${@:5}" )
+				local str=$(printf "${fmt}"  "$1" "$2" "$3" "${deps[0]}")
+				for (( i = 1; i < ${#deps[@]}; i++ )); do
+					if (( ${#str} + ${#deps[i]} + 1 <= cols )); then
+						str+=" ${deps[i]}"
+					else
+						write_line "${str}"
+						str=$(printf "${fmt}"  "" "" "" "> ${deps[i]}")
+					fi
+				done
+				write_line "${str}"
+			fi
                 }
 
                 print_verbose() {
-                        fmt="%-20s %-10s %-12s %-20s %-s"
+                        fmt="%-${max_len_modulename}s %-10s %-12s %-s"
                         func_print_header='print_header_verbose'
                         func_print_line='print_line_verbose'
                 }
                 
+                print_header_verbose() {
+		        std::info ''
+		        std::info "${fmt}" "Module" "Release" "Group" "Dependencies/Modulefile"
+		        std::info '-%.0s' $(seq 1 ${cols})
+	        }
+
+                print_line_verbose() {
+			local deps="${@:5}"
+                        std::info "${fmt}" "$1" "$2" "$3" "dependencies: ${deps}"
+                        std::info "${fmt}" ""   ""   ""   "modulefile:   $4"
+                 }
+
+                # print full modulefile names only
+                print_modulefiles() {
+			fmt=''
+			func_print_header='print_header_none'
+                        func_print_line='print_header_none'
+                }
+
                 print_header_none() {
                         :
                 }
@@ -1604,13 +1641,6 @@ subcommand_search() {
 			done
 			out+="${line[0]}"
 			std::info "${out}"
-                }
-
-                # print full modulefile names only
-                print_modulefiles() {
-			fmt=''
-			func_print_header='print_header_none'
-                        func_print_line='print_header_none'
                 }
 
                 print_line_csv() {
@@ -1670,37 +1700,54 @@ subcommand_search() {
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
 			local depth=${GroupDepths[${group}]}
-			local modulepath=( $(find \
-						 "${src_prefix[@]/%//${group}/modulefiles}" \
-						 -mindepth ${depth} -maxdepth ${depth} \
-						 -type d \
-						 -printf "%p:"
-						 2>/dev/null))
-
+			local s=''
+			if (( depth > 0 )); then
+				s=$(printf '/*%.0s' $(seq 1 ${depth}))
+			fi
+			local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+			
 			# get and print all available modules in $mpath
 			# with respect to the requested releases
 			# tmpfile: module/version release group group-
                         # dependencies...
 			local mods=( $( get_available_modules \
-						"${modulepath}" \
 						"${module}" \
-						"${opt_use_releases}" ) )
+						"${opt_use_releases}" \
+				     		"${modulepath[@]}" \
+				     ) )
+
 			for (( i=0; i<${#mods[@]}; i+=3 )); do
 				local name=${mods[i]}
 				local release=${mods[i+1]}
 				local modulefile=${mods[i+2]}
-				local prefix=''
-				local requires=''
 
-				get_module_prefix prefix "${modulefile}"
-				local dependencies_file="${prefix}/.dependencies"
-				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-					requires=$(< "${dependencies_file}")
+				if (( ${#name} > max_len_modulename)); then
+					max_len_modulename=${#name}
 				fi
 				
-				echo ${mods[i]} ${mods[i+1]} \
-				     ${group} ${mods[i+2]} \
-                                     ${requires} >> "${tmpfile}"
+				if [[ "${opt_print_verbose}" == 'yes' ]] || [[ "${opt_all_deps}" == 'yes' ]]; then
+					local prefix=''
+					get_module_prefix prefix "${modulefile}"
+					local dependencies_file="${prefix}/.dependencies"
+					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
+						deps=($(< "${dependencies_file}"))
+					else
+						deps=()
+					fi
+				else
+					# get dependencies encoded in directory name
+					local deps=()
+					local -i j
+					IFS='/'
+					local toks=( ${modulefile} )
+					for ((j = -depth-2; j < -2; j += 2)); do
+						deps+=( "${toks[*]: $j:2}" );
+					done
+					IFS=${__IFS}
+				fi
+				
+				echo ${name} ${release} ${group} ${modulefile} \
+                                     ${deps[@]} >> "${tmpfile}"
 			done
 		done
 		print_result "${tmpfile}"
@@ -1712,6 +1759,9 @@ subcommand_search() {
                         -H | --help )
                                 print_help "${subcommand}"
                                 ;;
+			--all-deps )
+				opt_all_deps='yes'
+				;;
 			--no-header )
 				opt_print_header='no'
 				;;
@@ -1767,6 +1817,9 @@ subcommand_search() {
                         -v | --verbose )
                                 opt_print_verbose='yes'
                                 ;;
+			--wrap )
+				opt_wrap='yes'
+				;;
 			-- )
 				;;
 			* )
