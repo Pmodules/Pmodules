@@ -345,6 +345,10 @@ pmodules::compile() {
 		build bash
 	fi
 
+	if [[ ! -f "${PMODULES_HOME}/sbin/find" ]] || [[ ${opt_force} == 'yes' ]]; then
+		build findutils
+	fi
+
 	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build Tcl
 	fi
