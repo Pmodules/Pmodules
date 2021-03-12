@@ -47,4 +47,3 @@ if (! $?LOADEDMODULES ) then
   setenv LOADEDMODULES ""
 endif
 
-setenv PATH "${PMODULES_HOME}/bin:${PATH}"
