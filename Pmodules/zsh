@@ -89,10 +89,6 @@ unset PMODULES_DEFAULT_RELEASES
 unset PMODULES_DEFAULT_GROUPS
 unset PMODULES_DEFINED_RELEASES
 
-# setup PATH
-dirs_to_remove="${PMODULES_HOME%/*}/*"
-path=( ${(m)path:#${dirs_to_remove}} "${PMODULES_HOME}/bin" )
-
 # initialize MANPATH with output of `man --path` if not set
 [[ -z "${MANPATH}" ]] && manpath=$( man --path )
 

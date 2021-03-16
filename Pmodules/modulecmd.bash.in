@@ -1315,10 +1315,6 @@ reset_used_releases() {
         g_env_must_be_saved='yes'
 }
 
-init_path() {
-        std::replace_path PATH    "${PMODULES_HOME%/*}/.*"
-        std::prepend_path PATH    "${PMODULES_HOME}/bin"
-}
 
 init_manpath() {
         std::replace_path MANPATH "${PMODULES_HOME%/*}/.*"
@@ -1350,13 +1346,11 @@ pmodules_init() {
         reset_modulepath
         reset_used_groups
         reset_used_releases
-        init_path
         init_manpath
         export_env \
                    LOADEDMODULES \
                    _LMFILES_ \
                    MODULEPATH \
-                   PATH \
                    MANPATH
 }
 
