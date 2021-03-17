@@ -3,7 +3,7 @@
 pbuild::set_download_url "https://ftp.gnu.org/pub/gnu/$P/$P-$V.tar.gz"
 
 pbuild::add_configure_args "--prefix=${PREFIX}"
-pbuild::add_configure_args "--bindir=${PREFIX}/sbin"
+pbuild::add_configure_args "--bindir=${PREFIX}/${UTILBIN_DIR}"
 pbuild::add_configure_args "--disable-java"
 pbuild::add_configure_args "--disable-threads"
 pbuild::add_configure_args "--disable-shared"
