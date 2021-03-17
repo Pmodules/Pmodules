@@ -21,7 +21,6 @@ declare -r getopt="${sbindir}/getopt"
 declare -r find="${sbindir}/find"
 
 source "${libdir}/libstd.bash"
-source "${libdir}/libpmodules.bash"
 
 : ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
 
@@ -1804,8 +1803,8 @@ subcommand_search() {
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			--src )
+				# :FIXME: do we have to add some sanity checks here?
 				src_prefix=$2
-				pmodules::check_directories "${src_prefix}"
 				shift
 				;;
                         -v | --verbose )
