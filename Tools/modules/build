@@ -29,18 +29,19 @@ pbuild::configure() {
 }
 
 pbuild::post_install() {
-	rm -v    ${PREFIX}/Modules/bin/add.modules
-	rm -v    ${PREFIX}/Modules/bin/mkroot
-	rm -rfv  ${PREFIX}/Modules/modulefiles
-	mv -v    ${PREFIX}/Modules/share/man/man1/module.1 ${PREFIX}/share/man/man1
-	mv -v    ${PREFIX}/Modules/share/man/man4/modulefile.4 ${PREFIX}/share/man/man4
-	rmdir    ${PREFIX}/Modules/bin
-	rmdir    ${PREFIX}/Modules/share/man/man1
-	rmdir    ${PREFIX}/Modules/share/man/man4
-	rmdir    ${PREFIX}/Modules/share/man
-	rmdir    ${PREFIX}/Modules/share
-	rmdir    ${PREFIX}/Modules
-	cp -v    "${BUILD_DIR}/modulecmd" "${PREFIX}/libexec/modulecmd.bin" || exit 1
+	rm -v   "${PREFIX}/Modules/bin/add.modules"
+	rm -v   "${PREFIX}/Modules/bin/mkroot"
+	rm -rfv "${PREFIX}/Modules/modulefiles"
+	mv -v   "${PREFIX}/Modules/share/man/man1/module.1 ${PREFIX}/share/man/man1"
+	mv -v   "${PREFIX}/Modules/share/man/man4/modulefile.4 ${PREFIX}/share/man/man4"
+	rmdir   "${PREFIX}/Modules/bin"
+	rmdir   "${PREFIX}/Modules/share/man/man1"
+	rmdir   "${PREFIX}/Modules/share/man/man4"
+	rmdir   "${PREFIX}/Modules/share/man"
+	rmdir   "${PREFIX}/Modules/share"
+	rmdir   "${PREFIX}/Modules"
+	rm -f	"${PREIX}/init/{ksh,perl.pm,python.py,ruby.rb,cmake,.modulespath}"
+	cp -v   "${BUILD_DIR}/modulecmd" "${PREFIX}/libexec/modulecmd.bin" || exit 1
 }
 	
 # fake module command
