@@ -1,0 +1,10 @@
+#%Module1.0
+
+module-whatis		"Pmodules environment"
+module-url		"https://gitlab.psi.ch/Pmodules/src"
+module-license		"GNU GPL v2"
+module-maintainer	"Achim Gsell <achim.gsell@psi.ch>"
+
+module-help	"
+Pmodules are a hierarchical module environment based on Environment Modules.
+"

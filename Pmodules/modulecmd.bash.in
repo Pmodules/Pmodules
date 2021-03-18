@@ -1,4 +1,4 @@
-#!@PMODULES_HOME@/sbin/bash --noprofile
+#!@BASH@ --noprofile
 #
 
 #set -o nounset
@@ -10,18 +10,28 @@ declare -r  CMD='module'
 
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare     prefix=$(dirname "${mydir}")
-declare -r  sbindir="${prefix}/sbin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
-declare -r base64="${sbindir}/base64"
-declare -r mktemp="${sbindir}/mktemp"
-declare -r sort="${sbindir}/sort"
-declare -r getopt="${sbindir}/getopt"
-declare -r find="${sbindir}/find"
+base64=$(PATH=/bin:/usr/bin /usr/bin/which base64)
+declare -r base64
+mktemp=$(PATH=/bin:/usr/bin /usr/bin/which mktemp)
+declare -r mktemp
+sort=$(PATH=/bin:/usr/bin /usr/bin/which sort)
+declare -r sort
+awk=$(PATH=/bin:/usr/bin /usr/bin/which awk)
+declare -r awk
+if [[ $(uname -s) == 'Darwin' ]]; then
+	declare -r getopt="${libexecdir}/getopt"
+	declare -r find="${libexecdir}/find"
+else
+	getopt=$(PATH=/bin:/usr/bin /usr/bin/which getopt)
+	declare -r getopt
+	find=$(PATH=/bin:/usr/bin /usr/bin/which find)
+	declare -r find
+fi
 
 source "${libdir}/libstd.bash"
-source "${libdir}/libpmodules.bash"
 
 : ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
 
@@ -318,7 +328,7 @@ subcommand_load() {
 		# can be used.
 		#
 		mapfile -t array  < <("${modulecmd}" 'bash' show "$m" 2>&1 | \
-			awk 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
+			${awk} 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
 		test -n "${current_modulefile}" || return 1
@@ -1663,14 +1673,14 @@ subcommand_search() {
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
                 done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
-                                 awk "${with_modules}")
+                                 ${awk} "${with_modules}")
         }
 
 	get_module_prefix() {
 		local "$1"
 		local modulefile="$2"
 		local -r _prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
-					  awk '/_PREFIX |_HOME / {print $3; exit}')
+					  ${awk} '/_PREFIX |_HOME / {print $3; exit}')
 		std::upvar $1 "${_prefix}"
 	}
 
@@ -1804,8 +1814,8 @@ subcommand_search() {
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			--src )
+				# :FIXME: do we have to add some sanity checks here?
 				src_prefix=$2
-				pmodules::check_directories "${src_prefix}"
 				shift
 				;;
                         -v | --verbose )

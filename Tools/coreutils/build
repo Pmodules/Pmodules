@@ -1,4 +1,4 @@
 #!/usr/bin/env modbuild
 
 pbuild::set_download_url "http://ftp.gnu.org/gnu/coreutils/$P-$V.tar.xz"
-pbuild::add_configure_args "--bindir=${PREFIX}/sbin"
+pbuild::add_configure_args "--bindir=${PREFIX}/${UTILBIN_DIR}"
