@@ -340,16 +340,18 @@ pmodules::compile() {
 	#	build coreutils
 	#fi
 
-	if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build getopt
+	if [[ "${OS}" == 'Darwin' ]]; then
+		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
+			build getopt
+		fi
+
+		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/find" ]] || [[ ${opt_force} == 'yes' ]]; then
+			build findutils
+		fi
 	fi
 
 	if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/bash" ]] || [[ ${opt_force} == 'yes' ]]; then
 		build bash
-	fi
-
-	if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/find" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build findutils
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/${UTILBIN_DIR}/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
