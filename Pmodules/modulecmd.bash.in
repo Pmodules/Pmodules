@@ -747,7 +747,7 @@ get_available_modules() {
 				if [[ :${use_releases}: =~ :${release}: ]]; then
 					mods+=( "${mod}" ${release} "${dir}/${mod}")
 				fi
-			done < <(${find} * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
+			done < <(${find} -L * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
 		}
 	done
 	echo "${mods[@]}"
