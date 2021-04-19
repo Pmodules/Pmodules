@@ -806,10 +806,16 @@ pbuild::make_all() {
 	}
 
 	#......................................................................
-	# non-redefinable post-install
+	# non-redefinable post-install. Install:
+	# - documentation files as defined in the build-script
+	# - modulefile and file with release
+	# .
 	post_install() {
 		#..............................................................
 		# install the doc-files specified in the build-script
+		#
+		# Arguments:
+		#     none
 		#
 		install_doc() {
 			if [[ -z "${MODULE_DOCFILES}" ]]; then
