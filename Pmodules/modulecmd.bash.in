@@ -609,7 +609,15 @@ subcommand_unload() {
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	fi
-
+	
+	# The module() function uses PMODULES_HOME to call modulecmd.
+	# If a Pmodules module is unloaded this evnvironment variable
+	# will be unset. In consequence the module() function would
+	# fail. Instead of comparing the name of the module to unload
+	# with 'Pmodules', we save the value and set it at the end of
+	# the loop again, if it has been unset.
+	local saved_home="${PMODULES_HOME}"
+	
         local arg
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
@@ -623,6 +631,10 @@ subcommand_unload() {
                 	;;
 		esac
 	done
+	if [[ -z ${PMODULES_HOME} ]]; then
+		PMODULES_HOME=${saved_home}
+		export_env 'PMODULES_HOME'
+	fi
 }
 
 ##############################################################################
@@ -1398,10 +1410,15 @@ subcommand_purge() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
+	# we cannot unset PMODULES_HOME, otherwise the module function
+	# would fail.
+	local saved_home="${PMODULES_HOME}"
 	"${modulecmd}" "${Shell}" "${subcommand}"
         reset_modulepath
         reset_used_groups
-	export_env MODULEPATH
+	PMODULES_HOME="${saved_home}"
+	
+	export_env MODULEPATH PMODULES_HOME
 }
 
 ##############################################################################
