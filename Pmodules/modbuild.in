@@ -229,6 +229,13 @@ parse_args() {
 		--system=* )
 			opt_system="${1/*=}"
 			;;
+		--use-flags )
+			USE_FLAGS="y:$2:"
+			shift
+			;;
+		--use-flags=* )
+			USE_FLAGS=":${1/--use-flags=}:"
+			;;
 		--with )
 			opt_with_modules+=( "$2" )
 			shift
