@@ -21,6 +21,7 @@ sort=$(PATH=/bin:/usr/bin /usr/bin/which sort)
 declare -r sort
 awk=$(PATH=/bin:/usr/bin /usr/bin/which awk)
 declare -r awk
+rm=$(PATH=/bin:/usr/bin /usr/bin/which rm)
 if [[ $(uname -s) == 'Darwin' ]]; then
 	declare -r getopt="${libexecdir}/getopt"
 	declare -r find="${libexecdir}/find"
@@ -1755,7 +1756,7 @@ subcommand_search() {
 			done
 		done
 		print_result "${tmpfile}"
-		#rm -f "${tmpfile}"
+		${rm} -f "${tmpfile}"
 	}
 
 	while (( $# > 0 )); do
