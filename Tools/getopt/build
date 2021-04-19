@@ -17,22 +17,30 @@ pbuild::compile() {
 	declare -x LIBRARY_PATH="${PREFIX}/lib"
 	case ${OS} in
 		Linux )
+			declare -x C_INCLUDE_PATH="${PREFIX}/include"
+			declare -x LIBRARY_PATH="${PREFIX}/lib"
 			declare -x LDFLAGS="-lintl -L${PREFIX}/lib"
 			;;
 		Darwin )
-			declare -x LDFLAGS="-lintl -liconv -framework CoreFoundation"
+			if [[ ! -d '/opt/local/bin' ]] || [[ ! -x '/opt/local/bin/msgfmt' ]]; then
+				std::die 1 "gettext port from Macports is required to build 'getopt'!"
+			fi
+			PATH+=':/opt/local/bin'
+			declare -x C_INCLUDE_PATH='/opt/local/include'
+			declare -x LDFLAGS="/opt/local/lib/libintl.a /opt/local/lib/libiconv.a -framework CoreFoundation"
 			;;
 	esac
 
-	make -e all
+	make -e all || exit 1
+	declare -x DESTDIR="${PREFIX}"
+	declare -x prefix='' || exit 1 
+	PATH="${PREFIX}/${UTILBIN_DIR}:${PATH}"
+	make -e install
+	mv "${PREFIX}/bin/getopt" "${PREFIX}/${UTILBIN_DIR}"
 }
 
 pbuild::install() {
-	declare -x DESTDIR="${PREFIX}"
-	declare -x prefix=''
-	make -e install
-	mkdir -p "${PREFIX}/sbin"
-	mv "${PREFIX}/bin/getopt" "${PREFIX}/sbin"
+	:
 }
 
 pbuild::cleanup_build() {

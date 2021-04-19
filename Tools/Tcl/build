@@ -14,12 +14,12 @@ pbuild::configure() {
 	esac
 	"${srcdir}"/configure \
 		--prefix="${PREFIX}" \
-		--bindir="${PREFIX}/sbin" \
+		--bindir="${PREFIX}/${UTILBIN_DIR}" \
 		--enable-shared=no \
 		|| exit 1
 }
 
 pbuild::post_install() {
-	{ cd "${PREFIX}"/sbin && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
+	{ cd "${PREFIX}/${UTILBIN_DIR}" && rm -f tclsh && ln -fs tclsh${V%.*} tclsh; };
 }
 

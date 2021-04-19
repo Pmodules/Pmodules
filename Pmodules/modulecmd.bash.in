@@ -1,4 +1,4 @@
-#!@PMODULES_HOME@/sbin/bash --noprofile
+#!@BASH@ --noprofile
 #
 
 #set -o nounset
@@ -10,18 +10,29 @@ declare -r  CMD='module'
 
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare     prefix=$(dirname "${mydir}")
-declare -r  sbindir="${prefix}/sbin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
-declare -r base64="${sbindir}/base64"
-declare -r mktemp="${sbindir}/mktemp"
-declare -r sort="${sbindir}/sort"
-declare -r getopt="${sbindir}/getopt"
-declare -r find="${sbindir}/find"
+base64=$(PATH=/bin:/usr/bin /usr/bin/which base64)
+declare -r base64
+mktemp=$(PATH=/bin:/usr/bin /usr/bin/which mktemp)
+declare -r mktemp
+sort=$(PATH=/bin:/usr/bin /usr/bin/which sort)
+declare -r sort
+awk=$(PATH=/bin:/usr/bin /usr/bin/which awk)
+declare -r awk
+rm=$(PATH=/bin:/usr/bin /usr/bin/which rm)
+if [[ $(uname -s) == 'Darwin' ]]; then
+	declare -r getopt="${libexecdir}/getopt"
+	declare -r find="${libexecdir}/find"
+else
+	getopt=$(PATH=/bin:/usr/bin /usr/bin/which getopt)
+	declare -r getopt
+	find=$(PATH=/bin:/usr/bin /usr/bin/which find)
+	declare -r find
+fi
 
 source "${libdir}/libstd.bash"
-source "${libdir}/libpmodules.bash"
 
 : ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
 
@@ -35,6 +46,10 @@ else
 fi
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
+
+# we use newline as internal field separator
+IFS=$' \t\n'
+declare -r __IFS=${IFS}	# used to restore IFS
 
 shopt -s nullglob
 
@@ -281,6 +296,65 @@ USAGE:
 subcommand_load() {
         local -r subcommand='load'
 	local current_modulefile=''
+	local prefix=''
+	local m=''
+
+	IFS=':'
+	local -a modulepath=(${MODULEPATH})
+	IFS=${__IFS}
+
+	#
+	# Test whether a given module is available.
+	# The passed module-name can be
+	#
+	# - an absolute file- or link-name.
+	#   The module can be either in- or outside our hierarchy.
+	#
+	# - a relative file- or link-name.
+	#   The module can be either in- or outside out hierarchy.
+	#
+	# - specified with name and version (like gcc/5.2.0).
+	#   The module can be either in- or outside our hierarchy.
+	#
+	# - specified with name only (without version, like gcc).
+	#   The module can be either in- or outside our hierarchy.
+	#
+	# - directory in- or outsite our hierarchy (not supported by
+        #   modulecmd.tcl!)
+	#
+	# arguments:
+	# 	$1: module name or file
+	#
+	# possible return values:
+	# 	0: module is loadable
+	# 	1: either not a modulefile or unsused release
+	#
+	# The following variables in the enclosing function are set:
+        #       current_modulefile
+        #       prefix
+	#	release
+	#
+	is_available() {
+		local  m=$1
+		local -a array
+		#
+		# the next command assigns the absolute modulefile path
+		# to ${arry[0]} and - if the module is in our root - the
+		# prefix of the module to ${array[1]}.
+		#
+		# The trick with the first line matching "_PREFIX" is not
+		# 100% reliable: One of the Pmodules extensions must be
+		# called before something like
+		#   setenv FOO_PREFIX bar
+		# can be used.
+		#
+		mapfile -t array  < <("${modulecmd}" 'bash' show "$m" 2>&1 | \
+			${awk} 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
+		current_modulefile="${array[0]}"
+		prefix="${array[1]}"
+		test -n "${current_modulefile}" || return 1
+		get_release release "${current_modulefile}" "${UsedReleases}"
+	}
 
 	#
 	# output load 'hints'
@@ -418,27 +492,10 @@ subcommand_load() {
 			# - release:name
 			# - release:group:name
 			# - name:release
-                        #
-                        # :FIXME: move to a function
-			#
-			# following variables are manipulated:
-			#
-			# m
-			#     the module to load (group and release are stripped)
-			#
-			# MODULEPATH, modulepath
-			#     if a group as been given, both variables are set
-			#     to the corresponding module-file directories of the
-			#     used overlays.
-			#
-			# UsedReleases
-			#     if a release as been given, UsedReleases is set to
-			#     this release.
-			#
-			local save_ifs=${IFS}
+
 			IFS=':'
 			local -a toks=($m)
-			IFS=${save_ifs}
+			IFS=${__IFS}
 			local group=''
 			local release=''
 			if is_group "${toks[0]}"; then
@@ -622,7 +679,15 @@ subcommand_unload() {
                          "${CMD}" "${subcommand}" \
                          "missing argument"
 	fi
-
+	
+	# The module() function uses PMODULES_HOME to call modulecmd.
+	# If a Pmodules module is unloaded this evnvironment variable
+	# will be unset. In consequence the module() function would
+	# fail. Instead of comparing the name of the module to unload
+	# with 'Pmodules', we save the value and set it at the end of
+	# the loop again, if it has been unset.
+	local saved_home="${PMODULES_HOME}"
+	
         local arg
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
@@ -636,6 +701,10 @@ subcommand_unload() {
                 		;;
 		esac
 	done
+	if [[ -z ${PMODULES_HOME} ]]; then
+		PMODULES_HOME=${saved_home}
+		export_env 'PMODULES_HOME'
+	fi
 }
 
 ##############################################################################
@@ -740,27 +809,21 @@ subcommand_show() {
 # Find all modules in a given modulepath matching a specific string.
 # The search can be restricted to certain releases.
 #
-# $1    modulepath (colon separated)
-# $2    string (module name or part of, might be empty)
-# $3    releases, defaults to used releases
-#
 # return list like
 #	modulename1 release1 modulefile1  modulename2 release2 modulefile2 ...
 #
 get_available_modules() {
-	local saved_IFS=${IFS}; 
-	IFS=':'
-	local -a dirs=($1)
-	IFS=${saved_IFS}
+        local var="$1"
 	local -r module="$2"
 	local -r releases="${3:-${UsedReleases}}"
+	shift 3 # in the for loop below we use $@ to loop over the directories
 	local -a mods=()
 	local    release
 
         local -A dict
 	local -A modulenames
 	local dir
-        for dir in "${dirs[@]}"; do
+        for dir in "$@"; do
                 test -d "${dir}" || continue
 	        {
 		        cd "${dir}"
@@ -814,7 +877,7 @@ get_available_modules() {
                                          -ipath "${module}*")
 	        }
         done
-	echo "${mods[@]}"
+	std::upvar ${var} "${mods[@]}"
 }
 
 #
@@ -1075,10 +1138,9 @@ subcommand_avail() {
 	        pattern+=( '' )
 	fi
         local -a modulepath
-	local saved_IFS=${IFS}
 	IFS=':'
 	modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
         
         local overlay=''
         local group=''
@@ -1097,10 +1159,12 @@ subcommand_avail() {
         local string
 	for string in "${pattern[@]}"; do
                 for group in "${groups[@]}"; do
-			mods=( $( get_available_modules \
-                                          "${modulepath_of_group[${group}]}" \
-                                          "${string}" \
-                                          "${opt_use_releases}" ) )
+			get_available_modules \
+				mods \
+                                "${string}" \
+                                "${opt_use_releases}" \
+				"${modulepath_of_group[${group}]}"
+
 			[[ ${#mods[@]} == 0 ]] && continue
 
 			${output_function} "${group}"
@@ -1121,7 +1185,7 @@ compute_group_depth () {
         local group=${group##*/}
         [[ -n "${GroupDepths[${group}]}" ]] && return 0
 	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
-                              -printf "%d" -quit 2>/dev/null)
+                          -printf "%d" -quit 2>/dev/null)
 	(( depth-=2 ))
 	# if a group doesn't contain a modulefile, depth is negativ
 	# :FIXME: better solution?
@@ -1179,10 +1243,9 @@ SWITCHES:
 
 subcommand_use() {
         local -r subcommand='use'
-	local saved_IFS=${IFS};
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
         local add2path_func='std::append_path'
 
         group_is_used() {
@@ -1724,7 +1787,6 @@ pmodules_init() {
         reset_used_groups
         reset_modulepath
         reset_used_releases
-        init_path
         init_manpath
         export_env \
                 PMODULES_OVERLAYS \
@@ -1768,8 +1830,15 @@ subcommand_purge() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
+	# we cannot unset PMODULES_HOME, otherwise the module function
+	# would fail.
+	local saved_home="${PMODULES_HOME}"
 	"${modulecmd}" "${Shell}" "${subcommand}"
-	export_env MODULEPATH
+        reset_modulepath
+        reset_used_groups
+	PMODULES_HOME="${saved_home}"
+	
+	export_env MODULEPATH PMODULES_HOME
 }
 
 ##############################################################################
@@ -1865,7 +1934,8 @@ subcommand_clear() {
 Subcommands[search]='search'
 Options[search]='-o aH -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release: -l with: -l all-releases -l src: -l print-csv '
-Options[search]+='-l verbose'
+Options[search]+='-l verbose '
+Options[search]+='-l all-deps -l wrap'
 Help[search]='
 USAGE:
         module search [switches] string...
@@ -1873,6 +1943,12 @@ USAGE:
 		for modules whose name match the argument.
 
 SWITCHES:
+        -a|--all-releases
+		Search within all releases.
+
+	--all-deps
+                Show all dependecies
+
         --no-header
 		Suppress output of a header.
 
@@ -1881,8 +1957,8 @@ SWITCHES:
 		switch multiple times.  Without this switch, the used releases
 		will be searched.
 
-        -a|--all-releases
-		Search within all releases.
+        --verbose
+                vebose output
 
         --with=STRING
 		Search for modules compiled with modules matching string. The
@@ -1892,20 +1968,24 @@ SWITCHES:
 
 		lists all modules in the hierarchy compiled with gcc 4.8.3.
 
-        --verbose
-                vebose output
+        --wrap
+                wrap output
 '
 
 subcommand_search() {
 	local -r subcommand='search'
 	local modules=()
 	local with_modules='//'
+	local -ir cols=$(tput cols)	# get number of columns of terminal
+	local -i max_len_modulename=0
 	local src_prefix=()
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
 	local opt_print_csv='no'
         local opt_print_verbose='no'
 	local opt_use_releases=':'
+	local opt_all_deps='no'
+	local opt_wrap='no'
 
 	#.....................................................................
 	#
@@ -1923,21 +2003,8 @@ subcommand_search() {
                 local func_print_line=''
                 local fmt=''
                 
-                # no args
-                print_header_default() {
-		        std::info ''
-		        std::info "${fmt}" "Module" "Release" "Group" "Requires"
-		        std::info '-%.0s' {1..60}
-		        std::info ''
-	        }
-
-                print_line_default() {
-			local deps="${@:5}"
-                        std::info "${fmt}" "$1" "$2" "$3" "${deps}"
-                }
-
                 print_default() {
-                        fmt="%-20s %-10s %-12s %-s"
+			fmt="%-${max_len_modulename}s %-10s %-12s %-s"
                         if [[ ${opt_print_header} == 'yes' ]]; then
                                 func_print_header='print_header_default'
                         else
@@ -1946,23 +2013,64 @@ subcommand_search() {
                         func_print_line='print_line_default'
                 }
 
-                print_header_verbose() {
+                print_header_default() {
 		        std::info ''
-		        std::info "${fmt}" "Module" "Release" "Group" "Overlay" "Requires"
-		        std::info '-%.0s' {1..79}
-		        std::info ''
+		        std::info "${fmt}" "Module" "Release" "Group" "Requires"
+		        std::info '-%.0s' $(seq 1 ${cols})
 	        }
 
-                print_line_verbose() {
-                        std::info "${fmt}" "$@"
+                print_line_default() {
+			write_line() {
+				local str="$1"
+				if (( ${#str} >= cols )); then
+					str="${str:0:$((cols-1))}>"
+				fi
+				std::info "${str}"
+			}
+			if [[ "${opt_wrap}" == 'no' ]]; then
+				local deps="${@:5}"
+				local str=$(printf "${fmt}"  "$1" "$2" "$3" "${deps[@]}")
+				write_line "${str}"
+			else
+				local deps=( "${@:5}" )
+				local str=$(printf "${fmt}"  "$1" "$2" "$3" "${deps[0]}")
+				for (( i = 1; i < ${#deps[@]}; i++ )); do
+					if (( ${#str} + ${#deps[i]} + 1 <= cols )); then
+						str+=" ${deps[i]}"
+					else
+						write_line "${str}"
+						str=$(printf "${fmt}"  "" "" "" "> ${deps[i]}")
+					fi
+				done
+				write_line "${str}"
+			fi
                 }
 
                 print_verbose() {
-                        fmt="%-20s %-10s %-12s %-20s %-s"
+                        fmt="%-${max_len_modulename}s %-10s %-12s %-s"
                         func_print_header='print_header_verbose'
                         func_print_line='print_line_verbose'
                 }
                 
+                print_header_verbose() {
+		        std::info ''
+		        std::info "${fmt}" "Module" "Release" "Group" "Dependencies/Modulefile"
+		        std::info '-%.0s' $(seq 1 ${cols})
+	        }
+
+                print_line_verbose() {
+			local deps="${@:5}"
+                        std::info "${fmt}" "$1" "$2" "$3" "dependencies: ${deps}"
+                        std::info "${fmt}" ""   ""   ""   "modulefile:   $4"
+                 }
+
+                # print full modulefile names only
+                print_modulefiles() {
+			fmt=''
+			func_print_header='print_header_none'
+                        func_print_line='print_header_none'
+                }
+
                 print_header_none() {
                         :
                 }
@@ -1978,13 +2086,6 @@ subcommand_search() {
 			done
 			out+="${line[0]}"
 			std::info "${out}"
-                }
-
-                # print full modulefile names only
-                print_modulefiles() {
-			fmt=''
-			func_print_header='print_header_none'
-                        func_print_line='print_header_none'
                 }
 
                 print_line_csv() {
@@ -2013,14 +2114,14 @@ subcommand_search() {
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
                 done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
-                                 awk "${with_modules}")
+                                 ${awk} "${with_modules}")
         }
 
 	get_module_prefix() {
 		local "$1"
 		local modulefile="$2"
 		local -r _prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
-					  awk '/_PREFIX |_HOME / {print $3; exit}')
+					  ${awk} '/_PREFIX |_HOME / {print $3; exit}')
 		std::upvar $1 "${_prefix}"
 	}
 
@@ -2044,43 +2145,59 @@ subcommand_search() {
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
 			local depth=${GroupDepths[${group}]}
-			local mpaths=( $(${find} \
-						 "${src_prefix[@]/%//${group}/modulefiles}" \
-						 -type d \
-						 -mindepth ${depth} -maxdepth ${depth} \
-						 2>/dev/null))
-			local modulepath=''
-			for ((i=0; i<${#mpaths[@]}; i++)); do
-				modulepath+=":${mpaths[i]}"
-			done
-			local requires=""
-
+			local s=''
+			if (( depth > 0 )); then
+				s=$(printf '/*%.0s' $(seq 1 ${depth}))
+			fi
+			local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+			
 			# get and print all available modules in $mpath
 			# with respect to the requested releases
 			# tmpfile: module/version release group group-
                         # dependencies...
-			local mods=( $( get_available_modules \
-						"${modulepath:1}" \
-						"${module}" \
-						"${opt_use_releases}" ) )
+			local mods
+			get_available_modules \
+				mods \
+				"${module}" \
+				"${opt_use_releases}" \
+				"${modulepath[@]}" \
+
 			for (( i=0; i<${#mods[@]}; i+=3 )); do
 				local name=${mods[i]}
 				local release=${mods[i+1]}
 				local modulefile=${mods[i+2]}
-				local prefix
-				get_module_prefix prefix "${modulefile}"
-				local dependencies_file="${prefix}/.dependencies"
-				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-					requires=$(< "${dependencies_file}")
+
+				if (( ${#name} > max_len_modulename)); then
+					max_len_modulename=${#name}
 				fi
 				
-				echo ${mods[i]} ${mods[i+1]} \
-				     ${group} ${mods[i+2]} \
-                                     ${requires} >> "${tmpfile}"
+				if [[ "${opt_print_verbose}" == 'yes' ]] || [[ "${opt_all_deps}" == 'yes' ]]; then
+					local prefix=''
+					get_module_prefix prefix "${modulefile}"
+					local dependencies_file="${prefix}/.dependencies"
+					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
+						deps=($(< "${dependencies_file}"))
+					else
+						deps=()
+					fi
+				else
+					# get dependencies encoded in directory name
+					local deps=()
+					local -i j
+					IFS='/'
+					local toks=( ${modulefile} )
+					for ((j = -depth-2; j < -2; j += 2)); do
+						deps+=( "${toks[*]: $j:2}" );
+					done
+					IFS=${__IFS}
+				fi
+				
+				echo ${name} ${release} ${group} ${modulefile} \
+                                     ${deps[@]} >> "${tmpfile}"
 			done
 		done
 		print_result "${tmpfile}"
-		#rm -f "${tmpfile}"
+		${rm} -f "${tmpfile}"
 	}
 
 	while (( $# > 0 )); do
@@ -2088,6 +2205,9 @@ subcommand_search() {
                         -H | --help )
                                 print_help "${subcommand}"
                                 ;;
+			--all-deps )
+				opt_all_deps='yes'
+				;;
 			--no-header )
 				opt_print_header='no'
 				;;
@@ -2136,13 +2256,16 @@ subcommand_search() {
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			--src )
+				# :FIXME: do we have to add some sanity checks here?
 				src_prefix=$2
-				pmodules::check_directories "${src_prefix}"
 				shift
 				;;
                         -v | --verbose )
                                 opt_print_verbose='yes'
                                 ;;
+			--wrap )
+				opt_wrap='yes'
+				;;
 			-- )
 				;;
 			* )

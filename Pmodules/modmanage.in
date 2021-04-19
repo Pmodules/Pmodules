@@ -1,0 +1,5 @@
+#!/bin/sh
+
+unset BASH_ENV
+
+"@BASH@" --noprofile --norc "@MODMANAGE@ "$@"
