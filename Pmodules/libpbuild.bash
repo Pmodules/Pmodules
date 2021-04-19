@@ -1459,11 +1459,6 @@ pbuild.build_module() {
 
 	pbuild.init_env "${module_name}" "${module_version}"
 	pbuild::make_all
-	std::info \
-		"%s " \
-		"${module_name}/${module_version}:" \
-		${with_modules:+with ${with_modules[@]}} \
-		"done!"
 	std::info "* * * * *\n"
 }
 
