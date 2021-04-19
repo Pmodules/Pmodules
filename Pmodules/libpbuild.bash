@@ -586,7 +586,10 @@ pbuild::pre_compile() {
 }
 
 pbuild::compile() {
-	make -j${JOBS}
+	make -j${JOBS} || \
+		std::die 3 \
+			 "%s " "${module_name}/${module_version}:" \
+			 "compilation failed!"
 }
 
 pbuild::post_compile() {
@@ -598,7 +601,10 @@ pbuild::pre_install() {
 }
 
 pbuild::install() {
-	make install
+	make install || \
+		std::die 3 \
+			 "%s " "${module_name}/${module_version}:" \
+			 "compilation failed!"
 }
 
 pbuild::install_shared_libs() {
