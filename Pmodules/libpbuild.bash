@@ -183,9 +183,6 @@ pbuild.verbose() {
         verbose="$1"
 }
 
-# module name including path in hierarchy and version
-# (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
-declare -x  fully_qualified_module_name=''
 
 # group this module is in (ex: 'Programming')
 declare -x  GROUP=''
@@ -245,76 +242,6 @@ pbuild::supported_os() {
 pbuild::supported_compilers() {
 	SUPPORTED_COMPILERS+=( "$@" )
 }
-#......................................................................
-#
-# compute full module name and installation prefix
-#
-# The following variables are expected to be set:
-#	GROUP	    module group
-#	P		    module name
-#	V		    module version
-#       variables defining the hierarchical environment like
-#	COMPILER and COMPILER_VERSION
-#
-# The following variables are set in this function
-#	fully_qualified_module_name
-#	PREFIX
-#
-set_full_module_name_and_prefix() {
-	join_by() {
-		local IFS="$1"
-		shift
-		echo "$*"
-	}
-
-	[[ -n ${GROUP} ]] || std::die 1 \
-                                      "${module_name}/${module_version}:" \
-                                      "group not set."
-
-	# build module name
-	# :FIXME: this should be read from a configuration file
-	local name=()
-	case ${GROUP} in
-	Compiler )
-		name+=( "${COMPILER}/${COMPILER_VERSION}" )
-	        name+=( "${module_name}/${module_version}" )
-		;;
-	MPI )
-		name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		name+=( "${MPI}/${MPI_VERSION}" )
-		name+=( "${module_name}/${module_version}" )
-		;;
-	HDF5 )
-		name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		name+=( "${MPI}/${MPI_VERSION}" )
-		name+=( "${HDF5}/${HDF5_VERSION}" )
-		name+=( "${module_name}/${module_version}" )
-		;;
-	OPAL )
-		name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		name+=( "${MPI}/${MPI_VERSION}" )
-		name+=( "${OPAL}/${OPAL_VERSION}" )
-		name+=( "${module_name}/${module_version}" )
-		;;
-	HDF5_serial )
-		name+=( "${COMPILER}/${COMPILER_VERSION}" )
-		name+=( "hdf5_serial/${HDF5_SERIAL_VERSION}" )
-		name+=( "${module_name}/${module_version}" )
-		;;
-	* )
-		name+=("${module_name}/${module_version}" )
-		;;
-	esac
-
-	# set full module name
-	fully_qualified_module_name=$( join_by '/' "${name[@]}" )
-	# set PREFIX of module
-	PREFIX="${PMODULES_ROOT}/${GROUP}"
-        local -i i=0
-	for ((i=${#name[@]}-1; i >= 0; i--)); do
-		PREFIX+="/${name[i]}"
-	done
-}
 
 ##############################################################################
 #
@@ -330,7 +257,6 @@ pbuild::add_to_group() {
                          "${FUNCNAME}: missing group argument."
 	fi
 	GROUP="$1"
-	set_full_module_name_and_prefix
 }
 
 ##############################################################################
@@ -722,6 +648,10 @@ pbuild::make_all() {
 
 	set -e
 	local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
+	# module name including path in hierarchy and version
+	# (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
+	local    modulefile_dir=''
+	local    modulefile_name=''
 
 	#
 	# To be able to set environment variables in one of the 'pbuild::TARGET'
@@ -783,6 +713,74 @@ pbuild::make_all() {
 	}
 
 	#......................................................................
+	#
+	# compute full module name and installation prefix
+	#
+	# The following variables are expected to be set:
+	#	GROUP	    module group
+	#	P		    module name
+	#	V		    module version
+	#       variables defining the hierarchical environment like
+	#	COMPILER and COMPILER_VERSION
+	#
+	# The following variables are set in this function
+	#	modulefile_dir
+	#	modulefile_name
+	#	PREFIX
+	#
+	set_full_module_name_and_prefix() {
+		join_by() {
+			local IFS="$1"
+			shift
+			echo "$*"
+		}
+
+		[[ -n ${GROUP} ]] || std::die 1 \
+					      "${module_name}/${module_version}:" \
+					      "group not set."
+
+		# define defaults if not set in configuration file
+		: ${Compiler_HIERARCHY:='${COMPILER}/${COMPILER_VERSION}'}
+		: ${CUDA_HIERARCHY:='${COMPILER}/${COMPILER_VERSION} cuda/${CUDA_VERSION}'}
+		: ${MPI_HIERARCHY:='${COMPILER}/${COMPILER_VERSION} ${MPI}/${MPI_VERSION}'}
+		: ${HDF5_HIERARCHY:='${COMPILER}/${COMPILER_VERSION} ${MPI}/${MPI_VERSION} hdf5/${HDF5_VERSION}'}
+		: ${HDF5_SERIAL_HIERARCHY:='${COMPILER}/${COMPILER_VERSION} hdf5_serial/${HDF5_SERIAL_VERSION}'}
+
+		# evaluate
+		local names=()
+		local vname="${GROUP}_HIERARCHY"
+		if [[ -n ${!vname} ]]; then
+			names=( $(eval echo ${!vname}) )
+		fi
+
+		modulefile_dir=$(join_by '/' \
+					 "${PMODULES_ROOT}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+					 "${names[@]}" \
+					 "${module_name}")
+		modulefile_name="${modulefile_dir}/${module_version}"
+		PREFIX="${PMODULES_ROOT}/${GROUP}/${module_name}/${module_version}"
+		local -i i=0
+		for ((i=${#names[@]}-1; i >= 0; i--)); do
+			PREFIX+="/${names[i]}"
+		done
+	}
+	
+	#......................................................................
+	# Select the modulefile to install. Modulefiles can be versioned like
+	#     modulefile-10.2.0
+	#     modulefile-10.2
+	#     modulefile-10
+	#     modulefile
+	# the most specific modulefile will be selected. Example:
+	# For a version 10.2.1 the file moduelfile-10.2 would be selected.
+	#
+	# Arguments:
+	#     $1  upvar to return the filename
+	#
+	# Used gloabal variables:
+	#     VERSIONS
+	#     BUILDBLOCK_DIR
+	#
 	find_modulefile() {
 		local "$1"
 		local fname=''
@@ -924,9 +922,11 @@ pbuild::make_all() {
 	}
 
  	#......................................................................
-	# Install modulefile
+	# Install modulefile in ${PMODULES_ROOT}/${GROUP}/modulefiles/...
+	#
+	# Arguments
+	#     none
 	install_modulefile() {
-
 		local src=''
 		find_modulefile src
 		if (( $? != 0 )); then
@@ -936,34 +936,16 @@ pbuild::make_all() {
 				"skipping modulefile installation ..."
 			return
 		fi
-		# assemble name of modulefile
-		local dst="${PMODULES_ROOT}/"
-		dst+="${GROUP}/"
-		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${fully_qualified_module_name}"
-
-		# directory where to install modulefile
- 		local -r dstdir=${dst%/*}
-
 		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
-			"installing modulefile in '${dstdir}' ..."
-		mkdir -p "${dstdir}"
-		install -m 0444 "${src}" "${dst}"
+			"installing modulefile '${modulefile_name}' ..."
+		mkdir -p "${modulefile_dir}"
+		install -m 0444 "${src}" "${modulefile_name}"
 	}
 
 	install_release_file() {
-		local dst="${PMODULES_ROOT}/"
-		dst+="${GROUP}/"
-		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${fully_qualified_module_name}"
-
-		# directory where to install release file
-		local -r dstdir=${dst%/*}
-		mkdir -p "${dstdir}"
-
- 		local -r release_file="${dst%/*}/.release-${module_version}"
+ 		local -r release_file="${modulefile_dir}/.release-${module_version}"
 
 		if [[ -r "${release_file}" ]]; then
 			local release
@@ -1121,24 +1103,14 @@ pbuild::make_all() {
 				"removing all files in '${PREFIX}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -rf ${PREFIX}
 		fi
-
-		# assemble name of modulefile
-		local dst="${PMODULES_ROOT}/"
-		dst+="${GROUP}/"
-		dst+="${PMODULES_MODULEFILES_DIR}/"
-		dst+="${fully_qualified_module_name}"
-
-		# directory where to install modulefile
- 		local -r dstdir=${dst%/*}
-
-		if [[ -e "${dst}" ]]; then
+		if [[ -e "${modulefile_name}" ]]; then
 			std::info \
 				"%s " \
 				"${module_name}/${module_version}:" \
-				"removing modulefile '${dst}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -v "${dst}"
+				"removing modulefile '${modulefile_name}' ..."
+			[[ "${dry_run}" == 'no' ]] && rm -v "${modulefile_name}"
 		fi
-		local release_file="${dstdir}/.release-${module_version}"
+		local release_file="${modulefile_dir}/.release-${module_version}"
 		if [[ -e "${release_file}" ]]; then
 			std::info \
 				"%s " \
@@ -1146,7 +1118,7 @@ pbuild::make_all() {
 				"removing release file '${release_file}' ..."
 			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
 		fi
-		rmdir -p "${dstdir}" 2>/dev/null || :
+		rmdir -p "${modulefile_dir}" 2>/dev/null || :
 	}
 
 	########################################################################
