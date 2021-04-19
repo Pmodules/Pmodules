@@ -1182,13 +1182,13 @@ pbuild.init_env() {
 		V_MINOR=''		# second number in version string (or empty)
 		V_PATCHLVL=''		# third number in version string (or empty)
 		V_RELEASE=''		# module release (or empty)
-		USE_FLAGS=''		# architectures (or empty)
+		: ${USE_FLAGS:=''}	# architectures (or empty)
 
 		local tmp=''
 
 		if [[ "$v" =~ "_" ]]; then
 			tmp="${v#*_}"
-			USE_FLAGS=":${tmp//_/:}:"
+			USE_FLAGS+=":${tmp//_/:}:"
 			v="${v%%_*}"
 		fi
 		V_PKG="${v%%-*}"	# version without the release number
