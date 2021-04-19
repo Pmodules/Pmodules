@@ -741,17 +741,17 @@ subcommand_show() {
 #	modulename1 release1 modulename2 release2 ...
 #
 get_available_modules() {
-	local -r module="$1"
-	local -r use_releases="${2:-${UsedReleases}}"
-	shift 2
-	local -a dirs=( "$@" )
+	local var="$1"
+	local -r module="$2"
+	local -r use_releases="${3:-${UsedReleases}}"
+	shift 3 # in the for loop below we use $@ to loop over the directories
 
 	local -a mods=()
 	local    release
 	local dir=''
 	
-	for dir in "${dirs[@]}"; do
-		test -d "${dir}" || return 0
+	for dir in "$@"; do
+		test -d "${dir}" || continue
 		{
 			cd "${dir}"
 			while read mod; do
@@ -763,7 +763,7 @@ get_available_modules() {
 			done < <(${find} -L * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
 		}
 	done
-	echo "${mods[@]}"
+	std::upvar ${var} "${mods[@]}"
 }
 
 ##############################################################################
@@ -945,10 +945,11 @@ subcommand_avail() {
         local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			mods=( $( get_available_modules \
-                                          "${string}" \
-                                          "${opt_use_releases}" \
-					  "${dir}" ) )
+			get_available_modules \
+				mods \
+				"${string}" \
+                                "${opt_use_releases}" \
+				"${dir}"
 			[[ ${#mods[@]} == 0 ]] && continue
 			${output_function}
 		done
@@ -1732,11 +1733,12 @@ subcommand_search() {
 			# with respect to the requested releases
 			# tmpfile: module/version release group group-
                         # dependencies...
-			local mods=( $( get_available_modules \
-						"${module}" \
-						"${opt_use_releases}" \
-				     		"${modulepath[@]}" \
-				     ) )
+			local mods
+			get_available_modules \
+				mods \
+				"${module}" \
+				"${opt_use_releases}" \
+				"${modulepath[@]}" \
 
 			for (( i=0; i<${#mods[@]}; i+=3 )); do
 				local name=${mods[i]}
