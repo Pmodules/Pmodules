@@ -447,7 +447,11 @@ pbuild::prep() {
 				"${module_name}/${module_version}:" \
 				"Appling patch '${PATCH_FILES[_i]}' ..."
 			local -i strip_val="${PATCH_STRIPS[_i]:-${PATCH_STRIP_DEFAULT}}"
-			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}"
+			patch -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}" || \
+				std::die 4 \
+					 "%s " \
+					 "${module_name}/${module_version}:" \
+					 "error patching sources!"
 		done
 	}
 	if [[ -z "${SOURCE_URLS}" ]]; then
