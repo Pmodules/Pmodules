@@ -1142,8 +1142,9 @@ pbuild::make_all() {
 		check_supported_os
 		check_supported_compilers
 		set_full_module_name_and_prefix
-		if module_exists "${module_name}/${module_version}" \
-			&& [[ ${forece_rebuild} != 'yes' ]]; then
+		if [[ -e "${modulefile_name}" ]] \
+			   && [[ -d ${PREFIX} ]] \
+			   && [[ ${force_rebuild} != 'yes' ]]; then
 			if [[ "${module_release}" == 'removed' ]]; then
 				remove_module
 			else
@@ -1258,18 +1259,6 @@ pbuild.init_env() {
 	PATCH_STRIP_DEFAULT='1'
 	MODULE_DOCFILES=()
 	configure_with='undef'
-}
-
-#..............................................................
-#
-# Test whether a module with the given name already exists.
-#
-# Arguments:
-#   $1: module name/version
-#
-module_exists() {
-	[[ -n $("${MODULECMD}" bash avail -m "$1" \
-			       2>&1 1>/dev/null) ]]
 }
 
 pbuild.build_module() {
