@@ -416,11 +416,6 @@ pbuild.update_modulefiles "${opt_update_modulefiles}"
 pbuild.system "${opt_system}"
 pbuild.verbose "${opt_verbose}"
 
-source libpbuild_dyn.bash    || \
-        std::die 3 "Oops: cannot source library -- '$_'"
-
-# source build configuration,
-# must be done before sourcing libpbuild!
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
         test -d "${BUILDBLOCK_DIR}/../../config" && PATH+=":$_"
 else
