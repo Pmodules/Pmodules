@@ -429,13 +429,13 @@ pbuild::prep() {
 	unpack() {
 		local -r file="$1"
 		local -r dir="${2:-${SRC_DIR}}"
-		(
-			if [[ -n "${dir}" ]]; then
-				mkdir -p "${dir}"
-				cd "${dir}"
-			fi
-			tar -xv --strip-components 1 -f "${file}"
-		)
+		tar --directory="${dir}" -xv --strip-components 1 -f "${file}" || {
+			rm -f "${file}"
+			std::die 4 \
+				 "%s " \
+				 "${module_name}/${module_version}:" \
+				 "cannot unpack sources!"
+		}
 	}
 
 	patch_sources() {
