@@ -1524,6 +1524,12 @@ USAGE:
 		for modules whose name match the argument.
 
 SWITCHES:
+        -a|--all-releases
+		Search within all releases.
+
+	--all-deps
+                Show all dependecies
+
         --no-header
 		Suppress output of a header.
 
@@ -1532,8 +1538,8 @@ SWITCHES:
 		switch multiple times.  Without this switch, the used releases
 		will be searched.
 
-        -a|--all-releases
-		Search within all releases.
+        --verbose
+                vebose output
 
         --with=STRING
 		Search for modules compiled with modules matching string. The
@@ -1542,9 +1548,6 @@ SWITCHES:
 		module search --with=gcc/4.8.3
 
 		lists all modules in the hierarchy compiled with gcc 4.8.3.
-
-        --verbose
-                vebose output
 
         --wrap
                 wrap output
