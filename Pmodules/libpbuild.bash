@@ -843,12 +843,14 @@ pbuild::make_all() {
 		}
 
 		#..............................................................
-		# install build-block files
+		# install build-block files 
 		# - modulefile
 		# - build-script
-		# - build dependencies
+		# - run-time and build dependencies
+		# in ${PREFIX}/share/${GROUP}/${module_name}
 		#
-		# Skip installation if modulefile does not exist.
+		# Arguments:
+		#     none
 		#
 		install_pmodules_files() {
 			local modulefile=''
