@@ -356,12 +356,12 @@ pmodules::compile() {
 		build bash
 	fi
 
-	if [[ ! -f "${PMODULES_HOME}/sbin/find" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build findutils
+	if [[ ! -e "${PMODULES_HOME}/${UTILBIN_DIR}/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
+		build Tcl
 	fi
 
-	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build Tcl
+	if [[ ! -e "${PMODULES_HOME}/lib/tcllib1.20" ]] || [[ ${opt_force} == 'yes' ]]; then
+		build tcllib
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${opt_force} == 'yes' ]]; then
