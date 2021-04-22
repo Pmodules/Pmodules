@@ -870,7 +870,7 @@ get_available_modules() {
 			                mods+=( "${mod}" ${release} "${dir}/${mod}" )
                                         dict[${mod}]=1
 				fi
-		        done < <(${find} ${entries} \
+		        done < <(${find} -L ${entries} \
 					 \( -type f -o -type l \) \
 					 -not -name ".*" \
                                          -ipath "${module}*")
@@ -913,7 +913,7 @@ find_module() {
                         # a version number has been specified. But we still might
                         # have the same module/version with different use flags.
                         # Releases we ignore in this case.
-                        modules=$(${find} "${dir}" -type f -not -name ".*" \
+                        modules=$(${find} -L "${dir}" -type f -not -name ".*" \
                                        -ipath "${dir}/${module}*" \
                                           | cut -b${col}-)
                         for mod in "${modules[@]}"; do
@@ -936,7 +936,7 @@ find_module() {
                         # difficult. We have to load the newest version taking
                         # the used releases and flags into account.
                         (( col += ${#module} + 1 ))
-                        modules=( $(${find} "${dir}" -type f -not -name ".*" \
+                        modules=( $(${find} -L "${dir}" -type f -not -name ".*" \
                                          -ipath "${dir}/${module}/*"  \
                                             | cut -b${col}- \
                                             | sort -rV ) )
@@ -1182,7 +1182,7 @@ compute_group_depth () {
         local group=${dir%/*}
         local group=${group##*/}
         [[ -n "${GroupDepths[${group}]}" ]] && return 0
-	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
+	local -i depth=$(${find} -L "${dir}" -depth \( -type f -o -type l \) \
                           -printf "%d" -quit 2>/dev/null)
 	(( depth-=2 ))
 	# if a group doesn't contain a modulefile, depth is negativ
