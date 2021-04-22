@@ -476,10 +476,9 @@ subcommand_load() {
 		         "No module specified"
 	fi
 
-        local saved_IFS="${IFS}";
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
 
         local m=''
 	for m in "${args[@]}"; do
@@ -900,10 +899,9 @@ get_available_modules() {
 #               if no modulefile could be found
 #       
 find_module() {
-	local saved_IFS=${IFS}; 
 	IFS=':'
 	local -a dirs=($3)
-	IFS=${saved_IFS}
+	IFS=${__IFS}
 	local -r module="$4"
 
         for dir in "${dirs[@]}"; do
@@ -1519,10 +1517,9 @@ unuse directory|group|release...
 
 subcommand_unuse() {
         local -r subcommand='unuse'
-        local saved_IFS=${IFS};
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${saved_IFS}
+	IFS=${__IFS}
 
         unuse() {
                 unuse_overlay() {
@@ -2275,10 +2272,9 @@ subcommand_search() {
 		shift
 	done
 	if [[ -z "${src_prefix}" ]]; then
-		local saved_IFS="${IFS}";
 		IFS=':'
 		local -a src_prefix=(${PMODULES_OVERLAYS})
-		IFS=${saved_IFS}
+		IFS=${__IFS}
 	fi
 
 	if [[ "${opt_use_releases}" == ":" ]]; then
