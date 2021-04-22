@@ -21,7 +21,6 @@ if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 	proc debug {msg} {}
 }
 
-puts stderr "loading libmodules"
 debug "loading libmodules"
 
 proc _pmodules_parse_pmodules_env { } {
