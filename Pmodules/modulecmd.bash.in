@@ -2608,8 +2608,30 @@ if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
 
+_init_overlay_map() {
+	local overlay
+	for overlay in "${!Overlays[@]}"; do
+		local group
+		for group in ${UsedGroups//:/ }; do
+			local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
+			if [[ -d "${dir}" ]]; then
+				MapDirsToOverlays[${dir}]=${overlay}
+			fi
+		done
+	done
+}
+
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+	# if we load a Pmodules version with overlay support,
+	# PMODULES_OVERLAYS might not be set. Since libmodules.tcl
+	# reads PMODULES_ENV we have to save the environment.
+	if [[ -z "${PMODULES_OVERLAYS}" ]]; then
+		declare -g PMODULES_OVERLAYS="${PMODULES_ROOT}"
+		declare -Ag Overlays=([${PMODULES_ROOT}]="0")
+		_init_overlay_map
+		save_env
+	fi
 else
 	pmodules_init
 fi
