@@ -846,26 +846,32 @@ get_available_modules() {
 					"${dir}" \
 					"${mod}"
 				[[ :${releases}: =~ ${release} ]] || continue
-				#
-				# add to list of available modules, if
-				# - first time found by name only
-				# - in same overlay as first found
-				# - new version and not hidden by overlay
-				local name="${mod%/*}"
 				local add='no'
-				if [[ -z "${modulenames[${name}]}" ]]; then
-					if [[ "${Overlays[$overlay]}" == 'h' ]]; then
-						modulenames[${name}]="${overlay}"
-					else
-						modulenames[${name}]='0'
+				if [[ -n "${overlay}" ]]; then
+					# module is in an overlay
+					#
+					# add to list of available modules, if
+					# - first time found by name only
+					# - in same overlay as first found
+					# - new version and not hidden by overlay
+					local name="${mod%/*}"
+					if [[ -z "${modulenames[${name}]}" ]]; then
+						if [[ "${Overlays[$overlay]}" == 'h' ]]; then
+							modulenames[${name}]="${overlay}"
+						else
+							modulenames[${name}]='0'
+						fi
+						add='yes'
+					elif [[ "${modulenames[${name}]}" == "${overlay}" ]]; then
+						add='yes'
+					elif [[ "${modulenames[${name}]}" == '0'  ]] \
+						     && [[ -z ${dict[${mod}]} ]]; then
+						add='yes'
 					fi
+				else
+					# module is NOT in an overlay
 					add='yes'
-				elif [[ "${modulenames[${name}]}" == "${overlay}" ]]; then
-					add='yes'
-				elif [[ "${modulenames[${name}]}" == '0'  ]] \
-					     && [[ -z ${dict[${mod}]} ]]; then
-					add='yes'
-                                fi
+				fi
 				if [[ "${add}" == 'yes' ]]; then
 			                mods+=( "${mod}" ${release} "${dir}/${mod}" )
                                         dict[${mod}]=1
