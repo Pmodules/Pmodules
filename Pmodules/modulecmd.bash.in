@@ -178,7 +178,7 @@ find_overlay () {
         local group="${path#${overlay}/}"
         group=${group%%/*}
         std::upvar $2 "${group}"
-        return 0
+	return 0
 }
 
 module_is_loaded() {
@@ -301,10 +301,6 @@ subcommand_load() {
 	local current_modulefile=''
 	local prefix=''
 	local m=''
-
-	IFS=':'
-	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
 
 	#
 	# Test whether a given module is available.
