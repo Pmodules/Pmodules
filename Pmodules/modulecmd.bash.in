@@ -563,7 +563,7 @@ subcommand_load() {
 			fi
 		fi # handle extended module names
                 local release=''
-                find_module current_modulefile release "${MODULEPATH}" "${m}"
+                find_module current_modulefile release "${m}" "${modulepath[@]}"
                 if [[ -z ${current_modulefile} ]]; then
 			local text=''
 			get_load_hints text
@@ -902,8 +902,8 @@ get_available_modules() {
 # find module(file) to load. Input arguments are
 #       $1      upvar: return module file
 #       $2      upvar: return module release
-#       $3      a modulepath (usually MODULEPATH)
-#       $4      module to load
+#       $3      module to load
+#       $4      a modulepath (usually MODULEPATH)
 #
 # The module name can be
 #       name
@@ -918,10 +918,10 @@ get_available_modules() {
 #               if no modulefile could be found
 #       
 find_module() {
-	IFS=':'
-	local -a dirs=($3)
-	IFS=${__IFS}
-	local -r module="$4"
+	local "$1"
+	local "$2"
+	local -r module="$3"
+	local -a dirs=("${@:4}")
 
         for dir in "${dirs[@]}"; do
                 test -d "${dir}" || continue
