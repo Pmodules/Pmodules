@@ -431,6 +431,7 @@ subcommand_load() {
 	# hierarchical depth of a group must always be the same.
 	#
 	is_group () {
+		local "$1"
 		find_an_overlay_providing_group () {
 			local "$1"
 			local -r group="$2/${PMODULES_MODULEFILES_DIR}"
