@@ -117,6 +117,19 @@ save_env() {
 
 trap 'save_env ' EXIT
 
+get_overlay_of_moduledir() {
+	local "$1"
+	local -r moduledir=$2
+
+	if [[ ! -v Dir2OverlayMap[${moduledir}] ]]; then
+		for overlay in "${OverlayList[@]}" 'other'; do
+			[[ ${moduledir} == ${overlay}/* ]] && break
+		done
+		Dir2OverlayMap[${moduledir}]="${overlay}"
+	fi
+	std::upvar $1 "${Dir2OverlayMap[${moduledir}]}"
+}
+
 #
 # get release of module
 # Note:
