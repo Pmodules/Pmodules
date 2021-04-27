@@ -112,6 +112,7 @@ save_env() {
 	local s=$(typeset -p ${vars[@]})
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
 	export_env 'PMODULES_ENV'
+	unset UsedGroups
 }
 
 trap 'save_env ' EXIT
