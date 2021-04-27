@@ -1715,6 +1715,24 @@ subcommand_refresh() {
         subcommand_generic0 'refresh' "$@"
 }
 
+#
+# help function, used during initialization and for purging all modules
+#
+reset_modulepath() {
+	MODULEPATH=''
+	local group
+	local overlay
+	for overlay in "${!OverlayDict[@]}"; do
+		for group in ${PMODULES_DEFAULT_GROUPS}; do
+			local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
+			if [[ -d "${dir}" ]]; then
+				std::prepend_path MODULEPATH "${dir}"
+				Dir2OverlayMap[${dir}]=${overlay}
+			fi
+		done
+	done
+}
+
 pmodules_init() {
 	declare -gx LOADEDMODULES=''
 	declare -gx _LMFILES_=''
@@ -1733,21 +1751,6 @@ pmodules_init() {
 			std::append_path UsedGroups "${group}"
 		done
 		g_env_must_be_saved='yes'
-	}
-
-	reset_modulepath() {
-		MODULEPATH=''
-		local group
-		local overlay
-		for overlay in "${!Overlays[@]}"; do
-			for group in ${PMODULES_DEFAULT_GROUPS}; do
-				local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
-				if [[ -d "${dir}" ]]; then
-					std::prepend_path MODULEPATH "${dir}"
-					MapDirsToOverlays[${dir}]=${overlay}
-				fi
-			done
-		done
 	}
 
 	reset_used_releases() {
