@@ -47,9 +47,8 @@ fi
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
-# we use newline as internal field separator
-IFS=$' \t\n'
-declare -r __IFS=${IFS}	# used to restore IFS
+# use default IFS
+unset IFS
 
 shopt -s nullglob
 
@@ -478,7 +477,7 @@ subcommand_load() {
 
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
+	unset IFS
 
         local m=''
 	for m in "${args[@]}"; do
@@ -494,7 +493,7 @@ subcommand_load() {
 
 			IFS=':'
 			local -a toks=($m)
-			IFS=${__IFS}
+			unset IFS
 			local group=''
 			local release=''
 			if is_group "${toks[0]}"; then
@@ -1141,11 +1140,9 @@ subcommand_avail() {
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
-        local -a modulepath
 	IFS=':'
-	modulepath=(${MODULEPATH})
-	IFS=${__IFS}
-        
+	local -a modulepath=(${MODULEPATH})
+	unset IFS
         local overlay=''
         local group=''
         local -A modulepath_of_group
@@ -1249,7 +1246,7 @@ subcommand_use() {
         local -r subcommand='use'
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
+	unset IFS
         local add2path_func='std::append_path'
 
         group_is_used() {
@@ -1525,8 +1522,7 @@ subcommand_unuse() {
         local -r subcommand='unuse'
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
-
+	unset IFS
         unuse() {
                 unuse_overlay() {
 			if [[ -n "${_LMFILES_}" ]] && [[ ${LOADEDMODULES} != Pmodules/* ]]; then				std::die 3 "%s %s: %s -- %s" \
@@ -2186,12 +2182,12 @@ subcommand_search() {
 					# get dependencies encoded in directory name
 					local deps=()
 					local -i j
-					IFS='/'
+					IFS='/'   # note: IFS is used to concat in the for loop!
 					local toks=( ${modulefile} )
 					for ((j = -depth-2; j < -2; j += 2)); do
 						deps+=( "${toks[*]: $j:2}" );
 					done
-					IFS=${__IFS}
+					unset IFS
 				fi
 				
 				echo ${name} ${release} ${group} ${modulefile} \
