@@ -1551,7 +1551,8 @@ subcommand_unuse() {
 	unset IFS
         unuse() {
                 unuse_overlay() {
-			if [[ -n "${_LMFILES_}" ]] && [[ ${LOADEDMODULES} != Pmodules/* ]]; then				std::die 3 "%s %s: %s -- %s" \
+			if [[ -n "${_LMFILES_}" ]] && [[ ${LOADEDMODULES} != Pmodules/* ]]; then
+				std::die 3 "%s %s: %s -- %s" \
 					 "${CMD}" "${subcommand}" \
 					 "overlays can NOT be removed as long as modules are loaded!" \
 					 "${overlay}"
