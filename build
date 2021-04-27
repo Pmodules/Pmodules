@@ -338,10 +338,6 @@ pmodules::compile() {
 	echo "  root of Pmodules environment: ${prefix}"
 	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 
-	#if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/base64" ]] || [[ ${opt_force} == 'yes' ]]; then
-	#	build coreutils
-	#fi
-
 	if [[ "${OS}" == 'Darwin' ]]; then
 		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
 			build getopt
