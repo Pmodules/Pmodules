@@ -3,7 +3,7 @@
 # switch/swap
 # unload modules if parent removed
 #
-package require base64
+
 
 if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 	proc debug {msg} {
@@ -23,14 +23,27 @@ if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 
 debug "loading libmodules"
 
+package require base64
+
+set ::MODULEFILES_DIR "modulefiles"
+
 proc _pmodules_parse_pmodules_env { } {
+        debug "enter"
 	foreach line [split [base64::decode $::env(PMODULES_ENV)] "\n"] {
-		if { ![regexp -- {.* -[aA] (.*)=\((.*)\)} $line -> name value] } {
+		if { ![regexp -- {.* -[aAx]* (.*)=\((.*)\)} $line -> name value] } {
 			continue
 		}
 		switch $name {
-			Overlays {
-				array set ::Overlays [regsub -all  {[]=[]} $value " "]
+			OverlayDict {
+				array set ::OverlayDict [regsub -all  {[]=[]} $value " "]
+			}
+		        OverlayList {
+			        array set tmp [regsub -all  {[]=[]} $value " "]
+  			        set ::OverlayList {}
+				set l [lsort [array names tmp]]
+			        foreach k $l {
+				        lappend ::OverlayList $tmp($k)
+			        }
 			}
 		}
 	}
@@ -55,20 +68,23 @@ proc module-addgroup { group } {
         debug "mode=[module-info mode]"
 	if { [module-info mode load] } {
 		array set overlayed_groups {}
-		foreach overlay [lreverse_n $::PmodulesOverlays 1] {
+		foreach overlay [lreverse_n $::OverlayList 1] {
 			debug "overlay=$overlay"
 			if {![info exists overlayed_groups($group)]}	{
+				debug "group=$group"
+				debug "::variant=$::variant"
 				set dir [file join \
 					     $overlay \
 					     $group \
-					     $::PmodulesModulfilesDir \
+					     $::MODULEFILES_DIR \
 					     {*}$::variant]
 				if { [file isdirectory $dir] } {
+					debug "prepend $dir to MODULEPATH "
 					prepend-path MODULEPATH $dir
 				}
 			}
 			# don't add if overlayed
-			if { [string compare $::Overlays($overlay) "g"] == 0 } {
+			if { [string compare $::OverlayDict($overlay) "g"] == 0 } {
 				# get groups in this overlay
 				set dirs [glob -directory $overlay -type d {[A-Z]*}]
 				foreach dir $dirs {
@@ -76,9 +92,8 @@ proc module-addgroup { group } {
 				}
 			}
                 }
+		debug "end foreach"
 		prepend-path UsedGroups $group
-		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
-		debug "mode=load: new UsedGroups=$env(UsedGroups)"
 	} elseif { [module-info mode remove] } {
 		set GROUP [string toupper $group]
 		debug "mode=remove: hierarchical group '${GROUP}'"
@@ -99,11 +114,11 @@ proc module-addgroup { group } {
 			debug "mode=remove: no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
-                foreach overlay $::PmodulesOverlays {
+                foreach overlay $::OverlayList {
                         set dir [file join \
                                      $overlay \
                                      $group \
-                                     $::PmodulesModulfilesDir \
+                                     $::MODULEFILES_DIR \
                                      {*}$::variant]
                         remove-path MODULEPATH $dir
                 }
@@ -136,7 +151,6 @@ proc lreverse_n { list n } {
         set res
 }
 
-debug "test"
 #
 # set standard environment variables
 #
@@ -291,15 +305,15 @@ proc ModulesHelp { } {
 # intialize global vars
 # Modulefile is something like
 #
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/name/version
+#   ${PMODULES_ROOT}/group/modulefiles/name/version
 # or
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1/name/version
+#   ${PMODULES_ROOT}/group/modulefiles/X1/Y1/name/version
 # or
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1//X2/Y2/name/version
+#   ${PMODULES_ROOT}/group/modulefiles/X1/Y1//X2/Y2/name/version
 #
 proc _find_overlay { modulefile_components } {
-        debug "_is_in_overlay"
-        foreach overlay $::PmodulesOverlays  {
+        debug "_find_overlay()"
+        foreach overlay $::OverlayList  {
                 debug "$overlay"
                 if { [string range $overlay end end] == "/" } {
                         set overlay [string range $overlay 0 end-1]
@@ -314,6 +328,7 @@ proc _find_overlay { modulefile_components } {
                         return $overlay_components
                 }
         }
+        debug "not found"
         return {}
 }
 
@@ -332,8 +347,6 @@ proc _pmodules_init_global_vars { } {
 	global	variant
 	global	PREFIX		# prefix of package
 
-	set	::PmodulesOverlays	[split $::env(PMODULES_OVERLAYS) ':']
-        set	::PmodulesModulfilesDir	$::env(PMODULES_MODULEFILES_DIR)
         set	modulefile_components	[file split $::ModulesCurrentModulefile]
 
         set     overlay_components [_find_overlay ${modulefile_components}]
@@ -359,6 +372,7 @@ proc _pmodules_init_global_vars { } {
 
 	debug "group of module $name: $group"
 }
+
 
 if { [info exists ::whatis] } {
 	module-whatis	"$whatis"
