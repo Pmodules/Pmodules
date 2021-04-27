@@ -646,7 +646,9 @@ subcommand_load() {
 	while read dir; do
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
+		get_overlay_of_moduledir overlay "${dir}"
 	done <<< "${MODULEPATH//:/$'\n'}"
+        g_env_must_be_saved='yes'
 	export_env 'LOADEDMODULES'
 }
 
