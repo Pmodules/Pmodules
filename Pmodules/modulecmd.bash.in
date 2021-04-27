@@ -1084,14 +1084,15 @@ subcommand_avail() {
 	human_readable_output() {
 		output_header "$1"
 
-		local -i column=$cols
-		local -i colsize=16
+		local -a available_modules=()
+		local mod=''
+		local -i max_length=1
 		for ((i=0; i<${#mods[@]}; i+=3)); do
 			if [[ ${verbosity_lvl} == 'verbose' ]]; then
 			        local  release=${mods[i+1]}
 			        case ${mods[i+1]} in
 					stable )
-						mod=${mods[i]}
+						mod="${mods[i]}"
 						;;
 					* )
 						mod="${mods[i]}(${release:0:1})"
@@ -1100,9 +1101,17 @@ subcommand_avail() {
 			else
 				mod=${mods[i]}
 			fi
+			local -i n=${#mod}
+			(( n > max_length )) && (( max_length=n ))
+			available_modules+=("${mod}")
+		done
+		IFS=$'\n' available_modules=($(sort <<<"${available_modules[*]}"))
+		unset IFS
+		local -i span=$(( max_length / 16 + 1 ))	# compute column size
+		local -i colsize=$(( span * 16 ))		# as multiple of 16
+		local -i column=$cols				# force a line-break
+		for mod in "${available_modules[@]}"; do
 			local -i len=${#mod}
-			local -i span=$(( len / 16 + 1 ))
-			local -i colsize=$(( span * 16 ))
 			if (( column+len >= cols )); then
 			        printf -- "\n" 1>&2
 				column=0
