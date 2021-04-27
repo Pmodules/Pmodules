@@ -144,8 +144,7 @@ get_release() {
 	local -r releasefile="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${releasefile} ]]; then
 		# read releasefile, remove empty lines, spaces etc
-		local -r data=$( < "${releasefile}" )
-		std::upvar $1 "${data}"
+		std::upvar $1 $( < "${releasefile}" )
 	else
 		std::upvar $1 'unstable'
 	fi
