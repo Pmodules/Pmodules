@@ -1170,26 +1170,27 @@ subcommand_avail() {
 	unset IFS
         local overlay=''
         local group=''
-        local -A modulepath_of_group
         local -a groups=()
         for dir in "${modulepath[@]}"; do
                 group='other'
                 find_overlay overlay group "${dir}"
-                if [[ ${modulepath_of_group[${group}]} ]]; then
-                           modulepath_of_group[${group}]+=:${dir}
-                else
-                        modulepath_of_group[${group}]=${dir}
-                        groups+=( "${group}" )
-                fi
+		if [[ -v modulepath_${group} ]]; then
+			path+=("${dir}")
+		else
+			typeset -a modulepath_${group}="${dir}"
+			typeset -n path=modulepath_${group}
+			groups+=("${group}")
+		fi
         done
-        local string
-	for string in "${pattern[@]}"; do
+        local p
+	for p in  "${pattern[@]}"; do
                 for group in "${groups[@]}"; do
+			declare -n path=modulepath_${group}
 			get_available_modules \
 				mods \
-                                "${string}" \
+                                "${p}" \
                                 "${opt_use_releases}" \
-				"${modulepath_of_group[${group}]}"
+				"${path[@]}"
 
 			[[ ${#mods[@]} == 0 ]] && continue
 
