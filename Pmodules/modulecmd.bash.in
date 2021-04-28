@@ -102,7 +102,7 @@ export_env() {
 declare g_env_must_be_saved='no'
 
 save_env() {
-        [[ ${g_env_must_be_saved} == 'no' ]] && return 0
+        [[ "$1" == 'no' ]] && return 0
         local vars=( GroupDepths UsedReleases UseFlags UsedGroups )
         vars+=( PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES )
         vars+=( PMODULES_DEFAULT_RELEASES )
@@ -115,7 +115,7 @@ save_env() {
 	unset UsedGroups
 }
 
-trap 'save_env ' EXIT
+trap 'save_env ${g_env_must_be_saved}' EXIT
 
 get_overlay_of_moduledir() {
 	local "$1"
