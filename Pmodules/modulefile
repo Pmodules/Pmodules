@@ -8,3 +8,15 @@ module-maintainer	"Achim Gsell <achim.gsell@psi.ch>"
 module-help	"
 Pmodules are a hierarchical module environment based on Environment Modules.
 "
+
+#
+# It might be that '${PMODULES_ROOT}/Tools/Pmodules/VERSION' is in PATH.
+# Why? With older version the PATH might have been set without loading
+# a module.
+#
+if { [module-info mode load] } {
+    set PATH ":$::env(PATH):"
+    if { [regexp -- {.*:(.*/Pmodules/[^:]*):} $PATH -> str] } {
+    	remove-path PATH $str
+    }
+}
