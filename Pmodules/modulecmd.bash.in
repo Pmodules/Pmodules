@@ -1757,7 +1757,7 @@ reset_modulepath() {
 	local group
 	local overlay
 	for overlay in "${!OverlayDict[@]}"; do
-		for group in ${PMODULES_DEFAULT_GROUPS}; do
+		for group in ${UsedGroups//:/ }; do
 			local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
 			if [[ -d "${dir}" ]]; then
 				std::prepend_path MODULEPATH "${dir}"
@@ -1912,7 +1912,6 @@ subcommand_purge() {
                 echo "${error}" 1>&2
 	fi
 
-        reset_modulepath
 	if [[ -n "${pmodule}" ]]; then
 		# reload a previously loaded Pmodule module
 		# stderr is redirected to /dev/null, otherwise
@@ -1920,6 +1919,7 @@ subcommand_purge() {
 		# 'unstable module has been loaded'
 		subcommand_load "${pmodule}" 2> /dev/null
 	fi
+        reset_modulepath
 	
 	export_env MODULEPATH PMODULES_HOME
 }
