@@ -2639,7 +2639,9 @@ if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
 
-_init_overlay_map() {
+_init_overlay_vars() {
+	declare -ag OverlayList=( "${PMODULES_ROOT}" )
+	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0")
 	local overlay
 	for overlay in "${!OverlayDict[@]}"; do
 		local group
@@ -2650,6 +2652,7 @@ _init_overlay_map() {
 			fi
 		done
 	done
+	save_env 'yes'
 }
 
 if [[ -n ${PMODULES_ENV} ]]; then
@@ -2658,10 +2661,7 @@ if [[ -n ${PMODULES_ENV} ]]; then
 	# OverlayList might not be set. Since libmodules.tcl
 	# reads PMODULES_ENV we have to save the environment.
 	if [[ -z "${OverlayList}" ]]; then
-		declare -ag OverlayList=( "${PMODULES_ROOT}" )
-		declare -Ag OverlayDict=([${PMODULES_ROOT}]="0")
-		_init_overlay_map
-		save_env
+		_init_overlay_vars
 	fi
 else
 	pmodules_init
