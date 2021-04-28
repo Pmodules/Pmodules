@@ -114,7 +114,12 @@ save_env() {
 	export_env 'PMODULES_ENV'
 }
 
-trap 'save_env ${g_env_must_be_saved}' EXIT
+_exit() {
+	save_env "${g_env_must_be_saved}"
+	${rm} -f "${tmpfile}"
+}
+
+trap '_exit' EXIT
 
 get_overlay_of_moduledir() {
 	local "$1"
@@ -597,8 +602,6 @@ subcommand_load() {
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
                 fi
 
-		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-			|| std::die 1 "Oops: unable to create tmp file!"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
 
@@ -1888,8 +1891,6 @@ subcommand_purge() {
 	# run module purge
 	# since we might have to reload a Pmodules module, we cannot
 	# just run 'modulecmd ${Shell} purge'
-	local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-		|| std::die 1 "Oops: unable to create tmp file!"
 	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
 
 	local error=$( < "${tmpfile}")
@@ -2181,8 +2182,6 @@ subcommand_search() {
                         func_print_line='print_line_csv'
                 }
 
-                local -r tmpfile=$1
-
                 if [[ "${opt_print_modulefiles}" == 'yes' ]]; then
                         print_modulefiles
                 elif [[ "${opt_print_csv}" == 'yes' ]]; then
@@ -2220,8 +2219,6 @@ subcommand_search() {
 	search () {
 		local -r module=$1
 		# write results to a temporary file for later processing
-		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-			|| std::die 1 "Oops: unable to create tmp file!"
 		local group
 		# loop over all groups
 		for group in "${!GroupDepths[@]}"; do
@@ -2279,8 +2276,7 @@ subcommand_search() {
                                      ${deps[@]} >> "${tmpfile}"
 			done
 		done
-		print_result "${tmpfile}"
-		${rm} -f "${tmpfile}"
+		print_result
 	}
 
 	while (( $# > 0 )); do
@@ -2718,6 +2714,13 @@ fi
 if (( ${#GroupDepths[@]} == 0 )); then
 	scan_groups "${!OverlayDict[@]}"
 fi
+
+case ${subcommand} in
+	load|purge|search )
+		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
+			|| std::die 1 "Oops: unable to create tmp file!"
+		;;
+esac
 
 declare options
 options=$( "${getopt}" ${Options[${subcommand}]} -- -- "${opts[@]}" "$@" ) \
