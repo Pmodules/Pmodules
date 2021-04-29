@@ -102,7 +102,7 @@ export_env() {
 declare g_env_must_be_saved='no'
 
 save_env() {
-        [[ ${g_env_must_be_saved} == 'no' ]] && return 0
+        [[ $1 == 'no' ]] && return 0
         local vars=( GroupDepths UsedReleases UseFlags UsedGroups )
         vars+=( PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES )
         vars+=( PMODULES_DEFAULT_RELEASES )
@@ -112,7 +112,12 @@ save_env() {
 	export_env 'PMODULES_ENV'
 }
 
-trap 'save_env ' EXIT
+_exit() {
+	save_env "${g_env_must_be_saved}"
+	${rm} -f "${tmpfile}"
+}
+
+trap '_exit' EXIT
 
 #
 # get release of module
@@ -515,8 +520,6 @@ subcommand_load() {
                         test -r "${prefix}/.info" && cat "$_" 1>&2
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
 		fi
-		local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-                    || std::die 1 "Oops: unable to create tmp file!\n"
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
 
@@ -1439,9 +1442,6 @@ subcommand_purge() {
 	# run module purge
 	# since we might have to reload a Pmodules module, we cannot
 	# just run 'modulecmd ${Shell} purge'
-	local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-                || std::die 1 "Oops: unable to create tmp file!\n"
-
 	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
 
 	local error=$( < "${tmpfile}")
@@ -1774,8 +1774,6 @@ subcommand_search() {
 	search () {
 		local -r module=$1
 		# write results to a temporary file for later processing
-		local -r tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
-			|| std::die 1 "Oops: unable to create tmp file!"
 		local group
 		# loop over all groups
 		for group in "${!GroupDepths[@]}"; do
@@ -2250,6 +2248,13 @@ fi
 if (( ${#GroupDepths[@]} == 0 )); then
 	scan_groups "${PMODULES_ROOT}"
 fi
+
+case ${subcommand} in
+	load|purge|search )
+		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
+			|| std::die 1 "Oops: unable to create tmp file!"
+		;;
+esac
 
 declare options
 options=$( "${getopt}" ${Options[${subcommand}]} -- -- "${opts[@]}" "$@" ) \
