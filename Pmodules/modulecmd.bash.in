@@ -1320,7 +1320,7 @@ reset_modulepath() {
 	MODULEPATH=''
         local group
         local root="${PMODULES_ROOT}"
-        for group in ${PMODULES_DEFAULT_GROUPS}; do
+	for group in ${UsedGroups//:/ }; do
                 local dir="${root}/${group}/${PMODULES_MODULEFILES_DIR}"
                 [[ -d "${dir}" ]] && std::prepend_path MODULEPATH "${dir}"
         done
@@ -1395,6 +1395,13 @@ USAGE:
 '
 
 subcommand_purge() {
+	#
+	# unload all loaded modules
+	#
+	# Note:
+	#     If a Pmodule module is loaded, it will *not* be
+	#     unloaded! 
+	#
         local -r subcommand='purge'
 	local -a args=()
 	while (( $# > 0)); do
@@ -1411,20 +1418,65 @@ subcommand_purge() {
 		shift
 	done
         if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
+	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
                          "no arguments allowd"
         fi
-	# we cannot unset PMODULES_HOME, otherwise the module function
-	# would fail.
-	local saved_home="${PMODULES_HOME}"
-	"${modulecmd}" "${Shell}" "${subcommand}"
+
+	# is a Pmodule module loaded?
+	# if yes, save name in variable 'pmodule'
+	local pmodule=''
+	IFS=':'
+	local -a lmfiles=($_LMFILES_)
+	unset IFS
+	for f in "${lmfiles[@]}"; do
+		if [[ $f == */${PMODULES_MODULEFILES_DIR}/Pmodules/* ]]; then
+			pmodule="${f##*/${PMODULES_MODULEFILES_DIR}/}"
+			break;
+		fi
+	done
+
+	# run module purge
+	# since we might have to reload a Pmodules module, we cannot
+	# just run 'modulecmd ${Shell} purge'
+	local tmpfile=$( "${mktemp}" /tmp/Pmodules.XXXXXX ) \
+                || std::die 1 "Oops: unable to create tmp file!\n"
+
+	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
+
+	local error=$( < "${tmpfile}")
+	${rm} "${tmpfile}"
+	if [[ "${error}" =~ ":ERROR:" ]]; then
+                local s=${error%%$'\n'*}
+                local error_txt='failed'
+		std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "${error_txt}"
+        fi
+        if [[ "${Shell}" == "sh" ]]; then
+		# for sh-like shells just echo 
+                echo "${output}"
+        else
+		# re-run with right shell
+                "${modulecmd}" "${Shell}" 'purge'
+        fi
+	eval "${output}"
+	if [[ -n "${error}" ]]; then
+                echo "${error}" 1>&2
+	fi
+
+	if [[ -n "${pmodule}" ]]; then
+		# reload a previously loaded Pmodule module
+		# stderr is redirected to /dev/null, otherwise
+		# we may get output like
+		# 'unstable module has been loaded'
+		subcommand_load "${pmodule}" 2> /dev/null
+	fi
         reset_modulepath
-        reset_used_groups
-	PMODULES_HOME="${saved_home}"
 	
 	export_env MODULEPATH PMODULES_HOME
 }
+
 
 ##############################################################################
 #
