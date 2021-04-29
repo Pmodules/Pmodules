@@ -22,6 +22,10 @@ declare -r sort
 awk=$(PATH=/bin:/usr/bin /usr/bin/which awk)
 declare -r awk
 rm=$(PATH=/bin:/usr/bin /usr/bin/which rm)
+declare -r rm
+logger=$(PATH=/bin:/usr/bin /usr/bin/which logger)
+declare -r logger
+
 if [[ $(uname -s) == 'Darwin' ]]; then
 	declare -r getopt="${libexecdir}/getopt"
 	declare -r find="${libexecdir}/find"
@@ -556,7 +560,7 @@ subcommand_load() {
                            [[ ${release} != stable ]]; then
 		        std::info "%s" "${msg}"
 		fi
-		logger "${msg}"
+		${logger} -t Pmodules "${msg}"
 	done
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
