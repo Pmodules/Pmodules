@@ -1,4 +1,4 @@
-#!@PMODULES_HOME@/sbin/bash
+#!@BASH@ --noprofile
 
 # we have to unset CDPATH, otherwise 'cd' prints the directoy!
 unset CDPATH
