@@ -345,11 +345,26 @@ delete_module() {
 #		Initialize a new module environment in this directory-
 # 		
 subcommand_init() {
+	check_env() {
+		[[ -n "${PMODULES_ROOT}" ]] &&
+			[[ -d "${PMODULES_ROOT}" ]] &&
+			[[ -n "${PMODULES_HOME}" ]] &&
+			[[ -n "${PMODULES_VERSION}" ]] || \
+				std::die 1 "
+Error: the module environment you are going to use as so  urce has not been
+initialized properly!"
+
+		[[ -d "${src_prefix}/${PMODULES_CONFIG_DIR}" ]] &&
+			[[ -d "${src_prefix}/Tools/Pmodules/${PMODULES_VERSION}" ]] || \
+				std::die 1 "
+Error: the module environment '${src_prefix}' has not been initialized properly!"
+	}
+	
 	local src=''
 	local target_prefixes=()
 	local user=''
 	local opts=''
-	opts=$(pmodules::get_options -o h -l src: -l user: -l help -l version: -- "$@")
+	opts=$(${getopt} -o h -l src: -l user: -l help -l version: -- "$@")
 	if [[ $? != 0 ]]; then
 		subcommand_help_init
 		exit 1
@@ -407,7 +422,7 @@ subcommand_init() {
 		    std::die 1 "Error: --user option is only allowed if running as root!"
 	fi
 
-	pmodules::check_env || \
+	check_env || \
 		std::die 1 "Giving up..."
 
 	echo "
@@ -449,11 +464,6 @@ environment at '${PMODULES_ROOT}'
 			    "${src_prefix}" \
 			    "${target_prefix}" || \
 		        std::die 1 "Error: sync Pmodules failed!"
-
-		dst="${target_prefix}/${PMODULES_CONFIG_DIR}/environment.bash"
-		echo "Adding installation source '${src_prefix}' to '${dst}'..."
-		sed -i.bak '/PMODULES_INSTALL_SOURCE/d' "${dst}"
-		echo "declare -x PMODULES_INSTALL_SOURCE=\"${src_prefix}\"" >> "${dst}"
 		${mkdir} -p "${target_prefix}/Tools/${PMODULES_MODULEFILES_DIR}"
 		echo
 
@@ -667,7 +677,7 @@ subcommand_install() {
 		std::info ""
 	}
 	
-	opts=$(pmodules::get_options -o hf -l dry-run -l force -l with: -l release: -l help -l src: -- "$@")
+	opts=$(${getopt} -o hf -l dry-run -l force -l with: -l release: -l help -l src: -- "$@")
 	if [[ $? != 0 ]]; then
 		subcommand_help_install
 		exit 1
