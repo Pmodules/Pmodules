@@ -1,22 +1,42 @@
-#!@PMODULES_HOME@/sbin/bash
+#!@BASH@ --noprofile
 
 # we have to unset CDPATH, otherwise 'cd' prints the directoy!
 unset CDPATH
 
 # used for some output only
-declare -r  CMD=$(basename "$0")
+declare -r  CMD='modmanage'
 
-declare -r  mydir=$(cd $(dirname "$0") && pwd)
-declare -r  prefix=$(dirname "${mydir}")
+dirname=$(PATH=/bin:/usr/bin which dirname)
+declare -r dirname
+uname=$(PATH=/bin:/usr/bin which uname)
+declare -r uname
+mkdir=$(PATH=/bin:/usr/bin which mkdir)
+declare -r mkdir
+rsync=$(PATH=/bin:/usr/bin which rsync)
+declare -r rsync
+rm=$(PATH=/bin:/usr/bin /usr/bin/which rm)
+declare -r rm
+
+if [[ $(${uname} -s) == 'Darwin' ]]; then
+	declare -r getopt="${libexecdir}/getopt"
+	declare -r find="${libexecdir}/find"
+else
+	getopt=$(PATH=/bin:/usr/bin /usr/bin/which getopt)
+	declare -r getopt
+	find=$(PATH=/bin:/usr/bin /usr/bin/which find)
+	declare -r find
+fi
+
+
+declare -r  mydir=$(cd $(${dirname} "$0") && pwd)
+declare -r  prefix=$(${dirname} "${mydir}")
 declare -r  bindir="${prefix}/bin"
-declare -r  sbindir="${prefix}/sbin"
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
-source "${libdir}/libstd.bash"
-source "${libdir}/libpmodules.bash"
 
-PATH="${sbindir}:${bindir}:${PATH}"
+source "${libdir}/libstd.bash"
+
 
 _exit () {
 	std::die 1 "Interrupted..."
@@ -205,7 +225,7 @@ get_module_prefix() {
 #	$1: relative module file path
 #
 get_releasefile_name() {
-	echo "$(dirname "$1")/.release-$(basename "$1")"
+	echo "$(${dirname} "$1")/.release-$(basename "$1")"
 }
 
 ##############################################################################
@@ -234,8 +254,8 @@ sync_module() {
 
 	# install/update module
 	if [[ ! -d "${target_prefix}/${rel_module_prefix}" ]] || [[ "${force}" == 'yes' ]]; then
-		$DRY mkdir -p "${target_prefix}/${rel_module_prefix}" || return $?
-		$DRY rsync --links --perms --recursive --delete \
+		$DRY ${mkdir} -p "${target_prefix}/${rel_module_prefix}" || return $?
+		$DRY ${rsync} --links --perms --recursive --delete \
 		      "${src_prefix}/${rel_module_prefix}/" \
 		      "${target_prefix}/${rel_module_prefix}/" || exit $?
 	fi
@@ -246,8 +266,8 @@ sync_module() {
 
 	# create target directory for module- and release-file
 	if [[ -e "${src_modulefile}" ]] || [[ -e "${src_releasefile}" ]]; then
-	        local dir=$( dirname "${target_modulefile}" )
-		$DRY mkdir -p "${dir}" || return $?
+	        local dir=$( ${dirname} "${target_modulefile}" )
+		$DRY ${mkdir} -p "${dir}" || return $?
 	fi
 
 	# copy modulefile template
@@ -260,20 +280,20 @@ sync_module() {
 	local -r src_template="${src_prefix}/${template}"
 	local -r target_template="${target_prefix}/${template}"
 	if [[ -e "${src_template}" ]]; then
-		$DRY mkdir -p "${target_template}"
-		$DRY rsync --links --perms --recursive \
+		$DRY ${mkdir} -p "${target_template}"
+		$DRY ${rsync} --links --perms --recursive \
 		     "${src_template}" "${target_template}" || exit $?
 	fi
 
 	# copy modulefile
 	if [[ -e "${src_modulefile}" ]]; then
-	        $DRY rsync --links --perms --recursive \
+	        $DRY ${rsync} --links --perms --recursive \
 		     "${src_modulefile}" "${target_modulefile}" || exit $?
 	fi
 
 	# copy release-file
 	if [[ -e "${src_releasefile}" ]]; then
-	        $DRY rsync --links --perms --recursive \
+	        $DRY ${rsync} --links --perms --recursive \
 		     "${src_releasefile}" "${target_releasefile}" || exit $?
 	fi
 
@@ -290,9 +310,8 @@ sync_module() {
 sync_config() {
 	src="$1/${PMODULES_CONFIG_DIR}/"
 	dst="$2/${PMODULES_CONFIG_DIR}/"
-	$DRY rsync --recursive --links --perms --delete \
+	$DRY ${rsync} --recursive --links --perms --delete \
 		"${src}" "${dst}" 2>/dev/null || return $?
-	sed -i.bak "s/PMODULES_VERSION=\(.*\)/PMODULES_VERSION=${PMODULES_VERSION}/" "${dst}/environment.bash"
 	echo
 }
 
@@ -326,11 +345,26 @@ delete_module() {
 #		Initialize a new module environment in this directory-
 # 		
 subcommand_init() {
+	check_env() {
+		[[ -n "${PMODULES_ROOT}" ]] &&
+			[[ -d "${PMODULES_ROOT}" ]] &&
+			[[ -n "${PMODULES_HOME}" ]] &&
+			[[ -n "${PMODULES_VERSION}" ]] || \
+				std::die 1 "
+Error: the module environment you are going to use as so  urce has not been
+initialized properly!"
+
+		[[ -d "${src_prefix}/${PMODULES_CONFIG_DIR}" ]] &&
+			[[ -d "${src_prefix}/Tools/Pmodules/${PMODULES_VERSION}" ]] || \
+				std::die 1 "
+Error: the module environment '${src_prefix}' has not been initialized properly!"
+	}
+	
 	local src=''
 	local target_prefixes=()
 	local user=''
 	local opts=''
-	opts=$(pmodules::get_options -o h -l src: -l user: -l help -l version: -- "$@")
+	opts=$(${getopt} -o h -l src: -l user: -l help -l version: -- "$@")
 	if [[ $? != 0 ]]; then
 		subcommand_help_init
 		exit 1
@@ -388,7 +422,7 @@ subcommand_init() {
 		    std::die 1 "Error: --user option is only allowed if running as root!"
 	fi
 
-	pmodules::check_env || \
+	check_env || \
 		std::die 1 "Giving up..."
 
 	echo "
@@ -416,7 +450,7 @@ environment at '${PMODULES_ROOT}'
 		fi
 		force='yes'
 		echo "Creating target directory '${target_prefix}'..."
-		$DRY mkdir -p "${target_prefix}" || \
+		$DRY ${mkdir} -p "${target_prefix}" || \
 		        std::die 1 "Error: make directory failed!"
 		echo
 
@@ -430,13 +464,7 @@ environment at '${PMODULES_ROOT}'
 			    "${src_prefix}" \
 			    "${target_prefix}" || \
 		        std::die 1 "Error: sync Pmodules failed!"
-		mkdir -p "${target_prefix}/Tools/${PMODULES_MODULEFILES_DIR}"
-		echo
-
-		dst="${target_prefix}/${PMODULES_CONFIG_DIR}/environment.bash"
-		echo "Adding installation source '${src_prefix}' to '${dst}'..."
-		sed -i.bak '/PMODULES_INSTALL_SOURCE/d' "${dst}"
-		echo "declare -x PMODULES_INSTALL_SOURCE=\"${src_prefix}\"" >> "${dst}"
+		${mkdir} -p "${target_prefix}/Tools/${PMODULES_MODULEFILES_DIR}"
 		echo
 
 		if [[ -n "${user}" ]]; then
@@ -505,7 +533,7 @@ get_group_depths () {
 		cd "${root}"
 		local group
 		for group in "${Groups[@]}"; do
-			local  fname=$(find "${group}/${modulefiles_dir}" \
+			local  fname=$(${find} "${group}/${modulefiles_dir}" \
 					    -depth \( -type f -o -type l \) -print -quit)
 			[[ -n ${fname} ]] || continue
 			local -a tmp
@@ -591,7 +619,7 @@ subcommand_install() {
 			[[ -z ${dep} ]] && continue
 
 			# search for module with current modulepath and remember
-			local modulename=$(find "${modulepath[@]}" -path "*/${dep}" \
+			local modulename=$(${find} "${modulepath[@]}" -path "*/${dep}" \
                                                 2>/dev/null | head -n 1 )
 			[[ -n ${modulename} ]] || \
 			        std::die 3 "Oops: required module '${dep}' not found!"
@@ -606,7 +634,7 @@ subcommand_install() {
 				modulepath+=( "${path}" )
 			fi
 		done < "${tmpfile}"
-                rm "${tmpfile}"
+                ${rm} "${tmpfile}"
 	}
 
 	#......................................................................
@@ -649,7 +677,7 @@ subcommand_install() {
 		std::info ""
 	}
 	
-	opts=$(pmodules::get_options -o hf -l dry-run -l force -l with: -l release: -l help -l src: -- "$@")
+	opts=$(${getopt} -o hf -l dry-run -l force -l with: -l release: -l help -l src: -- "$@")
 	if [[ $? != 0 ]]; then
 		subcommand_help_install
 		exit 1
@@ -729,7 +757,7 @@ subcommand_install() {
 			map_to_family[$_key]=${_family}
 		fi
 	done < <({ cd "${src_prefix}" && \
-				 find */"${PMODULES_MODULEFILES_DIR}" \
+				 ${find} */"${PMODULES_MODULEFILES_DIR}" \
 				      \( -type l -o -type f \) \! -name ".*"; } 2>/dev/null )
 
 	#
