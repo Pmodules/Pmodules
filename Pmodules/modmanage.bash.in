@@ -4,7 +4,7 @@
 unset CDPATH
 
 # used for some output only
-declare -r  CMD=$(basename "$0")
+declare -r  CMD='modmanage'
 
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare -r  prefix=$(dirname "${mydir}")
