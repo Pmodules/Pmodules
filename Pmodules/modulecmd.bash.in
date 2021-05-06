@@ -729,6 +729,7 @@ subcommand_unload() {
 		PMODULES_HOME=${saved_home}
 		export_env 'PMODULES_HOME'
 	fi
+	g_env_must_be_saved='yes'
 }
 
 ##############################################################################
