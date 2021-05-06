@@ -71,7 +71,7 @@ proc module-addgroup { group } {
 		foreach overlay $::OverlayList {
 			lappend overlays_to_add $overlay
 			debug $overlay
-			if { [string compare $::OverlayDict($overlay) $ol_replacing=] == 0 } {
+			if { [string compare $::OverlayDict($overlay) $::ol_replacing] == 0 } {
 				break
 			}
 		}
