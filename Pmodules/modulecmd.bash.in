@@ -102,7 +102,7 @@ declare g_env_must_be_saved='no'
 
 save_env() {
         [[ $1 == 'no' ]] && return 0
-        local vars=( GroupDepths UsedReleases UseFlags UsedGroups )
+        local vars=( Version GroupDepths UsedReleases UseFlags UsedGroups )
         vars+=( PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES )
         vars+=( PMODULES_DEFAULT_RELEASES )
 
@@ -1345,6 +1345,7 @@ reset_modulepath() {
                 local dir="${root}/${group}/${PMODULES_MODULEFILES_DIR}"
                 [[ -d "${dir}" ]] && std::prepend_path MODULEPATH "${dir}"
         done
+        g_env_must_be_saved='yes'
 }
 
 reset_used_groups() {
@@ -1363,7 +1364,6 @@ reset_used_releases() {
 	done
         g_env_must_be_saved='yes'
 }
-
 
 init_manpath() {
         std::replace_path MANPATH "${PMODULES_HOME%/*}/.*"
@@ -1391,7 +1391,9 @@ pmodules_init() {
 	declare -gx MODULEPATH=''
 
 	declare -Ag GroupDepths='()'
+	unset UseFlags
 	declare -Ag  UseFlags=()
+	declare -g Version="${PMODULES_VERSION}"
         reset_modulepath
         reset_used_groups
         reset_used_releases
@@ -2259,6 +2261,9 @@ fi
 
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+	if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
+		pmodules_init
+	fi
 else
 	pmodules_init
 fi
