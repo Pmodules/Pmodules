@@ -49,6 +49,9 @@ else
 	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
 fi
 
+declare -r ol_hiding='h'
+declare -r ol_replacing='r'
+
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 # use default IFS
@@ -878,7 +881,7 @@ get_available_modules() {
 					# - new version and not hidden by overlay
 					local name="${mod%/*}"
 					if [[ -z "${modulenames[${name}]}" ]]; then
-						if [[ "${OverlayDict[$overlay]}" == 'h' ]]; then
+						if [[ "${OverlayDict[$overlay]}" == "${ol_hiding}" ]]; then
 							modulenames[${name}]="${overlay}"
 						else
 							modulenames[${name}]='0'
@@ -1353,11 +1356,16 @@ subcommand_use() {
 
 	use () {
                 use_overlay() {
-			if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
-				std::die 3 "%s %s: %s -- %s" \
-					 "${CMD}" "${subcommand}" \
-					 "overlays can be added as long as no modules are loaded!" \
-					 "${overlay}"
+			if [[ -n ${LOADEDMODULES} ]]; then
+				if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
+					std::error "%s %s: %s" \
+						   "${CMD}" "${subcommand}" \
+						   "overlay cannot be added since some modules are already loaded!"
+					std::die 3 "%s %s: %s -- %s" \
+						 "${CMD}" "${subcommand}" \
+						 "overlay failed" \
+						 "${overlay}"
+				fi
 			fi
 			local overlay=''
 			local modifier='0'
@@ -1365,7 +1373,7 @@ subcommand_use() {
 				modifier=${1##*:}
 				overlay=${1%:*}
 				case ${modifier} in
-					g | h )
+					${ol_replacing} | ${ol_hiding} )
 						:
 						;;
 					* )
@@ -1392,9 +1400,9 @@ subcommand_use() {
 				return 0
 			fi  
 				
-			if [[ "${modifier}" == "g" ]]; then
-				# if this overlay hides groups, we have to remove
-				# the modules made available by other overlays
+			if [[ "${modifier}" == "${ol_replacing}" ]]; then
+				# if this overlay replaces groups, we have to remove
+				# the modules made available by other overlays in these groups
 				for group in ${UsedGroups//:/ }; do
 					# first test whether this group is in the to be added overlay
                                         local dir="${overlay}/"
@@ -1558,11 +1566,16 @@ subcommand_unuse() {
 	unset IFS
         unuse() {
                 unuse_overlay() {
-			if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
-				std::die 3 "%s %s: %s -- %s" \
-					 "${CMD}" "${subcommand}" \
-					 "overlays can NOT be removed as long as modules are loaded!" \
-					 "${overlay}"
+			if [[ -n ${LOADEDMODULES} ]]; then
+				if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
+					std::error "%s %s: %s" \
+						   "${CMD}" "${subcommand}" \
+						   "overlay cannot be removed since some modules are still loaded!"
+					std::die 3 "%s %s: %s -- %s" \
+						 "${CMD}" "${subcommand}" \
+						 "overlay failed" \
+						 "${overlay}"
+				fi
 			fi
 			overlay=${overlay%:*}  # ignore any modifier
 			overlay=${overlay%/} # remove trailing '/' if there is one
@@ -1582,7 +1595,7 @@ subcommand_unuse() {
                                          "not an used overlay" \
                                          "${overlay}"
 				
-			if [[ "${modifier}" == 'g' ]]; then
+			if [[ "${modifier}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
 				for group in ${UsedGroups//:/ }; do
