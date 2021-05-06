@@ -818,9 +818,7 @@ subcommand_avail() {
 	cols=$(tput cols)
 
 	output_header() {
-		local caption=${dir/${PMODULES_ROOT}\/}
-		local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
-		local caption=${caption/: \//: }
+		local caption="$1"
 		let i=($cols-${#caption})/2-2
 		printf -- "%0.s-" $(seq 1 $i) 1>&2
 		printf -- " %s " "${caption}" 1>&2
@@ -829,7 +827,7 @@ subcommand_avail() {
 	}
 
 	terse_output() {
-		output_header
+		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
 			local release=${mods[i+1]}
@@ -855,7 +853,7 @@ subcommand_avail() {
 	#
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
-		output_header
+		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
 			local release=${mods[i+1]}
@@ -873,7 +871,7 @@ subcommand_avail() {
 	}
 
 	human_readable_output() {
-		output_header
+		output_header "$1"
 
 		local -a available_modules=()
 		local mod=''
@@ -919,18 +917,15 @@ subcommand_avail() {
 	}
 	local pattern=()
 	local output_function='human_readable_output'
-	local opt_all_groups='no'
 	local opt_use_releases="${UsedReleases}"
+	local -A opt_groups=()
+	local val=''
 	while (($# > 0)); do
 		case $1 in
-                        -H | --help )
+                        -H | --help | -\? )
                                 print_help "${subcommand}"
                                 ;;
-			-a | --all )
-				opt_all_groups='yes'
-				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
-				;;
-			--all-releases )
+			-a | --all | --all-releases )
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			-h | --human )
@@ -944,6 +939,15 @@ subcommand_avail() {
 				;;
 			-m | --machine )
 				output_function='machine_output'
+				;;
+			-g | --group | --group=* )
+				if [[ $1 == --group=* ]]; then
+					val="${1/--group=}"
+				else
+					val="$2"
+					shift
+				fi
+				opt_groups[${val}]=1
 				;;
 			-- | '' )
 				;;
@@ -962,13 +966,18 @@ subcommand_avail() {
         local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
+			local group="${dir/${PMODULES_ROOT}\/}"
+			group="${group%%/*}"
+			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
+				continue
+			fi
 			get_available_modules \
 				mods \
 				"${string}" \
                                 "${opt_use_releases}" \
 				"${dir}"
 			[[ ${#mods[@]} == 0 ]] && continue
-			${output_function}
+			${output_function} "${group}"
 		done
 	done
 }
