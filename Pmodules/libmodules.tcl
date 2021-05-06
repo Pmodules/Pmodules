@@ -26,6 +26,7 @@ debug "loading libmodules"
 package require base64
 
 set ::MODULEFILES_DIR "modulefiles"
+set ::ol_replacing "r"
 
 proc _pmodules_parse_pmodules_env { } {
         debug "enter"
@@ -65,33 +66,29 @@ proc module-addgroup { group } {
 	set	::${group}		$name
 	set	::${group}_version	$version
 
-        debug "mode=[module-info mode]"
 	if { [module-info mode load] } {
-		array set overlayed_groups {}
-		foreach overlay [lreverse_n $::OverlayList 1] {
+	        set overlays_to_add {}
+		foreach overlay $::OverlayList {
+			lappend overlays_to_add $overlay
+			debug $overlay
+			if { [string compare $::OverlayDict($overlay) $ol_replacing=] == 0 } {
+				break
+			}
+		}
+		foreach overlay [lreverse_n $overlays_to_add 1] {
 			debug "overlay=$overlay"
-			if {![info exists overlayed_groups($group)]}	{
-				debug "group=$group"
-				debug "::variant=$::variant"
-				set dir [file join \
-					     $overlay \
-					     $group \
-					     $::MODULEFILES_DIR \
-					     {*}$::variant]
-				if { [file isdirectory $dir] } {
-					debug "prepend $dir to MODULEPATH "
-					prepend-path MODULEPATH $dir
-				}
+			debug "group=$group"
+			debug "::variant=$::variant"
+			set dir [file join \
+				     $overlay \
+				     $group \
+				     $::MODULEFILES_DIR \
+				     {*}$::variant]
+			if { [file isdirectory $dir] } {
+				debug "prepend $dir to MODULEPATH "
+				prepend-path MODULEPATH $dir
 			}
-			# don't add if overlayed
-			if { [string compare $::OverlayDict($overlay) "g"] == 0 } {
-				# get groups in this overlay
-				set dirs [glob -directory $overlay -type d {[A-Z]*}]
-				foreach dir $dirs {
-					set overlayed_groups([lindex [file split $dir] end]) 1
-				}
-			}
-                }
+		}
 		debug "end foreach"
 		prepend-path UsedGroups $group
 	} elseif { [module-info mode remove] } {
@@ -120,6 +117,7 @@ proc module-addgroup { group } {
                                      $group \
                                      $::MODULEFILES_DIR \
                                      {*}$::variant]
+		        debug "remove $dir"
                         remove-path MODULEPATH $dir
                 }
 		remove-path UsedGroups $group
