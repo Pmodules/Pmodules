@@ -818,9 +818,7 @@ subcommand_avail() {
 	cols=$(tput cols)
 
 	output_header() {
-		local caption=${dir/${PMODULES_ROOT}\/}
-		local caption=${caption/\/${PMODULES_MODULEFILES_DIR}/: }
-		local caption=${caption/: \//: }
+		local caption="$1"
 		let i=($cols-${#caption})/2-2
 		printf -- "%0.s-" $(seq 1 $i) 1>&2
 		printf -- " %s " "${caption}" 1>&2
@@ -829,7 +827,7 @@ subcommand_avail() {
 	}
 
 	terse_output() {
-		output_header
+		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
 			local release=${mods[i+1]}
@@ -855,7 +853,7 @@ subcommand_avail() {
 	#
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
-		output_header
+		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
 			local release=${mods[i+1]}
@@ -873,7 +871,7 @@ subcommand_avail() {
 	}
 
 	human_readable_output() {
-		output_header
+		output_header "$1"
 
 		local -a available_modules=()
 		local mod=''
@@ -968,7 +966,7 @@ subcommand_avail() {
                                 "${opt_use_releases}" \
 				"${dir}"
 			[[ ${#mods[@]} == 0 ]] && continue
-			${output_function}
+			${output_function} "${group}"
 		done
 	done
 }
