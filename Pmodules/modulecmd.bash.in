@@ -51,9 +51,8 @@ fi
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
-# we use newline as internal field separator
-IFS=$' \t\n'
-declare -r __IFS=${IFS}	# used to restore IFS
+# use default IFS
+unset IFS
 
 shopt -s nullglob
 
@@ -290,7 +289,7 @@ subcommand_load() {
 
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
+	unset IFS
 
 	#
 	# Test whether a given module is available.
@@ -433,7 +432,7 @@ subcommand_load() {
 
 			IFS=':'
 			local -a toks=($m)
-			IFS=${__IFS}
+			unset IFS
 			local group=''
 			local release=''
 			if is_group "${toks[0]}"; then
@@ -962,7 +961,7 @@ subcommand_avail() {
 	fi
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
+	unset IFS
         local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
@@ -1052,7 +1051,7 @@ subcommand_use() {
         local -r subcommand='use'
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
-	IFS=${__IFS}
+	unset IFS
         local add2path_func='std::append_path'
 
         group_is_used() {
@@ -1843,7 +1842,7 @@ subcommand_search() {
 					for ((j = -depth-2; j < -2; j += 2)); do
 						deps+=( "${toks[*]: $j:2}" );
 					done
-					IFS=${__IFS}
+					unset IFS
 				fi
 				
 				echo ${name} ${release} ${group} ${modulefile} \
