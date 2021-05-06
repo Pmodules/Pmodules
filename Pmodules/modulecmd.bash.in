@@ -1040,7 +1040,7 @@ subcommand_avail() {
 	cols=$(tput cols)
 
 	output_header() {
-		local caption=$1
+		local caption="$1"
 		let i=($cols-${#caption})/2-2
 		printf -- "%0.s-" $(seq 1 $i) 1>&2
 		printf -- " %s " "${caption}" 1>&2
@@ -1139,18 +1139,15 @@ subcommand_avail() {
 	}
 	local pattern=()
 	local output_function='human_readable_output'
-	local opt_all_groups='no'
 	local opt_use_releases="${UsedReleases}"
+	local -A opt_groups=()
+	local val=''
 	while (($# > 0)); do
 		case $1 in
-                        -H | --help )
+                        -H | --help | -\? )
                                 print_help "${subcommand}"
                                 ;;
-			-a | --all )
-				opt_all_groups='yes'
-				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
-				;;
-			--all-releases )
+			-a | --all | --all-releases )
 				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
 				;;
 			-h | --human )
@@ -1164,6 +1161,15 @@ subcommand_avail() {
 				;;
 			-m | --machine )
 				output_function='machine_output'
+				;;
+			-g | --group | --group=* )
+				if [[ $1 == --group=* ]]; then
+					val="${1/--group=}"
+				else
+					val="$2"
+					shift
+				fi
+				opt_groups[${val}]=1
 				;;
 			-- | '' )
 				;;
@@ -1196,6 +1202,9 @@ subcommand_avail() {
         local p
 	for p in  "${pattern[@]}"; do
                 for group in "${groups[@]}"; do
+			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
+				continue
+			fi
 			declare -n path=modulepath_${group}
 			get_available_modules \
 				mods \
@@ -1204,7 +1213,6 @@ subcommand_avail() {
 				"${path[@]}"
 
 			[[ ${#mods[@]} == 0 ]] && continue
-
 			${output_function} "${group}"
 		done
 	done
