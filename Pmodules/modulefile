@@ -17,6 +17,8 @@ Pmodules are a hierarchical module environment based on Environment Modules.
 if { [module-info mode load] } {
     set PATH ":$::env(PATH):"
     if { [regexp -- {.*:(.*/Pmodules/[^:]*):} $PATH -> str] } {
-    	remove-path PATH $str
+        if { [string compare $str $PREFIX/bin] != 0 } {
+    	    remove-path PATH $str
+        }
     }
 }
