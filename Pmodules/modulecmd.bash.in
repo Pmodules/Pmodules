@@ -1185,27 +1185,26 @@ subcommand_avail() {
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	unset IFS
-        local overlay=''
+	local dir
         local group=''
-        local -a groups=()
+        local overlay=''
         for dir in "${modulepath[@]}"; do
                 group='other'
                 find_overlay overlay group "${dir}"
-		if [[ -v modulepath_${group} ]]; then
-			path+=("${dir}")
-		else
-			typeset -a modulepath_${group}="${dir}"
-			typeset -n path=modulepath_${group}
-			groups+=("${group}")
+		if [[ ! -v modulepath_${group} ]]; then
+			typeset -a modulepath_${group}
 		fi
+		typeset -n path=modulepath_${group}
+		path+=("${dir}")
         done
         local p
 	for p in  "${pattern[@]}"; do
-                for group in "${groups[@]}"; do
+                for group in ${UsedGroups//:/ } other; do
 			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
 				continue
 			fi
-			declare -n path=modulepath_${group}
+			[[ -v modulepath_${group} ]] || continue
+			typeset -n path=modulepath_${group}
 			get_available_modules \
 				mods \
                                 "${p}" \
@@ -1807,7 +1806,7 @@ pmodules_init() {
 		UsedGroups=''
 		local group
 		for group in ${PMODULES_DEFAULT_GROUPS}; do
-			std::append_path UsedGroups "${group}"
+			std::prepend_path UsedGroups "${group}"
 		done
 		g_env_must_be_saved='yes'
 	}
