@@ -1394,8 +1394,8 @@ pmodules_init() {
 	unset UseFlags
 	declare -Ag  UseFlags=()
 	declare -g Version="${PMODULES_VERSION}"
-        reset_modulepath
         reset_used_groups
+        reset_modulepath
         reset_used_releases
         init_manpath
         export_env \
