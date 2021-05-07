@@ -1465,7 +1465,6 @@ subcommand_purge() {
 	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
 
 	local error=$( < "${tmpfile}")
-	${rm} "${tmpfile}"
 	if [[ "${error}" =~ ":ERROR:" ]]; then
                 local s=${error%%$'\n'*}
                 local error_txt='failed'
@@ -1755,8 +1754,6 @@ subcommand_search() {
                         func_print_line='print_line_csv'
                 }
 
-                local -r tmpfile=$1
-
                 if [[ "${opt_print_modulefiles}" == 'yes' ]]; then
                         print_modulefiles
                 elif [[ "${opt_print_csv}" == 'yes' ]]; then
@@ -1852,7 +1849,6 @@ subcommand_search() {
 			done
 		done
 		print_result "${tmpfile}"
-		${rm} -f "${tmpfile}"
 	}
 
 	while (( $# > 0 )); do
@@ -2276,6 +2272,9 @@ case ${subcommand} in
 	load|purge|search )
 		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
 			|| std::die 1 "Oops: unable to create tmp file!"
+		;;
+	* )
+		declare -r tmpfile=''
 		;;
 esac
 
