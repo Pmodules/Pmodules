@@ -508,8 +508,20 @@ subcommand_load() {
 		fi
                 if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]] \
                            && [[ ! ${m} =~ / ]]; then
+			# the module is in our hierarchy but no version
+			# has been specified. We take the version from
+			# current_modulefile and append it
                         m+="/${current_modulefile##*/}"
                 fi
+		if [[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]]; then
+			std::error "%s %s: %s" \
+				   "${CMD}" "${subcommand}" \
+				   "cannot load a Pmodules module because other modules are already load!"
+			std::die 3 "%s %s: %s -- %s\n" \
+                                 "${CMD}" "${subcommand}" \
+                                 "failed" \
+                                 "${m}"
+		fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
                         continue
 		fi
