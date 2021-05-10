@@ -2270,7 +2270,16 @@ fi
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 	if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
+		# the Pmodules version changed!
+		# we save _LMFILES_ and LOADEDMODULES and restore them
+		# later. Otherwise the Pmodules module would not be listed
+		# by module list
+		declare saved_LMFILES_="${_LMFILES_}"
+		declare saved_LOADEDMODULES="${LOADEDMODULES}"
 		pmodules_init
+		_LMFILES_="${saved_LMFILES_}"
+		LOADEDMODULES="${saved_LOADEDMODULES}"
+		export_env _LMFILES_ LOADEDMODULES
 	fi
 else
 	pmodules_init
