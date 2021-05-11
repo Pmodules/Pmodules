@@ -244,6 +244,33 @@ std::get_os_release() {
 	${func_map[${OS}]}
 }
 
+std::get_type() {
+	local -a signature=$(typeset -p "$1")
+	case ${signature[1]} in
+		-Ai* )
+			echo 'int dict'
+			;;
+		-A* )
+			echo 'dict'
+			;;
+		-ai* )
+			echo 'int array'
+			;;
+		-a* )
+			echo 'array'
+			;;
+		-i* )
+			echo 'integer'
+			;;
+		-- )
+			echo 'string'
+			;;
+		* )
+			echo 'none'
+			return 1
+	esac
+}
+
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
