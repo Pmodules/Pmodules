@@ -49,6 +49,7 @@ else
 	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
 fi
 
+declare -r ol_normal='n'
 declare -r ol_hiding='h'
 declare -r ol_replacing='r'
 
@@ -1374,7 +1375,8 @@ subcommand_use() {
 	use () {
                 use_overlay() {
 			if [[ -n ${LOADEDMODULES} ]]; then
-				if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
+				if [[  $LOADEDMODULES == *:*  ]] \
+					   || [[ $LOADEDMODULES != Pmodules/* ]]; then
 					std::error "%s %s: %s" \
 						   "${CMD}" "${subcommand}" \
 						   "overlay cannot be added since some modules are already loaded!"
@@ -1385,24 +1387,29 @@ subcommand_use() {
 				fi
 			fi
 			local overlay=''
-			local modifier='0'
+			local type="${ol_normal}"
 			if [[ $1 == *:* ]]; then
-				modifier=${1##*:}
+				type=${1##*:}
 				overlay=${1%:*}
-				case ${modifier} in
-					${ol_replacing} | ${ol_hiding} )
-						:
-						;;
-					* )
-						std::die 3 "%s %s: %s -- %s" \
-							 "${CMD}" "${subcommand}" \
-							 "invalid modifier '${modifier}!" \
-							 "${overlay}"
-						;;
-				esac
+			elif [[ -d $1 ]] && [[ -r $1/config/overlay.conf ]]; then
+				overlay=$1
+				source "${overlay}/config/overlay.conf"
 			else
 				overlay=$1
 			fi
+			
+			case ${type} in
+				${ol_normal} | ${ol_replacing} | ${ol_hiding} )
+					:
+					;;
+				* )
+					std::die 3 "%s %s: %s -- %s" \
+						 "${CMD}" "${subcommand}" \
+						 "invalid type '${type}!" \
+						 "${overlay}"
+					;;
+			esac
+			
                         overlay=${overlay%/} # remove trailing '/' if there is one
                         [[ -d "${overlay}" ]] || \
                                 std::die 3 "%s %s: %s -- %s" \
@@ -1417,7 +1424,7 @@ subcommand_use() {
 				return 0
 			fi  
 				
-			if [[ "${modifier}" == "${ol_replacing}" ]]; then
+			if [[ "${type}" == "${ol_replacing}" ]]; then
 				# if this overlay replaces groups, we have to remove
 				# the modules made available by other overlays in these groups
 				for group in ${UsedGroups//:/ }; do
@@ -1442,7 +1449,7 @@ subcommand_use() {
                                 fi
                         done
 
-                        OverlayDict[${overlay}]=${modifier}
+                        OverlayDict[${overlay}]=${type}
                         OverlayList=( "${overlay}" "${OverlayList[@]}" )
                         export_env OverlayList
                         g_env_must_be_saved='yes'
@@ -1517,6 +1524,10 @@ subcommand_use() {
                 fi
 
                 local dir="$(cd "${arg}" && pwd)"
+		if [[ -r ${dir}/config/overlay.conf ]]; then
+			use_overlay "${dir}"
+			return
+		fi
                 local overlay
                 for overlay in "${OverlayList[@]}"; do
                         if [[ ${dir}/ =~ ^${overlay}/ ]]; then
@@ -1594,7 +1605,7 @@ subcommand_unuse() {
 						 "${overlay}"
 				fi
 			fi
-			overlay=${overlay%:*}  # ignore any modifier
+			overlay=${overlay%:*}  # ignore any type
 			overlay=${overlay%/} # remove trailing '/' if there is one
                         [[ -d "${overlay}" ]] || \
                                 std::die 3 "%s %s: %s -- %s" \
@@ -1612,7 +1623,7 @@ subcommand_unuse() {
                                          "not an used overlay" \
                                          "${overlay}"
 				
-			if [[ "${modifier}" == "${ol_replacing}" ]]; then
+			if [[ "${OverlayDict[${overlay}]}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
 				for group in ${UsedGroups//:/ }; do
