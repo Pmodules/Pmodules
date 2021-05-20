@@ -1512,7 +1512,6 @@ subcommand_use() {
                                  "${CMD}" "${subcommand}" \
                                  "illegal group" \
                                  "${arg}"
-                        return
                 fi
                 # arg must be a directory!
 		if [[ ! -d ${arg} ]]; then
@@ -1520,7 +1519,6 @@ subcommand_use() {
                                  "${CMD}" "${subcommand}" \
                                  "illegal argument" \
                                  "${arg}"
-                        return
                 fi
 
                 local dir="$(cd "${arg}" && pwd)"
@@ -1700,7 +1698,6 @@ subcommand_unuse() {
                                  "${CMD}" "${subcommand}" \
                                  "illegal group" \
                                  "${arg}"
-                        return
                 fi
                 # user wants to append a directory to MODULEPATH
 		if [[ ! -d ${arg} ]]; then
@@ -1708,21 +1705,14 @@ subcommand_unuse() {
                                  "${CMD}" "${subcommand}" \
                                  "illegal argument" \
                                  "${arg}"
-                        return
                 fi
 
                 local dir="$(cd "${arg}" && pwd)"
-                local overlay
-                for overlay in "${OverlayList[@]}"; do
-                        if [[ ${dir}/ =~ ^${overlay}/ ]]; then
-                                # dir is in one of our used overlays
-			        std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${subcommand}" \
-                                         "illegal argument" \
-                                         "${arg}"
-                                return
-                        fi
-                done
+		if [[ -r ${dir}/config/overlay.conf ]] || [[ -v OverlayDict[${dir}] ]]; then
+			unuse_overlay "${dir}"
+			return
+		fi
+
                 # argument is a modulepath
                 std::remove_path MODULEPATH "${dir}"
 
