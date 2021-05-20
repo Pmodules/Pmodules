@@ -1591,6 +1591,7 @@ subcommand_unuse() {
 	unset IFS
         unuse() {
                 unuse_overlay() {
+			local overlay="$1"
 			if [[ -n ${LOADEDMODULES} ]]; then
 				if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
 					std::error "%s %s: %s" \
