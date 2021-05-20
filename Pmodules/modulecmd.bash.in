@@ -1526,17 +1526,16 @@ subcommand_use() {
 			use_overlay "${dir}"
 			return
 		fi
-                local overlay
-                for overlay in "${OverlayList[@]}"; do
-                        if [[ ${dir}/ =~ ^${overlay}/ ]]; then
-                                # dir is in one of our used overlays
-			        std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${subcommand}" \
-                                         "illegal argument" \
-                                         "${arg}"
-                                return
-                        fi
-                done
+		# Is ${dir} a used overlay?
+		# Note: the config.file 'overlay.conf is *not* required
+		#       in an overlay!'
+		if [[ -v OverlayDict[${dir}] ]]; then
+			std::die 3 "%s %s: %s -- %s" \
+                                 "${CMD}" "${subcommand}" \
+                                 "illegal argument: is already loaded as overlay" \
+                                 "${dir}"
+		fi
+
                 # argument is a modulepath
                 ${add2path_func} MODULEPATH "${dir}"
 	}
