@@ -1,7 +1,7 @@
 #!/bin/tcsh
 
 setenv PMODULES_DEFAULT_GROUPS 'Tools Programming'
-setenv PMODULES_DEFAULT_RELEASES 'stable'
+setenv DefaultUsedReleaseStages 'stable'
 if ( ! $?PMODULES_VERSION ) then
 	setenv PMODULES_VERSION "@PMODULES_VERSION@"
 endif
@@ -14,7 +14,7 @@ endif
 #############################################################################
 
 setenv PMODULES_MODULEFILES_DIR 'modulefiles'
-setenv PMODULES_DEFINED_RELEASES ':unstable:stable:deprecated:'
+setenv ReleaseStages ':unstable:stable:deprecated:'
 
 setenv PMODULES_ROOT "@PMODULES_ROOT@"
 setenv PMODULES_CONFIG_DIR 'config'
