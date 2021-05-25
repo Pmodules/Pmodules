@@ -8,11 +8,11 @@
 #
 
 declare -xa PMODULES_DEFAULT_GROUPS
-declare -xa PMODULES_DEFAULT_RELEASES
+declare -xa DefaultUsedReleaseStages
 declare -x  PMODULES_VERSION
 
 : ${PMODULES_DEFAULT_GROUPS:=(Tools Programming)}
-: ${PMODULES_DEFAULT_RELEASES:=(stable)}
+: ${DefaultUsedReleaseStages:=(stable)}
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
 #############################################################################

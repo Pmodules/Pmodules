@@ -78,14 +78,14 @@ done
 # build initial list of used releases
 declare -x UsedReleases=''
 typeset -T UsedReleases usedreleases
-for r in ${PMODULES_DEFAULT_RELEASES[@]}; do
+for r in ${DefaultUsedReleaseStages[@]}; do
 	usedreleases=( "${r}" ${(m)usedreleases:#${r}} )
 done
 
-eval $(save_env UsedReleases PMODULES_DEFAULT_RELEASES PMODULES_DEFAULT_GROUPS ReleaseStages)
+eval $(save_env UsedReleases DefaultUsedReleaseStages PMODULES_DEFAULT_GROUPS ReleaseStages)
 
 unset UsedReleases
-unset PMODULES_DEFAULT_RELEASES
+unset DefaultUsedReleaseStages
 unset PMODULES_DEFAULT_GROUPS
 unset ReleaseStages
 

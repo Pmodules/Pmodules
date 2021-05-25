@@ -104,7 +104,7 @@ save_env() {
         [[ $1 == 'no' ]] && return 0
         local vars=( Version GroupDepths UsedReleases UseFlags UsedGroups )
         vars+=( PMODULES_DEFAULT_GROUPS ReleaseStages )
-        vars+=( PMODULES_DEFAULT_RELEASES )
+        vars+=( DefaultUsedReleaseStages )
 
 	local s=$(typeset -p ${vars[@]})
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
@@ -1371,7 +1371,7 @@ reset_used_groups() {
 
 reset_used_releases() {
 	declare -g  UsedReleases=''
-	for r in ${PMODULES_DEFAULT_RELEASES//:/ }; do
+	for r in ${DefaultUsedReleaseStages//:/ }; do
 		std::append_path UsedReleases "${r}"
 	done
         g_env_must_be_saved='yes'

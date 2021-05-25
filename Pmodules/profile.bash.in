@@ -7,7 +7,7 @@
 : ${PMODULES_DEFAULT_GROUPS:='Tools Programming'}
 
 # set releases which should be available after initialization
-: ${PMODULES_DEFAULT_RELEASES:='stable'}
+: ${DefaultUsedReleaseStages:='stable'}
 
 # set default version
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
@@ -23,7 +23,7 @@
 #
 
 export	PMODULES_DEFAULT_GROUPS
-export	PMODULES_DEFAULT_RELEASES
+export	DefaultUsedReleaseStages
 export	PMODULES_VERSION
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
