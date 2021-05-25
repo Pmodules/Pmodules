@@ -1,6 +1,6 @@
 #!/bin/tcsh
 
-setenv PMODULES_DEFAULT_GROUPS 'Tools Programming'
+setenv DefaultGroups 'Tools Programming'
 setenv DefaultUsedReleaseStages 'stable'
 if ( ! $?PMODULES_VERSION ) then
 	setenv PMODULES_VERSION "@PMODULES_VERSION@"

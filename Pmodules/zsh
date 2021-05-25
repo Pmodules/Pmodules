@@ -70,7 +70,7 @@ declare -x _LMFILES_=''
 # build initial MODULEPATH
 declare -x MODULEPATH=''
 typeset -T MODULEPATH modulepath
-for group in ${PMODULES_DEFAULT_GROUPS[@]}; do
+for group in ${DefaultGroups[@]}; do
 	dir="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
 	modulepath=( "${dir}" ${(m)modulepath:#${dir}} )
 done
@@ -82,11 +82,11 @@ for r in ${DefaultUsedReleaseStages[@]}; do
 	usedreleases=( "${r}" ${(m)usedreleases:#${r}} )
 done
 
-eval $(save_env UsedReleases DefaultUsedReleaseStages PMODULES_DEFAULT_GROUPS ReleaseStages)
+eval $(save_env UsedReleases DefaultUsedReleaseStages DefaultGroups ReleaseStages)
 
 unset UsedReleases
 unset DefaultUsedReleaseStages
-unset PMODULES_DEFAULT_GROUPS
+unset DefaultGroups
 unset ReleaseStages
 
 # initialize MANPATH with output of `man --path` if not set
