@@ -20,7 +20,7 @@ declare -x  PMODULES_VERSION
 #############################################################################
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
-declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
+declare -x ReleaseStages=':unstable:stable:deprecated:'
 
 declare -x PMODULES_ROOT=$(cd $(dirname "${(%):-%N}")/.. && pwd)
 declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${(%):-%N}") && pwd))

@@ -27,7 +27,7 @@ export	PMODULES_DEFAULT_RELEASES
 export	PMODULES_VERSION
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
-declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
+declare -x ReleaseStages=':unstable:stable:deprecated:'
 
 declare -x PMODULES_ROOT=$(cd $(dirname "${BASH_SOURCE}")/.. && pwd)
 declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${BASH_SOURCE}") && pwd))

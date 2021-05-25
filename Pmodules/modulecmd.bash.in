@@ -38,7 +38,7 @@ fi
 
 source "${libdir}/libstd.bash"
 
-: ${PMODULES_DEFINED_RELEASES:=':unstable:stable:deprecated:'}
+: ${ReleaseStages:=':unstable:stable:deprecated:'}
 
 declare -r  version='@PMODULES_VERSION@'
 
@@ -103,7 +103,7 @@ declare g_env_must_be_saved='no'
 save_env() {
         [[ $1 == 'no' ]] && return 0
         local vars=( Version GroupDepths UsedReleases UseFlags UsedGroups )
-        vars+=( PMODULES_DEFAULT_GROUPS PMODULES_DEFINED_RELEASES )
+        vars+=( PMODULES_DEFAULT_GROUPS ReleaseStages )
         vars+=( PMODULES_DEFAULT_RELEASES )
 
 	local s=$(typeset -p ${vars[@]})
@@ -151,7 +151,7 @@ get_release() {
 }
 
 is_release() {
-	[[ ${PMODULES_DEFINED_RELEASES} =~ :$1: ]]
+	[[ ${ReleaseStages} =~ :$1: ]]
 }
 
 #
@@ -937,7 +937,7 @@ subcommand_avail() {
                                 print_help "${subcommand}"
                                 ;;
 			-a | --all | --all-releases )
-				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
+				opt_use_releases="${ReleaseStages}"
 				;;
 			-h | --human )
 				output_function='human_readable_output'
@@ -1095,7 +1095,7 @@ subcommand_use() {
 			std::info "\t${r}"
 		done
 		std::info "\nUnused releases:"
-		for r in ${PMODULES_DEFINED_RELEASES//:/ }; do
+		for r in ${ReleaseStages//:/ }; do
 			if ! release_is_used $r; then
 				std::info "\t${r}"
 			fi
@@ -1916,7 +1916,7 @@ subcommand_search() {
                                 done
 				;;
 			-a | --all-releases )
-				opt_use_releases="${PMODULES_DEFINED_RELEASES}"
+				opt_use_releases="${ReleaseStages}"
 				;;
 			--src )
 				# :FIXME: do we have to add some sanity checks here?

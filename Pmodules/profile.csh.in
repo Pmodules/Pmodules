@@ -14,7 +14,7 @@ endif
 #############################################################################
 
 setenv PMODULES_MODULEFILES_DIR 'modulefiles'
-setenv PMODULES_DEFINED_RELEASES ':unstable:stable:deprecated:'
+setenv ReleaseStages ':unstable:stable:deprecated:'
 
 setenv PMODULES_ROOT "@PMODULES_ROOT@"
 setenv PMODULES_CONFIG_DIR 'config'
