@@ -4,7 +4,7 @@
 # in a system wide profile or in a user's profile.
 
 # set groups which should be available after initialization
-: ${PMODULES_DEFAULT_GROUPS:='Tools Programming'}
+: ${DefaultGroups:='Tools Programming'}
 
 # set releases which should be available after initialization
 : ${DefaultUsedReleaseStages:='stable'}
@@ -22,7 +22,7 @@
 #	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
 #
 
-export	PMODULES_DEFAULT_GROUPS
+export	DefaultGroups
 export	DefaultUsedReleaseStages
 export	PMODULES_VERSION
 

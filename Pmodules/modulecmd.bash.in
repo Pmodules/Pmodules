@@ -103,7 +103,7 @@ declare g_env_must_be_saved='no'
 save_env() {
         [[ $1 == 'no' ]] && return 0
         local vars=( Version GroupDepths UsedReleases UseFlags UsedGroups )
-        vars+=( PMODULES_DEFAULT_GROUPS ReleaseStages )
+        vars+=( DefaultGroups ReleaseStages )
         vars+=( DefaultUsedReleaseStages )
 
 	local s=$(typeset -p ${vars[@]})
@@ -1363,7 +1363,7 @@ reset_modulepath() {
 reset_used_groups() {
 	UsedGroups=''
         local group
-        for group in ${PMODULES_DEFAULT_GROUPS}; do
+        for group in ${DefaultGroups}; do
                 std::append_path UsedGroups "${group}"
         done
         g_env_must_be_saved='yes'

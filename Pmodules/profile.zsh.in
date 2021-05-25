@@ -7,11 +7,11 @@
 #	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
 #
 
-declare -xa PMODULES_DEFAULT_GROUPS
+declare -xa DefaultGroups
 declare -xa DefaultUsedReleaseStages
 declare -x  PMODULES_VERSION
 
-: ${PMODULES_DEFAULT_GROUPS:=(Tools Programming)}
+: ${DefaultGroups:=(Tools Programming)}
 : ${DefaultUsedReleaseStages:=(stable)}
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
