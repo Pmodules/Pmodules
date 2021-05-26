@@ -38,10 +38,6 @@ fi
 
 source "${libdir}/libstd.bash"
 
-: ${ReleaseStages:=':unstable:stable:deprecated:'}
-
-declare -r  version='@PMODULES_VERSION@'
-
 if [[ ${PMODULES_PURETCL} == yes ]]; then
 	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
 else
@@ -62,8 +58,10 @@ declare -A Subcommands
 declare -A Options
 declare -A Help
 
+declare -r pmodules_config_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/Pmodules.conf"
+
 Help['version']="
-Pmodules ${version} using Tcl Environment Modules @MODULES_VERSION@
+Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
 Copyright GNU GPL v2
 "
 
@@ -89,6 +87,18 @@ export_env() {
 		printf "${fmt}" "$1" "${!1}"
 		shift
 	done
+	# :FIXME: UsedGroups can be modified in libmodule.tcl using
+	# append-path/remove-path! But we keep the state in PMODULES_ENV
+	# so we don't have to export it.
+	# 
+	case "${Shell}" in
+	sh | bash | zsh )
+		echo "unset UsedGroups; "
+		;;
+	csh | tcsh )
+		echo "unsetenv UsedGroups; "
+		;;
+	esac
 }
 
 #
@@ -152,6 +162,42 @@ get_release() {
 
 is_release() {
 	[[ ${ReleaseStages} =~ :$1: ]]
+}
+
+#
+# compute depth of modulefile directory.
+#
+# Args:
+#       $1: absolute path of a modulefile directory
+#
+compute_group_depth () {
+        local -r dir=$1
+	test -d "${dir}" || return 1
+        local group=${dir%/*}
+        local group=${group##*/}
+        [[ -n "${GroupDepths[${group}]}" ]] && return 0
+	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
+                          -printf "%d" -quit 2>/dev/null)
+	(( depth-=2 ))
+	# if a group doesn't contain a modulefile, depth is negativ
+	# :FIXME: better solution?
+	(( depth < 0 )) && (( depth = 0 ))
+	GroupDepths[$group]=${depth}
+        g_env_must_be_saved='yes'
+}
+
+#
+# (Re-)Scan available groups in given root and compute group depth's
+#
+# Args:
+#       $1: root of modulefile hierarchy
+#
+scan_groups () {
+	local -r root="$1"
+	local moduledir
+	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
+		compute_group_depth "${moduledir}"
+	done
 }
 
 #
@@ -993,42 +1039,6 @@ subcommand_avail() {
 	done
 }
 
-#
-# compute depth of modulefile directory.
-#
-# Args:
-#       $1: absolute path of a modulefile directory
-#
-compute_group_depth () {
-        local -r dir=$1
-	test -d "${dir}" || return 1
-        local group=${dir%/*}
-        local group=${group##*/}
-        [[ -n "${GroupDepths[${group}]}" ]] && return 0
-	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
-                          -printf "%d" -quit 2>/dev/null)
-	(( depth-=2 ))
-	# if a group doesn't contain a modulefile, depth is negativ
-	# :FIXME: better solution?
-	(( depth < 0 )) && (( depth = 0 ))
-	GroupDepths[$group]=${depth}
-        g_env_must_be_saved='yes'
-}
-
-#
-# (Re-)Scan available groups in given root and compute group depth's
-#
-# Args:
-#       $1: root of modulefile hierarchy
-#
-scan_groups () {
-	local -r root="$1"
-	local moduledir
-	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
-		compute_group_depth "${moduledir}"
-	done
-}
-
 ##############################################################################
 #
 # use [-a|--append|-p|--prepend] [directory|group|release...]
@@ -1397,15 +1407,19 @@ init_manpath() {
 }
 
 pmodules_init() {
+	source "${pmodules_config_file}" || \
+		std::die 3 "Oops: cannot parse config file  -- %s\n" \
+                         "${pmodules_config_file}"
+
 	declare -gx LOADEDMODULES=''
 	declare -gx _LMFILES_=''
 	declare -gx UsedGroups=''
 	declare -gx MODULEPATH=''
-
 	declare -Ag GroupDepths='()'
 	unset UseFlags
 	declare -Ag  UseFlags=()
 	declare -g Version="${PMODULES_VERSION}"
+
         reset_used_groups
         reset_modulepath
         reset_used_releases
@@ -2273,6 +2287,12 @@ if [[ -n ${PMODULES_ENV} ]]; then
 		# the Pmodules version changed!
 		declare -g Version="${PMODULES_VERSION}"
 		g_env_must_be_saved='yes'
+	fi
+	if [[ -v DefaultGroups ]] || [[ -v DefaultUsedReleaseStages ]] || [[ -v ReleaseStages ]]; then
+		source "${pmodules_config_file}" || \
+			std::die 3 "Oops: cannot parse config file  -- %s\n" \
+				 "${pmodules_config_file}"
+
 	fi
 else
 	pmodules_init
