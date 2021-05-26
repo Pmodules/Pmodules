@@ -114,7 +114,7 @@ save_env() {
         [[ $1 == 'no' ]] && return 0
         local vars=( Version GroupDepths UsedReleases UseFlags UsedGroups )
         vars+=( DefaultGroups ReleaseStages )
-        vars+=( DefaultUsedReleaseStages )
+        vars+=( DefaultReleaseStages )
 
 	local s=$(typeset -p ${vars[@]})
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
@@ -1381,7 +1381,7 @@ reset_used_groups() {
 
 reset_used_releases() {
 	declare -g  UsedReleases=''
-	for r in ${DefaultUsedReleaseStages//:/ }; do
+	for r in ${DefaultReleaseStages//:/ }; do
 		std::append_path UsedReleases "${r}"
 	done
         g_env_must_be_saved='yes'
@@ -2288,7 +2288,7 @@ if [[ -n ${PMODULES_ENV} ]]; then
 		declare -g Version="${PMODULES_VERSION}"
 		g_env_must_be_saved='yes'
 	fi
-	if [[ -v DefaultGroups ]] || [[ -v DefaultUsedReleaseStages ]] || [[ -v ReleaseStages ]]; then
+	if [[ -v DefaultGroups ]] || [[ -v DefaultReleaseStages ]] || [[ -v ReleaseStages ]]; then
 		source "${pmodules_config_file}" || \
 			std::die 3 "Oops: cannot parse config file  -- %s\n" \
 				 "${pmodules_config_file}"
