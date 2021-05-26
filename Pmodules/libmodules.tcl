@@ -22,6 +22,22 @@ if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 
 debug "loading libmodules"
 
+package require base64
+
+proc _pmodules_parse_pmodules_env { } {
+        debug "enter"
+	foreach line [split [base64::decode $::env(PMODULES_ENV)] "\n"] {
+		if { ![regexp -- {.* -[aAx]* (.*)=\((.*)\)} $line -> name value] } {
+			continue
+		}
+		switch $name {
+			UsedGroups {
+				set ::UsedGroups $value
+			}
+		}
+	}
+}
+
 proc module-addgroup { group } {
 	global env
 	global name
