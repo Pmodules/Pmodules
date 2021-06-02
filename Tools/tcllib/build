@@ -1,5 +1,5 @@
 #!/usr/bin/env modbuild
 
 pbuild::set_download_url "https://core.tcl-lang.org/tcllib/uv/$P-$V.tar.xz"
-#uild::install_docfiles 'license.terms' 'README.md'
+
 

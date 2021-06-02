@@ -7,12 +7,12 @@
 #	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
 #
 
-declare -xa PMODULES_DEFAULT_GROUPS
-declare -xa PMODULES_DEFAULT_RELEASES
+declare -xa DefaultGroups
+declare -xa DefaultReleaseStages
 declare -x  PMODULES_VERSION
 
-: ${PMODULES_DEFAULT_GROUPS:=(Tools Programming)}
-: ${PMODULES_DEFAULT_RELEASES:=(stable)}
+: ${DefaultGroups:=(Tools Programming)}
+: ${DefaultReleaseStages:=(stable)}
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
 #############################################################################
@@ -20,7 +20,7 @@ declare -x  PMODULES_VERSION
 #############################################################################
 
 declare -x PMODULES_MODULEFILES_DIR='modulefiles'
-declare -x PMODULES_DEFINED_RELEASES=':unstable:stable:deprecated:'
+declare -x ReleaseStages=':unstable:stable:deprecated:'
 
 declare -x PMODULES_ROOT=$(cd $(dirname "${(%):-%N}")/.. && pwd)
 declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${(%):-%N}") && pwd))

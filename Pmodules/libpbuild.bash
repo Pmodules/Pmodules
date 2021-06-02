@@ -1303,7 +1303,7 @@ pbuild.build_module() {
 	build_dependency() {
 		local -r m=$1
 		std::debug "${m}: module not available"
-		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
+		local rels=( ${ReleaseStages//:/ } )
 		[[ ${dry_run} == yes ]] && \
 			std::die 1 \
 				 "%s " \
