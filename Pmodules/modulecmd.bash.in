@@ -112,9 +112,11 @@ declare g_env_must_be_saved='no'
 
 save_env() {
         [[ $1 == 'no' ]] && return 0
-        local vars=( Version GroupDepths UsedReleases UseFlags UsedGroups )
-        vars+=( DefaultGroups ReleaseStages )
-        vars+=( DefaultReleaseStages )
+        local vars=( Version )
+	vars+=( UsedReleaseStages UsedFlags UsedGroups )
+	vars+=( DefaultGroups DefaultReleaseStages )
+        vars+=( ReleaseStages )
+	vars+=( GroupDepths )
 
 	local s=$(typeset -p ${vars[@]})
 	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
@@ -129,16 +131,16 @@ _exit() {
 trap '_exit' EXIT
 
 #
-# get release of module
+# get release stage of module
 # Note:
-# - the release of a modulefile outside ${PMODULES_ROOT} is 'stable'
-# - the release of a modulefile inside ${PMODULES_ROOT} without a
-#   coresponding release file is 'unstable'
+# - the release stage of a modulefile outside ${PMODULES_ROOT} is 'stable'
+# - the release stage of a modulefile inside ${PMODULES_ROOT} without a
+#   coresponding file is 'unstable'
 #
 # Args:
 # 	$1: absolute modulefile name
 #
-get_release() {
+get_release_stage() {
 	local "$1"
 	local -r modulefile="$2"
 
@@ -149,10 +151,10 @@ get_release() {
 	fi
 
 	# we are inside ${PMODULES_ROOT}
-	local -r releasefile="${modulefile%/*}/.release-${modulefile##*/}"
-	if [[ -r ${releasefile} ]]; then
-		# read releasefile, remove empty lines, spaces etc
-		local -r data=$( < "${releasefile}" )
+	local -r rel_stage_file="${modulefile%/*}/.release-${modulefile##*/}"
+	if [[ -r ${rel_stage_file} ]]; then
+		# read file, remove empty lines, spaces etc
+		local -r data=$( < "${rel_stage_file}" )
 		std::upvar $1 "${data}"
 	else
 		std::upvar $1 'unstable'
@@ -160,7 +162,7 @@ get_release() {
 	return 0
 }
 
-is_release() {
+is_release_stage() {
 	[[ ${ReleaseStages} =~ :$1: ]]
 }
 
@@ -328,7 +330,7 @@ USAGE:
 
 subcommand_load() {
         local -r subcommand='load'
-	local release='undef'
+	local rel_stage='undef'
 	local current_modulefile=''
 	local prefix=''
 	local m=''
@@ -361,12 +363,12 @@ subcommand_load() {
 	#
 	# possible return values:
 	# 	0: module is loadable
-	# 	1: either not a modulefile or unsused release
+	# 	1: either not a modulefile or unsused release stage
 	#
 	# The following variables in the enclosing function are set:
         #       current_modulefile
         #       prefix
-	#	release
+	#	rel_stage
 	#
 	is_available() {
 		local  m=$1
@@ -387,7 +389,7 @@ subcommand_load() {
 		current_modulefile="${array[0]}"
 		prefix="${array[1]}"
 		test -n "${current_modulefile}" || return 1
-		get_release release "${current_modulefile}" "${UsedReleases}"
+		get_release_stage rel_stage "${current_modulefile}" "${UsedReleaseStages}"
 	}
 
 	#
@@ -401,11 +403,11 @@ subcommand_load() {
 	#	none
 	output_load_hints() {
 		local output=''
-		local release=''
+		local rel_stage=''
 		while read -a line; do
-			release=${line[1]}
-			if [[ ! ":${UsedReleases}:" =~ "${release}" ]]; then
-				output+="module use ${release}; "
+			rel_stage=${line[1]}
+			if [[ ! ":${UsedReleaseStages}:" =~ "${rel_stage}" ]]; then
+				output+="module use ${rel_stage}; "
 			fi
 			local group=${line[2]}
 	        	if [[ ! ":${UsedGroups}:" =~ ":${group}:" ]] && \
@@ -471,22 +473,22 @@ subcommand_load() {
 
 			# extendet module name is either
 			# - group:name or
-			# - group:name:release or
-			# - release:name or
-			# - release:group:name or
-			# - name:release
+			# - group:name:rel_stage or
+			# - rel_stage:name or
+			# - rel_stage:group:name or
+			# - name:rel_stage
 
 			IFS=':'
 			local -a toks=($m)
 			unset IFS
 			local group=''
-			local release=''
+			local rel_stage=''
 			if is_group "${toks[0]}"; then
 				group=${toks[0]}
 				m=${toks[1]}
-				release=${toks[2]}
-			elif is_release "${toks[0]}"; then
-				release=${toks[0]}
+				rel_stage=${toks[2]}
+			elif is_release_stage "${toks[0]}"; then
+				rel_stage=${toks[0]}
 				if is_group "${toks[1]}"; then
 					group=${toks[1]}
 					m=${toks[2]}
@@ -498,9 +500,9 @@ subcommand_load() {
 				m=${toks[0]}
 				if is_group "${toks[1]}"; then
 					group=${toks[1]}
-					release=${toks[2]}
+					rel_stage=${toks[2]}
 				else
-					release=${toks[1]}
+					rel_stage=${toks[1]}
 					group=${toks[2]}
 				fi
 			fi
@@ -520,32 +522,26 @@ subcommand_load() {
                                 MODULEPATH+="${PMODULES_MODULEFILES_DIR}"
 				modulepath=( ${MODULEPATH} )
 			fi
-			if [[ -n ${release} ]]; then
-			        is_release "${release}" || \
+			if [[ -n ${rel_stage} ]]; then
+			        is_release_stage "${rel_stage}" || \
                                         std::die 3 "%s %s: %s -- %s\n" \
                                                  "${CMD}" "${subcommand}" \
-                                                 "illegal release name"
-                                                 "${release}"
-				std::append_path UsedReleases "${release}"
+                                                 "illegal release stage"
+                                                 "${rel_stage}"
+				std::append_path UsedReleaseStages "${rel_stage}"
                                 g_env_must_be_saved='yes'
 			fi
 		fi
 		local found=''
-		for flag in "${!UseFlags[@]}"; do
+		for flag in "${UsedFlags[@]/#/_}" ''; do
                	        # :FIXME: this doesn't work if ${m} is a
                        	#         modulename without version
-			if is_available "${m}_${flag}"; then
-				m+="_${flag}"
+			if is_available "${m}"; then
+				m+="${flag}"
 				found=':'
 				break
 			fi
 		done
-		if [[ ! "${found}" ]]; then
-			# no use-flags set
-			if is_available "${m}"; then
-				found=':'
-			fi
-		fi
 		if [[ ! "${found}" ]]; then
 			std::info "%s %s: module unavailable -- %s" \
                                   "${CMD}" 'load' "${m}"
@@ -614,10 +610,10 @@ subcommand_load() {
 
 		local msg=$(printf "%s %s: %s -- %s" \
                                   "${CMD}" 'load' \
-                                  "${release} module has been loaded" \
+                                  "${rel_stage} module has been loaded" \
                                   "${m}")
 		if [[ ${verbosity_lvl} != silent ]] && \
-                           [[ ${release} != stable ]]; then
+                           [[ ${rel_stage} != stable ]]; then
 		        std::info "%s" "${msg}"
 		fi
 		${logger} -t Pmodules "${msg}"
@@ -803,27 +799,27 @@ subcommand_show() {
 #
 # get all available modules in given directory.
 # return list like
-#	modulename1 release1 modulename2 release2 ...
+#	modulename_1 rel_stage_1 modulefile_1 modulename_2 rel_stage_2 modulefile_1 ...
 #
 get_available_modules() {
 	local var="$1"
 	local -r module="$2"
-	local -r use_releases="${3:-${UsedReleases}}"
+	local -r used_rel_stages="${3:-${UsedReleaseStages}}"
 	shift 3 # in the for loop below we use $@ to loop over the directories
 
 	local -a mods=()
-	local    release
-	local dir=''
+	local    rel_stage=''
+	local	 dir=''
 	
 	for dir in "$@"; do
 		test -d "${dir}" || continue
 		{
 			cd "${dir}"
 			while read mod; do
-				get_release release "${dir}/${mod}"
+				get_release_stage rel_stage "${dir}/${mod}"
 				
-				if [[ :${use_releases}: =~ :${release}: ]]; then
-					mods+=( "${mod}" ${release} "${dir}/${mod}")
+				if [[ :${used_rel_stages}: =~ :${rel_stage}: ]]; then
+					mods+=( "${mod}" ${rel_stage} "${dir}/${mod}")
 				fi
 			done < <(${find} -L * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
 		}
@@ -836,7 +832,7 @@ get_available_modules() {
 # avail [-hlt] [<module-pattern>...]
 #
 Subcommands[avail]='avail'
-Options[avail]='-l help -o Hahlmt -l all -l all-releases -l human -l long -l machine -l terse'
+Options[avail]='-l help -o Hahlmt -l all -l all-release-stages -l human -l long -l machine -l terse'
 Help[avail]="
 USAGE:
         module avail [switches] string
@@ -850,8 +846,8 @@ USAGE:
 		e.g. a compiler, or with the sub-command 'use'.
 
 SWITCHES:
-        -a|--all||--all-releases
-		List all available modules independend of the release.
+        -a|--all||--all-release-stages
+		List all available modules independend of the release stage.
 
 	-t|--terse
 		Output in short format.
@@ -885,15 +881,16 @@ subcommand_avail() {
 
 	terse_output() {
 		output_header "$1"
-		for (( i=0; i<${#mods[@]}; i+=3 )); do
+		local -i i=0
+		for i in ${!mods[@]}; do
 			local mod=${mods[i]}
-			local release=${mods[i+1]}
-			case $release in
+			local rel_stage=${mods[i+1]}
+			case ${rel_stage} in
 				stable )
 					out=''
 					;;
 				* )
-					out="${release}"
+					out="${rel_stage}"
 					;;
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
@@ -913,13 +910,13 @@ subcommand_avail() {
 		output_header "$1"
 		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
-			local release=${mods[i+1]}
-			case $release in
+			local rel_stage=${mods[i+1]}
+			case ${rel_stage} in
 				stable )
 					out=''
 					;;
 				* )
-					out=${release}
+					out=${rel_stage}
 					;;
 			esac
 			printf "%-20s\t%s\n" "${mod}" "${out}" 1>&2
@@ -935,13 +932,13 @@ subcommand_avail() {
 		local -i max_length=1
 		for ((i=0; i<${#mods[@]}; i+=3)); do
 			if [[ ${verbosity_lvl} == 'verbose' ]]; then
-			        local  release=${mods[i+1]}
-			        case ${mods[i+1]} in
+			        local  rel_stage=${mods[i+1]}
+			        case ${rel_stage} in
 					stable )
 						mod="${mods[i]}"
 						;;
 					* )
-						mod="${mods[i]}(${release:0:1})"
+						mod="${mods[i]}(${rel_stage:0:1})"
 						;;
 				esac
 			else
@@ -974,7 +971,7 @@ subcommand_avail() {
 	}
 	local pattern=()
 	local output_function='human_readable_output'
-	local opt_use_releases="${UsedReleases}"
+	local opt_use_rel_stages="${UsedReleaseStages}"
 	local -A opt_groups=()
 	local val=''
 	while (($# > 0)); do
@@ -982,8 +979,8 @@ subcommand_avail() {
                         -H | --help | -\? )
                                 print_help "${subcommand}"
                                 ;;
-			-a | --all | --all-releases )
-				opt_use_releases="${ReleaseStages}"
+			-a | --all | --all-release-stages )
+				opt_use_rel_stages="${ReleaseStages}"
 				;;
 			-h | --human )
 				output_function='human_readable_output'
@@ -1031,7 +1028,7 @@ subcommand_avail() {
 			get_available_modules \
 				mods \
 				"${string}" \
-                                "${opt_use_releases}" \
+                                "${opt_use_rel_stages}" \
 				"${dir}"
 			[[ ${#mods[@]} == 0 ]] && continue
 			${output_function} "${group}"
@@ -1041,17 +1038,17 @@ subcommand_avail() {
 
 ##############################################################################
 #
-# use [-a|--append|-p|--prepend] [directory|group|release...]
+# use [-a|--append|-p|--prepend] [directory|group|release_stage...]
 #
 Subcommands[use]='use'
 Options[use]='-l help -o Hap -l append -l prepend'
 Help[use]="
 USAGE:
-        module use [-a|--append|-p|--prepend] [directory|group|release...]
+        module use [-a|--append|-p|--prepend] [directory|group|release_stage|...]
 		Without arguments this sub-command displays information about
-		the module search path, used families and releases. You can
-		use this sub-command to get a list of available families and
-		releases.
+		the module search path, used groups and release stages. You can
+		use this sub-command to get a list of available groups and
+		releases stages.
 
 		With a directory as argument, this directory will either be
 		prepended or appended to the module search path. The default
@@ -1080,10 +1077,6 @@ subcommand_use() {
 	        [[ :${UsedGroups}: =~ :$1: ]]
         }
 
-        release_is_used() {
-	        [[ ":${UsedReleases}:" =~ :$1: ]]
-        }
-
 	print_info() {
 		local f
 		local r
@@ -1100,19 +1093,17 @@ subcommand_use() {
 			fi
 		done
 
-		std::info "\nUsed releases:"
-		for r in ${UsedReleases//:/ }; do
+		std::info "\nUsed releases stages:"
+		for r in ${UsedReleaseStages//:/ }; do
 			std::info "\t${r}"
 		done
-		std::info "\nUnused releases:"
+		std::info "\nUnused release stages:"
 		for r in ${ReleaseStages//:/ }; do
-			if ! release_is_used $r; then
-				std::info "\t${r}"
-			fi
+			[[ ":${UsedReleaseStages}:" =~ :$r: ]] && std::info "\t${r}"
 		done
 
 		std::info "\nUsed flags:"
-		for flag in "${!UseFlags[@]}"; do
+		for flag in "${UsedFlags[@]}"; do
 			std::info "\t${flag}"
 		done
 
@@ -1133,14 +1124,14 @@ subcommand_use() {
 	use () {
 		local arg=$1
 
-		if is_release "${arg}"; then
-                        # argument is release
-			std::append_path UsedReleases "${arg}"
+		if is_release_stage "${arg}"; then
+                        # argument is release stage
+			std::append_path UsedReleaseStages "${arg}"
                         return
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
-			UseFlags["${arg/flag=}"]=1
+			UsedFlags+=( "${arg/flag=}" )
                         return
                 fi
                 if [[ -z ${GroupDepths[${arg}]} ]] && [[ -d "${PMODULES_ROOT}/${arg}" ]]; then
@@ -1221,14 +1212,14 @@ subcommand_use() {
 
 ##############################################################################
 #
-# unuse directory|group|release...
+# unuse directory|group|release_stage|...
 #
 Subcommands[unuse]='unuse'
 Options[unuse]='-o H -l help'
 Help[unuse]='
 unuse directory|group|release...
-		Remove the given directory, group or release from the search
-		path.
+		Remove the given modulefiles directory, group, release stage,
+                flag or overlay from the search path.
 '
 
 subcommand_unuse() {
@@ -1236,14 +1227,18 @@ subcommand_unuse() {
         unuse() {
                 local arg=$1
 
-                if is_release "${arg}"; then
-                        # argument is release
-			std::remove_path UsedReleases "${arg}"
+                if is_release_stage "${arg}"; then
+                        # argument is release stage
+			std::remove_path UsedReleaseStages "${arg}"
                         return
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
-			unset UseFlags["${arg/flag=}"]
+			local flag="${arg/flag=}"
+			local i
+			for i in ${!UsedFlags[@]}; do
+				[[ ${UsedFlags[i]} == ${flag} ]] && unset UsedFlags[i]
+			done
                         return
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
@@ -1380,9 +1375,9 @@ reset_used_groups() {
 }
 
 reset_used_releases() {
-	declare -g  UsedReleases=''
+	declare -g  UsedReleaseStages=''
 	for r in ${DefaultReleaseStages//:/ }; do
-		std::append_path UsedReleases "${r}"
+		std::append_path UsedReleaseStages "${r}"
 	done
         g_env_must_be_saved='yes'
 }
@@ -1411,14 +1406,13 @@ pmodules_init() {
 		std::die 3 "Oops: cannot parse config file  -- %s\n" \
                          "${pmodules_config_file}"
 
-	declare -gx LOADEDMODULES=''
-	declare -gx _LMFILES_=''
-	declare -gx UsedGroups=''
-	declare -gx MODULEPATH=''
-	declare -Ag GroupDepths='()'
-	unset UseFlags
-	declare -Ag  UseFlags=()
-	declare -g Version="${PMODULES_VERSION}"
+	declare -gx  LOADEDMODULES=''
+	declare -gx  _LMFILES_=''
+	declare -gx  UsedGroups=''
+	declare -gx  MODULEPATH=''
+	declare -Ag  GroupDepths='()'
+	declare -ag  UsedFlags=()
+	declare -g   Version="${PMODULES_VERSION}"
 
         reset_used_groups
         reset_modulepath
@@ -1615,7 +1609,7 @@ subcommand_clear() {
 #
 Subcommands[search]='search'
 Options[search]='-o aH -l help -l no-header -l print-modulefiles '
-Options[search]+='-l release: -l with: -l all-releases -l src: -l print-csv '
+Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
 Options[search]+='-l all-deps -l wrap'
 Help[search]='
@@ -1625,7 +1619,7 @@ USAGE:
 		for modules whose name match the argument.
 
 SWITCHES:
-        -a|--all-releases
+        -a|--all-release-stages
 		Search within all releases.
 
 	--all-deps
@@ -1634,10 +1628,10 @@ SWITCHES:
         --no-header
 		Suppress output of a header.
 
-        --release=RELEASE
-		Search for modules within this release. You can specify this
-		switch multiple times.  Without this switch, the used releases
-		will be searched.
+        --release-stage=RELEASE_STAGE
+		Search for modules within this release stage. You can specify
+                this switch multiple times.  Without this switch, the release
+                stages in use will be searched.
 
         --verbose
                 vebose output
@@ -1697,7 +1691,7 @@ subcommand_search() {
 
                 print_header_default() {
 		        std::info ''
-		        std::info "${fmt}" "Module" "Release" "Group" "Requires"
+		        std::info "${fmt}" "Module" "Rel.stage" "Group" "Requires"
 		        std::info '-%.0s' $(seq 1 ${cols})
 	        }
 
@@ -1736,7 +1730,7 @@ subcommand_search() {
                 
                 print_header_verbose() {
 		        std::info ''
-		        std::info "${fmt}" "Module" "Release" "Group" "Dependencies/Modulefile"
+		        std::info "${fmt}" "Module" "Rel.stage" "Group" "Dependencies/Modulefile"
 		        std::info '-%.0s' $(seq 1 ${cols})
 	        }
 
@@ -1830,19 +1824,18 @@ subcommand_search() {
 			local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
 			
 			# get and print all available modules in $mpath
-			# with respect to the requested releases
-			# tmpfile: module/version release group group-
-                        # dependencies...
+			# with respect to the requested release stage
+			# tmpfile: module/version rel_stage group dependencies...
 			local mods
 			get_available_modules \
 				mods \
 				"${module}" \
-				"${opt_use_releases}" \
+				"${opt_use_rel_stages}" \
 				"${modulepath[@]}" \
 
 			for (( i=0; i<${#mods[@]}; i+=3 )); do
 				local name=${mods[i]}
-				local release=${mods[i+1]}
+				local rel_stage=${mods[i+1]}
 				local modulefile=${mods[i+2]}
 
 				if (( ${#name} > max_len_modulename)); then
@@ -1870,7 +1863,7 @@ subcommand_search() {
 					unset IFS
 				fi
 				
-				echo ${name} ${release} ${group} ${modulefile} \
+				echo ${name} ${rel_stage} ${group} ${modulefile} \
                                      ${deps[@]} >> "${tmpfile}"
 			done
 		done
@@ -1896,19 +1889,19 @@ subcommand_search() {
 				opt_print_csv='yes'
 				opt_print_header='no'
 				;;
-			--release | --release=* )
+			--release-stage | --release-stage=* )
                                 if [[ "$1" == "--release" ]]; then
                                         local arg=$2
                                         shift
                                 else
                                         local arg=${1/--release=}
                                 fi
-				is_release "${arg}" || \
+				is_release_stage "${arg}" || \
 				        std::die 1 "%s %s: %s -- %s" \
                                                  "${CMD}" 'search' \
-                                                 "illegal release name" \
+                                                 "illegal release stage" \
                                                  "${arg}"
-				opt_use_releases+="${arg}:"
+				opt_use_rel_stages+="${arg}:"
 				;;
 			--with | --with=* )
                                 if [[ "$1" == --with ]]; then
@@ -1930,7 +1923,7 @@ subcommand_search() {
                                 done
 				;;
 			-a | --all-releases )
-				opt_use_releases="${ReleaseStages}"
+				opt_use_rel_stages+="${ReleaseStages}"
 				;;
 			--src )
 				# :FIXME: do we have to add some sanity checks here?
@@ -1955,8 +1948,8 @@ subcommand_search() {
 	        src_prefix="${PMODULES_ROOT}"
 	fi
 
-	if [[ "${opt_use_releases}" == ":" ]]; then
-                opt_use_releases=":${UsedReleases}:"
+	if [[ "${opt_use_rel_stages}" == ":" ]]; then
+                opt_use_rel_stages=":${UsedReleaseStages}:"
 	fi
 
 	if [[ ${#modules[@]} == 0 ]]; then
@@ -2042,7 +2035,7 @@ subcommand_help() {
                 	print_help "${arg}"
                 else
 		        # :FIXME: print help of newest *available* module
-		        # (respecting UsedReleases)
+		        # (respecting UsedReleaseStages)
                         "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
 	        fi
         done
@@ -2286,6 +2279,12 @@ if [[ -n ${PMODULES_ENV} ]]; then
 	if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
 		# the Pmodules version changed!
 		declare -g Version="${PMODULES_VERSION}"
+		# renamed in version 1.0.0rc10 and type changed from
+		# associative array to normal array
+		if [[ -v UseFlags ]]; then
+			declare -a UsedFlags=( "${!UseFlags[@]}" )
+			unset UseFlags
+		fi
 		g_env_must_be_saved='yes'
 	fi
 	if [[ -v DefaultGroups ]] || [[ -v DefaultReleaseStages ]] || [[ -v ReleaseStages ]]; then
