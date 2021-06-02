@@ -2285,6 +2285,25 @@ if [[ -n ${PMODULES_ENV} ]]; then
 			declare -a UsedFlags=( "${!UseFlags[@]}" )
 			unset UseFlags
 		fi
+		if [[ ! -v UsedFlags ]]; then
+			declare -a UsedFlags=()
+		fi
+		if [[ -v UsedReleases ]]; then
+			declare -- UsedReleaseStages="${UsedReleases}"
+			unset UsedReleases
+		fi
+		if [[ -v PMODULES_DEFAULT_GROUPS ]]; then
+			declare -- DefaultGroups="${PMODULES_DEFAULT_GROUPS}"
+			unset PMODULES_DEFAULT_GROUPS
+		fi
+		if [[ -v PMODULES_DEFINED_RELEASES ]]; then
+			declare -- ReleaseStages="${PMODULES_DEFINED_RELEASES}"
+			unset PMODULES_DEFINED_RELEASES
+		fi
+		if [[ -v PMODULES_DEFAULT_RELEASES ]]; then
+			declare -- DefaultReleaseStages="${PMODULES_DEFAULT_RELEASES}"
+			unset PMODULES_DEFAULT_RELEASES
+		fi
 		g_env_must_be_saved='yes'
 	fi
 	if [[ -v DefaultGroups ]] || [[ -v DefaultReleaseStages ]] || [[ -v ReleaseStages ]]; then
