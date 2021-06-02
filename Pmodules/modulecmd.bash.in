@@ -1099,7 +1099,7 @@ subcommand_use() {
 		done
 		std::info "\nUnused release stages:"
 		for r in ${ReleaseStages//:/ }; do
-			[[ ":${UsedReleaseStages}:" =~ :$r: ]] && std::info "\t${r}"
+			[[ ! ":${UsedReleaseStages}:" =~ :$r: ]] && std::info "\t${r}"
 		done
 
 		std::info "\nUsed flags:"
