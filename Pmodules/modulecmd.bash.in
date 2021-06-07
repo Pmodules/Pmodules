@@ -966,7 +966,8 @@ get_available_modules() {
 		        done < <(${find} -L ${entries} \
 					 \( -type f -o -type l \) \
 					 -not -name ".*" \
-                                         -ipath "${module}*")
+                                         -ipath "${module}*" \
+					 | ${sort} --version-sort)
 	        }
         done
 	std::upvar ${var} "${mods[@]}"
@@ -1111,7 +1112,7 @@ subcommand_avail() {
 	terse_output() {
 		output_header "$1"
 		local -i i=0
-		for i in ${!mods[@]}; do
+		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
 			local rel_stage=${mods[i+1]}
 			case ${rel_stage} in
@@ -1177,8 +1178,6 @@ subcommand_avail() {
 			(( n > max_length )) && (( max_length=n ))
 			available_modules+=("${mod}")
 		done
-		IFS=$'\n' available_modules=($(sort <<<"${available_modules[*]}"))
-		unset IFS
 		local -i span=$(( max_length / 16 + 1 ))	# compute column size
 		local -i colsize=$(( span * 16 ))		# as multiple of 16
 		local -i column=$cols				# force a line-break
@@ -2237,7 +2236,7 @@ subcommand_search() {
                 ${func_print_header}
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
-                done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
+                done < <("${sort}" --version-sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
                                  ${awk} "${with_modules}")
         }
 
