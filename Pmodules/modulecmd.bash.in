@@ -821,7 +821,10 @@ get_available_modules() {
 				if [[ :${used_rel_stages}: =~ :${rel_stage}: ]]; then
 					mods+=( "${mod}" ${rel_stage} "${dir}/${mod}")
 				fi
-			done < <(${find} -L * \( -type f -o -type l \) -not -name ".*" -ipath "${module}*")
+			done < <(${find} -L * \
+					 \( -type f -o -type l \) -not -name ".*" \
+					 -ipath "${module}*" \
+					 | ${sort} --version-sort)
 		}
 	done
 	std::upvar ${var} "${mods[@]}"
@@ -948,8 +951,6 @@ subcommand_avail() {
 			(( n > max_length )) && (( max_length=n ))
 			available_modules+=("${mod}")
 		done
-		IFS=$'\n' available_modules=($(sort <<<"${available_modules[*]}"))
-		unset IFS
 		local -i span=$(( max_length / 16 + 1 ))	# compute column size
 		local -i colsize=$(( span * 16 ))		# as multiple of 16
 		local -i column=$cols				# force a line-break
@@ -1787,7 +1788,7 @@ subcommand_search() {
                 ${func_print_header}
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
-                done < <("${sort}" -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
+                done < <("${sort}" --version-sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
                                  ${awk} "${with_modules}")
         }
 
