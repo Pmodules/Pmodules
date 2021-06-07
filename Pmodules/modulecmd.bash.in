@@ -882,7 +882,7 @@ subcommand_avail() {
 	terse_output() {
 		output_header "$1"
 		local -i i=0
-		for i in ${!mods[@]}; do
+		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			local mod=${mods[i]}
 			local rel_stage=${mods[i+1]}
 			case ${rel_stage} in
