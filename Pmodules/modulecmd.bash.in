@@ -1043,7 +1043,7 @@ find_module() {
 		                for flag in "${UseFlags[@]/#/_}" ""; do
                                         [[ ${mod} == ${module}/*${flag} ]] || continue
                                         std::upvar $1 "${dir}/${mod}"
-                                        get_release \
+                                        get_release_stage \
 						rel_stage \
                                                 "${dir}" \
 						"${mod}"
