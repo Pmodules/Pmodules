@@ -45,6 +45,7 @@ proc _pmodules_parse_pmodules_env { } {
 			        foreach k $l {
 				        lappend ::OverlayList $tmp($k)
 			        }
+			}
 			UsedGroups {
 				set ::UsedGroups $value
 			}
