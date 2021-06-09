@@ -1421,10 +1421,11 @@ init_manpath() {
 }
 
 pmodules_init() {
-	source "${pmodules_config_file}" || \
-		std::die 3 "Oops: cannot parse config file  -- %s\n" \
-                         "${pmodules_config_file}"
-
+	if [[ -r "${pmodules_config_file}" ]]; then
+		source "${pmodules_config_file}" || \
+			std::die 3 "Oops: cannot parse config file  -- %s\n" \
+				 "${pmodules_config_file}"
+	fi
 	declare -gx  LOADEDMODULES=''
 	declare -gx  _LMFILES_=''
 	declare -gx  UsedGroups=''
