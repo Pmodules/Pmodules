@@ -60,11 +60,29 @@ declare -A Help
 
 declare -r pmodules_config_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/Pmodules.conf"
 
+# the following settings are used if the Pmodules.conf is not available
+
+# set groups which should be available after initialization
+declare -- DefaultGroups='Tools Programming'
+
+# define available release stages
+declare -- ReleaseStages=':unstable:stable:deprecated:'
+
+# set releases which should be available after initialization
+declare -- DefaultReleaseStages='stable'
+
+# In the dictionary Help we store the help text of each single command
+# and for displaying the version.
+
+# initialize help text of 'module --version'
 Help['version']="
 Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
 Copyright GNU GPL v2
 "
 
+#
+# display help text for command given in $1
+#
 print_help() {
         echo -e "${Help[$1]}" 1>&2
         std::die 1
@@ -1220,7 +1238,7 @@ Options[unuse]='-o H -l help'
 Help[unuse]='
 unuse directory|group|release...
 		Remove the given modulefiles directory, group, release stage,
-                flag or overlay from the search path.
+                flag from the search path.
 '
 
 subcommand_unuse() {
@@ -1403,10 +1421,11 @@ init_manpath() {
 }
 
 pmodules_init() {
-	source "${pmodules_config_file}" || \
-		std::die 3 "Oops: cannot parse config file  -- %s\n" \
-                         "${pmodules_config_file}"
-
+	if [[ -r "${pmodules_config_file}" ]]; then
+		source "${pmodules_config_file}" || \
+			std::die 3 "Oops: cannot parse config file  -- %s\n" \
+				 "${pmodules_config_file}"
+	fi
 	declare -gx  LOADEDMODULES=''
 	declare -gx  _LMFILES_=''
 	declare -gx  UsedGroups=''
@@ -2306,12 +2325,6 @@ if [[ -n ${PMODULES_ENV} ]]; then
 			unset PMODULES_DEFAULT_RELEASES
 		fi
 		g_env_must_be_saved='yes'
-	fi
-	if [[ -v DefaultGroups ]] || [[ -v DefaultReleaseStages ]] || [[ -v ReleaseStages ]]; then
-		source "${pmodules_config_file}" || \
-			std::die 3 "Oops: cannot parse config file  -- %s\n" \
-				 "${pmodules_config_file}"
-
 	fi
 else
 	pmodules_init
