@@ -1238,7 +1238,7 @@ Options[unuse]='-o H -l help'
 Help[unuse]='
 unuse directory|group|release...
 		Remove the given modulefiles directory, group, release stage,
-                flag or overlay from the search path.
+                flag from the search path.
 '
 
 subcommand_unuse() {
