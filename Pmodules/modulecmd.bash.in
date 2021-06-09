@@ -2326,12 +2326,6 @@ if [[ -n ${PMODULES_ENV} ]]; then
 		fi
 		g_env_must_be_saved='yes'
 	fi
-	if [[ -v DefaultGroups ]] || [[ -v DefaultReleaseStages ]] || [[ -v ReleaseStages ]]; then
-		source "${pmodules_config_file}" || \
-			std::die 3 "Oops: cannot parse config file  -- %s\n" \
-				 "${pmodules_config_file}"
-
-	fi
 else
 	pmodules_init
 fi
