@@ -220,8 +220,8 @@ std.get_os_release_linux() {
         fi
 
 	case "${ID}" in
-		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
-			echo "rhel${VERSION_ID%.*}"
+		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | CentOS | fedora )
+			echo "rhel${VERSION_ID%%.*}"
 			;;
 		Ubuntu )
 			echo "Ubuntu${VERSION_ID%.*}"
