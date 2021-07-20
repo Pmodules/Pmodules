@@ -90,7 +90,7 @@ pbuild::version_lt() {
 pbuild::version_le() {
         pbuild::version_compare "$1" "$2"
         local -i exit_code=$?
-        (( exit_code == 0 || exit_code = 2 ))
+        (( exit_code == 0 || exit_code == 2 ))
 }
 
 
@@ -98,7 +98,7 @@ pbuild::version_gt() {
         pbuild::version_compare "$1" "$2"
         (( $? == 1 ))
         local -i exit_code=$?
-        (( exit_code == 0 || exit_code = 1 ))
+        (( exit_code == 0 || exit_code == 1 ))
 }
 
 pbuild::version_eq() {
