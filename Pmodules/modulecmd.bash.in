@@ -143,7 +143,9 @@ save_env() {
 
 _exit() {
 	save_env "${g_env_must_be_saved}"
-	${rm} -f "${tmpfile}"
+	if [[ -n "${tmpfile}" ]] && [[ -e "${tmpfile}" ]]; then
+		${rm} -f "${tmpfile}" || :
+	fi
 }
 
 trap '_exit' EXIT
