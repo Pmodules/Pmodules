@@ -39,9 +39,9 @@ _module() {
 
 	COMPREPLY=()
 
-	cmds="add apropos avail clear dependencies display help\
+	cmds="add apropos avail clear display help\
 	      initadd initclear initlist initprepend initrm initswitch\
-	      keyword list load purge refresh rm search show swap switch sync\
+	      keyword list load purge refresh rm search show swap switch \
 	      unload unuse update use whatis"
 
 	opts="-c -f -h -i -l -s -t -u -v -H -V\
