@@ -150,7 +150,9 @@ save_env() {
 
 _exit() {
 	save_env "${g_env_must_be_saved}"
-	${rm} -f "${tmpfile}"
+	if [[ -n "${tmpfile}" ]] && [[ -e "${tmpfile}" ]]; then
+		${rm} -f "${tmpfile}" || :
+	fi
 }
 
 trap '_exit' EXIT
@@ -307,6 +309,7 @@ subcommand_generic0() {
 				args+=( "$1" )
 				;;
 		esac
+		shift 1
 	done
         if (( ${#args[@]} > 0 )); then
 	        std::die 3 "%s %s: %s" \
@@ -544,7 +547,7 @@ subcommand_load() {
 	while (($# > 0)); do
 		case $1 in
                         -H | --help )
-                                print_help "${subcommand_load}"
+                                print_help "${subcommand}"
                                 ;;
 			-f | --force )
 				opts+=(' -f')
@@ -2758,6 +2761,24 @@ _init_overlay_vars() {
 	save_env 'yes'
 }
 
+case ${subcommand} in
+	add )
+		subcommand='load'
+		;;
+	display )
+		subcommand='show'
+		;;
+	keyword )
+		subcommand='apropos'
+		;;
+	rm )
+		subcommand='unload'
+		;;
+	switch )
+		subcommand='swap'
+		;;
+esac
+
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 	if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
@@ -2800,7 +2821,7 @@ if (( ${#GroupDepths[@]} == 0 )); then
 fi
 
 case ${subcommand} in
-	load|purge|search|switch )
+	load|purge|search|swap )
 		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
 			|| std::die 1 "Oops: unable to create tmp file!"
 		;;
