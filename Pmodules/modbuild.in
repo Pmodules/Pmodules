@@ -409,9 +409,13 @@ build_modules() {
 
 declare -r OVERLAY_CONF="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/overlays.conf"
 
+#
+# Return overlay name *and* directory for an overlay given
+# by name *or* directory. Search in the config file ${OVERLAY_CONF}.
+#
 get_overlay_name_and_dir() {
-	local "$1"
-	local "$2"
+	local "$1"	# upvar for overlay name
+	local "$2"	# upvar for overlay directory
 	if [[ -r "${OVERLAY_CONF}" ]]; then
 		local toks=()
 		while read -a toks; do
@@ -431,6 +435,8 @@ get_overlay_name_and_dir() {
 parse_args "$@"
 
 #
+# set overlay_name, overlay_dir and opt_system
+#
 # --overlay=name
 #    lookup overlay directory, system name equivalent to overlay name
 # --overlay=name --system=sysname
@@ -438,7 +444,7 @@ parse_args "$@"
 # --overlay=dir
 #    use given overlay dir and default system name
 # --system=name
-#    lookup name, set overlay_dir of found confi
+#    lookup name, set overlay_dir of found config
 declare overlay_name=''
 declare overlay_dir=''
 if [[ -n "${opt_overlay_name_or_dir}" ]]; then
