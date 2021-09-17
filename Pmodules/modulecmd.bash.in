@@ -1042,8 +1042,12 @@ subcommand_avail() {
         local string
 	for string in "${pattern[@]}"; do
 		for dir in "${modulepath[@]}"; do
-			local group="${dir/${PMODULES_ROOT}\/}"
-			group="${group%%/*}"
+			if [[ ${dir} =~ ${PMODULES_ROOT} ]]; then
+				local group="${dir/${PMODULES_ROOT}\/}"
+				group="${group%%/*}"
+			else
+				local group="${dir}"
+			fi
 			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
 				continue
 			fi
