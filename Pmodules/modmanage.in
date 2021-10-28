@@ -2,4 +2,4 @@
 
 unset BASH_ENV
 
-"@BASH@" --noprofile --norc "@MODMANAGE@ "$@"
+"@BASH@" --noprofile --norc "@MODMANAGE@" "$@"
