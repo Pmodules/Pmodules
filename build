@@ -338,10 +338,6 @@ pmodules::compile() {
 	echo "  root of Pmodules environment: ${prefix}"
 	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 
-	#if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/base64" ]] || [[ ${opt_force} == 'yes' ]]; then
-	#	build coreutils
-	#fi
-
 	if [[ "${OS}" == 'Darwin' ]]; then
 		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
 			build getopt
@@ -356,12 +352,12 @@ pmodules::compile() {
 		build bash
 	fi
 
-	if [[ ! -f "${PMODULES_HOME}/sbin/find" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build findutils
+	if [[ ! -e "${PMODULES_HOME}/${UTILBIN_DIR}/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
+		build Tcl
 	fi
 
-	if [[ ! -e "${PMODULES_HOME}/sbin/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build Tcl
+	if [[ ! -e "${PMODULES_HOME}/lib/tcllib1.20" ]] || [[ ${opt_force} == 'yes' ]]; then
+		build tcllib
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${opt_force} == 'yes' ]]; then
@@ -499,6 +495,9 @@ pmodules::install() {
 	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${PMODULES_HOME}/libexec/modmanage.bash"
 	chmod 0755 "${PMODULES_HOME}/libexec/modmanage.bash"
 
+	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/Pmodules.conf" || \
+	    install -m 0644 "${SRC_DIR}/Pmodules.conf"	"${PMODULES_ROOT}/${CONFIG_DIR}"
+	
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/csh"		"${PMODULES_HOME}/init"

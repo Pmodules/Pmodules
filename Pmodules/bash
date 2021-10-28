@@ -35,6 +35,11 @@ unset MODULE_VERSION_STACK
 unset MODULESHOME
 unset PMODULES_ENV
 
+declare -x PMODULES_MODULEFILES_DIR='modulefiles'
+declare -x PMODULES_CONFIG_DIR='config'
+declare -x PMODULES_DIR="${PMODULES_HOME}"
+
+
 #############################################################################
 # implement module comand as shell function
 #

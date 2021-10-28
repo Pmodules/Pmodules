@@ -220,8 +220,8 @@ std.get_os_release_linux() {
         fi
 
 	case "${ID}" in
-		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | fedora )
-			echo "rhel${VERSION_ID%.*}"
+		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | CentOS | fedora )
+			echo "rhel${VERSION_ID%%.*}"
 			;;
 		Ubuntu )
 			echo "Ubuntu${VERSION_ID%.*}"
@@ -242,6 +242,33 @@ std::get_os_release() {
 	func_map['Linux']=std.get_os_release_linux
 	func_map['Darwin']=std.get_os_release_macos
 	${func_map[${OS}]}
+}
+
+std::get_type() {
+	local -a signature=$(typeset -p "$1")
+	case ${signature[1]} in
+		-Ai* )
+			echo 'int dict'
+			;;
+		-A* )
+			echo 'dict'
+			;;
+		-ai* )
+			echo 'int array'
+			;;
+		-a* )
+			echo 'array'
+			;;
+		-i* )
+			echo 'integer'
+			;;
+		-- )
+			echo 'string'
+			;;
+		* )
+			echo 'none'
+			return 1
+	esac
 }
 
 # Local Variables:

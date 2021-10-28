@@ -154,7 +154,7 @@ declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
 
-declare         overlay=''
+declare         opt_overlay_name_or_dir=''
 
 
 parse_args() {
@@ -259,10 +259,10 @@ parse_args() {
 			opt_update_modulefiles='yes'
 			;;
                 --overlay )
-                        overlay=$2
+                        opt_overlay_name_or_dir=$2
                         ;;
                 --overlay=* )
-                        overlay=${1/*=}
+                        opt_overlay_name_or_dir=${1/*=}
                         ;;
                 -- )
                         :
@@ -366,7 +366,6 @@ build_modules() {
                 fi
 	done
 
-        
         local variants=()
         local variants_files=()
         for f in "${files[@]}"; do
@@ -408,14 +407,69 @@ build_modules() {
         done
 }
 
+declare -r OVERLAY_CONF="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/overlays.conf"
+
+#
+# Return overlay name *and* directory for an overlay given
+# by name *or* directory. Search in the config file ${OVERLAY_CONF}.
+#
+get_overlay_name_and_dir() {
+	local "$1"	# upvar for overlay name
+	local "$2"	# upvar for overlay directory
+	if [[ -r "${OVERLAY_CONF}" ]]; then
+		local toks=()
+		while read -a toks; do
+			if [[ ${toks[0]} == $3 ]] || [[ ${toks[1]} == $3 ]]; then
+				std::upvar $1  "${toks[0]}"
+				std::upvar $2  "${toks[1]}"
+				return 0
+			fi
+		done < "${OVERLAY_CONF}"
+	fi
+	return 1
+}
+
 #.............................................................................
 # main
 
 parse_args "$@"
 
-if [[ -z "${opt_system}" ]]; then
-        opt_system=$(std::get_os_release)
+#
+# set overlay_name, overlay_dir and opt_system
+#
+# --overlay=name
+#    lookup overlay directory, system name equivalent to overlay name
+# --overlay=name --system=sysname
+#    lookup name, use given system name
+# --overlay=dir
+#    use given overlay dir and default system name
+# --system=name
+#    lookup name, set overlay_dir of found config
+declare overlay_name=''
+declare overlay_dir=''
+if [[ -n "${opt_overlay_name_or_dir}" ]]; then
+	if ! get_overlay_name_and_dir overlay_name overlay_dir "${opt_overlay_name_or_dir}"; then
+		# not found in config
+		if [[ ${opt_overlay_name_or_dir:0:1} == / ]]; then
+			overlay_dir="${opt_overlay_name_or_dir}"
+		else
+			std::die 1 "Invalid overlay name -- ${opt_overlay_name_or_dir}"
+		fi
+	fi
+	if [[ -z "${opt_system}" ]] && [[ -n "${overlay_name}" ]]; then
+		opt_system="${overlay_name}"
+	fi
+elif [[ -n "${opt_system}" ]]; then
+	get_overlay_name_and_dir overlay_name overlay_dir "${opt_system}" || :
 fi
+
+[[ -z "${overlay_name}" ]] && overlay_name='unknown'
+[[ -z "${overlay_dir}" ]] && overlay_dir="${PMODULES_ROOT}"
+[[ -z "${opt_system}" ]] && opt_system=$(std::get_os_release)
+
+echo overlay_name=$overlay_name
+echo overlay_dir=$overlay_dir
+echo opt_system=$opt_system
 
 pbuild.jobs "${opt_jobs}"
 pbuild.force_rebuild "${opt_force_rebuild}"
@@ -440,8 +494,6 @@ fi
 
 source "${opt_build_config}" || \
         std::die 3 "Oops: Cannot source configuration file -- '$_'"
-
-[[ -z "${overlay}" ]] && overlay=${PMODULES_ROOT}
 
 # :FIXME: should go dist files to
 #         ${PMODULES_ROOT}/var/distfiles

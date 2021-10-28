@@ -35,7 +35,7 @@ unset prefix
 unset postfix
 
 setenv MODULEPATH
-foreach group ( ${PMODULES_DEFAULT_GROUPS} )
+foreach group ( ${DefaultGroups} )
 	if ( "${MODULEPATH}" == "" ) then
 		setenv MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
 	else

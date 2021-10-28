@@ -90,7 +90,7 @@ pbuild::version_lt() {
 pbuild::version_le() {
         pbuild::version_compare "$1" "$2"
         local -i exit_code=$?
-        (( exit_code == 0 || exit_code = 2 ))
+        (( exit_code == 0 || exit_code == 2 ))
 }
 
 
@@ -98,7 +98,7 @@ pbuild::version_gt() {
         pbuild::version_compare "$1" "$2"
         (( $? == 1 ))
         local -i exit_code=$?
-        (( exit_code == 0 || exit_code = 1 ))
+        (( exit_code == 0 || exit_code == 1 ))
 }
 
 pbuild::version_eq() {
@@ -764,12 +764,12 @@ pbuild::make_all() {
 		fi
 
 		modulefile_dir=$(join_by '/' \
-					 "${overlay}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+					 "${overlay_dir}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
 					 "${names[@]}" \
 					 "${module_name}")
 		modulefile_name="${modulefile_dir}/${module_version}"
 		
-		PREFIX="${overlay}/${GROUP}/${module_name}/${module_version}"
+		PREFIX="${overlay_dir}/${GROUP}/${module_name}/${module_version}"
 		local -i i=0
 		for ((i=${#names[@]}-1; i >= 0; i--)); do
 			PREFIX+="/${names[i]}"
@@ -1303,7 +1303,7 @@ pbuild.build_module() {
 	build_dependency() {
 		local -r m=$1
 		std::debug "${m}: module not available"
-		local rels=( ${PMODULES_DEFINED_RELEASES//:/ } )
+		local rels=( ${ReleaseStages//:/ } )
 		[[ ${dry_run} == yes ]] && \
 			std::die 1 \
 				 "%s " \
@@ -1479,7 +1479,7 @@ pbuild.bootstrap() {
 
 	MODULECMD=$(which true)
 	GROUP='Tools'
-	PREFIX="${overlay}/${GROUP}/Pmodules/${PMODULES_VERSION}"
+	PREFIX="${overlay_dir}/${GROUP}/Pmodules/${PMODULES_VERSION}"
 
 	C_INCLUDE_PATH="${PREFIX}/include"
 	CPLUS_INCLUDE_PATH="${PREFIX}/include"
