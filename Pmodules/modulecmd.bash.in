@@ -1150,7 +1150,7 @@ subcommand_avail() {
                 group='other'
                 find_overlay overlay group "${dir}"
                 if [[ ${modulepath_of_group[${group}]} ]]; then
-                           modulepath_of_group[${group}]+=:${dir}
+                        modulepath_of_group[${group}]+=:${dir}
                 else
                         modulepath_of_group[${group}]=${dir}
                         groups+=( "${group}" )
