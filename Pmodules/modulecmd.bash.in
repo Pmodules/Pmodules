@@ -1771,7 +1771,7 @@ subcommand_search() {
                 print_modulefiles() {
 			fmt=''
 			func_print_header='print_header_none'
-                        func_print_line='print_header_none'
+                        func_print_line='print_line_modulefile'
                 }
 
                 print_header_none() {
@@ -1779,16 +1779,7 @@ subcommand_search() {
                 }
 
                 print_line_modulefile() {
-                        local line=( "$@" )
-			# group first
-			local out="${line[2]}/"
-			# add directory of modulefiles
-			out+="${PMODULES_MODULEFILES_DIR}/"
-			for d in "${line[@]:3}"; do
-				out+="$d/"
-			done
-			out+="${line[0]}"
-			std::info "${out}"
+			std::info "$4"
                 }
 
                 print_line_csv() {
@@ -1952,10 +1943,26 @@ subcommand_search() {
 			-a | --all-releases )
 				opt_use_rel_stages+="${ReleaseStages}"
 				;;
-			--src )
-				# :FIXME: do we have to add some sanity checks here?
-				src_prefix=$2
-				shift
+			--src | --src=*)
+                                if [[ "$1" == --src ]]; then
+                                        local src_prefix="$2"
+                                        shift
+                                else
+                                        local src_prefix="${1/--src=}"
+                                fi
+				if [[ ! -e "${src_prefix}" ]]; then
+					std::die 1 "%s %s: %s -- %s" \
+						 "${CMD}" 'search' \
+                                                 "illegal value for --src option" \
+                                                 "${src_prefix} does not exist"
+				fi
+				if [[ ! -d "${src_prefix}" ]]; then
+					std::die 1 "%s %s: %s -- %s" \
+						 "${CMD}" 'search' \
+                                                 "illegal value for --src option" \
+                                                 "${src_prefix} is not a directory"
+				fi
+				src_prefix=$(std::get_abspath "${src_prefix}")
 				;;
                         -v | --verbose )
                                 opt_print_verbose='yes'
