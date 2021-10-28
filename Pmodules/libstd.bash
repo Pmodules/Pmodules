@@ -135,11 +135,26 @@ std::replace_path () {
 #
 # split file name
 #
+# Args:
+#     $1  upvar
+#     $2  fname (=${@: -1})
+#   or
+#     $1  upvar
+#     $2  number of components
+#     $3  fname (=${@: -1})
+#
 std::split_fname() {
-        local -r savedIFS="${IFS}"
+	local "$1"
+	local  -r fname="${@: -1}"
+	if [[ "${fname:0:1}" == '/' ]]; then
+		local -r tmp="${fname:1}"
+	else
+		local -r tmp="${fname}"
+	fi
+	
         IFS='/'
-        local std__split_fname_result__=( $(echo "${@: -1}") )
-        IFS=${savedIFS}
+        local std__split_fname_result__=( ${tmp} )
+	unset IFS
         eval $1=\(\"\${std__split_fname_result__[@]}\"\)
 	if (( $# >= 3 )); then
 	        eval $2=${#std__split_fname_result__[@]}
