@@ -351,7 +351,7 @@ subcommand_init() {
 			[[ -n "${PMODULES_HOME}" ]] &&
 			[[ -n "${PMODULES_VERSION}" ]] || \
 				std::die 1 "
-Error: the module environment you are going to use as so  urce has not been
+Error: the module environment you are going to use as source has not been
 initialized properly!"
 
 		[[ -d "${src_prefix}/${PMODULES_CONFIG_DIR}" ]] &&
@@ -360,7 +360,7 @@ initialized properly!"
 Error: the module environment '${src_prefix}' has not been initialized properly!"
 	}
 	
-	local src=''
+	local src_prefix=''
 	local target_prefixes=()
 	local user=''
 	local opts=''
@@ -373,7 +373,7 @@ Error: the module environment '${src_prefix}' has not been initialized properly!
 	while (($# > 0)); do
 		case $1 in
 			--src )
-				src=$2
+				src_prefix=$2
 				shift
 				;;
 			--user )
@@ -402,14 +402,14 @@ Error: the module environment '${src_prefix}' has not been initialized properly!
 		std::die 1 "Error: no target directory specified!"
 
 	# if source directory is not passed as argument, derive it from script name
-	if [[ -z "${src}" ]]; then
-	    src=$(cd "${bindir}/../../../.." && pwd) 
+	if [[ -z "${src_prefix}" ]]; then
+	    src_prefix=$(cd "${bindir}/../../../.." && pwd) 
 	fi
-	[[ -d "${src}" ]] || \
-		std::die 1 "Error: ${src}: source directory does not exist!"
-	[[ -r "${src}/config/profile.bash" ]] || \
-		std::die 1 "Error: ${src}: shell profile does not exist or is not readable!"
-	source "${src}/config/profile.bash"
+	[[ -d "${src_prefix}" ]] || \
+		std::die 1 "Error: ${src_prefix}: source directory does not exist!"
+	[[ -r "${src_prefix}/config/profile.bash" ]] || \
+		std::die 1 "Error: ${src_prefix}: shell profile does not exist or is not readable!"
+	source "${src_prefix}/config/profile.bash"
 
 	local -i euid=$(id -u)
 	if (( euid == 0 )); then
@@ -601,15 +601,15 @@ subcommand_install() {
 		# compute filename with dependencies of given module
 		local -i i=0 n=0
 		std::split_fname items n "${modulefile}"
-		local prefix="${src_prefix}/${items[0]}"
+		local _prefix="${src_prefix}/${items[3]}"
 		for (( i = n-2; i >= 2; i-=2 )); do
-			prefix+="/${items[$i]}/${items[i+1]}"
+			_prefix+="/${items[$i]}/${items[i+1]}"
 		done
                 local tmpfile=$(mktemp /tmp/Pmodules_XXXXXX)
 
-		local fname_dependencies="${prefix}/.dependencies"
-		[[ -r "${prefix}/.dependencies" ]] && cat "$_" > "${tmpfile}"
-                [[ -r "${prefix}/.install_dependencies" ]] && cat "$_" >> "${tmpfile}"
+		local fname_dependencies="${_prefix}/.dependencies"
+		[[ -r "${_prefix}/.dependencies" ]] && cat "$_" > "${tmpfile}"
+                [[ -r "${_prefix}/.install_dependencies" ]] && cat "$_" >> "${tmpfile}"
 
 		# loop over all dependecies
 		local dep
