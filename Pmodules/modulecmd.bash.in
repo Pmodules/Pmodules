@@ -258,7 +258,9 @@ subcommand_generic0() {
 				print_help "${subcommand}"
 				;;
 			-- )
-				:
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -284,7 +286,9 @@ subcommand_generic1() {
 				print_help "${subcommand}"
 				;;
 			-- )
-				:
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -314,7 +318,9 @@ subcommand_generic1plus() {
 				print_help "${subcommand}"
 				;;
 			-- )
-                                :
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -477,6 +483,9 @@ subcommand_load() {
 				verbosity_lvl='warn'
 				;;
 			-- )
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( $1 )
@@ -678,6 +687,9 @@ subcommand_unload() {
                                 print_help "${subcommand}"
                                 ;;
 			-- )
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -744,6 +756,9 @@ subcommand_swap() {
                                 print_help "${subcommand}"
                                 ;;
 			-- )
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -798,6 +813,9 @@ subcommand_show() {
                                 print_help "${subcommand}"
                                 ;;
 			-- )
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -1027,7 +1045,12 @@ subcommand_avail() {
 				fi
 				opt_groups[${val}]=1
 				;;
-			-- | '' )
+			'' )
+				;;
+			-- )
+				shift 1
+				pattern+=( "$@" )
+				break
 				;;
 			* )
 				pattern+=( "$1" )
@@ -1219,6 +1242,9 @@ subcommand_use() {
                                 add2path_func='std::prepend_path'
 			        ;;
 		        -- )
+				shift 1
+				args+=( "$@" )
+				break
 			        ;;
 		        * )
 			        args+=( "$1" )
@@ -1324,6 +1350,9 @@ subcommand_unuse() {
                                 print_help "${subcommand}"
                                 ;;
 		        -- )
+				shift 1
+				args+=( "$@" )
+				break
 			        ;;
 		        * )
 			        args+=( "$1" )
@@ -1482,6 +1511,9 @@ subcommand_purge() {
                                 print_help "${subcommand}"
                                 ;;
 		        -- )
+				shift 1
+				args+=( "$@" )
+				break
 			        ;;
 		        * )
 			        args+=( "$1" )
@@ -1577,6 +1609,9 @@ subcommand_list() {
 				opts+=( '-t' )
 				;;
 			-- )
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
                                 args+=( "$1" )
@@ -1615,7 +1650,9 @@ subcommand_clear() {
                                 print_help "${subcommand}"
                                 ;;
 			-- )
-				:
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
                                 args+=( "$1" )
@@ -1973,6 +2010,9 @@ subcommand_search() {
 				opt_wrap='yes'
 				;;
 			-- )
+				shift 1
+				modules+=( "$@" )
+				break
 				;;
 			* )
 				modules+=( "$1" )
@@ -2054,7 +2094,9 @@ subcommand_help() {
 				print_help 'version'
 				;;
 			-- )
-				:
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -2209,7 +2251,9 @@ subcommand_initswitch() {
 				print_help "${subcommand}"
 				;;
 			-- )
-                                :
+				shift 1
+				args+=( "$@" )
+				break
 				;;
 			* )
 				args+=( "$1" )
@@ -2288,7 +2332,7 @@ while (( $# > 0 )); do
 		--debug )
 			set -x
 			;;
-		'' | -- )
+		'' )
 			;;
 		-* )
 			opts+=( "$1" )
@@ -2379,7 +2423,7 @@ case ${subcommand} in
 esac
 
 declare options
-options=$( "${getopt}" ${Options[${subcommand}]} -- -- "${opts[@]}" "$@" ) \
+options=$( "${getopt}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
         || print_help "${subcommand}"
 eval set -- ${options}
 subcommand_${Subcommands[$subcommand]} "$@"
