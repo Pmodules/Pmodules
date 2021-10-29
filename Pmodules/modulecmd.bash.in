@@ -972,6 +972,8 @@ subcommand_avail() {
 			(( n > max_length )) && (( max_length=n ))
 			available_modules+=("${mod}")
 		done
+		IFS=$'\n' available_modules=($(sort --version-sort <<<"${available_modules[*]}"))
+		unset IFS
 		local -i span=$(( max_length / 16 + 1 ))	# compute column size
 		local -i colsize=$(( span * 16 ))		# as multiple of 16
 		local -i column=$cols				# force a line-break
