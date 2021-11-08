@@ -133,29 +133,29 @@ std::replace_path () {
 }
 
 #
-# split file name
+# split an absolute path
 #
 # Args:
 #     $1  upvar
-#     $2  fname
+#     $2  absolute path
 #     $3  opt upvar: number of components
 #
-std::split_fname() {
+std::split_abs_path() {
 	local parts="$1"
-	local  -r fname="$2"
-	if [[ "${fname:0:1}" == '/' ]]; then
-		local -r std__split_fname_tmp="${fname:1}"
+	local  -r path="$2"
+	if [[ "${path:0:1}" == '/' ]]; then
+		local -r std__split_path_tmp="${path:1}"
 	else
-		local -r std__split_fname_tmp="${fname}"
+		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
 	fi
 
         IFS='/'
-        local std__split_fname_result=( ${std__split_fname_tmp} )
+        local std__split_path_result=( ${std__split_path_tmp} )
 	unset IFS
-	std::upvar ${parts} "${std__split_fname_result[@]}"
+	std::upvar ${parts} "${std__split_path_result[@]}"
 	if (( $# >= 3 )); then
 		# return number of parts
-	        std::upvar "$3" ${#std__split_fname_result[@]}
+	        std::upvar "$3" ${#std__split_path_result[@]}
 	fi
 }
 
