@@ -1,37 +1,59 @@
 #!/bin/bash
 
-if [[  -z ${sbindir} ]]; then
-        local sbindir=$(dirname "${BASH_SOURCE}")
-	sbindir=$(cd "${sbindir}"/.. && pwd)"/sbin"
-fi
+declare    PMODULES_MODULEFILES_DIR='modulefiles'
+declare -A GroupDepths=()
+declare -A Subcommands=()
+declare -A Options=()
+declare -A Help=()
 
-pmodules::get_options() {
-	local "$1"
-	std::upvar $1 $("${sbindir}/getopt" "${@:2}")
+# initialize help text of 'module --version'
+Help['version']="
+Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
+Copyright GNU GPL v2
+"
+
+#
+# display help text for command given in $1
+#
+print_help() {
+        echo -e "${Help[$1]}" 1>&2
+        std::die 1
 }
 
-pmodules::check_env_vars() {
-	[[ -n "${PMODULES_ROOT}" ]] &&
-	    [[ -n "${PMODULES_HOME}" ]] &&
-	    [[ -n "${PMODULES_VERSION}" ]] || std::die 1 "
-Error: the module environment you are going to use as source has not been
-initialized properly!"
+#
+# compute depth of modulefile directory.
+#
+# Args:
+#       $1: absolute path of a modulefile directory
+#
+compute_group_depth () {
+        local -r dir=$1
+	test -d "${dir}" || return 1
+        local group=${dir%/*}
+        local group=${group##*/}
+        [[ -n "${GroupDepths[${group}]}" ]] && return 0
+	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
+                          -printf "%d" -quit 2>/dev/null)
+	(( depth-=2 ))
+	# if a group doesn't contain a modulefile, depth is negativ
+	# :FIXME: better solution?
+	(( depth < 0 )) && (( depth = 0 ))
+	GroupDepths[$group]=${depth}
 }
 
-pmodules::check_directories() {
-	local -r src_prefix="$1"
-
-	[[ -d "${src_prefix}" ]] &&
-	    [[ -d "${src_prefix}/${PMODULES_CONFIG_DIR}" ]] &&
-	    [[ -d "${src_prefix}/Tools/Pmodules/${PMODULES_VERSION}" ]] || std::die 1 "
-Error: the module environment '${src_prefix}' has not been initialized properly!"
+#
+# (Re-)Scan available groups in given root and compute group depth's
+#
+# Args:
+#       $1: root of modulefile hierarchy
+#
+scan_groups () {
+	local -r root="$1"
+	local moduledir
+	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
+		compute_group_depth "${moduledir}"
+	done
 }
-
-pmodules::check_env() {
-	pmodules::check_env_vars
-	pmodules::check_directories "${PMODULES_ROOT}"
-}
-
 
 # Local Variables:
 # mode: sh
