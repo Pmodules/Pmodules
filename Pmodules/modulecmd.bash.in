@@ -161,6 +161,7 @@ is_group () {
         local moduledir="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
         [[ -d "${moduledir}" ]] || return 1
 	compute_group_depth "${moduledir}"
+	g_env_must_be_saved='yes'
 }
 
 #
@@ -1116,6 +1117,7 @@ subcommand_use() {
                 fi
                 if [[ -z ${GroupDepths[${arg}]} ]] && [[ -d "${PMODULES_ROOT}/${arg}" ]]; then
 			scan_groups "${PMODULES_ROOT}"
+			g_env_must_be_saved='yes'
 		fi
 		
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
@@ -1965,6 +1967,7 @@ subcommand_search() {
 	if (( ${#GroupDepths[@]} == 0 )) || \
                    [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
 		scan_groups "${src_prefix}"
+		g_env_must_be_saved='yes'
 	fi
 
 	local module
@@ -2340,6 +2343,7 @@ fi
 
 if (( ${#GroupDepths[@]} == 0 )); then
 	scan_groups "${PMODULES_ROOT}"
+	g_env_must_be_saved='yes'
 fi
 
 case ${subcommand} in
