@@ -35,6 +35,17 @@ std::die() {
         exit $ec
 }
 
+std::def_cmds(){
+	local path="$1"
+	shift
+	for cmd in "$@"; do
+		eval declare -g ${cmd}=$(PATH="${path}" which $cmd 2>/dev/null)
+		if [[ -z "${!cmd}" ]]; then
+			std::die 255 "${cmd} not found"
+		fi
+	done
+}
+
 #
 # get answer to yes/no question
 #

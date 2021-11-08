@@ -13,30 +13,14 @@ declare     prefix=$(dirname "${mydir}")
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
-base64=$(PATH=/bin:/usr/bin /usr/bin/which base64)
-declare -r base64
-mktemp=$(PATH=/bin:/usr/bin /usr/bin/which mktemp)
-declare -r mktemp
-sort=$(PATH=/bin:/usr/bin /usr/bin/which sort)
-declare -r sort
-awk=$(PATH=/bin:/usr/bin /usr/bin/which awk)
-declare -r awk
-rm=$(PATH=/bin:/usr/bin /usr/bin/which rm)
-declare -r rm
-logger=$(PATH=/bin:/usr/bin /usr/bin/which logger)
-declare -r logger
-
-if [[ $(uname -s) == 'Darwin' ]]; then
-	declare -r getopt="${libexecdir}/getopt"
-	declare -r find="${libexecdir}/find"
-else
-	getopt=$(PATH=/bin:/usr/bin /usr/bin/which getopt)
-	declare -r getopt
-	find=$(PATH=/bin:/usr/bin /usr/bin/which find)
-	declare -r find
-fi
-
 source "${libdir}/libstd.bash"
+source "${libdir}/libpmodules.bash"
+
+path="/bin:/usr/bin"
+[[ $(uname -s) == 'Darwin' ]] && path+=":${libexecdir}" 
+std::def_cmds "${path}" \
+	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
+	      'rm' 'sort' 'find'
 
 if [[ ${PMODULES_PURETCL} == yes ]]; then
 	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
