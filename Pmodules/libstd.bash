@@ -140,7 +140,7 @@ std::replace_path () {
 #     $2  absolute path
 #     $3  opt upvar: number of components
 #
-std::split_abs_path() {
+std::split_abspath() {
 	local parts="$1"
 	local  -r path="$2"
 	if [[ "${path:0:1}" == '/' ]]; then
