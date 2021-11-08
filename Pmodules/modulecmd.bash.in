@@ -789,7 +789,7 @@ get_available_modules() {
 				fi
 			done < <(${find} -L * \
 					 \( -type f -o -type l \) -not -name ".*" \
-					 -ipath "${module}*" \
+					 -ipath "${module}" \
 					 | ${sort} --version-sort)
 		}
 	done
@@ -1008,7 +1008,7 @@ subcommand_avail() {
 			fi
 			get_available_modules \
 				mods \
-				"${string}" \
+				"${string}*" \
                                 "${opt_use_rel_stages}" \
 				"${dir}"
 			[[ ${#mods[@]} == 0 ]] && continue
@@ -1609,6 +1609,7 @@ Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
 Options[search]+='-l all-deps -l wrap '
+Options[search]+='-l glob'
 Help[search]='
 USAGE:
         module search [switches] STRING...
@@ -1621,6 +1622,9 @@ SWITCHES:
 
 	--all-deps
                 Show all dependecies
+
+        --glob
+                Interpret STRING as shell pattern.
 
         --no-header
 		Suppress output of a header.
@@ -1659,6 +1663,7 @@ subcommand_search() {
 	local opt_use_releases=':'
 	local opt_all_deps='no'
 	local opt_wrap='no'
+	local opt_glob='no'
 
 	#.....................................................................
 	#
@@ -1797,7 +1802,12 @@ subcommand_search() {
 	#   :FIXME:
 	#
 	search () {
-		local -r module=$1
+		if [[ ${opt_glob} == 'yes' ]]; then
+			local -r module="$1"
+		else
+			local -r module="${1}*"
+		fi
+
 		# write results to a temporary file for later processing
 		local group
 		# loop over all groups
@@ -1860,7 +1870,7 @@ subcommand_search() {
 
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			--all-deps )
@@ -1939,6 +1949,9 @@ subcommand_search() {
                                 ;;
 			--wrap )
 				opt_wrap='yes'
+				;;
+			--glob )
+				opt_glob='yes'
 				;;
 			-- )
 				shift 1
