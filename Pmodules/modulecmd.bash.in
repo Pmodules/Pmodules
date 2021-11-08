@@ -1,9 +1,12 @@
 #!@BASH@ --noprofile
 #
 
-#set -o nounset
-# we have to unset CDPATH, otherwise 'cd' prints the directoy!
-unset CDPATH
+PATH='/bin:/usr/bin'
+case 
+unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
+unset IFS	# use default IFS
+
+shopt -s nullglob
 
 # used for some output only
 declare -r  CMD='module'
@@ -13,30 +16,14 @@ declare     prefix=$(dirname "${mydir}")
 declare -r  libdir="${prefix}/lib"
 declare -r  libexecdir="${prefix}/libexec"
 
-base64=$(PATH=/bin:/usr/bin /usr/bin/which base64)
-declare -r base64
-mktemp=$(PATH=/bin:/usr/bin /usr/bin/which mktemp)
-declare -r mktemp
-sort=$(PATH=/bin:/usr/bin /usr/bin/which sort)
-declare -r sort
-awk=$(PATH=/bin:/usr/bin /usr/bin/which awk)
-declare -r awk
-rm=$(PATH=/bin:/usr/bin /usr/bin/which rm)
-declare -r rm
-logger=$(PATH=/bin:/usr/bin /usr/bin/which logger)
-declare -r logger
-
-if [[ $(uname -s) == 'Darwin' ]]; then
-	declare -r getopt="${libexecdir}/getopt"
-	declare -r find="${libexecdir}/find"
-else
-	getopt=$(PATH=/bin:/usr/bin /usr/bin/which getopt)
-	declare -r getopt
-	find=$(PATH=/bin:/usr/bin /usr/bin/which find)
-	declare -r find
-fi
-
 source "${libdir}/libstd.bash"
+source "${libdir}/libpmodules.bash"
+
+path="/bin:/usr/bin"
+[[ $(uname -s) == 'Darwin' ]] && path+=":${libexecdir}" 
+std::def_cmds "${path}" \
+	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
+	      'rm' 'sort' 'find'
 
 if [[ ${PMODULES_PURETCL} == yes ]]; then
 	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
@@ -47,20 +34,11 @@ fi
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
-# use default IFS
-unset IFS
-
-shopt -s nullglob
-
-declare -A GroupDepths='()'
 declare    Shell=''
-declare -A Subcommands
-declare -A Options
-declare -A Help
 
 declare -r pmodules_config_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/Pmodules.conf"
 
-# the following settings are used if the Pmodules.conf is not available
+# the following settings are used if the Pmodules.conf doesn't exist
 
 # set groups which should be available after initialization
 declare -- DefaultGroups='Tools Programming'
@@ -71,22 +49,6 @@ declare -- ReleaseStages=':unstable:stable:deprecated:'
 # set releases which should be available after initialization
 declare -- DefaultReleaseStages='stable'
 
-# In the dictionary Help we store the help text of each single command
-# and for displaying the version.
-
-# initialize help text of 'module --version'
-Help['version']="
-Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
-Copyright GNU GPL v2
-"
-
-#
-# display help text for command given in $1
-#
-print_help() {
-        echo -e "${Help[$1]}" 1>&2
-        std::die 1
-}
 
 export_env() {
 	case "${Shell}" in
@@ -187,42 +149,6 @@ is_release_stage() {
 }
 
 #
-# compute depth of modulefile directory.
-#
-# Args:
-#       $1: absolute path of a modulefile directory
-#
-compute_group_depth () {
-        local -r dir=$1
-	test -d "${dir}" || return 1
-        local group=${dir%/*}
-        local group=${group##*/}
-        [[ -n "${GroupDepths[${group}]}" ]] && return 0
-	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
-                          -printf "%d" -quit 2>/dev/null)
-	(( depth-=2 ))
-	# if a group doesn't contain a modulefile, depth is negativ
-	# :FIXME: better solution?
-	(( depth < 0 )) && (( depth = 0 ))
-	GroupDepths[$group]=${depth}
-        g_env_must_be_saved='yes'
-}
-
-#
-# (Re-)Scan available groups in given root and compute group depth's
-#
-# Args:
-#       $1: root of modulefile hierarchy
-#
-scan_groups () {
-	local -r root="$1"
-	local moduledir
-	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
-		compute_group_depth "${moduledir}"
-	done
-}
-
-#
 # Check whether argument is a group
 #
 # Args:
@@ -235,6 +161,7 @@ is_group () {
         local moduledir="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
         [[ -d "${moduledir}" ]] || return 1
 	compute_group_depth "${moduledir}"
+	g_env_must_be_saved='yes'
 }
 
 #
@@ -254,7 +181,7 @@ subcommand_generic0() {
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
-			-H | --help )
+			-\? | -H | --help )
 				print_help "${subcommand}"
 				;;
 			-- )
@@ -282,7 +209,7 @@ subcommand_generic1() {
 	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
-			-H | --help )
+			-\? | -H | --help )
 				print_help "${subcommand}"
 				;;
 			-- )
@@ -314,7 +241,7 @@ subcommand_generic1plus() {
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
-			-H | --help )
+			-\? | -H | --help )
 				print_help "${subcommand}"
 				;;
 			-- )
@@ -344,7 +271,7 @@ subcommand_generic1plus() {
 #
 Subcommands[add]='load'
 Subcommands[load]='load'
-Options['load']='-l help -o Hfsvwi -l force -l silent -l verbose -l warn -l internal'
+Options[load]='-l help -o \?Hfsvw -l force -l silent -l verbose -l warn'
 Help[load]='
 USAGE:
         module add     modulefile...
@@ -467,7 +394,7 @@ subcommand_load() {
 	opts=()
 	while (($# > 0)); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-f | --force )
@@ -664,7 +591,7 @@ subcommand_load() {
 #
 Subcommands[rm]='unload'
 Subcommands[unload]='unload'
-Options[unload]='-o H -l help'
+Options[unload]='-o \?H -l help'
 Help[unload]="
 USAGE:
         module rm      modulefile...
@@ -683,7 +610,7 @@ subcommand_unload() {
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-- )
@@ -737,7 +664,7 @@ subcommand_unload() {
 #
 Subcommands[switch]='swap'
 Subcommands[swap]='swap'
-Options[swap]='-o H -l help'
+Options[swap]='-o \?H -l help'
 Help[swap]="
 USAGE:
         module switch  [modulefile1] modulefile2
@@ -752,7 +679,7 @@ subcommand_swap() {
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-- )
@@ -792,7 +719,7 @@ subcommand_swap() {
 #
 Subcommands[display]='show'
 Subcommands[show]='show'
-Options[show]='-o H -l help'
+Options[show]='-o \?H -l help'
 Help[show]='
 USAGE:
         module display modulefile...
@@ -809,7 +736,7 @@ subcommand_show() {
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-- )
@@ -862,7 +789,7 @@ get_available_modules() {
 				fi
 			done < <(${find} -L * \
 					 \( -type f -o -type l \) -not -name ".*" \
-					 -ipath "${module}*" \
+					 -ipath "${module}" \
 					 | ${sort} --version-sort)
 		}
 	done
@@ -874,7 +801,8 @@ get_available_modules() {
 # avail [-hlt] [<module-pattern>...]
 #
 Subcommands[avail]='avail'
-Options[avail]='-l help -o Hahlmt -l all -l all-release-stages -l human -l long -l machine -l terse'
+Options[avail]='-l help -o \?Hahlmtg: -l all -l all-release-stages -l group: '
+Options[avail]+='-l human -l long -l machine -l terse'
 Help[avail]="
 USAGE:
         module avail [switches] string
@@ -897,8 +825,12 @@ SWITCHES:
 	-l|--long
 		Output in long format.
 
+        -g|--group=<GROUP>
+                Output modules available in <GROUP>
+
 	-h|--human
 		Output in human readable format.
+
 	-m|--machine
 		Output in machine readable format
 "
@@ -1018,7 +950,7 @@ subcommand_avail() {
 	local val=''
 	while (($# > 0)); do
 		case $1 in
-                        -H | --help | -\? )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-a | --all | --all-release-stages )
@@ -1038,14 +970,12 @@ subcommand_avail() {
 				;;
 			-g | --group | --group=* )
 				if [[ $1 == --group=* ]]; then
-					val="${1/--group=}"
+					val="${1#--*=}"
 				else
 					val="$2"
 					shift
 				fi
 				opt_groups[${val}]=1
-				;;
-			'' )
 				;;
 			-- )
 				shift 1
@@ -1078,7 +1008,7 @@ subcommand_avail() {
 			fi
 			get_available_modules \
 				mods \
-				"${string}" \
+				"${string}*" \
                                 "${opt_use_rel_stages}" \
 				"${dir}"
 			[[ ${#mods[@]} == 0 ]] && continue
@@ -1092,7 +1022,7 @@ subcommand_avail() {
 # use [-a|--append|-p|--prepend] [directory|group|release_stage...]
 #
 Subcommands[use]='use'
-Options[use]='-l help -o Hap -l append -l prepend'
+Options[use]='-l help -o \?Hap -l append -l prepend'
 Help[use]="
 USAGE:
         module use [-a|--append|-p|--prepend] [directory|group|release_stage|...]
@@ -1187,6 +1117,7 @@ subcommand_use() {
                 fi
                 if [[ -z ${GroupDepths[${arg}]} ]] && [[ -d "${PMODULES_ROOT}/${arg}" ]]; then
 			scan_groups "${PMODULES_ROOT}"
+			g_env_must_be_saved='yes'
 		fi
 		
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
@@ -1232,7 +1163,7 @@ subcommand_use() {
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 		        -a | --append )
@@ -1269,7 +1200,7 @@ subcommand_use() {
 # unuse directory|group|release_stage|...
 #
 Subcommands[unuse]='unuse'
-Options[unuse]='-o H -l help'
+Options[unuse]='-o \?H -l help'
 Help[unuse]='
 unuse directory|group|release...
 		Remove the given modulefiles directory, group, release stage,
@@ -1346,7 +1277,7 @@ subcommand_unuse() {
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 		        -- )
@@ -1381,7 +1312,7 @@ subcommand_unuse() {
 # sub-command
 #
 Subcommands[update]='update'
-Options[update]='-o H -l help'
+Options[update]='-o \?H -l help'
 Help[update]='
 USAGE:
         module update
@@ -1397,7 +1328,7 @@ subcommand_update() {
 # refresh
 #
 Subcommands[refresh]='refresh'
-Options[refresh]='-o H -l help'
+Options[refresh]='-o \?H -l help'
 Help[refresh]='
 USAGE:
         module refresh
@@ -1488,7 +1419,7 @@ pmodules_init() {
 # purge
 #
 Subcommands[purge]='purge'
-Options[purge]='-o H -l help'
+Options[purge]='-o \?H -l help'
 Help[purge]='
 USAGE:
         module purge
@@ -1507,7 +1438,7 @@ subcommand_purge() {
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 		        -- )
@@ -1583,7 +1514,7 @@ subcommand_purge() {
 # list [-hlt]
 #
 Subcommands[list]='list'
-Options[list]='-l help -o Hhlt -l human -l long -l terse'
+Options[list]='-l help -o \?Hhlt -l human -l long -l terse'
 Help[list]='
 USAGE:
         module list
@@ -1596,7 +1527,7 @@ subcommand_list() {
         local args=()
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-h | --human )
@@ -1633,7 +1564,7 @@ subcommand_list() {
 # clear
 #
 Subcommands[clear]='clear'
-Options[clear]='-o H -l help'
+Options[clear]='-o \?H -l help'
 Help[clear]='
 USAGE:
         module clear
@@ -1646,7 +1577,7 @@ subcommand_clear() {
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-- )
@@ -1674,13 +1605,14 @@ subcommand_clear() {
 # search [switches] [STRING...]
 #
 Subcommands[search]='search'
-Options[search]='-o aH -l help -l no-header -l print-modulefiles '
+Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
-Options[search]+='-l all-deps -l wrap'
+Options[search]+='-l all-deps -l wrap '
+Options[search]+='-l glob'
 Help[search]='
 USAGE:
-        module search [switches] string...
+        module search [switches] STRING...
 		Search installed modules. If an argument is given, search
 		for modules whose name match the argument.
 
@@ -1690,6 +1622,9 @@ SWITCHES:
 
 	--all-deps
                 Show all dependecies
+
+        --glob
+                Interpret STRING as shell pattern.
 
         --no-header
 		Suppress output of a header.
@@ -1728,6 +1663,7 @@ subcommand_search() {
 	local opt_use_releases=':'
 	local opt_all_deps='no'
 	local opt_wrap='no'
+	local opt_glob='no'
 
 	#.....................................................................
 	#
@@ -1866,7 +1802,12 @@ subcommand_search() {
 	#   :FIXME:
 	#
 	search () {
-		local -r module=$1
+		if [[ ${opt_glob} == 'yes' ]]; then
+			local -r module="$1"
+		else
+			local -r module="${1}*"
+		fi
+
 		# write results to a temporary file for later processing
 		local group
 		# loop over all groups
@@ -1929,7 +1870,7 @@ subcommand_search() {
 
 	while (( $# > 0 )); do
 		case $1 in
-                        -H | --help )
+                        -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			--all-deps )
@@ -2009,6 +1950,9 @@ subcommand_search() {
 			--wrap )
 				opt_wrap='yes'
 				;;
+			--glob )
+				opt_glob='yes'
+				;;
 			-- )
 				shift 1
 				modules+=( "$@" )
@@ -2036,6 +1980,7 @@ subcommand_search() {
 	if (( ${#GroupDepths[@]} == 0 )) || \
                    [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
 		scan_groups "${src_prefix}"
+		g_env_must_be_saved='yes'
 	fi
 
 	local module
@@ -2057,6 +2002,7 @@ USAGE:
 SWITCHES:
         -h|-H|-?|--help         this usage info
         -V|--version            modules version & configuration options
+        --debug                 enable debug output
 
 SUBCOMMANDS:
         + add|load [switches]   modulefile [modulefile ...]
@@ -2087,7 +2033,7 @@ subcommand_help() {
 	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
-			-[hH] | --help )
+			-\? | -h | -H | --help )
 				print_help "${subcommand}"
 				;;
 			-V | --version )
@@ -2124,7 +2070,7 @@ subcommand_help() {
 # whatis
 #
 Subcommands[whatis]='whatis'
-Options[whatis]='-o H -l help'
+Options[whatis]='-o \?H -l help'
 Help[whatis]='
 USAGE:
         module whatis [modulefile...]
@@ -2147,7 +2093,7 @@ subcommand_whatis() {
 #
 Subcommands[apropos]='apropos'
 Subcommands[keyword]='apropos'
-Options[apropos]='-o H -l help'
+Options[apropos]='-o \?H -l help'
 Help[apropos]='
 USAGE:
         module apropos string
@@ -2165,7 +2111,7 @@ subcommand_apropos() {
 # initadd module...
 #
 Subcommands[initadd]='initadd'
-Options[initadd]='-o H -l help'
+Options[initadd]='-o \?H -l help'
 Help[initadd]="
 USAGE:
         module initadd	modulefile...
@@ -2201,7 +2147,7 @@ subcommand_initadd() {
 # initprepend module...
 #
 Subcommands[initprepend]='initprepend'
-Options[initprepend]='-o H -l help'
+Options[initprepend]='-o \?H -l help'
 Help[initprepend]="
 USAGE:
         module initprepend modulefile...
@@ -2218,7 +2164,7 @@ subcommand_initprepend() {
 # initrm module...
 #
 Subcommands[initrm]='initrm'
-Options[initrm]='-o H -l help'
+Options[initrm]='-o \?H -l help'
 Help[initrm]="
 USAGE:
         module initrm modulefile...
@@ -2234,7 +2180,7 @@ subcommand_initrm() {
 # initswitch module1 module2
 #
 Subcommands[initswitch]='initswitch'
-Options[initswitch]='-o H -l help'
+Options[initswitch]='-o \?H -l help'
 Help[initswitch]="
 USAGE:
         module initswitch modulefile1 modulefile2
@@ -2247,7 +2193,7 @@ subcommand_initswitch() {
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
-			-h | --help )
+			-\? | --help )
 				print_help "${subcommand}"
 				;;
 			-- )
@@ -2274,7 +2220,7 @@ subcommand_initswitch() {
 # initlist
 #
 Subcommands[initlist]='initlist'
-Options[initlist]='-o H -l help'
+Options[initlist]='-o \?H -l help'
 Help[initlist]="
 USAGE:
         module initlist
@@ -2291,7 +2237,7 @@ subcommand_initlist() {
 # initclear
 #
 Subcommands[initclear]='initclear'
-Options[initclear]='-o H -l help'
+Options[initclear]='-o \?H -l help'
 Help[initclear]="
 USAGE:
 	module initclear
@@ -2323,7 +2269,7 @@ shift
 declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
-		-H | -\? | --help | -help )
+		-\? | -H | --help | -help )
 			print_help 'help'
 			;;
 		-V | --version )
@@ -2410,6 +2356,7 @@ fi
 
 if (( ${#GroupDepths[@]} == 0 )); then
 	scan_groups "${PMODULES_ROOT}"
+	g_env_must_be_saved='yes'
 fi
 
 case ${subcommand} in
@@ -2422,11 +2369,12 @@ case ${subcommand} in
 		;;
 esac
 
-declare options
-options=$( "${getopt}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
+
+tmp=$("${getopt}" --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
         || print_help "${subcommand}"
-eval set -- ${options}
-subcommand_${Subcommands[$subcommand]} "$@"
+eval args=( "$tmp" )
+unset tmp
+subcommand_${Subcommands[$subcommand]} "${args[@]}"
 
 # Local Variables:
 # mode: sh

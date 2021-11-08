@@ -35,6 +35,17 @@ std::die() {
         exit $ec
 }
 
+std::def_cmds(){
+	local path="$1"
+	shift
+	for cmd in "$@"; do
+		eval declare -g ${cmd}=$(PATH="${path}" which $cmd 2>/dev/null)
+		if [[ -z "${!cmd}" ]]; then
+			std::die 255 "${cmd} not found"
+		fi
+	done
+}
+
 #
 # get answer to yes/no question
 #
@@ -133,31 +144,29 @@ std::replace_path () {
 }
 
 #
-# split file name
+# split an absolute path
 #
 # Args:
 #     $1  upvar
-#     $2  fname (=${@: -1})
-#   or
-#     $1  upvar
-#     $2  number of components
-#     $3  fname (=${@: -1})
+#     $2  absolute path
+#     $3  opt upvar: number of components
 #
-std::split_fname() {
-	local "$1"
-	local  -r fname="${@: -1}"
-	if [[ "${fname:0:1}" == '/' ]]; then
-		local -r tmp="${fname:1}"
+std::split_abspath() {
+	local parts="$1"
+	local  -r path="$2"
+	if [[ "${path:0:1}" == '/' ]]; then
+		local -r std__split_path_tmp="${path:1}"
 	else
-		local -r tmp="${fname}"
+		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
 	fi
-	
+
         IFS='/'
-        local std__split_fname_result__=( ${tmp} )
+        local std__split_path_result=( ${std__split_path_tmp} )
 	unset IFS
-        eval $1=\(\"\${std__split_fname_result__[@]}\"\)
+	std::upvar ${parts} "${std__split_path_result[@]}"
 	if (( $# >= 3 )); then
-	        eval $2=${#std__split_fname_result__[@]}
+		# return number of parts
+	        std::upvar "$3" ${#std__split_path_result[@]}
 	fi
 }
 
