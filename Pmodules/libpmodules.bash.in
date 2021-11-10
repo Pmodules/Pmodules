@@ -1,6 +1,7 @@
 #!/bin/bash
 
 declare    PMODULES_MODULEFILES_DIR='modulefiles'
+declare    PMODULES_CONFIG_DIR='config'
 declare -A GroupDepths=()
 declare -A Subcommands=()
 declare -A Options=()
