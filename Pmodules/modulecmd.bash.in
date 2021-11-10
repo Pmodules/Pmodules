@@ -2,7 +2,7 @@
 #
 
 PATH='/bin:/usr/bin'
-case 
+
 unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
 unset IFS	# use default IFS
 
