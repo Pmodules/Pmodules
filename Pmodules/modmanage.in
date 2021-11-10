@@ -2,4 +2,10 @@
 
 unset BASH_ENV
 
-"@BASH@" --noprofile --norc "@MODMANAGE@ "$@"
+declare     mydir=$(cd $(dirname "$0") && pwd)
+declare     libexecdir="$(dirname "${mydir}")/libexec"
+
+declare	    bash="${libexecdir}/bash"
+declare     modmanage="${libexecdir}/modmanage.bash"
+
+"${bash}" --noprofile --norc "${modmanage}" "$@"
