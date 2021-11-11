@@ -1920,7 +1920,7 @@ subcommand_search() {
 				        with_modules+=" && / ${module//\//\\/}/"
                                 done
 				;;
-			-a | --all-releases )
+			-a | --all-releases-stages )
 				opt_use_rel_stages+="${ReleaseStages}"
 				;;
 			--src | --src=*)
