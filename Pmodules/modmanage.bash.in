@@ -655,7 +655,7 @@ if [[ "${subcommand}" != "init" ]] && [[ -z "${PMODULES_ROOT}" ]]; then
         std::die 1 "Error: No current module environment configured!"
 fi
 
-tmp=$("${getopt}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
+tmp=$("${getopt}" --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
         || print_help "${subcommand}"
 eval args=( "$tmp" )
 unset tmp
