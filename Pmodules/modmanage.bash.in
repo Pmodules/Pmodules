@@ -61,6 +61,7 @@ SWITCHES:
 SUBCOMMANDS:
         + init [switches]       TARGET_DIR
         + install [switches]    module...
+	+ search [switches]	[string|pattern]...
         + help                  [subcommand]
 '
 
@@ -610,20 +611,80 @@ subcommand_install() {
 	std::info "\nDone!\n"
 } # subcommand_install
 
-###############################################################################
+##############################################################################
 #
-# delete specified module(s)
-#
-subcommand_delete() {
-	:
-}
+# sub-command 'search'
+# 
+Subcommands[search]='search'
+Options[search]='-o \?h -l with: -l help -l all-dep -l wrap -l glob -l src:'
+Help[install]='
+USAGE:
+        modmanage search [switches] <string>...
+                search modules
 
-###############################################################################
-#
-# remove modules which have been removed in our source
-#
-subcommand_cleanup() {
-	:
+SWITCHES:
+	--src <src>
+		Search modules in environment <src>.
+		Default is the source defined in modmanage.conf.
+
+	--with <module>
+		Search module(s) in this sub-group.
+
+	<string>
+		Search modules matching given string.
+
+	<pattern>
+		Search modules matching given shell glob-pattern.
+'
+
+subcommand_search() {
+	local -a args=()
+	while (($# > 0)); do
+		case $1 in
+			-h | -H | -\? | --help | -help )
+				print_help "${subcommand}"
+				;;
+			--src | --src=*)
+                                if [[ $1 == --src ]]; then
+                                        src_root="$2"
+                                        shift
+				else
+                                        src_root="${1#--*=}"
+                                fi
+				;;
+			--with | --with=* )
+                                if [[ "$1" == --with ]]; then
+                                        args+=( '--with' "$2" )
+                                        shift
+                                else
+                                        args+=( "$1" )
+                                fi
+				;;
+			--all-deps | --glob | --wrap )
+				args+=( "$1" )
+				;;
+			-- )
+				:
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if [[ -z ${src_root} ]]; then
+		local conf_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/modmanage.conf"
+		if [[ -r ${conf_file} ]]; then
+			source "${conf_file}"
+			src_root="${SourceRoot}"
+		fi
+	fi
+	[[ -n ${src_root} ]] \
+		|| std::die 3 "Oops: no installation source given."
+	[[ -d ${src_root} ]] \
+		|| std::die 3 "Oops: '${src_root}' is not a valid installation source."
+	${modulecmd} bash search --src="${src_root}" --all-release-stages \
+		     "${args[@]}" 2>&1 1>/dev/null
 }
 
 declare force='no'
