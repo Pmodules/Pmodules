@@ -173,46 +173,12 @@ sync_module() {
 
 ##############################################################################
 #
-# Sync the Pmodules configuration and templates
-#
-# Arguments:
-#	$1: source prefix of Pmodule environment
-#	$2: target prefix of Pmodule environment
-#
-sync_config() {
-	src="$1/${PMODULES_CONFIG_DIR}/"
-	dst="$2/${PMODULES_CONFIG_DIR}/"
-	${rsync} --links --perms \
-		 "${src}"/profile.{bash,csh,zsh} "${dst}" || return $?
-	${rsync} --links --perms \
-		 "${src}"/profile.{bash,csh,zsh}-"${PMODULES_VERSION}" "${dst}" || return $?
-	${rsync} --links --perms \
-		 "${src}/Pmodules.conf" "${dst}" || return $?
-	${rsync} --links --perms \
-		 "${src}/modbuild.conf" "${dst}" || return $?
-	echo
-}
-
-##############################################################################
-#
-# Delete a module
-#
-# Arguments:
-#	$1: relative modulefile path
-#	$2: target prefix of Pmodule environment
-#
-delete_module() {
-        echo "Not implemented yet!"
-}
-
-##############################################################################
-#
 # initialize a new module environment
 #
 # 
 #
 Subcommands[init]='init'
-Options[init]='-o h -l src: -l user: -l help -l version:'
+Options[init]='-o \?hfy -l src: -l user: -l help -l force -l yes'
 Help[init]="
 USAGE:
         modmanage init [switches] TARGET_DIR
@@ -224,7 +190,7 @@ SWITCHES:
 	--user <USER>
 		If this scripts runs with root privileges, a user name
 		ore ID must be specified.
-        --force
+        --force|--yes|-f|-y
                 re-initialise an already existing Pmodule environment.
 "
  		
@@ -238,7 +204,32 @@ subcommand_init() {
 Error: the module environment you are going to use as source has not been
 initialized properly!"
 	}
-	
+
+	#.....................................................................
+	#
+	# Sync the Pmodules configuration and templates
+	#
+	# Arguments:
+	#	$1: source prefix of Pmodule environment
+	#	$2: target prefix of Pmodule environment
+	#
+	sync_config() {
+		src="$1/${PMODULES_CONFIG_DIR}/"
+		dst="$2/${PMODULES_CONFIG_DIR}/"
+		${rsync} --links --perms \
+			 "${src}"/profile.{bash,csh,zsh} "${dst}" \
+			|| return $?
+		${rsync} --links --perms \
+			 "${src}"/profile.{bash,csh,zsh}-"${PMODULES_VERSION}" "${dst}" \
+			|| return $?
+		${rsync} --links --perms \
+			 "${src}/Pmodules.conf" "${dst}" \
+			|| return $?
+		${rsync} --links --perms \
+			 "${src}/modbuild.conf" "${dst}" \
+			|| return $?
+	}
+
 	local target_root=()
 	local user=''
 	while (($# > 0)); do
@@ -246,7 +237,7 @@ initialized properly!"
 			-h | -H | -\? | --help | -help )
 				print_help "${subcommand}"
 				;;
-			--force | -f )
+			--force | --yes | -f | -y )
 				force='yes'
 				;;
 			--user | --user=* )
@@ -290,22 +281,20 @@ initialized properly!"
 	check_env || \
 		std::die 1 "Giving up..."
 
-	echo "
-Attempting to create a minimal module environment from the
-environment at '${PMODULES_ROOT}'
-"
-	echo "Initializing target directory '${target_root}' ..."
-	echo
+	echo "Creating a minimal Pmodule environment from the environment at"
+	echo "    ${PMODULES_ROOT}"
+	echo "in"
+	echo "    ${target_root}"
 	if [[ -d "${target_root}" ]]  && [[ ${force} == no ]]; then
 		echo "Warning: ${target_root} already exists."
-		std::get_YN_answer "Do you really want to re-run the initialization? (y/N) " || \
-			std::die 1 "Abort ..."
+		std::get_YN_answer \
+			"Do you really want to re-run the initialization? (y/N) " \
+			|| std::die 1 "Abort ..."
 	fi
 	force='yes'
 	echo "Creating target directory '${target_root}'..."
 	${mkdir} -p "${target_root}" || \
 		std::die 1 "Error: make directory failed!"
-	echo
 
 	echo "Syncing configuration ..."
 	sync_config "${src_root}" \
@@ -317,7 +306,6 @@ environment at '${PMODULES_ROOT}'
 		    "${src_root}" \
 		    "${target_root}" || \
 		std::die 1 "Error: sync Pmodules failed!"
-	echo
 
 	for d in "${src_root}"/*/${PMODULES_MODULEFILES_DIR}; do
 		${mkdir} -p "${target_root}/${d#${src_root}/}"
@@ -404,7 +392,7 @@ subcommand_install() {
 		#     to MODULEPATH.
 		#
 		# The dependency files do not convey the information whether
-		# loading a module extends MODULEPATH or not. All we need to
+		# loading a module extends MODULEPATH or not. What we need to
 		# know is
 		# 1) does loading a specific module extends MODULEPATH?
 		# 2) if yes: what is the hierarchical group?
@@ -414,20 +402,39 @@ subcommand_install() {
 		#     in the hierarchical group 'Compiler' to MODULEPATH, we
 		#      know that this directory is
 		#         <pmodules_root>/Compiler/modulefiles/gcc/10.3.0
-		local    fname=''
-		local -i n
-		local -a parts
-		while read fname; do
-			std::split_relpath parts "${fname}" n
-			# We are only interested in groups adding something to
-			# the modulepath.
-			(( n >= 6 )) || continue
-			local key="${parts[-4]}/${parts[-3]}"
-			[[ -z "${group_map[${key}]}" ]] || continue
-			group_map[${key}]="${src_root}/${parts[0]}"
-		done < <({ cd "${src_root}" && \
-				   ${find} */"${PMODULES_MODULEFILES_DIR}" \
-					   \( -type l -o -type f \) \! -name ".*"; } 2>/dev/null )
+		#
+		# This information we store in the dictionary 'group_map'.
+		# For concinience reasons we store the string 'src_root/group'.
+		# So, 'group_map' maps
+		#     module/version -> src_root/group
+		#
+		# Example:
+		#     group_map[gcc/10.3.0]="${src_root}/Compiler"
+		#
+		local group=''
+		for group in "${!GroupDepths[@]}"; do
+			(( ${GroupDepths[${group}]} > 0 )) || continue
+			local fname=''
+			while read fname; do
+				local -a parts=()
+				std::split_relpath parts "${fname}"
+				if (( ${#parts[@]} - 2 != ${GroupDepths[${group}]} )); then
+					std::warn "error in source group ${group}:"
+					std::warn "modulefile: ${fname}"
+					continue
+				fi
+				if [[ ${#parts[@]} < 4 ]]; then
+					echo "${group} ${parts[@]}"
+				fi
+				local key="${parts[-4]}/${parts[-3]}"
+				[[ -z "${group_map[${key}]}" ]] || continue
+				group_map[${key}]="${src_root}/${group}"
+			done < <(${find} -L "${src_root}/${group}/${PMODULES_MODULEFILES_DIR}" \
+					 \( -type l -o -type f \) \
+					 \! -name ".*" \
+					 -printf "%P\n" \
+				)
+		done
 	}
 	
 	#......................................................................
@@ -439,7 +446,7 @@ subcommand_install() {
 	#
 	# Notes:
 	#   Following variables from the enclosing function are used:
-	#	modulepath (might be changed)
+	#	modulepath
 	#	group_map (read-only)
 	#
 	resolve_dependencies () {
@@ -447,9 +454,9 @@ subcommand_install() {
 
 		local -- prefix=$(get_module_prefix "${modulefile}")
 		local -a rdeps=()
-		local    rdeps_file="${prefix}/.dependencies"
+		local -- rdeps_file="${prefix}/.dependencies"
 		local -a ideps=()
-		local    ideps_file="${prefix}/.install_dependencies"
+		local -- ideps_file="${prefix}/.install_dependencies"
 		
 		if [[ -r "${rdeps_file}" ]]; then
 			mapfile -t rdeps < <(grep -v '^ *#' "${rdeps_file}" )
@@ -471,9 +478,10 @@ subcommand_install() {
 			local rel_modulename="${modulename#${src_root}/}"
 			dependencies_to_install[${rel_modulename}]='.'
 			resolve_dependencies "${modulename}"
-			if [[ -n ${group_map[${dep}]} ]]; then
-				modulepath+=( "${group_map[${dep}]}/${rel_modulename##+([!/])/}" )
-			fi
+			[[ -v group_map[${dep}] ]] || continue
+			local dir="${group_map[${dep}]}"     # = ${src_root}/<group>
+			dir+="/${rel_modulename##+([!/])/}"  # += rel.name with group removed
+			modulepath+=( "${dir}" )
 		done
 	}
 
@@ -491,21 +499,28 @@ subcommand_install() {
 	#	modules_to_install (read-only)
 	#	dependencies_to_install (read-only)
 	#
-	
-	print_modules_to_install() {
+	print_modules() {
 		local modulefile
-		local parts
-		std::info "The following modules will be installed/updated:"
-		for modulefile in "${!modules_to_install[@]}"; do
+		for modulefile in "$@"; do
+			local -a parts
 			std::split_relpath parts "${modulefile}"
-			std::info "    ${parts[-2]}/${parts[-1]}"
+			local s=''
+			if (( ${#parts[@]} >= 6 )); then
+				s="(${parts[2]}/${parts[3]}"
+				for ((i = 4; i < ${#parts[@]}-2; i+=2)); do
+					s+=" ${parts[i]}/${parts[i+1]}"
+				done
+				s+=')'
+			fi
+			std::info "%-20s %s" "${parts[-2]}/${parts[-1]}" "$s"
 		done 2>&1 | sort
+	}
+	print_modules_to_install() {
+		std::info "The following modules will be installed/updated:"
+		print_modules "${!modules_to_install[@]}"
 		if (( ${#dependencies_to_install[@]} > 0 )); then
 			std::info "\nThe following dependencies will be installed/updated:"
-			for modulefile in "${!dependencies_to_install[@]}"; do
-				std::split_relpath parts "${modulefile}"
-				std::info "    ${parts[-2]}/${parts[-1]}"
-			done 2>&1 | sort
+			print_modules "${!dependencies_to_install[@]}"
 		fi
 		std::info ""
 		std::get_YN_answer "Do you want to continue? [n] " || \
@@ -522,19 +537,19 @@ subcommand_install() {
 				force='yes'
 				;;
 			--src | --src=*)
-                                if [[ $1 == --src=* ]]; then
-                                        src_root="${1#--*=}"
-				else
+                                if [[ $1 == --src ]]; then
                                         src_root="$2"
                                         shift
+				else
+                                        src_root="${1#--*=}"
                                 fi
 				;;
 			--target | --target=*)
-                                if [[ $1 == --target=* ]]; then
-                                        target_root="${1#--*=}"
-				else
+                                if [[ $1 == --target ]]; then
                                         target_root="$2"
                                         shift
+				else
+                                        target_root="${1#--*=}"
                                 fi
 				;;
 			--with | --with=* )
@@ -542,7 +557,7 @@ subcommand_install() {
                                         with+=( "$2" )
                                         shift
                                 else
-                                        with+=( "${1/--with=}" )
+                                        with+=( "${1#--*=}" )
                                 fi
 				;;
 			-- )
