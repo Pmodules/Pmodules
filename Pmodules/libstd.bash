@@ -35,6 +35,17 @@ std::die() {
         exit $ec
 }
 
+std::def_cmds(){
+	local path="$1"
+	shift
+	for cmd in "$@"; do
+		eval declare -g ${cmd}=$(PATH="${path}" which $cmd 2>/dev/null)
+		if [[ -z "${!cmd}" ]]; then
+			std::die 255 "${cmd} not found"
+		fi
+	done
+}
+
 #
 # get answer to yes/no question
 #
@@ -133,16 +144,73 @@ std::replace_path () {
 }
 
 #
-# split file name
+# Functions to split a path into its components.
 #
-std::split_fname() {
-        local -r savedIFS="${IFS}"
+# Args:
+#     $1  upvar
+#     $2  absolute or relative path (depends on the function)
+#     $3  opt upvar: number of components
+#
+# Notes:
+# std::split_path()
+#     if the path is absolute, the first element of the returned array is empty.
+#
+# std::split_abspath()
+#     the path must begin with a slash, otherwise std::die() is called with
+#     an internal error message.
+#
+# std::split_relpath()
+#     analog to std::split_abspath() with a relative path.
+#
+std::split_path() {
+	local parts="$1"
+	local  -r path="$2"
+
         IFS='/'
-        local std__split_fname_result__=( $(echo "${@: -1}") )
-        IFS=${savedIFS}
-        eval $1=\(\"\${std__split_fname_result__[@]}\"\)
+        local std__split_path_result=( ${std__split_path_tmp} )
+	unset IFS
+	std::upvar ${parts} "${std__split_path_result[@]}"
 	if (( $# >= 3 )); then
-	        eval $2=${#std__split_fname_result__[@]}
+		# return number of parts
+	        std::upvar "$3" ${#std__split_path_result[@]}
+	fi
+}
+
+std::split_abspath() {
+	local parts="$1"
+	local  -r path="$2"
+	if [[ "${path:0:1}" == '/' ]]; then
+		local -r std__split_path_tmp="${path:1}"
+	else
+		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
+	fi
+
+        IFS='/'
+        local std__split_path_result=( ${std__split_path_tmp} )
+	unset IFS
+	std::upvar ${parts} "${std__split_path_result[@]}"
+	if (( $# >= 3 )); then
+		# return number of parts
+	        std::upvar "$3" ${#std__split_path_result[@]}
+	fi
+}
+
+std::split_relpath() {
+	local parts="$1"
+	local  -r path="$2"
+	if [[ "${path:0:1}" == '/' ]]; then
+		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
+	else
+		local -r std__split_path_tmp="${path}"
+	fi
+
+        IFS='/'
+        local std__split_path_result=( ${std__split_path_tmp} )
+	unset IFS
+	std::upvar ${parts} "${std__split_path_result[@]}"
+	if (( $# >= 3 )); then
+		# return number of parts
+	        std::upvar "$3" ${#std__split_path_result[@]}
 	fi
 }
 

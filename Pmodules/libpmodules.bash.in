@@ -1,0 +1,63 @@
+#!/bin/bash
+
+declare    PMODULES_MODULEFILES_DIR='modulefiles'
+declare    PMODULES_CONFIG_DIR='config'
+declare -A GroupDepths=()
+declare -A Subcommands=()
+declare -A Options=()
+declare -A Help=()
+
+# initialize help text of 'module --version'
+Help['version']="
+Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
+Copyright GNU GPL v2
+"
+
+#
+# display help text for command given in $1
+#
+print_help() {
+        echo -e "${Help[$1]}" 1>&2
+        std::die 1
+}
+
+#
+# compute depth of modulefile directory.
+#
+# Args:
+#       $1: absolute path of a modulefile directory
+#
+compute_group_depth () {
+        local -r dir=$1
+	test -d "${dir}" || return 1
+        local group=${dir%/*}
+        local group=${group##*/}
+        [[ -n "${GroupDepths[${group}]}" ]] && return 0
+	local -i depth=$(${find} "${dir}" -depth \( -type f -o -type l \) \
+                          -printf "%d" -quit 2>/dev/null)
+	(( depth-=2 ))
+	# if a group doesn't contain a modulefile, depth is negativ
+	# :FIXME: better solution?
+	(( depth < 0 )) && (( depth = 0 ))
+	GroupDepths[$group]=${depth}
+}
+
+#
+# (Re-)Scan available groups in given root and compute group depth's
+#
+# Args:
+#       $1: root of modulefile hierarchy
+#
+scan_groups () {
+	local -r root="$1"
+	local moduledir
+	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
+		compute_group_depth "${moduledir}"
+	done
+}
+
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
