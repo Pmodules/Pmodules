@@ -43,17 +43,20 @@ compute_group_depth () {
 }
 
 #
-# (Re-)Scan available groups in given root and compute group depth's
+# (Re-)Scan available groups in given overlays and compute group depth's
 #
 # Args:
-#       $1: root of modulefile hierarchy
+#       $1: array of overlays
 #
 scan_groups () {
-	local -r root="$1"
-	local moduledir
-	for moduledir in ${root}/*/${PMODULES_MODULEFILES_DIR}; do
-		compute_group_depth "${moduledir}"
-	done
+	local -r overlays=( "$@" )
+        local    overlay
+        for overlay in "${overlays[@]}"; do
+	        local moduledir
+	        for moduledir in ${overlay}/*/${PMODULES_MODULEFILES_DIR}; do
+		        compute_group_depth "${moduledir}"
+	        done
+        done
 }
 
 # Local Variables:

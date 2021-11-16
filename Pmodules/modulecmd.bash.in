@@ -176,45 +176,6 @@ is_release_stage() {
 }
 
 #
-# compute depth of modulefile directory.
-#
-# Args:
-#       $1: absolute path of a modulefile directory
-#
-compute_group_depth () {
-        local -r dir=$1
-	test -d "${dir}" || return 1
-        local group=${dir%/*}
-        local group=${group##*/}
-        [[ -n "${GroupDepths[${group}]}" ]] && return 0
-	local -i depth=$(${find} -L "${dir}" -depth \( -type f -o -type l \) \
-                          -printf "%d" -quit 2>/dev/null)
-	(( depth-=2 ))
-	# if a group doesn't contain a modulefile, depth is negativ
-	# :FIXME: better solution?
-	(( depth < 0 )) && (( depth = 0 ))
-	GroupDepths[$group]=${depth}
-        g_env_must_be_saved='yes'
-}
-
-#
-# (Re-)Scan available groups in given overlays and compute group depth's
-#
-# Args:
-#       $1: array of overlays
-#
-scan_groups () {
-	local -r overlays=( "$@" )
-        local    overlay
-        for overlay in "${overlays[@]}"; do
-	        local moduledir
-	        for moduledir in ${overlay}/*/${PMODULES_MODULEFILES_DIR}; do
-		        compute_group_depth "${moduledir}"
-	        done
-        done
-}
-
-#
 # Check whether a given path is in an used overlay.
 # If yes, return 0 and the overlay with upvar of first argument
 # otherwise return 1
@@ -504,8 +465,8 @@ subcommand_load() {
 		local overlay=''
 		find_an_overlay_providing_group overlay "${group}" || return 1
 		local moduledir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
-		[[ -d "${moduledir}" ]] || return 1
-		compute_group_depth "${moduledir}"
+		compute_group_depth "${moduledir}" || return 1
+		g_env_must_be_saved='yes'
 	}
 
 	local args=()
@@ -1466,7 +1427,6 @@ subcommand_use() {
                         export_env OverlayList
                         g_env_must_be_saved='yes'
 	                scan_groups "${OverlayList[@]}"
-                        local group
                 }
 
                 use_group() {
@@ -1509,6 +1469,7 @@ subcommand_use() {
                         # this scan is required if a new group has been
                         # create inside an used overlay
 			scan_groups "${overlays}"
+			g_env_must_be_saved='yes'
                 fi
 
                 if [[ -n ${GroupDepths[${arg}]} ]] &&
@@ -2850,6 +2811,7 @@ fi
 
 if (( ${#GroupDepths[@]} == 0 )); then
 	scan_groups "${!OverlayDict[@]}"
+	g_env_must_be_saved='yes'
 fi
 
 case ${subcommand} in
