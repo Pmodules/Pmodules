@@ -1,8 +1,6 @@
 #!@BASH@ --noprofile
 #
 
-PATH='/bin:/usr/bin'
-
 unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
 unset IFS	# use default IFS
 
