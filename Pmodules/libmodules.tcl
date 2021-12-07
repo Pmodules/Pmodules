@@ -383,8 +383,8 @@ if { [info exists ::whatis] } {
 }
 
 _pmodules_parse_pmodules_env
-
-if {[_is_in_overlay]} {
+if {[_is_in_overlay] == 0} {
+	debug "setup env vars for module in overlay"
 	_pmodules_init_global_vars 
 	conflict	$name
     	_pmodules_setenv ${PREFIX} ${name} ${version}
