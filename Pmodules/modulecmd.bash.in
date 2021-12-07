@@ -887,11 +887,6 @@ get_available_modules() {
                         local entries=$(echo *)
 			[[ -n ${entries} ]] || continue
                         while read mod; do
-			        get_release_stage \
-					rel_stage \
-					"${dir}" \
-					"${mod}"
-				[[ :${used_rel_stages}: =~ :${rel_stage}: ]] || continue
 				local add='no'
 				if [[ -n "${overlay}" ]]; then
 					# module is in an overlay
@@ -918,10 +913,15 @@ get_available_modules() {
 					# module is NOT in an overlay
 					add='yes'
 				fi
-				if [[ "${add}" == 'yes' ]]; then
-			                mods+=( "${mod}" ${rel_stage} "${dir}/${mod}" )
-                                        dict[${mod}]=1
-				fi
+				[[ "${add}" == 'yes' ]] || continue
+			        get_release_stage \
+					rel_stage \
+					"${dir}" \
+					"${mod}"
+				[[ :${used_rel_stages}: =~ :${rel_stage}: ]] || continue
+
+			        mods+=( "${mod}" ${rel_stage} "${dir}/${mod}" )
+                                dict[${mod}]=1
 		        done < <(${find} -L ${entries} \
 					 \( -type f -o -type l \) \
 					 -not -name ".*" \
