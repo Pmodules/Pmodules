@@ -1508,6 +1508,7 @@ subcommand_use() {
                                  "illegal group" \
                                  "${arg}"
                 fi
+		[[ ! -d ${arg} ]] && get_overlay_dir_by_name arg "${arg}"
                 # arg must be a directory!
 		if [[ ! -d ${arg} ]]; then
 			std::die 3 "%s %s: %s -- %s" \
@@ -1515,12 +1516,12 @@ subcommand_use() {
                                  "illegal argument: is neither a valid keyword, group nor directory" \
                                  "${arg}"
                 fi
-
                 local dir="$(cd "${arg}" && pwd)"
 		if [[ -r ${dir}/config/overlay.conf ]]; then
 			use_overlay "${dir}"
 			return
 		fi
+		# FIXME: do we need this?
 		# Is ${dir} a used overlay?
 		# Note: the config.file 'overlay.conf is *not* required
 		#       in an overlay!'
@@ -1703,7 +1704,8 @@ subcommand_unuse() {
                                  "illegal group" \
                                  "${arg}"
                 fi
-                # user wants to append a directory to MODULEPATH
+		[[ ! -d ${arg} ]] && get_overlay_dir_by_name arg "${arg}"
+                # user wants to remove a directory or overlay
 		if [[ ! -d ${arg} ]]; then
 			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
