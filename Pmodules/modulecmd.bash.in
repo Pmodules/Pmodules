@@ -2739,6 +2739,7 @@ fi
 _init_overlay_vars() {
 	declare -ag OverlayList=( "${PMODULES_ROOT}" )
 	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0")
+	declare -Ag Dir2OverlayMap=()
 	local overlay
 	for overlay in "${!OverlayDict[@]}"; do
 		local group
