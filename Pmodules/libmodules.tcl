@@ -29,7 +29,12 @@ set ::MODULEFILES_DIR "modulefiles"
 set ::ol_replacing "r"
 
 proc _pmodules_parse_pmodules_env { } {
-        debug "enter"
+	#
+	# In this library we need the value of some BASH variables
+	# defined in PMODULES_ENV. In this function we translate
+	# these variables definitions - created in BASH with
+	# 'typeset -p VAR' - to Tcl.
+	#
 	foreach line [split [base64::decode $::env(PMODULES_ENV)] "\n"] {
 		if { ![regexp -- {.* -[aAx]* (.*)=\((.*)\)} $line -> name value] } {
 			continue
@@ -163,7 +168,7 @@ proc _pmodules_setenv { PREFIX name version } {
 		return
 	}
 
-	set		NAME			[string toupper $name]
+	set NAME [string toupper $name]
 	regsub -- "-" ${NAME} "_" NAME
 
 	if { ! [info exist ::dont-setenv] } {
@@ -333,6 +338,12 @@ proc _find_overlay { modulefile_components } {
         return {}
 }
 
+proc _is_in_overlay { } {
+	debug "_is_in_overlay?"
+	set parts [_find_overlay [file split $::ModulesCurrentModulefile]]
+	expr {[string compare $parts ""] == 0 }
+}
+
 proc _pmodules_init_global_vars { } {
 	global	group
 	global  GROUP
@@ -348,15 +359,9 @@ proc _pmodules_init_global_vars { } {
 	global	variant
 	global	PREFIX		# prefix of package
 
-        set	modulefile_components	[file split $::ModulesCurrentModulefile]
+	set	modulefile_components	[file split $::ModulesCurrentModulefile]
 
-        set     overlay_components [_find_overlay ${modulefile_components}]
-        if { [ string compare $overlay_components "" ] == 0 } {
-                debug "not in an overlay"
-                return
-        }
-
-	debug	"modulefile is inside our root"
+	set     overlay_components [_find_overlay ${modulefile_components}]
 	set	rel_modulefile	[lrange $modulefile_components [llength $overlay_components] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	GROUP		"${group}"
@@ -370,25 +375,20 @@ proc _pmodules_init_global_vars { } {
 	set	variant 	[lrange $rel_modulefile 2 end]
 	set	prefix		"$overlay_components $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
-
 	debug "group of module $name: $group"
 }
-
 
 if { [info exists ::whatis] } {
 	module-whatis	"$whatis"
 }
 
 _pmodules_parse_pmodules_env
-_pmodules_init_global_vars 
 
-#
-# we cannot load another module with the same name
-#
-conflict	$name
-
-_pmodules_setenv ${PREFIX} ${name} ${version}
-_pmodules_update_loaded_modules ${group} ${name} ${version}
-
+if {[_is_in_overlay]} {
+	_pmodules_init_global_vars 
+	conflict	$name
+    	_pmodules_setenv ${PREFIX} ${name} ${version}
+	_pmodules_update_loaded_modules ${group} ${name} ${version}
+}
 debug "return from lib"
 
