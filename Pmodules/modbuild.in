@@ -413,18 +413,30 @@ declare -r OVERLAY_CONF="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/overlays.conf"
 # Return overlay name *and* directory for an overlay given
 # by name *or* directory. Search in the config file ${OVERLAY_CONF}.
 #
+# Arguments
+#     $1: name or directory of overlay
+#
 get_overlay_name_and_dir() {
 	local "$1"	# upvar for overlay name
 	local "$2"	# upvar for overlay directory
-	if [[ -r "${OVERLAY_CONF}" ]]; then
+	local config_files=()
+	if [[ -v PMODULES_OVERLAY_CONF ]]; then
+		config_files+=("${PMODULES_OVERLAY_CONF}")
+	fi
+	config_files+=("${HOME}/.Pmodules/overlay.conf")
+	config_files+=("${OVERLAY_CONF}")
+	for config_file in "${config_files[@]}"; do
+		[[ -r "${OVERLAY_CONF}" ]] || continue
 		local toks=()
 		while read -a toks; do
+			[[ -n "${toks[0]}" ]] || continue
+			[[ ! "${toks[0]}" =~ \#* ]] || continue
 			if [[ ${toks[0]} == $3 ]] || [[ ${toks[1]} == $3 ]]; then
 				std::upvar $1  "${toks[0]}"
 				std::upvar $2  "${toks[1]}"
 				return 0
 			fi
-		done < "${OVERLAY_CONF}"
+		done < "${config_file}"
 	fi
 	return 1
 }
