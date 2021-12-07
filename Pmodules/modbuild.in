@@ -423,21 +423,21 @@ get_overlay_name_and_dir() {
 	if [[ -v PMODULES_OVERLAY_CONF ]]; then
 		config_files+=("${PMODULES_OVERLAY_CONF}")
 	fi
-	config_files+=("${HOME}/.Pmodules/overlay.conf")
+	config_files+=("${HOME}/.Pmodules/overlays.conf")
 	config_files+=("${OVERLAY_CONF}")
 	for config_file in "${config_files[@]}"; do
-		[[ -r "${OVERLAY_CONF}" ]] || continue
+		[[ -r "${config_file}" ]] || continue
 		local toks=()
 		while read -a toks; do
 			[[ -n "${toks[0]}" ]] || continue
-			[[ ! "${toks[0]}" =~ \#* ]] || continue
+			[[ ${toks[0]} == \#* ]] && continue
 			if [[ ${toks[0]} == $3 ]] || [[ ${toks[1]} == $3 ]]; then
 				std::upvar $1  "${toks[0]}"
 				std::upvar $2  "${toks[1]}"
 				return 0
 			fi
 		done < "${config_file}"
-	fi
+	done
 	return 1
 }
 
