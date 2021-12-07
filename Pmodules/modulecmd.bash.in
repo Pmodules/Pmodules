@@ -1275,6 +1275,29 @@ SWITCHES:
                 Append/prepend agrument to module search path or list of to be
                 searched releases.
 "
+# helper function for subcommand_use() und subcommand_unuse()
+get_overlay_dir_by_name(){
+	local name="$2"
+	local config_files=()
+	if [[ -v PMODULES_OVERLAYS_CONF ]]; then
+		config_files+=("${PMODULES_OVERLAYS_CONF}")
+	fi
+	config_files+=("${HOME}/.Pmodules/overlays.conf")
+	config_files+=("${PMODULES_ROOT}/config/overlays.conf")
+	for config_file in "${config_files[@]}"; do
+		[[ -r "${config_file}" ]] || continue
+		local toks=()
+		while read -a toks; do
+			[[ -n "${toks[0]}" ]] || continue
+			[[ ${toks[0]} == \#* ]] && continue
+			if [[ ${toks[0]} == ${name} ]]; then
+				std::upvar "$1" "${toks[1]}"
+				return
+			fi
+		done < "${config_file}"
+	done
+	std::upvar "$1" "${name}"
+}
 
 subcommand_use() {
         local -r subcommand='use'
@@ -1357,16 +1380,31 @@ subcommand_use() {
 						 "${overlay}"
 				fi
 			fi
-			local overlay=''
+			local overlay="${1%:*}"
+
+			[[ -d "${overlay}" ]] || \
+				get_overlay_dir_by_name overlay "${overlay}"
+                        [[ -d "${overlay}" ]] || \
+                                std::die 3 "%s %s: %s -- %s" \
+                                         "${CMD}" "${subcommand}" \
+                                         "is not an overlay directory" \
+                                         "${overlay}"
+                        overlay=${overlay%/} # remove trailing '/' if there is one
+                        if [[ -n "${OverlayDict[${overlay}]}" ]]; then
+                                std::info "%s %s: %s -- %s" \
+                                          "${CMD}" "${subcommand}" \
+                                          "overlay already in use" \
+                                          "${overlay}"
+				return 0
+			fi
+
+			# if overlay type has not been passed via the argument,
+			# get it from overlay config file - if exist
 			local type="${ol_normal}"
-			if [[ $1 == *:* ]]; then
-				type=${1##*:}
-				overlay=${1%:*}
-			elif [[ -d $1 ]] && [[ -r $1/config/overlay.conf ]]; then
-				overlay=$1
+			if [[ $1 != *:* ]] && [[ -r "${overlay}/config/overlay.conf" ]]; then
 				source "${overlay}/config/overlay.conf"
 			else
-				overlay=$1
+				type="${1##*:}"
 			fi
 			
 			case ${type} in
@@ -1381,20 +1419,6 @@ subcommand_use() {
 					;;
 			esac
 			
-                        overlay=${overlay%/} # remove trailing '/' if there is one
-                        [[ -d "${overlay}" ]] || \
-                                std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${subcommand}" \
-                                         "is not an overlay directory" \
-                                         "${overlay}"
-                        if [[ -n "${OverlayDict[${overlay}]}" ]]; then
-                                std::info "%s %s: %s -- %s" \
-                                          "${CMD}" "${subcommand}" \
-                                          "overlay already in use" \
-                                          "${overlay}"
-				return 0
-			fi  
-				
 			if [[ "${type}" == "${ol_replacing}" ]]; then
 				# if this overlay replaces groups, we have to remove
 				# the modules made available by other overlays in these groups
@@ -1579,6 +1603,8 @@ subcommand_unuse() {
 			fi
 			overlay=${overlay%:*}  # ignore any type
 			overlay=${overlay%/} # remove trailing '/' if there is one
+			[[ -d "${overlay}" ]] || \
+				get_overlay_dir_by_name overlay "${overlay}"
                         [[ -d "${overlay}" ]] || \
                                 std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
