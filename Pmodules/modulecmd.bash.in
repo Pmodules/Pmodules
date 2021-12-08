@@ -1275,28 +1275,52 @@ SWITCHES:
                 Append/prepend agrument to module search path or list of to be
                 searched releases.
 "
+
 # helper function for subcommand_use() und subcommand_unuse()
-get_overlay_dir_by_name(){
-	local name="$2"
+get_overlay_info(){
+	# Args:
+	#	$1 [in] overlay name or directory plus optional type
+	#	$2 [upvar] overlay type
+	#	$3 [upvar] overlay root directory
+	#	$4 [upvar] overlay prefix for software installation
+	#
+	local name_or_dir="${1%:*}"
+	[[ -d ${name_or_dir} ]] && name_or_dir=$(cd "${name_or_dir}" && pwd -L)
+
 	local config_files=()
 	if [[ -v PMODULES_OVERLAYS_CONF ]]; then
 		config_files+=("${PMODULES_OVERLAYS_CONF}")
 	fi
 	config_files+=("${HOME}/.Pmodules/overlays.conf")
 	config_files+=("${PMODULES_ROOT}/config/overlays.conf")
+
 	for config_file in "${config_files[@]}"; do
 		[[ -r "${config_file}" ]] || continue
 		local toks=()
 		while read -a toks; do
 			[[ -n "${toks[0]}" ]] || continue
 			[[ ${toks[0]} == \#* ]] && continue
-			if [[ ${toks[0]} == ${name} ]]; then
-				std::upvar "$1" "${toks[1]}"
-				return
+			local _name="${toks[0]%:*}"
+			if [[ "${toks[0]%:*}" == "${name_or_dir}" ]] \
+				   || [[ "${toks[1]}" == "${name_or_dir}" ]]; then
+				# take type from
+				# 1. $1
+				# 2. configuration file
+				# 3. use default type
+				local _type="${ol_normal}"
+				if [[ "$1" == *:* ]]; then
+					_type="${1##*:}"
+				elif [[ "${toks[0]}" == *:* ]]; then
+					_type="${toks[0]##*:}"
+				fi
+				[[ -n "$2" ]] && std::upvar "$2" "${_type}"
+				[[ -n "$3" ]] && std::upvar "$3" "${toks[1]}"
+				[[ -n "$4" ]] && std::upvar "$4" "${toks[2]}"
+				return 0
 			fi
 		done < "${config_file}"
 	done
-	std::upvar "$1" "${name}"
+	return 1
 }
 
 subcommand_use() {
@@ -1346,7 +1370,8 @@ subcommand_use() {
                 std::info "Used overlays:"
                 for overlay in "${OverlayList[@]}"; do
 			local hiding=''
-			[[ "${OverlayDict[${overlay}]}" != '0' ]] && hiding=' (hiding)'
+			[[ "${OverlayDict[${overlay}]}" == "${ol_hiding}" ]] && \
+				hiding=' (hiding)'
                         std::info "\t${overlay}${hiding}"
                 done
 
@@ -1368,6 +1393,7 @@ subcommand_use() {
 
 	use () {
                 use_overlay() {
+			local ol_name_or_dir="$1"
 			if [[ -n ${LOADEDMODULES} ]]; then
 				if [[  $LOADEDMODULES == *:*  ]] \
 					   || [[ $LOADEDMODULES != Pmodules/* ]]; then
@@ -1377,54 +1403,48 @@ subcommand_use() {
 					std::die 3 "%s %s: %s -- %s" \
 						 "${CMD}" "${subcommand}" \
 						 "overlay failed" \
-						 "${overlay}"
+						 "${ol_name_or_dir}"
 				fi
 			fi
-			local overlay="${1%:*}"
 
-			[[ -d "${overlay}" ]] || \
-				get_overlay_dir_by_name overlay "${overlay}"
-                        [[ -d "${overlay}" ]] || \
-                                std::die 3 "%s %s: %s -- %s" \
+			local ol_dir=''
+			local ol_type=''
+
+			get_overlay_info \
+				"${ol_name_or_dir}" \
+				ol_type \
+				ol_dir \
+				|| std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "is not an overlay directory" \
-                                         "${overlay}"
-                        overlay=${overlay%/} # remove trailing '/' if there is one
-                        if [[ -n "${OverlayDict[${overlay}]}" ]]; then
-                                std::info "%s %s: %s -- %s" \
+                                         "${ol_name_or_dir%:*}"
+
+                        if [[ -n "${OverlayDict[${ol_dir}]}" ]]; then
+                                std::die 3 "%s %s: %s -- %s" \
                                           "${CMD}" "${subcommand}" \
                                           "overlay already in use" \
-                                          "${overlay}"
+                                          "${ol_name_or_dir%:*}"
 				return 0
 			fi
-
-			# if overlay type has not been passed via the argument,
-			# get it from overlay config file - if exist
-			local type="${ol_normal}"
-			if [[ $1 != *:* ]] && [[ -r "${overlay}/config/overlay.conf" ]]; then
-				source "${overlay}/config/overlay.conf"
-			else
-				type="${1##*:}"
-			fi
 			
-			case ${type} in
+			case ${ol_type} in
 				${ol_normal} | ${ol_replacing} | ${ol_hiding} )
 					:
 					;;
 				* )
 					std::die 3 "%s %s: %s -- %s" \
 						 "${CMD}" "${subcommand}" \
-						 "invalid type '${type}!" \
-						 "${overlay}"
+						 "invalid type '${ol_type}!" \
+						 "${ol_name_or_dir}"
 					;;
 			esac
 			
-			if [[ "${type}" == "${ol_replacing}" ]]; then
+			if [[ "${ol_type}" == "${ol_replacing}" ]]; then
 				# if this overlay replaces groups, we have to remove
 				# the modules made available by other overlays in these groups
 				for group in ${UsedGroups//:/ }; do
 					# first test whether this group is in the to be added overlay
-                                        local dir="${overlay}/"
+                                        local dir="${ol_dir}/"
                                         dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                         [[ -d "${dir}" ]] || continue  # no
 					
@@ -1436,16 +1456,16 @@ subcommand_use() {
 			fi
 
                         for group in ${UsedGroups//:/ }; do
-                                local dir="${overlay}/"
+                                local dir="${ol_dir}/"
                                 dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                 if [[ -d "${dir}" ]]; then
                                         std::prepend_path MODULEPATH "${dir}"
-					Dir2OverlayMap[${dir}]=${overlay}
+					Dir2OverlayMap[${dir}]=${o_dir}
                                 fi
                         done
 
-                        OverlayDict[${overlay}]=${type}
-                        OverlayList=( "${overlay}" "${OverlayList[@]}" )
+                        OverlayDict[${ol_dir}]=${ol_type}
+                        OverlayList=( "${ol_dir}" "${OverlayList[@]}" )
                         export_env OverlayList
                         g_env_must_be_saved='yes'
 	                scan_groups "${OverlayList[@]}"
@@ -1508,7 +1528,11 @@ subcommand_use() {
                                  "illegal group" \
                                  "${arg}"
                 fi
-		[[ ! -d ${arg} ]] && get_overlay_dir_by_name arg "${arg}"
+		if get_overlay_info "${arg}"; then
+			use_overlay "${arg}"
+			return 0
+		fi
+
                 # arg must be a directory!
 		if [[ ! -d ${arg} ]]; then
 			std::die 3 "%s %s: %s -- %s" \
@@ -1516,24 +1540,7 @@ subcommand_use() {
                                  "illegal argument: is neither a valid keyword, group nor directory" \
                                  "${arg}"
                 fi
-                local dir="$(cd "${arg}" && pwd)"
-		if [[ -r ${dir}/config/overlay.conf ]]; then
-			use_overlay "${dir}"
-			return
-		fi
-		# FIXME: do we need this?
-		# Is ${dir} a used overlay?
-		# Note: the config.file 'overlay.conf is *not* required
-		#       in an overlay!'
-		if [[ -v OverlayDict[${dir}] ]]; then
-			std::die 3 "%s %s: %s -- %s" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument: is already loaded as overlay" \
-                                 "${dir}"
-		fi
-
-                # argument is a modulepath
-                ${add2path_func} MODULEPATH "${dir}"
+                ${add2path_func} MODULEPATH "${arg}"
 	}
 
 	local -a args=()
@@ -1590,7 +1597,7 @@ subcommand_unuse() {
 	unset IFS
         unuse() {
                 unuse_overlay() {
-			local overlay="$1"
+			local ol_name_or_dir="$1"
 			if [[ -n ${LOADEDMODULES} ]]; then
 				if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
 					std::error "%s %s: %s" \
@@ -1599,35 +1606,39 @@ subcommand_unuse() {
 					std::die 3 "%s %s: %s -- %s" \
 						 "${CMD}" "${subcommand}" \
 						 "overlay failed" \
-						 "${overlay}"
+						 "${ol_name_or_dir}"
 				fi
 			fi
-			overlay=${overlay%:*}  # ignore any type
-			overlay=${overlay%/} # remove trailing '/' if there is one
-			[[ -d "${overlay}" ]] || \
-				get_overlay_dir_by_name overlay "${overlay}"
-                        [[ -d "${overlay}" ]] || \
-                                std::die 3 "%s %s: %s -- %s" \
+
+			local ol_dir=''
+			local ol_type=''
+
+			get_overlay_info \
+				"${ol_name_or_dir}" \
+				ol_type \
+				ol_dir \
+				|| std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "is not an overlay directory" \
-                                         "${overlay}"
-                        [[ "${overlay}" == "${PMODULES_ROOT}" ]] && \
+                                         "${ol_name_or_dir%:*}"
+
+                        [[ "${ol_dir}" == "${PMODULES_ROOT}" ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "cannot remove root overlay" \
-                                         "${overlay}"
-                        [[ -z ${OverlayDict[${overlay}]} ]] && \
+                                         "${ol_name_or_dir%:*}"
+                        [[ -z ${OverlayDict[${ol_dir}]} ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "not an used overlay" \
-                                         "${overlay}"
+                                         "${ol_name_or_dir%:*}"
 				
-			if [[ "${OverlayDict[${overlay}]}" == "${ol_replacing}" ]]; then
+			if [[ "${OverlayDict[${ol_dir}]}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
 				for group in ${UsedGroups//:/ }; do
 					# first test whether this group is in the to be added overlay
-                                        local dir="${overlay}/"
+                                        local dir="${ol_dir}/"
                                         dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                         [[ -d "${dir}" ]] || continue  # no
 					
@@ -1638,16 +1649,16 @@ subcommand_unuse() {
 				done
 			fi
 
-                        unset "OverlayDict[${overlay}]"
+                        unset "OverlayDict[${ol_dir}]"
 			local i
 			for i in "${!OverlayList[@]}"; do
-				[[ ${OverlayList[i]} == ${overlay} ]] && unset 'OverlayList[i]'
+				[[ ${OverlayList[i]} == ${ol_dir} ]] && unset 'OverlayList[i]'
 			done
                         g_env_must_be_saved='yes'
                         export_env OverlayList
                         local dir
                         for dir in "${modulepath[@]}"; do
-                                if [[ "${dir}" =~ "${overlay}" ]]; then
+                                if [[ "${dir}" =~ "${ol_dir}" ]]; then
                                         std::remove_path MODULEPATH "${dir}"
                                 fi
                         done
@@ -1704,22 +1715,18 @@ subcommand_unuse() {
                                  "illegal group" \
                                  "${arg}"
                 fi
-		[[ ! -d ${arg} ]] && get_overlay_dir_by_name arg "${arg}"
-                # user wants to remove a directory or overlay
+		if get_overlay_info "${arg}"; then
+			unuse_overlay "${arg}"
+			return 0
+		fi
+
+                # arg must be a directory!
 		if [[ ! -d ${arg} ]]; then
 			std::die 3 "%s %s: %s -- %s" \
                                  "${CMD}" "${subcommand}" \
                                  "illegal argument" \
                                  "${arg}"
                 fi
-
-                local dir="$(cd "${arg}" && pwd)"
-		if [[ -r ${dir}/config/overlay.conf ]] || [[ -v OverlayDict[${dir}] ]]; then
-			unuse_overlay "${dir}"
-			return
-		fi
-
-                # argument is a modulepath
                 std::remove_path MODULEPATH "${dir}"
 
         }
@@ -1804,7 +1811,7 @@ reset_modulepath() {
 			local dir="${overlay}/${group}/${PMODULES_MODULEFILES_DIR}"
 			if [[ -d "${dir}" ]]; then
 				std::prepend_path MODULEPATH "${dir}"
-				Dir2OverlayMap[${dir}]=${overlay}
+				Dir2OverlayMap[${dir}]="${overlay}"
 			fi
 		done
 	done
@@ -1868,6 +1875,7 @@ pmodules_init() {
         declare -ag OverlayList=( "${PMODULES_ROOT}" )
 
         reset_used_groups
+	init_overlay_vars
         reset_modulepath
         reset_used_releases
         init_manpath
@@ -2764,7 +2772,7 @@ if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
 
-_init_overlay_vars() {
+init_overlay_vars() {
 	declare -ag OverlayList=( "${PMODULES_ROOT}" )
 	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0")
 	declare -Ag Dir2OverlayMap=()
@@ -2778,7 +2786,6 @@ _init_overlay_vars() {
 			fi
 		done
 	done
-	save_env 'yes'
 }
 
 case ${subcommand} in
@@ -2804,7 +2811,7 @@ if [[ -n ${PMODULES_ENV} ]]; then
 	if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
 		# the Pmodules version changed!
 		declare -g Version="${PMODULES_VERSION}"
-		_init_overlay_vars
+		init_overlay_vars
 		# renamed in version 1.0.0rc10 and type changed from
 		# associative array to normal array
 		if [[ -v UseFlags ]]; then
@@ -2834,6 +2841,7 @@ if [[ -n ${PMODULES_ENV} ]]; then
 	fi
 else
 	pmodules_init
+	g_env_must_be_saved='yes'
 fi
 
 if (( ${#GroupDepths[@]} == 0 )); then
