@@ -1376,14 +1376,20 @@ subcommand_use() {
 			std::info "\t${flag}"
 		done
 
-                local overlay
 		std::info ''
                 std::info "Used overlays:"
-                for overlay in "${OverlayList[@]}"; do
-			local hiding=''
-			[[ "${OverlayDict[${overlay}]}" == "${ol_hiding}" ]] && \
-				hiding=' (hiding)'
-                        std::info "\t${overlay}${hiding}"
+                local ol_dir
+                for ol_dir in "${OverlayList[@]}"; do
+			local txt=''
+			case "${OverlayDict[${ol_dir}]}" in
+				"${ol_hiding}" )
+					txt=' (hiding modules with same name)'
+					;;
+				"${ol_replacing}" )
+					txt=' (replacing groups)'
+					;;
+			esac
+                        std::info "\t${ol_dir}${txt}"
                 done
 
 		std::info ''
