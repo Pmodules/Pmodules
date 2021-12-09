@@ -1468,12 +1468,13 @@ subcommand_use() {
                                 dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                 if [[ -d "${dir}" ]]; then
                                         std::prepend_path MODULEPATH "${dir}"
-					Dir2OverlayMap[${dir}]=${o_dir}
+					Dir2OverlayMap[${dir}]="${ol_dir}"
                                 fi
                         done
 
-                        OverlayDict[${ol_dir}]=${ol_type}
+                        OverlayDict[${ol_dir}]="${ol_type}"
                         OverlayList=( "${ol_dir}" "${OverlayList[@]}" )
+			# FIXME: do we have to export it????
                         export_env OverlayList
                         g_env_must_be_saved='yes'
 	                scan_groups "${OverlayList[@]}"
