@@ -1494,6 +1494,7 @@ subcommand_use() {
 					 "${CMD}" "${subcommand}" \
 					 "illegal group" \
 					 "${arg}"
+			fi
 			std::append_path UsedGroups "$1"
                         local overlay group
                         for overlay in "${OverlayList[@]}"; do
