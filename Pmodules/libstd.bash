@@ -91,29 +91,42 @@ std::append_path () {
 }
 
 std::prepend_path () {
-        local -r P=$1
-        local -r d=$2
+        local -r P="$1"
+	shift 1
+	local new_path="$1"
+	shift 1
+	local dir
 
-        if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
-                if [[ -z ${!P} ]]; then
-                        export "$P=${d}"
-                else
-                        export "$P=${d}:${!P}"
-                fi
+        if [[ -z ${!P} ]]; then
+		for dir in "$@"; do
+			new_path+=":${dir}"
+		done
+                export "$P=${new_path}"
+        else
+		for dir in "$@"; do
+			[[ "${!P}" == @(|*:)${dir}@(|:*) ]] && continue
+			new_path+=":${dir}"
+		done
+		new_path+=":${!P}"
         fi
+        std::upvar "$P" "${new_path}"
 }
 
 std::remove_path() {
         local -r P=$1
-        local -r d=$2
+	shift 1
+        local -ar dirs="$@"
 	local new_path=''
 	local -r _P=( ${!P//:/ } )
-	# loop over all entries in path
-	for entry in "${_P[@]}"; do
-		[[ "${entry}" != "${d}" ]] && new_path+=":${entry}"
+	local dir=''
+	for dir in "${dirs[@]}"; do
+		# loop over all entries in path
+		for entry in "${_P[@]}"; do
+			[[ "${entry}" != "${dir}" ]] && new_path+=":${entry}"
+		done
 	done
 	# remove leading ':'
-	eval ${P}="${new_path:1}"
+	std::upvar "$P" "${new_path:1}"
 }
 
 #
