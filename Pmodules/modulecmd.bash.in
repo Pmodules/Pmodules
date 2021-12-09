@@ -1520,50 +1520,30 @@ subcommand_use() {
 			UsedFlags+=( "${arg/flag=}" )
                         return
                 fi
-                if [[ "${arg}" =~ "overlay=" ]]; then
-                        local overlay="${arg/overlay=}"
-                        use_overlay "${overlay}"
-                        return
-                fi
-
-                # check whether the user wants to add an unused group in
-                # an used overlay.
-                
-                if [[ -z ${GroupDepths[${arg}]} ]]; then
-                        # this scan is required if a new group has been
-                        # create inside an used overlay
-			scan_groups "${overlays}"
-			g_env_must_be_saved='yes'
-                fi
-
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} == 0 )); then
-                        # argument is group with depth 0
-			use_group "${arg}"
-                        return
-                fi
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} > 0 )); then
-                        # argument is a hierarchical group in our root
-			std::die 3 "%s %s: %s -- %s" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal group" \
-                                 "${arg}"
-                fi
 		if get_overlay_info "${arg}"; then
 			use_overlay "${arg}"
 			return 0
 		fi
-
-                # arg must be a directory!
-		if [[ ! -d ${arg} ]]; then
-			std::die 3 "%s %s: %s -- %s" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument: is neither a valid keyword, group nor directory" \
-                                 "${arg}"
+		if [[ -d ${arg} ]]; then
+			local dir=$(cd "${arg}" && pwd -L)
+			${add2path_func} MODULEPATH "${dir}"
+		fi
+                if [[ ! -v GroupDepths[${arg}] ]]; then
+                        # this scan is required if a new group has been
+                        # create inside an used overlay
+			scan_groups "${!OverlayDict[@]}"
+			g_env_must_be_saved='yes'
                 fi
-                ${add2path_func} MODULEPATH "${arg}"
-	}
+                if [[ -n ${GroupDepths[${arg}]} ]]; then
+			use_group "${arg}"
+                        return
+                fi
+
+		std::die 3 "%s %s: %s -- %s" \
+                         "${CMD}" "${subcommand}" \
+                         "invalid keyword, group, overlay or directory" \
+                         "${arg}"
+	} # use ()
 
 	#......................................................................
 	local -a args=()
@@ -1655,7 +1635,6 @@ subcommand_unuse() {
                                          "${CMD}" "${subcommand}" \
                                          "not an used overlay" \
                                          "${ol_name_or_dir%:*}"
-				
 			# make sure first index is '0' (it should, but you never know)
 			OverlayList=( "${OverlayList[@]}" )
 			[[ "${ol_dir}" != "${OverlayList[0]}" ]] && \
@@ -1679,10 +1658,7 @@ subcommand_unuse() {
 			fi
 
                         unset "OverlayDict[${ol_dir}]"
-			local i
-			for i in "${!OverlayList[@]}"; do
-				[[ ${OverlayList[i]} == ${ol_dir} ]] && unset 'OverlayList[i]'
-			done
+			OverlayList=( "${OverlayList[@]:1}")
                         g_env_must_be_saved='yes'
                         export_env OverlayList
                         local dir
@@ -1735,40 +1711,24 @@ subcommand_unuse() {
 			done
                         return
                 fi
-                if [[ ${arg} =~ ^overlay= ]]; then
-                        local overlay="${arg/overlay=}"
-                        unuse_overlay "${overlay}"
-                        return
-                fi
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} == 0 )); then
-                        # argument is group in our root with depth 0
-                        unuse_group "${arg}"
-                        return
-                fi
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} > 0 )); then
-                        # argument is a hierarchical group in our root
-			std::die 3 "%s %s: %s -- %s" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal group" \
-                                 "${arg}"
-                fi
 		if get_overlay_info "${arg}"; then
 			unuse_overlay "${arg}"
 			return 0
 		fi
-
-                # arg must be a directory!
-		if [[ ! -d ${arg} ]]; then
-			std::die 3 "%s %s: %s -- %s" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument" \
-                                 "${arg}"
+		if [[ -d ${arg} ]]; then
+			local dir=$(cd "${arg} && pwd -L")
+			std::remove_path MODULEPATH "${dir}"
+		fi
+                if [[ -n ${GroupDepths[${arg}]} ]]; then
+                        unuse_group "${arg}"
+                        return
                 fi
-                std::remove_path MODULEPATH "${dir}"
 
-        }
+		std::die 3 "%s %s: %s -- %s" \
+                         "${CMD}" "${subcommand}" \
+                         "invalid keyword, group, overlay or directory" \
+                         "${arg}"
+        } # unuse()
 
 	#......................................................................
 	local -a args=()
