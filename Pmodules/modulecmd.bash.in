@@ -1656,6 +1656,14 @@ subcommand_unuse() {
                                          "not an used overlay" \
                                          "${ol_name_or_dir%:*}"
 				
+			# make sure first index is '0' (it should, but you never know)
+			OverlayList=( "${OverlayList[@]}" )
+			[[ "${ol_dir}" != "${OverlayList[0]}" ]] && \
+				std::die 3 "%s %s: %s %s -- %s" \
+					 "${CMD}" "${subcommand}" \
+					 "overlay cannot be removed since" \
+					 "it not on top of the stack" \
+					 "${ol_name_or_dir%:*}"
 			if [[ "${OverlayDict[${ol_dir}]}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
