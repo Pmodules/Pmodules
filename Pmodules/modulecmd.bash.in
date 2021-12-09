@@ -1488,6 +1488,12 @@ subcommand_use() {
 
 		#..............................................................
                 use_group() {
+			if (( ${GroupDepths[${arg}]} > 0 )); then
+				# argument is a hierarchical group in our root
+				std::die 3 "%s %s: %s -- %s" \
+					 "${CMD}" "${subcommand}" \
+					 "illegal group" \
+					 "${arg}"
 			std::append_path UsedGroups "$1"
                         local overlay group
                         for overlay in "${OverlayList[@]}"; do
@@ -1684,6 +1690,14 @@ subcommand_unuse() {
 
 		#..............................................................
                 unuse_group() {
+                        if (( ${GroupDepths[${arg}]} > 0 )); then
+				# argument is a hierarchical group in our root
+				std::die 3 "%s %s: %s -- %s" \
+					 "${CMD}" "${subcommand}" \
+					 "illegal group" \
+					 "${arg}"
+			fi
+
                         local var="PMODULES_LOADED_${arg^^}"
                         if [[ -n "${!var}" ]]; then
                                 std::die 3 "%s %s: %s -- %s" \
