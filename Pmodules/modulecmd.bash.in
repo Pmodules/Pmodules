@@ -1406,17 +1406,13 @@ subcommand_use() {
 	use () {
                 use_overlay() {
 			local ol_name_or_dir="$1"
-			if [[ -n ${LOADEDMODULES} ]]; then
-				if [[  $LOADEDMODULES == *:*  ]] \
-					   || [[ $LOADEDMODULES != Pmodules/* ]]; then
-					std::error "%s %s: %s" \
-						   "${CMD}" "${subcommand}" \
-						   "overlay cannot be added since some modules are already loaded!"
-					std::die 3 "%s %s: %s -- %s" \
-						 "${CMD}" "${subcommand}" \
-						 "overlay failed" \
-						 "${ol_name_or_dir}"
-				fi
+
+			if [[ -n "${LOADEDMODULES}" ]] && \
+				   [[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]]; then
+				std::die 3 "%s %s: %s %s" \
+					   "${CMD}" "${subcommand}" \
+					   "overlay cannot be added since some" \
+					   "modules are already loaded!"
 			fi
 
 			local ol_dir=''
@@ -1616,16 +1612,13 @@ subcommand_unuse() {
 		#..............................................................
                 unuse_overlay() {
 			local ol_name_or_dir="$1"
-			if [[ -n ${LOADEDMODULES} ]]; then
-				if [[  $LOADEDMODULES == *:*  ]] || [[ $LOADEDMODULES != Pmodules/* ]]; then
-					std::error "%s %s: %s" \
-						   "${CMD}" "${subcommand}" \
-						   "overlay cannot be removed since some modules are still loaded!"
-					std::die 3 "%s %s: %s -- %s" \
-						 "${CMD}" "${subcommand}" \
-						 "overlay failed" \
-						 "${ol_name_or_dir}"
-				fi
+
+			if [[ -n "${LOADEDMODULES}" ]] && \
+				   [[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]]; then
+				std::die 3 "%s %s: %s %s" \
+					   "${CMD}" "${subcommand}" \
+					   "overlay cannot be removed since" \
+					   "some modules are still loaded!"
 			fi
 
 			local ol_dir=''
