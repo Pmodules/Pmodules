@@ -1496,16 +1496,14 @@ subcommand_use() {
 					 "${arg}"
 			fi
 			std::append_path UsedGroups "$1"
-                        local overlay group
-                        for overlay in "${OverlayList[@]}"; do
-                                for group in ${UsedGroups//:/ }; do
-                                        local dir="${overlay}/"
-                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
-                                        if [[ -d "${dir}" ]]; then
-                                                std::prepend_path MODULEPATH "${dir}"
-						Dir2OverlayMap[${dir}]=${overlay}
-                                        fi
-                                done
+                        local ol_dir
+                        for ol_dir in "${OverlayList[@]}"; do
+                                local dir="${ol_dir}/$1/${PMODULES_MODULEFILES_DIR}"
+                                [[ -d "${dir}" ]] || continue
+
+                                std::prepend_path MODULEPATH "${dir}"
+				Dir2OverlayMap[${dir}]=${ol_dir}
+				[[ "${OverlayDict[${ol_dir}]}" == "${ol_replacing}" ]] && break
                         done
                 }
                 
