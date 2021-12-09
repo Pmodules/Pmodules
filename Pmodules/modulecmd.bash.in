@@ -327,7 +327,7 @@ subcommand_load() {
 	local prefix=''
 	local m=''
 
-	#
+	#......................................................................
 	# Test whether a given module is available.
 	# The passed module-name can be
 	#
@@ -380,7 +380,7 @@ subcommand_load() {
 		get_release_stage rel_stage "${current_modulefile}" "${UsedReleaseStages}"
 	}
 
-	#
+	#......................................................................
 	# output load 'hints'
 	#
 	# Note:
@@ -410,10 +410,12 @@ subcommand_load() {
 		std::upvar $1 "${output}"
 	}
 
+	#......................................................................
         module_is_loaded() {
 	        [[ :${LOADEDMODULES}: =~ :$1: ]]
         }
 
+	#......................................................................
 	load_dependencies() {
 		local -r fname="$1"
 		while read dep; do
@@ -424,7 +426,7 @@ subcommand_load() {
 		done < "${fname}"
 	}
 
-	#
+	#......................................................................
 	# Check whether argument is a group.
 	#
 	# In the following function we test whether the group exist in
@@ -467,6 +469,7 @@ subcommand_load() {
 		g_env_must_be_saved='yes'
 	}
 
+	#......................................................................
 	local args=()
 	local opts=()
         local overlay
@@ -744,7 +747,7 @@ subcommand_unload() {
 		export_env 'PMODULES_HOME'
 	fi
 	g_env_must_be_saved='yes'
-}
+} # subcommand_unload
 
 ##############################################################################
 #
@@ -850,12 +853,12 @@ subcommand_show() {
 	done
 }
 
-#
+###############################################################################
 # Find all modules in a given modulepath matching a specific string.
 # The search can be restricted to certain release stages.
 #
 # return list like
-#	modulename_1 rel_stage_1 modulefile_1 modulename_2 rel_stage_2 modulefile_1 ...
+#	modulename_1 rel_stage_1 modulefile_1 ...
 #
 get_available_modules() {
         local var="$1"
@@ -930,7 +933,7 @@ get_available_modules() {
 	        }
         done
 	std::upvar ${var} "${mods[@]}"
-}
+} # get_available_modules()
 
 #
 # find module(file) to load. Input arguments are
@@ -1014,7 +1017,7 @@ find_module() {
                 fi
         done
         return 1
-}
+} # find_module()
 
 ##############################################################################
 #
@@ -1064,6 +1067,7 @@ subcommand_avail() {
 	# get number of columns of terminal
 	cols=$(tput cols)
 
+	#......................................................................
 	output_header() {
 		local caption="$1"
 		let i=($cols-${#caption})/2-2
@@ -1073,6 +1077,7 @@ subcommand_avail() {
 		printf -- "\n" 1>&2
 	}
 
+	#......................................................................
 	terse_output() {
 		output_header "$1"
 		local -i i=0
@@ -1092,13 +1097,14 @@ subcommand_avail() {
 		std::info ""
 	}
 
+	#......................................................................
 	machine_output() {
 		for (( i=0; i<${#mods[@]}; i+=3 )); do
 			printf "%-20s\t%s\n" "${mods[i]}" "${mods[i+1]}" 1>&2
 		done
 	}
 
-	#
+	#......................................................................
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
 		output_header "$1"
@@ -1118,6 +1124,7 @@ subcommand_avail() {
 		std::info ""
 	}
 
+	#......................................................................
 	human_readable_output() {
 		output_header "$1"
 
@@ -1163,6 +1170,8 @@ subcommand_avail() {
 		done
 		printf -- "\n\n" 1>&2
 	}
+
+	#......................................................................
 	local pattern=()
 	local output_function='human_readable_output'
 	local opt_use_rel_stages="${UsedReleaseStages}"
@@ -1244,7 +1253,7 @@ subcommand_avail() {
 			${output_function} "${group}"
 		done
 	done
-}
+} # subcommand_avail()
 
 ##############################################################################
 #
@@ -1330,10 +1339,12 @@ subcommand_use() {
 	unset IFS
         local add2path_func='std::append_path'
 
+	#......................................................................
         group_is_used() {
 	        [[ :${UsedGroups}: =~ :$1: ]]
         }
 
+	#......................................................................
 	print_info() {
 		local f
 		local r
@@ -1391,6 +1402,7 @@ subcommand_use() {
 		std::info ""
 	}
 
+	#......................................................................
 	use () {
                 use_overlay() {
 			local ol_name_or_dir="$1"
@@ -1471,6 +1483,7 @@ subcommand_use() {
 	                scan_groups "${OverlayList[@]}"
                 }
 
+		#..............................................................
                 use_group() {
 			std::append_path UsedGroups "$1"
                         local overlay group
@@ -1486,6 +1499,7 @@ subcommand_use() {
                         done
                 }
                 
+		#..............................................................
 		local arg=$1
 
 		if is_release_stage "${arg}"; then
@@ -1543,6 +1557,7 @@ subcommand_use() {
                 ${add2path_func} MODULEPATH "${arg}"
 	}
 
+	#......................................................................
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
@@ -1595,7 +1610,10 @@ subcommand_unuse() {
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	unset IFS
+
+	#......................................................................
         unuse() {
+		#..............................................................
                 unuse_overlay() {
 			local ol_name_or_dir="$1"
 			if [[ -n ${LOADEDMODULES} ]]; then
@@ -1664,6 +1682,7 @@ subcommand_unuse() {
                         done
                 }
 
+		#..............................................................
                 unuse_group() {
                         local var="PMODULES_LOADED_${arg^^}"
                         if [[ -n "${!var}" ]]; then
@@ -1680,6 +1699,7 @@ subcommand_unuse() {
                         done
                 }
 
+		#..............................................................
                 local arg=$1
 
                 if is_release_stage "${arg}"; then
@@ -1731,6 +1751,7 @@ subcommand_unuse() {
 
         }
 
+	#......................................................................
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
