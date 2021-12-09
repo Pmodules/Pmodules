@@ -1664,19 +1664,17 @@ subcommand_unuse() {
 					 "overlay cannot be removed since" \
 					 "it not on top of the stack" \
 					 "${ol_name_or_dir%:*}"
+
 			if [[ "${OverlayDict[${ol_dir}]}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
 				for group in ${UsedGroups//:/ }; do
-					# first test whether this group is in the to be added overlay
-                                        local dir="${ol_dir}/"
-                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+					# is this group in the to be removed overlay?
+                                        local dir="${ol_dir}/${group}/${PMODULES_MODULEFILES_DIR}"
                                         [[ -d "${dir}" ]] || continue  # no
 					
-					for dir in "${OverlayList[@]}"; do
-						dir+="/${group}/${PMODULES_MODULEFILES_DIR}"
-						std::remove_path MODULEPATH "${dir}"
-					done
+					dir="/${group}/${PMODULES_MODULEFILES_DIR}"
+					std::prepend_path MODULEPATH "${OverlayList[@]/%/${dir}}"
 				done
 			fi
 
