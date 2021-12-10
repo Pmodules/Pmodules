@@ -612,8 +612,8 @@ subcommand_load() {
                         continue
 		fi
 
-                local prefix=$("${modulecmd}" 'bash' 'show' "${current_modulefile}" 2>&1 | \
-                                       awk '/_PREFIX |_HOME / {print $3; exit}')
+		local prefix=''
+		get_module_prefix prefix "${current_modulefile}"
                 if [[ -n ${prefix} ]]; then
                         test -r "${prefix}/.info" && cat "$_" 1>&2
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
