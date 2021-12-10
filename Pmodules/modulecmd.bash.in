@@ -900,7 +900,7 @@ get_available_modules() {
 					# - new version and not hidden by overlay
 					local name="${mod%/*}"
 					if [[ -z "${modulenames[${name}]}" ]]; then
-						if [[ "${OverlayDict[$overlay]}" == "${ol_hiding}" ]]; then
+						if [[ "${OverlayDict[$overlay]%%:*}" == "${ol_hiding}" ]]; then
 							modulenames[${name}]="${overlay}"
 						else
 							modulenames[${name}]='0'
@@ -1391,7 +1391,7 @@ subcommand_use() {
                 local ol_dir
                 for ol_dir in "${OverlayList[@]}"; do
 			local txt=''
-			case "${OverlayDict[${ol_dir}]}" in
+			case "${OverlayDict[${ol_dir}]%%:*}" in
 				"${ol_hiding}" )
 					txt=' (hiding modules with same name)'
 					;;
@@ -1431,13 +1431,14 @@ subcommand_use() {
 					   "modules are already loaded!"
 			fi
 
-			local ol_dir=''
 			local ol_type=''
-
+			local ol_dir=''
+			local ol_prefix=''
 			get_overlay_info \
 				"${ol_name_or_dir}" \
 				ol_type \
 				ol_dir \
+				ol_prefix \
 				|| std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "is not an overlay directory" \
@@ -1488,7 +1489,7 @@ subcommand_use() {
                                 fi
                         done
 
-                        OverlayDict[${ol_dir}]="${ol_type}"
+                        OverlayDict[${ol_dir}]="${ol_type}:${ol_prefix}"
                         OverlayList=( "${ol_dir}" "${OverlayList[@]}" )
 			# FIXME: do we have to export it????
                         export_env OverlayList
@@ -1513,7 +1514,7 @@ subcommand_use() {
 
                                 std::prepend_path MODULEPATH "${dir}"
 				Dir2OverlayMap[${dir}]=${ol_dir}
-				[[ "${OverlayDict[${ol_dir}]}" == "${ol_replacing}" ]] && break
+				[[ "${OverlayDict[${ol_dir}]%%:*}" == "${ol_replacing}" ]] && break
                         done
                 }
                 
@@ -1654,7 +1655,7 @@ subcommand_unuse() {
 					 "it not on top of the stack" \
 					 "${ol_name_or_dir%:*}"
 
-			if [[ "${OverlayDict[${ol_dir}]}" == "${ol_replacing}" ]]; then
+			if [[ "${OverlayDict[${ol_dir}]%%:*}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
 				for group in ${UsedGroups//:/ }; do
@@ -1668,7 +1669,7 @@ subcommand_unuse() {
 			fi
 
                         unset "OverlayDict[${ol_dir}]"
-			OverlayList=( "${OverlayList[@]:1}")
+			OverlayList=( "${OverlayList[@]}")
                         g_env_must_be_saved='yes'
                         export_env OverlayList
                         local dir
@@ -1881,7 +1882,7 @@ pmodules_init() {
 	declare -Ag GroupDepths='()'
 	declare -ag UsedFlags=()
 	declare -g  Version="${PMODULES_VERSION}"
-        declare -Ag OverlayDict=([${PMODULES_ROOT}]="0")
+        declare -Ag OverlayDict=([${PMODULES_ROOT}]="0:${PMODULES_ROOT}")
         declare -ag OverlayList=( "${PMODULES_ROOT}" )
 
         reset_used_groups
@@ -2784,7 +2785,7 @@ fi
 
 init_overlay_vars() {
 	declare -ag OverlayList=( "${PMODULES_ROOT}" )
-	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0")
+	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0:${PMODULES_ROOT}")
 	declare -Ag Dir2OverlayMap=()
 	local overlay
 	for overlay in "${!OverlayDict[@]}"; do
