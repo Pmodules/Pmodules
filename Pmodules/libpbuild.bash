@@ -837,7 +837,7 @@ pbuild::make_all() {
 				"Installing documentation to ${docdir}"
 			install -m 0755 -d \
 				"${docdir}"
-			install -m0444 \
+			install -m0644 \
 				"${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
 				"${docdir}"
 			return 0
@@ -859,15 +859,15 @@ pbuild::make_all() {
 
 			local -r target_dir="${PREFIX}/share/$GROUP/${module_name}"
 			mkdir -p "${target_dir}"
-			install -m0444 \
+			install -m0644 \
 				"${BUILD_SCRIPT}" \
 				"${target_dir}"
-			install -m0444 \
+			install -m0644 \
 				"${modulefile}" \
 				"${target_dir}"
 			#install -m 0755 \
 			#	-d "${target_dir}/files"
-			#install -m0444 \
+			#install -m0644 \
 				#        "${variants_file}" \
 				#        "${target_dir}/files"
 
@@ -960,7 +960,7 @@ pbuild::make_all() {
 			"${module_name}/${module_version}:" \
 			"installing modulefile '${modulefile_name}' ..."
 		mkdir -p "${modulefile_dir}"
-		install -m 0444 "${src}" "${modulefile_name}"
+		install -m 0644 "${src}" "${modulefile_name}"
 	}
 
 	install_release_file() {
