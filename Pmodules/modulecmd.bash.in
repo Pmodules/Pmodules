@@ -213,6 +213,14 @@ is_modulefile() {
 	[[ "${shebang:0:8}" == '#%Module' ]] || [[ "${shebang:0:9}" == '#%Pmodule' ]]
 }
 
+get_module_prefix() {
+	local "$1"
+	local modulefile="$2"
+	local -r _prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
+				   ${awk} '/_PREFIX |_HOME / {print $3; exit}')
+	std::upvar $1 "${_prefix}"
+}
+
 subcommand_generic0() {
 	local -r subcommand="$1"
 	shift
@@ -2266,14 +2274,6 @@ subcommand_search() {
                 done < <("${sort}" --version-sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
                                  ${awk} "${with_modules}")
         }
-
-	get_module_prefix() {
-		local "$1"
-		local modulefile="$2"
-		local -r _prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
-					  ${awk} '/_PREFIX |_HOME / {print $3; exit}')
-		std::upvar $1 "${_prefix}"
-	}
 
 	#.....................................................................
 	#
