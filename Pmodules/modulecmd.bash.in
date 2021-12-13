@@ -1339,9 +1339,11 @@ get_overlay_info(){
 				[[ -n "$2" ]] && std::upvar "$2" "${_type}"
 				[[ -n "$3" ]] && std::upvar "$3" "${toks[1]}"
 				if [[ -n "$4" ]]; then
-					std::upvar "$4" "${toks[2]}"
-				else
-					std::upvar "$4" "${toks[1]}"
+					if [[ -n "${toks[2]}" ]]; then
+						std::upvar "$4" "${toks[2]}"
+					else
+						std::upvar "$4" "${toks[1]}"
+					fi
 				fi
 				return 0
 			fi
