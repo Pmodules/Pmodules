@@ -1679,7 +1679,7 @@ subcommand_unuse() {
 			fi
 
                         unset "OverlayDict[${ol_dir}]"
-			OverlayList=( "${OverlayList[@]}")
+			OverlayList=( "${OverlayList[@]:1}")
                         g_env_must_be_saved='yes'
                         export_env OverlayList
                         local dir
