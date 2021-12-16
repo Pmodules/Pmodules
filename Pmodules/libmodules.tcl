@@ -78,8 +78,7 @@ proc module-addgroup { group } {
 	        set overlays_to_add {}
 		foreach overlay $::OverlayList {
 			lappend overlays_to_add $overlay
-			debug $overlay
-			set ol_type [lindex [split $OverlayDict($overlay) ":"] 0]
+			set ol_type [lindex [split $::OverlayDict($overlay) ":"] 0]
 			if { [string compare $ol_type $::ol_replacing] == 0 } {
 				break
 			}
