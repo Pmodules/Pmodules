@@ -344,6 +344,7 @@ proc _is_in_overlay { } {
 }
 
 proc _pmodules_init_global_vars { } {
+	debug "_pmodules_init_global_vars() called"
 	global	group
 	global  GROUP
 	global  name
@@ -358,22 +359,25 @@ proc _pmodules_init_global_vars { } {
 	global	variant
 	global	PREFIX		# prefix of package
 
-	set	modulefile_components	[file split $::ModulesCurrentModulefile]
+	set	modulefile_splitted	[file split $::ModulesCurrentModulefile]
 
-	set     overlay_components [_find_overlay ${modulefile_components}]
-	set	rel_modulefile	[lrange $modulefile_components [llength $overlay_components] end]
+	set     ol_dir_splitted [_find_overlay ${modulefile_splitted}]
+	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_dir_splitted] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	GROUP		"${group}"
-	set	name		[lindex $modulefile_components end-1]
+	set	name		[lindex $modulefile_splitted end-1]
 	set	P		"${name}"
-	set	version		[lindex $modulefile_components end]
+	set	version		[lindex $modulefile_splitted end]
 	set 	V		"${version}"
 	lassign [split $V -]	V_PKG tmp
 	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 	set	variant 	[lrange $rel_modulefile 2 end]
-	set	prefix		"$overlay_components $group [lreverse_n $variant 2]"
+	set key [file join {*}$ol_dir_splitted]
+	set install_prefix [file split [lindex [split $::OverlayDict($key) ":"] 1]]
+	set	prefix		"$install_prefix $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
+	debug "PREFIX=$PREFIX"
 	debug "group of module $name: $group"
 }
 
