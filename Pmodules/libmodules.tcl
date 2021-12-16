@@ -319,19 +319,18 @@ proc ModulesHelp { } {
 #
 proc _find_overlay { modulefile_components } {
         debug "_find_overlay()"
-        foreach overlay $::OverlayList  {
-                debug "$overlay"
-                if { [string range $overlay end end] == "/" } {
-                        set overlay [string range $overlay 0 end-1]
+        foreach ol_dir $::OverlayList  {
+                debug "$ol_dir"
+                if { [string range $ol_dir end end] == "/" } {
+                        set ol_dir [string range $ol_dir 0 end-1]
                 }
-                set	overlay_components	[file split $overlay]
-                set	overlay_num_components	[llength $overlay_components]
-                set	modulefile_root	[file join \
-                                             {*}[lrange \
-                                                     $modulefile_components \
-                                                     0 [expr $overlay_num_components - 1]]]
-                if { [string compare $overlay $modulefile_root] == 0 } {
-                        return $overlay_components
+                set ol_dir_splitted [file split $ol_dir]
+                set modulefile_root [file join \
+					 {*}[lrange \
+						 $modulefile_components \
+						 0 [expr [llength $ol_dir_splitted] - 1]]]
+                if { [string compare $ol_dir $modulefile_root] == 0 } {
+                        return $ol_dir_splitted
                 }
         }
         debug "not found"
