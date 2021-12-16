@@ -118,7 +118,8 @@ trap '_exit' EXIT
 
 get_overlay_of_moduledir() {
 	local "$1"
-	local -r moduledir=$2
+	local moduledir="${2//+(\/)/\/}"  # replace multpile '/' with one
+	moduledir="${moduledir/%\/}"      # remove trailing slash if exist
 
 	if [[ ! -v Dir2OverlayMap[${moduledir}] ]]; then
 		for overlay in "${OverlayList[@]}" 'other'; do
@@ -185,8 +186,10 @@ is_release_stage() {
 find_overlay () {
         local "$1"
         local "$2"
-        local -r path=$3
-        local overlay=${Dir2OverlayMap[${path}]}
+	local path="${3//+(\/)/\/}"	# replace multpile '/' with one
+	path="${path/%\/}"		# remove trailing slash if exist
+
+        local overlay="${Dir2OverlayMap[${path}]}"
 	get_overlay_of_moduledir overlay "${path}"
         std::upvar $1 "${overlay}"
 
