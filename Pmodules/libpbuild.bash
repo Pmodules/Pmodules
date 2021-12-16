@@ -764,12 +764,12 @@ pbuild::make_all() {
 		fi
 
 		modulefile_dir=$(join_by '/' \
-					 "${overlay_dir}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+					 "${ol_dir}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
 					 "${names[@]}" \
 					 "${module_name}")
 		modulefile_name="${modulefile_dir}/${module_version}"
 		
-		PREFIX="${overlay_dir}/${GROUP}/${module_name}/${module_version}"
+		PREFIX="${ol_install_dir}/${GROUP}/${module_name}/${module_version}"
 		local -i i=0
 		for ((i=${#names[@]}-1; i >= 0; i--)); do
 			PREFIX+="/${names[i]}"
@@ -1479,7 +1479,7 @@ pbuild.bootstrap() {
 
 	MODULECMD=$(which true)
 	GROUP='Tools'
-	PREFIX="${overlay_dir}/${GROUP}/Pmodules/${PMODULES_VERSION}"
+	PREFIX="${ol_dir}/${GROUP}/Pmodules/${PMODULES_VERSION}"
 
 	C_INCLUDE_PATH="${PREFIX}/include"
 	CPLUS_INCLUDE_PATH="${PREFIX}/include"
