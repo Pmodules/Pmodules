@@ -910,16 +910,17 @@ get_available_modules() {
 					# - in same overlay as first found
 					# - new version and not hidden by overlay
 					local name="${mod%/*}"
-					if [[ -z "${modulenames[${name}]}" ]]; then
+					local key="${dir##/${PMODULES_MODULEFILES_DIR}}${name}"
+					if [[ -z "${modulenames[${key}]}" ]]; then
 						if [[ "${OverlayDict[$overlay]%%:*}" == "${ol_hiding}" ]]; then
-							modulenames[${name}]="${overlay}"
+							modulenames[${key}]="${overlay}"
 						else
-							modulenames[${name}]='0'
+							modulenames[${key}]='0'
 						fi
 						add='yes'
-					elif [[ "${modulenames[${name}]}" == "${overlay}" ]]; then
+					elif [[ "${modulenames[${key}]}" == "${overlay}" ]]; then
 						add='yes'
-					elif [[ "${modulenames[${name}]}" == '0'  ]] \
+					elif [[ "${modulenames[${key}]}" == '0'  ]] \
 						     && [[ -z ${dict[${mod}]} ]]; then
 						add='yes'
 					fi
