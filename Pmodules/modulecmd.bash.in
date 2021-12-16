@@ -100,6 +100,7 @@ save_env() {
         vars+=( ReleaseStages )
 	vars+=( GroupDepths )
         vars+=( OverlayList )
+	vars+=( OverlayNames )
         vars+=( OverlayDict Dir2OverlayMap)
 
 	local s=$(typeset -p ${vars[@]})
@@ -1343,19 +1344,45 @@ subcommand_use() {
 
 		std::info ''
                 std::info "Used overlays:"
+
                 local ol_dir
                 for ol_dir in "${OverlayList[@]}"; do
 			local txt=''
 			case "${OverlayDict[${ol_dir}]%%:*}" in
 				"${ol_hiding}" )
-					txt=' (hiding modules with same name)'
+					txt='(hiding modules with same name)'
 					;;
 				"${ol_replacing}" )
-					txt=' (replacing groups)'
+					txt='(replacing groups)'
 					;;
 			esac
-                        std::info "\t${ol_dir}${txt}"
+			local ol_name=${OverlayNames[$ol_dir]}
+                        std::info "\t${ol_name}: ${ol_dir} ${txt}"
                 done
+
+		std::info ''
+		std::info "Available overlays:"
+		local overlays
+		get_available_overlays overlays
+		local -- ol_name ol_type ol_install_dir
+		local -- ol
+		for ol in "${overlays[@]}"; do
+			local -a toks=( ${ol} )
+			ol_name="${toks[0]}"
+			ol_type="${toks[1]}"
+			ol_dir="${toks[2]}"
+			ol_install_dir="${toks[3]}"
+			local txt=''
+			case "${ol_type}" in
+				"${ol_hiding}" )
+					txt='(hiding modules with same name)'
+					;;
+				"${ol_replacing}" )
+					txt='()replacing groups)'
+					;;
+			esac
+			std::info "\t${ol_name}: ${ol_dir} ${txt}"
+		done
 
 		std::info ''
 		std::info "Additonal directories in MODULEPATH:"
@@ -1386,11 +1413,13 @@ subcommand_use() {
 					   "modules are already loaded!"
 			fi
 
+			local ol_name=''
 			local ol_type=''
 			local ol_dir=''
 			local ol_prefix=''
 			get_overlay_info \
 				"${ol_name_or_dir}" \
+				ol_name \
 				ol_type \
 				ol_dir \
 				ol_prefix \
@@ -1446,6 +1475,7 @@ subcommand_use() {
 
                         OverlayDict[${ol_dir}]="${ol_type}:${ol_prefix}"
                         OverlayList=( "${ol_dir}" "${OverlayList[@]}" )
+                        OverlayNames[${ol_dir}]="${ol_name}"
 			# FIXME: do we have to export it????
                         export_env OverlayList
                         g_env_must_be_saved='yes'
@@ -1579,11 +1609,13 @@ subcommand_unuse() {
 					   "some modules are still loaded!"
 			fi
 
-			local ol_dir=''
+			local ol_name=''
 			local ol_type=''
+			local ol_dir=''
 
 			get_overlay_info \
 				"${ol_name_or_dir}" \
+				ol_name \
 				ol_type \
 				ol_dir \
 				|| std::die 3 "%s %s: %s -- %s" \
@@ -1625,6 +1657,7 @@ subcommand_unuse() {
 
                         unset "OverlayDict[${ol_dir}]"
 			OverlayList=( "${OverlayList[@]:1}")
+			unset OverlayNames[${ol_dir}]
                         g_env_must_be_saved='yes'
                         export_env OverlayList
                         local dir
@@ -1837,8 +1870,6 @@ pmodules_init() {
 	declare -Ag GroupDepths='()'
 	declare -ag UsedFlags=()
 	declare -g  Version="${PMODULES_VERSION}"
-        declare -Ag OverlayDict=([${PMODULES_ROOT}]="0:${PMODULES_ROOT}")
-        declare -ag OverlayList=( "${PMODULES_ROOT}" )
 
         reset_used_groups
 	init_overlay_vars
@@ -2732,6 +2763,7 @@ fi
 
 init_overlay_vars() {
 	declare -ag OverlayList=( "${PMODULES_ROOT}" )
+	declare -Ag OverlayNames=( [${PMODULES_ROOT}]='base' )
 	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0:${PMODULES_ROOT}")
 	declare -Ag Dir2OverlayMap=()
 	local overlay
