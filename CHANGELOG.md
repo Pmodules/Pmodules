@@ -65,20 +65,28 @@
 
 ## Version 1.0.0rc7
 
-* build-system
-  * do not try to build deprecated modules if not forced
-  * support for installing versioned modulefiles (install `modulefile-X[.Y[.Z]]` in favour of `modulefile` if exist)
-  * Support of run-time dependencies which are required but must not be loaded
-  * installation of fallback shared libraries fixed.
-  * bootstrap/build script reviewed, `--config` option removed, help for all  
-    sub-commands added
-  * bugfixes
-* modulecmd
-  * add options to `module search` to show dependencies
-  * hardcoded path in `profile.csh`fixed
-  * bugfixes
-  * Update to BASH 5.1
-  * Update to Tcl 8.6.10
+* **modulecmd**
+  * *User visible changes*
+    * add options to `module search` to show dependencies
+  * *Internal changes and fixes*
+    * hardcoded path in `profile.csh`fixed
+    * bugfixes
+    * Update to BASH 5.1
+    * Update to Tcl 8.6.10
+* **build-system**
+  * *User visible changes*
+    * building deprecated modules must be forced
+    * support for versioned modulefiles in build-blocks: if a modulefile 
+      `modulefile-X[.Y[.Z]]` exists in the build-block it will be taken
+      in favour of `modulefile`-
+    * bootstrap/build script reviewed, `--config` option removed, help for all  
+      sub-commands added
+  * *Internal changes and fixes*
+    * installation of fallback shared libraries fixed.
+    * bugfixes
+* **modmanage**
+  * *User visible changes*
+    * Support of run-time dependencies which are required but must not be loaded
 
 ## Version 1.0.0rc6
 
