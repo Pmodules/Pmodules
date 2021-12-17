@@ -1,34 +1,84 @@
 # Changelog of Pmodules
 
-## Unreleased
+## Version 1.0.0rc10
+* **modulecmd**
+  * *User visible changes*
+    * The term "releases" has been replaced with "release stages". 
+      The visible changes are the change of the option 
+      `--all-releases` to `--all-release-stages`, adapted
+      help text and configuration files.
+    * New configuration file `Pmodules.conf` to configure the 
+      default visible group, the default visible release stages
+      and the defined releases stages. These information has
+      been stripped from the profiles `profiles.{bash,csh,zsh}`.
+    * module are now sorted numerically in output of
+      `module avail`.
+    * option `-?` added as alias for `--help`.
+    * new option `--glob` for `module search`. This enables 
+      shell glob-pattern searches.
+  * *Internal changes and fixes*
+    * bugfix in removing temp-file in exit function.
+    * terse output of `module avail` fixed.
+    * broken help for sub-commands fixed.
+    * missing group in output of `module avail` fixed.
+    * broken output of `module search --print-modulefiles` fixed.
+    * argument handling fixed after `--`.
+    * cleanup option/argument handling.
+* **build-system**
+  * *User visible changes*
+    * none
+  * *Internal changes and fixes*
+    * bugfixes in the functions `pbuild::version_{le,gt}
+    * bugfix in recognising newer CentOS versions
+* **modmanage**
+  * *User visible changes*
+    * complete re-implementation of (broken) modmanage
 
-**Added features:**
+## Version 1.0.0rc9
+* **modulecmd**
+  * *User visible changes*
+    * a Pmodules module must be the first module loaded
+    * new option `--group|-g GROUP` to list available modules in `GROUP`
+    * align columns in output of `module avail`
+    * remove path to Pmodules bin directory while unloading a Pmodules module
+    * exclude a Pmodules module from being purged 
+    * follow sym-links in `ROOT/GROUP/modulefiles`
+  * *Internal changes and fixes*
+    * use default field separator by unsetting `IFS`
+    * use read-only variables for all used commands with full path  
+    * better tmp-file creation/deletion
+    * more bugfixes
+* **build-system**
+  * *User visible changes*
+    * group hierarchy can now be defined in a config file
+  * *Internal changes and fixes*
+    * more bugfixes
 
-**Changed:**
+## Version 1.0.0rc8
+* **modulecmd**
+  * *User visible changes*
+    * Pmodules can now be loaded as module
+    * Since `${PMODULES_HOME}/bin` has been removed from `PATH` in `1.0.0rc7` a Pmodules
+      module must be loaded to make the build system available.
+  * *Internal changes and fixes*
+    * use system binaries in `/bin:/usr/bin` if possible
 
-**Deprecated:**
+## Version 1.0.0rc7
 
-**Removed:**
-
-**Fixed bugs:**
-
-## Version 1.0.0rc7 (not yet released)
-
-**Added features:**
-
-- Support of run-time dependencies which are required but must not be loaded
-
-**Changed:**
-
-- Update to BASH 5.0
-- Update to Tcl 8.6.10
-- bootstrap/build script reviewed, `--config` option removed, help for all  
-  sub-commands added
-  
-
-**Fixed bugs:
-
-- installation of fallback shared libraries
+* build-system
+  * do not try to build deprecated modules if not forced
+  * support for installing versioned modulefiles (install `modulefile-X[.Y[.Z]]` in favour of `modulefile` if exist)
+  * Support of run-time dependencies which are required but must not be loaded
+  * installation of fallback shared libraries fixed.
+  * bootstrap/build script reviewed, `--config` option removed, help for all  
+    sub-commands added
+  * bugfixes
+* modulecmd
+  * add options to `module search` to show dependencies
+  * hardcoded path in `profile.csh`fixed
+  * bugfixes
+  * Update to BASH 5.1
+  * Update to Tcl 8.6.10
 
 ## Version 1.0.0rc6
 
