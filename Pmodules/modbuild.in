@@ -25,6 +25,7 @@ fi
 PATH+='/usr/bin:/bin:/usr/sbin:/sbin'
 PATH+=":${mydir}"
 PATH+=":${mydir}/../lib:${mydir}/../config"
+PATH+=":${PMODULES_DIR}/libexec"
 
 source libstd.bash    || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
@@ -41,6 +42,9 @@ source libpmodules.bash    || \
 
 # save arguments, (still) required for building dependencies
 declare -r ARGS="$@"
+
+shopt -s nocaseglob
+shopt -s extglob
 
 ##############################################################################
 #
@@ -297,53 +301,66 @@ parse_args() {
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
 }
 
-shopt -s nocaseglob
-find_variants_files(){
-        shopt -q nullglob || :
-        local -i nullglob_set=$?
-        shopt -s nullglob
-        local files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"\.${opt_system} )
-        files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
-        local f
-	for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
-		[[ -e "${f}.${opt_system}" ]] \
-                        || [[ -e "${f}.$(uname -s)" ]] \
-                        || files+=( "$f" )
-	done
-        (( nullglob_set == 1 )) && shopt -u nullglob
-	std::upvar "$1" "${files[@]}"
+#
+# bash brace expansion of given args. Input args like:
+#
+#   "text" "gcc/{9.3.0,10.3.0}" "openmpi/{4.0.5,4.1.0}"
+#
+# will be expanded to the following four lines:
+#
+#   "text gcc/9.3.0 openmpi/4.0.5"
+#   "text gcc/9.3.0 openmpi/4.1.0"
+#   "text gcc/10.3.0 openmpi/4.0.5"
+#   "text gcc/10.3.0 openmpi/4.1.0"
+#
+brace_expand_with_prefix(){
+	local text="$1"
+	shift
+	local to_expand=( "${@}" )
+	if (( ${#to_expand[@]} == 0 )); then
+		echo ${text}
+	else
+		local list
+		eval list=( ${to_expand[0]} )
+		local s
+		for s in ${list[*]}; do
+			brace_expand_with_prefix "${text} ${s}" "${to_expand[@]:1}"
+		done;
+	fi;
 }
 
-shopt -s extglob
-expand_variants_file(){
-	expand_deps(){
-		local text="$1"
-                shift
-		local deps=( "${@}" )
-                echo "${deps[@]}"
-                if (( ${#deps[@]} == 0 )); then
-                        echo ${text}
-		else
-                        local list
-		        eval list=( ${deps[0]} )
-			for dep in ${list[*]}; do
-				expand_deps "${text} ${dep}" "${deps[@]:1}"
-			done
-		fi
+brace_expand(){
+	brace_expand_with_prefix "" "$@"
+}
+
+build_modules_legacy() {
+	find_variants_files(){
+		shopt -q nullglob || :
+		local -i nullglob_set=$?
+		shopt -s nullglob
+		local files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"\.${opt_system} )
+		files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
+		local f
+		for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
+			[[ -e "${f}.${opt_system}" ]] \
+				|| [[ -e "${f}.$(uname -s)" ]] \
+				|| files+=( "$f" )
+		done
+		(( nullglob_set == 1 )) && shopt -u nullglob
+		std::upvar "$1" "${files[@]}"
 	}
 
-	local -r input="$1"
-	while read -a toks; do
-		# skip empty and comment lines
-		[[ -z ${toks} ]] && continue
-		[[ ${toke:0:1} == '#' ]] && continue
-                # ignore first (module/version) and second (release) token
-		deps=( ${toks[*]:2} )
-		expand_deps "${toks[0]} ${toks[1]}" "${deps[@]}"
-	done < "${input}"
-}
+	expand_variants_file(){
+		local -r input="$1"
+		while read -a toks; do
+			# skip empty and comment lines
+			[[ -z ${toks} ]] && continue
+			[[ ${toke:0:1} == '#' ]] && continue
+			local -a deps=( ${toks[*]:2} )
+			brace_expand_with_prefix "${toks[0]} ${toks[1]}" "${deps[@]}"
+		done < "${input}"
+	}
 
-build_modules() {
         local name="$1"
         local version="$2"
         local exact_match='no'
@@ -369,18 +386,11 @@ build_modules() {
 	done
 
         local variants=()
-        local variants_files=()
         for f in "${files[@]}"; do
                 local line=''
                 while read line; do
                         variants+=( "${line}" )
-                        variants_files+=( "$f" )
                 done < <(expand_variants_file "${f}" | awk "${pattern}")
-                # here we should add a check, whether the version of the
-                # found variants are in the right variants files. Example:
-                # a variant for hdf5/1.10.4 is not allowed in a variants file
-                # for version 1.8. For this we need the mapping of a variant
-                # to the variants file in array 'variants_files'
         done
         if (( ${#variants[@]} == 0 )); then
 		std::info "%s " \
@@ -409,6 +419,70 @@ build_modules() {
         done
 }
 
+build_modules_yaml(){
+	local variants_file="${BUILDBLOCK_DIR}/files/"
+	variants_file+="${BNAME_VARIANTS}.${opt_system}.yaml"
+
+	yaml_get_versions(){
+		yq e "with_entries(select(.key | test(\"$1\"))) | keys" \
+		   "${variants_file}"|cut -b3-
+	}
+	yaml_get_num_variants(){
+		yq e ".[\"$1\"].variants | length" \
+		   "${variants_file}"
+	}
+	yaml_get_dependencies(){
+		yq e ".[\"$1\"].variants[$2].dependencies[]" \
+		   "${variants_file}"
+	}
+
+	yaml_get_rel_stage(){
+		yq e ".[\"$1\"].variants[$2].relstage" \
+		   "${variants_file}"
+	}
+	
+        local name="$1"
+        local version="$2"
+	shift 2
+        local with_modules=( $* )
+
+	# pattern used in the for-loop to filter dependencies via awk
+	local pattern="//"
+	for m in "${with_modules[@]}"; do
+		pattern+=" && /${m//\//\\/}( |$)/"
+	done
+
+	# loop over all matching versions and all variants
+	local key=''
+	local -a keys=( $(yaml_get_versions "${version}") )
+	for key in "${keys[@]}"; do
+		local -i n_variants=$(yaml_get_num_variants "${key}")
+		for ((i=0; i<n_variants; i++)); do
+			# check dependencies
+			local with_modules=()
+			local -a deps=( $(yaml_get_dependencies "${key}" "$i") )
+			if (( ${#deps[@]} > 0 )); then
+				with_modules=( $(brace_expand ${deps[@]} | awk "${pattern}") )
+				(( ${#with_modules[@]} == 0 )) && continue
+			fi
+			local name="${key%/*}"
+			local version="${key#*/}"
+			local relstage=$(yaml_get_rel_stage "${key}" "$i")
+			pbuild.build_module \
+				"${name}" "${version}" \
+				"${relstage}" "${with_modules[@]}"
+		done
+	done
+}
+
+build_modules() {
+	local variants_file="${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}"
+	if [[ -e "${variants_file}.yaml" ]]; then
+		build_modules_yaml "$@"
+	else
+		build_modules_legacy "@"
+	fi
+}
 declare -r OVERLAY_CONF="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/overlays.conf"
 
 #
