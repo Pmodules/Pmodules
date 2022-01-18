@@ -981,9 +981,9 @@ find_module() {
                         # a version number has been specified. But we still might
                         # have the same module/version with different use flags.
                         # The different release stages we ignore in this case.
-                        modules=$(${find} -L "${dir}" -type f -not -name ".*" \
+                        modules=( $(${find} -L "${dir}" -type f -not -name ".*" \
                                        -ipath "${dir}/${module}*" \
-                                          | cut -b${col}-)
+                                          | cut -b${col}-) )
                         for mod in "${modules[@]}"; do
                                 #
                                 # loop over all used flags. If a module with
