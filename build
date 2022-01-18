@@ -500,7 +500,7 @@ pmodules::install() {
 
 	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/Pmodules.conf" || \
 	    install -m 0644 "${SRC_DIR}/Pmodules.conf"	"${PMODULES_ROOT}/${CONFIG_DIR}"
-	
+	install -m 0755 "${SRC_DIR}/yq"			"${PMODULES_HOME}/libexec"
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/csh"		"${PMODULES_HOME}/init"
