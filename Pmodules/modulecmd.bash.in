@@ -1362,16 +1362,20 @@ subcommand_use() {
 
 		std::info ''
 		std::info "Available overlays:"
-		local overlays
-		get_available_overlays overlays
+		local -a files
+		get_ol_config_files files
+		local -a ol_names=( $(get_ol_names "${files[@]}") )
 		local -- ol_name ol_type ol_install_dir
-		local -- ol
-		for ol in "${overlays[@]}"; do
-			local -a toks=( ${ol} )
-			ol_name="${toks[0]}"
-			ol_type="${toks[1]}"
-			ol_dir="${toks[2]}"
-			ol_install_dir="${toks[3]}"
+		for ol_name in "${ol_names[@]}"; do
+			ol_type=$(get_ol_type \
+					  "${ol_names}" \
+					  "${files[@]}")
+			ol_install_dir=$(get_ol_install_root \
+						 "${ol_names}" \
+						 "${files[@]}")
+			ol_modulefiles_root=$(get_ol_modulefiles_root \
+						      "${ol_names}" \
+						      "${files[@]}")
 			local txt=''
 			case "${ol_type}" in
 				"${ol_hiding}" )
