@@ -233,11 +233,11 @@ parse_args() {
 		--tmpdir=* )
 			PMODULES_TMPDIR="${1/--tmpdir=}"
 			;;
-		--system )
+		--system | --overlay )
 			opt_system="$2"
 			shift
 			;;
-		--system=* )
+		--system=* | --overlay=* )
 			opt_system="${1/*=}"
 			;;
 		--use-flags )
@@ -264,12 +264,6 @@ parse_args() {
 		--update-modulefiles )
 			opt_update_modulefiles='yes'
 			;;
-                --overlay )
-                        opt_ol_name_or_dir=$2
-                        ;;
-                --overlay=* )
-                        opt_ol_name_or_dir=${1/*=}
-                        ;;
                 -- )
                         :
                         ;;
@@ -405,6 +399,10 @@ build_modules_legacy() {
                 done
                 std::die 10 "Aborting..."
         fi
+	declare ol_name='default'
+	declare ol_type=''
+	declare ol_dir="${PMODULES_ROOT}"
+	declare ol_install_dir="${PMODULES_ROOT}"
         local -i i=0
         local -i num_variants=${#variants[@]}
         for ((i = 0; i < num_variants; i++)); do
@@ -423,6 +421,11 @@ build_modules_yaml(){
 	local variants_file="${BUILDBLOCK_DIR}/files/"
 	variants_file+="${BNAME_VARIANTS}.${opt_system}.yaml"
 
+	yaml_get_overlay(){
+		local ol=$(yq e ".overlay" "${variants_file}")
+		[[ "${ol}" == 'null' ]] && ol='default'
+		echo "${ol}"
+	}
 	yaml_get_versions(){
 		yq e "with_entries(select(.key | test(\"$1\"))) | keys" \
 		   "${variants_file}"|cut -b3-
@@ -452,6 +455,14 @@ build_modules_yaml(){
 		pattern+=" && /${m//\//\\/}( |$)/"
 	done
 
+	local ol_name_or_dir=$(yaml_get_overlay)
+	get_ol_info "${ol_name_or_dir}" \
+			 ol_name \
+			 ol_type \
+			 ol_dir \
+			 ol_install_dir \
+		|| std::die 3 "${variants_file##*/}: unknown overlay -- ${ol_name_or_dir}"
+	
 	# loop over all matching versions and all variants
 	local key=''
 	local -a keys=( $(yaml_get_versions "${version}") )
@@ -480,41 +491,8 @@ build_modules() {
 	if [[ -e "${variants_file}.yaml" ]]; then
 		build_modules_yaml "$@"
 	else
-		build_modules_legacy "@"
+		build_modules_legacy "$@"
 	fi
-}
-declare -r OVERLAY_CONF="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/overlays.conf"
-
-#
-# Return overlay name *and* directory for an overlay given
-# by name *or* directory. Search in the config file ${OVERLAY_CONF}.
-#
-# Arguments
-#     $1: name or directory of overlay
-#
-get_ol_name_and_dir() {
-	local "$1"	# upvar for overlay name
-	local "$2"	# upvar for overlay directory
-	local config_files=()
-	if [[ -v PMODULES_OVERLAY_CONF ]]; then
-		config_files+=("${PMODULES_OVERLAY_CONF}")
-	fi
-	config_files+=("${HOME}/.Pmodules/overlays.conf")
-	config_files+=("${OVERLAY_CONF}")
-	for config_file in "${config_files[@]}"; do
-		[[ -r "${config_file}" ]] || continue
-		local toks=()
-		while read -a toks; do
-			[[ -n "${toks[0]}" ]] || continue
-			[[ ${toks[0]} == \#* ]] && continue
-			if [[ ${toks[0]} == $3 ]] || [[ ${toks[1]} == $3 ]]; then
-				std::upvar $1  "${toks[0]}"
-				std::upvar $2  "${toks[1]}"
-				return 0
-			fi
-		done < "${config_file}"
-	done
-	return 1
 }
 
 #.............................................................................
@@ -522,50 +500,7 @@ get_ol_name_and_dir() {
 
 parse_args "$@"
 
-#
-# set ol_name, ol_dir and opt_system
-#
-# --overlay=name
-#    lookup overlay directory, system name equivalent to overlay name
-# --overlay=name --system=sysname
-#    lookup name, use given system name
-# --overlay=dir
-#    use given overlay dir and default system name
-# --system=name
-#    lookup name, set ol_dir of found config
-declare ol_name=''
-declare ol_type=''
-declare ol_dir=''
-declare ol_install_dir=''
-if [[ -n "${opt_ol_name_or_dir}" ]]; then
-	get_overlay_info "${opt_ol_name_or_dir}" \
-			 ol_name \
-			 ol_type \
-			 ol_dir \
-			 ol_install_dir
-	if (( $? != 0 )); then
-		# not found in config
-		if [[ ${opt_ol_name_or_dir:0:1} == / ]]; then
-			ol_dir="${opt_ol_name_or_dir}"
-		else
-			std::die 1 "Invalid overlay name -- ${opt_ol_name_or_dir}"
-		fi
-	fi
-	if [[ -z "${opt_system}" ]] && [[ -n "${ol_name}" ]]; then
-		opt_system="${ol_name}"
-	fi
-elif [[ -n "${opt_system}" ]]; then
-	get_ol_name_and_dir "${opt_system}" ol_name ol_type ol_dir ol_install_dir || :
-fi
-
-ol_name="${ol_name:-unknown}"
-ol_dir="${ol_dir:-${PMODULES_ROOT}}"
-ol_install_dir="${ol_install_dir:-${ol_dir}}"
 opt_system="${opt_system:-$(std::get_os_release)}"
-
-echo ol_name=$ol_name
-echo ol_dir=$ol_dir
-echo opt_system=$opt_system
 
 pbuild.jobs "${opt_jobs}"
 pbuild.force_rebuild "${opt_force_rebuild}"
@@ -610,6 +545,10 @@ module_name=${fname[${#fname[@]}-2]}
 # are we bootstrapping? If yes, go for it...
 #
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
+	declare ol_name='default'
+	declare ol_type=''
+	declare ol_dir="${PMODULES_ROOT}"
+	declare ol_install_dir="${PMODULES_ROOT}"
 	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
         exit $?
 fi
