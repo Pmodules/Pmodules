@@ -1,5 +1,22 @@
 # Changelog of Pmodules
 
+## Version 1.1.7
+* **modulecmd**
+  * list of available overlays in subcommand `use` is now better readable
+* **buid-system**
+  * overlay definition must now be in YAML format
+  * support for YAML formatted variant files (the legacy format 
+    is still supported)
+  * build-system in 1.1.6 was still work in progress and broken
+
+## Version 1.1.6
+* **modulecmd**
+  * bugfix in searching/loading modules in a hierarchical
+    group
+
+## Version 1.1.5
+* first public version with the overlay feature
+
 ## Version 1.0.0rc10
 * **modulecmd**
   * *User visible changes*
