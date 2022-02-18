@@ -59,112 +59,116 @@ scan_groups () {
         done
 }
 
-get_overlay_info(){
+
+get_ol_config_files(){
+	#
+	# return array with overlay configuration files
+	#
+	# Args:
+	#	$1	[upvar] result
+	local files=()
+	if [[ -v PMODULES_OVERLAYS_DEF ]]; then
+		test -r "${PMODULES_OVERLAYS_DEF}" || \
+			std::die 3 \
+				 "%s -- %s" \
+				 "overlay definition file is not readable" \
+				 "$_"
+		files+=("${PMODULES_OVERLAYS_DEF}")
+	fi
+	if [[ -r "${HOME}/.Pmodules/overlays.yaml" ]]; then
+		files+=("${HOME}/.Pmodules/overlays.yaml")
+	fi
+	test -r "${PMODULES_ROOT}/config/overlays.yaml" || \
+		std::die 3 \
+			 "%s %s -- %s" \
+			 "base overlay definition file" \
+			 "does not exist or is not readable" \
+			 "$_"
+
+	files+=("${PMODULES_ROOT}/config/overlays.yaml")
+
+	std::upvar "$1" "${files[@]}"
+}
+
+get_ol_install_root(){
+	# $1	 overlay name
+	# ${@:2} files
+	yq -Ne e ".$1.install_root" - < <(cat "${@:2}") 2>/dev/null
+}
+
+get_ol_modulefiles_root(){
+	# $1	overlay name
+	# ${@:2} files
+	yq -Ne e ".$1.modulefiles_root" - < <(cat "${@:2}") 2>/dev/null
+}
+
+get_ol_type(){
+	# $1	overlay name
+	# ${@:2} files
+	yq -Ne e ".$1.type" - < <(cat "${@:2}") 2>/dev/null
+}
+
+get_ol_names(){
+	# ${@} files
+	yq -Ne e "keys" - < <(cat "$@") 2>/dev/null | cut -b3-
+}
+
+get_ol_info(){
 	# Args:
 	#	$1 [in] overlay name or directory plus optional type
 	#	$2 [upvar] overlay name
-	#	$2 [upvar] overlay type
-	#	$3 [upvar] overlay root directory
-	#	$4 [upvar] overlay prefix for software installation
+	#	$3 [upvar] overlay type
+	#	$4 [upvar] overlay modulefiles root directory
+	#	$5 [upvar] overlay prefix for software installation
 	#
 	local name_or_dir="${1%:*}"
-	[[ -d ${name_or_dir} ]] && name_or_dir=$(cd "${name_or_dir}" && pwd -L)
+	local ol_name=''
+	local ol_install_root=''
+	local ol_modulefiles_root=''
+	local ol_type=''
+	local files=()
 
-	local config_files=()
-	if [[ -v PMODULES_OVERLAYS_CONF ]]; then
-		config_files+=("${PMODULES_OVERLAYS_CONF}")
+	get_ol_config_files files
+	ol_install_root=$(get_ol_install_root "${name_or_dir}" "${files[@]}")
+	if (( $? == 0 )); then
+		# "$name_of_dir" is an overlay name
+		ol_name="${name_or_dir}"
+	else
+		# "$name_or_dir"" might be is a directory
+		local -a names=( $(get_ol_names "${files[@]}") )
+		for name in "${names[@]}"; do
+			ol_install_root=$(get_ol_install_root \
+						  "$name_or_dir" \
+						  "${files[@]}") || continue
+			# found a matching overlay name
+			ol_name="${name}"
+			break
+		done
 	fi
-	config_files+=("${HOME}/.Pmodules/overlays.conf")
-	config_files+=("${PMODULES_ROOT}/config/overlays.conf")
-
-	for config_file in "${config_files[@]}"; do
-		[[ -r "${config_file}" ]] || continue
-		local toks=()
-		local -i lino=0
-		while read -a toks; do
-			(( lino+=1 ))
-			[[ -n "${toks[0]}" ]] || continue
-			[[ ${toks[0]} == \#* ]] && continue
-			(( ${#toks[@]} < 2 )) && \
-				std::warn "%s - %s" \
-					  "Skipping malformed line ${lino} in configuration file" \
-					  "${config_file}"
-			local _name="${toks[0]%:*}"
-			if [[ "${toks[0]%:*}" == "${name_or_dir}" ]] \
-				   || [[ "${toks[1]}" == "${name_or_dir}" ]]; then
-				# take type from
-				# 1. $1
-				# 2. configuration file
-				# 3. use default type
-				local _type="${ol_normal}"
-				if [[ "$1" == *:* ]]; then
-					_type="${1##*:}"
-				elif [[ "${toks[0]}" == *:* ]]; then
-					_type="${toks[0]##*:}"
-				fi
-				[[ -n "$2" ]] && std::upvar "$2" "${toks[0]%:*}"
-				[[ -n "$3" ]] && std::upvar "$3" "${_type}"
-				[[ -n "$4" ]] && std::upvar "$4" "${toks[1]}"
-				if [[ -n "$5" ]]; then
-					if [[ -n "${toks[2]}" ]]; then
-						std::upvar "$5" "${toks[2]}"
-					else
-						std::upvar "$5" "${toks[1]}"
-					fi
-				fi
-				return 0
-			fi
-		done < "${config_file}"
-	done
-	return 1
+	if [[ -n "${ol_name}" ]]; then
+		ol_modulefiles_root=$(get_ol_modulefiles_root \
+					      "${ol_name}" \
+					      "${files[@]}") || \
+			ol_modulefiles_root="${root_dir}"
+		ol_type=$(get_ol_type \
+				  "${ol_name}" \
+				  "${files[@]}") || \
+			ol_type="${ol_normal}"
+	elif [[ "${name_or_dir}" == 'default' ]]; then
+		ol_name='default'
+		ol_type="${ol_normal}"
+		ol_modulefiles_root="${PMODULES_ROOT}"
+		ol_install_root="${PMODULES_ROOT}"
+	else
+		return 1
+	fi
+	
+	[[ -n "$2" ]] && std::upvar "$2" "${ol_name}"
+	[[ -n "$3" ]] && std::upvar "$3" "${ol_type}"
+	[[ -n "$4" ]] && std::upvar "$4" "${ol_install_root}"
+	[[ -n "$5" ]] && std::upvar "$5" "${ol_modulefiles_root}"
 }
 
-get_available_overlays(){
-	# Args:
-	#	$1 [upvar] result
-	#
-	local name_or_dir="${1%:*}"
-	[[ -d ${name_or_dir} ]] && name_or_dir=$(cd "${name_or_dir}" && pwd -L)
-
-	local config_files=()
-	if [[ -v PMODULES_OVERLAYS_CONF ]]; then
-		config_files+=("${PMODULES_OVERLAYS_CONF}")
-	fi
-	config_files+=("${HOME}/.Pmodules/overlays.conf")
-	config_files+=("${PMODULES_ROOT}/config/overlays.conf")
-
-	local -a result=()
-	for config_file in "${config_files[@]}"; do
-		[[ -r "${config_file}" ]] || continue
-		local toks=()
-		local -i lino=0
-		while read -a toks; do
-			(( lino++ ))
-			[[ -n "${toks[0]}" ]] || continue
-			[[ ${toks[0]} == \#* ]] && continue
-			(( ${#toks[@]} < 2 )) && \
-				std::warn "%s - %s" \
-					  "Skipping malformed line ${lino} in configuration file" \
-					  "${config_file}"
-			local _name="${toks[0]%:*}"
-			# take type from
-			# 1. $1
-			# 2. configuration file
-			# 3. use default type
-			local _type="${ol_normal}"
-			if [[ "$1" == *:* ]]; then
-				_type="${1##*:}"
-			elif [[ "${toks[0]}" == *:* ]]; then
-				_type="${toks[0]##*:}"
-			fi
-			local _ol_dir="${toks[1]}"
-			local _ol_install_dir="${toks[2]}"
-			_ol_install_dir="${_ol_install_dir:-${toks[1]}}"
-			result+=( "${_name} ${_type} ${_ol_dir} ${_ol_install_dir}")
-		done < "${config_file}"
-	done
-	std::upvar "$1" "${result[@]}"
-}
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
