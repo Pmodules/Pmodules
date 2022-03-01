@@ -90,7 +90,7 @@ read_config_file() {
 		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
 	fi
 
-	source "${fname}" || std::die 1 "Cannot read configuration file '${fname}'"
+	source "${fname}" || std::die 1 "Cannot read configuration file '${fname}'"
 
 	if [[ -z "${PMODULES_ROOT}" ]]; then
 		std::die 1 "Error in configuration file '${fname}': PMODULE_ROOT not defined!"
@@ -226,6 +226,9 @@ Use the option --force to override.\nAborting..."
 	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}.in" \
 		> "${config_file}" || \
 		std::die 1 "Cannot create configuration file in Pmodules root\nAborting..."
+
+	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" > "${SRC_DIR}/libpmodules.bash"
+	chmod 0755 "${SRC_DIR}/libpmodules.bash"
 
 	read_config_file 'config_file'
 	install -d -m 0755 "${PMODULES_HOME}/bin"
@@ -486,6 +489,9 @@ pmodules::install() {
 	chmod 0755 "${PMODULES_HOME}/libexec/modulecmd.bash"
 	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${PMODULES_HOME}/libexec/modulecmd.tcl"
 	chmod 0755 "${PMODULES_HOME}/libexec/modulecmd.tcl"
+
+	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" > "${SRC_DIR}/libpmodules.bash"
+	chmod 0755 "${SRC_DIR}/libpmodules.bash"
 
 	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in"    > "${PMODULES_HOME}/lib/libpmodules.bash"
 	chmod 0755 "${PMODULES_HOME}/lib/libpmodules.bash"
