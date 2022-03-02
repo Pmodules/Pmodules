@@ -1929,7 +1929,7 @@ subcommand_purge() {
         if (( ${#args[@]} > 0 )); then
 	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
-                         "no arguments allowd"
+                         "no arguments allowed"
         fi
 
 	# is a Pmodule module loaded?
@@ -2026,7 +2026,7 @@ subcommand_list() {
         if (( ${#args[@]} > 0 )); then
 	        std::die 3 "%s %s: %s" \
                          "${CMD}" "${subcommand}" \
-                         "no arguments allowd"
+                         "no arguments allowed"
         fi
 	"${modulecmd}" "${Shell}" list "${opts[@]}"
 }
