@@ -18,7 +18,7 @@ source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
 path="/bin:/usr/bin"
-[[ $(uname -s) == 'Darwin' ]] && path+=":${libexecdir}" 
+[[ $(uname -s) == 'Darwin' ]] && path="${libexecdir}:${path}"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sort' 'find'
