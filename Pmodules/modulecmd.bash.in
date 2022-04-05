@@ -1489,7 +1489,7 @@ subcommand_purge() {
 		# re-run with right shell
                 "${modulecmd}" "${Shell}" 'purge'
         fi
-	eval "${output}"
+	eval "$(echo "${output}"|sed -e 's/;unalias [^;]*//g')"
 	if [[ -n "${error}" ]]; then
                 echo "${error}" 1>&2
 	fi
