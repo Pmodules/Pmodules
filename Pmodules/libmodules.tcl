@@ -191,6 +191,9 @@ proc _pmodules_setenv { PREFIX name version } {
 		if { [lsearch ${::dont-setenv} "${NAME}_HOME"] == -1 } {
 			setenv		${NAME}_HOME		$PREFIX
 		}
+		if { [lsearch ${::dont-setenv} "${NAME}_ROOT"] == -1 } {
+			setenv		${NAME}_ROOT		$PREFIX
+		}
 	} else {
 		debug "$PREFIX is not a directory"
 	}
