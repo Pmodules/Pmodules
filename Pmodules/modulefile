@@ -10,6 +10,11 @@ Pmodules are a hierarchical module environment based on Environment Modules.
 "
 
 #
+# Pmodules >= 1.0.0rc11 set <PackageName>_ROOT
+# But for Pmodules PMODULES_ROOT != PMODULES_DIR and should not be set.
+# 
+set dont-setenv { "PMODULES_ROOT" }
+#
 # It might be that '${PMODULES_ROOT}/Tools/Pmodules/VERSION' is in PATH.
 # Why? With older version the PATH might have been set without loading
 # a module.
