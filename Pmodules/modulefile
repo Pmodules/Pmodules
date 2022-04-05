@@ -9,6 +9,7 @@ module-help	"
 Pmodules are a hierarchical module environment based on Environment Modules.
 "
 
+set dont-setenv { "PMODULES_ROOT" }
 #
 # It might be that '${PMODULES_ROOT}/Tools/Pmodules/VERSION' is in PATH.
 # Why? With older version the PATH might have been set without loading
