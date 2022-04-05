@@ -744,7 +744,7 @@ subcommand_unload() {
         local arg
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
-                eval "${output}"
+                eval "$(echo "${output}"|sed -e 's/;unalias [^;]*//g')"
 		case ${Shell} in
 			sh | bash | zsh )
 				echo "${output}"
