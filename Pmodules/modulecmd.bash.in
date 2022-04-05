@@ -104,7 +104,7 @@ save_env() {
         vars+=( OverlayDict Dir2OverlayMap)
 
 	local s=$(typeset -p ${vars[@]})
-	declare -g PMODULES_ENV=$( "${base64}" <<< "$s" )
+	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
 	export_env 'PMODULES_ENV'
 }
 
