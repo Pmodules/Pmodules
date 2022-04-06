@@ -233,12 +233,21 @@ parse_args() {
 		--tmpdir=* )
 			PMODULES_TMPDIR="${1/--tmpdir=}"
 			;;
-		--system | --overlay )
-			opt_system="$2"
-			shift
+		--system | --system=* )
+			if [[ $1 == *=* ]]; then
+				opt_system="${1#--*=}"
+			else
+				opt_system="$2"
+				shift
+			fi
 			;;
-		--system=* | --overlay=* )
-			opt_system="${1/*=}"
+		--overlay | --overlay=* )
+			if [[ $1 == *=* ]]; then
+				opt_overlay="${1#--*=}"
+			else
+				opt_overlay="$2"
+				shift
+			fi
 			;;
 		--use-flags )
 			USE_FLAGS="y:$2:"
@@ -455,6 +464,11 @@ build_modules_yaml(){
 		pattern+=" && /${m//\//\\/}( |$)/"
 	done
 
+	# precidency:
+	# 1. overlay passed as argument
+	# 2. overlay defined for the variant
+	# 3. default in variants file
+	# 4. default overlay
 	local ol_name_or_dir=$(yaml_get_overlay)
 	get_ol_info "${ol_name_or_dir}" \
 			 ol_name \
