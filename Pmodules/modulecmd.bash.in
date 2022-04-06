@@ -38,9 +38,9 @@ declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 declare    Shell=''
 
-declare -r pmodules_config_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/Pmodules.conf"
+declare -r pmodules_config_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/Pmodules.yaml"
 
-# the following settings are used if the Pmodules.conf doesn't exist
+# the following settings are used if the config file doesn't exist
 
 # set groups which should be available after initialization
 declare -- DefaultGroups='Tools Programming'
@@ -1385,7 +1385,7 @@ subcommand_use() {
 					txt='()replacing groups)'
 					;;
 			esac
-			std::info "\t${ol_name}: ${ol_dir} ${txt}"
+			std::info "\t${ol_name}: ${ol_install_dir} ${txt}"
 		done
 
 		std::info ''
@@ -1421,7 +1421,7 @@ subcommand_use() {
 			local ol_type=''
 			local ol_dir=''
 			local ol_prefix=''
-			get_overlay_info \
+			get_ol_info \
 				"${ol_name_or_dir}" \
 				ol_name \
 				ol_type \
@@ -1520,7 +1520,7 @@ subcommand_use() {
 			UsedFlags+=( "${arg/flag=}" )
                         return
                 fi
-		if get_overlay_info "${arg}"; then
+		if get_ol_info "${arg}"; then
 			use_overlay "${arg}"
 			return 0
 		fi
@@ -1617,7 +1617,7 @@ subcommand_unuse() {
 			local ol_type=''
 			local ol_dir=''
 
-			get_overlay_info \
+			get_ol_info \
 				"${ol_name_or_dir}" \
 				ol_name \
 				ol_type \
@@ -1714,7 +1714,7 @@ subcommand_unuse() {
 			done
                         return
                 fi
-		if get_overlay_info "${arg}"; then
+		if get_ol_info "${arg}"; then
 			unuse_overlay "${arg}"
 			return 0
 		fi
@@ -1823,7 +1823,7 @@ reset_modulepath() {
 reset_used_groups() {
 	UsedGroups=''
         local group
-        for group in ${DefaultGroups}; do
+        for group in ${DefaultGroups//:/ }; do
                 std::append_path UsedGroups "${group}"
         done
         g_env_must_be_saved='yes'
@@ -1863,9 +1863,11 @@ init_manpath() {
 
 pmodules_init() {
 	if [[ -r "${pmodules_config_file}" ]]; then
-		source "${pmodules_config_file}" || \
-			std::die 3 "Oops: cannot parse config file  -- %s\n" \
-				 "${pmodules_config_file}"
+		eval $(yq -Ne e ".defaults"  ${pmodules_config_file} | \
+			       awk '/DefaultGroups|ReleaseStages|DefaultReleaseStages/ {
+			       printf "%s=%s\n",substr($1,1,length($1)-1), $2}') || \
+				       std::die 3 "Oops: cannot parse config file  -- %s\n" \
+						"${pmodules_config_file}"
 	fi
 	declare -gx LOADEDMODULES=''
 	declare -gx _LMFILES_=''

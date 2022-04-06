@@ -75,17 +75,17 @@ get_ol_config_files(){
 				 "$_"
 		files+=("${PMODULES_OVERLAYS_DEF}")
 	fi
-	if [[ -r "${HOME}/.Pmodules/overlays.yaml" ]]; then
-		files+=("${HOME}/.Pmodules/overlays.yaml")
+	if [[ -r "${HOME}/.Pmodules/Pmodules.yaml" ]]; then
+		files+=("${HOME}/.Pmodules/Pmodules.yaml")
 	fi
-	test -r "${PMODULES_ROOT}/config/overlays.yaml" || \
+	test -r "${PMODULES_ROOT}/config/Pmodules.yaml" || \
 		std::die 3 \
 			 "%s %s -- %s" \
 			 "base overlay definition file" \
 			 "does not exist or is not readable" \
 			 "$_"
 
-	files+=("${PMODULES_ROOT}/config/overlays.yaml")
+	files+=("${PMODULES_ROOT}/config/Pmodules.yaml")
 
 	std::upvar "$1" "${files[@]}"
 }
@@ -93,24 +93,24 @@ get_ol_config_files(){
 get_ol_install_root(){
 	# $1	 overlay name
 	# ${@:2} files
-	yq -Ne e ".$1.install_root" - < <(cat "${@:2}") 2>/dev/null
+	yq -Ne e ".overlays.$1.install_root" - < <(cat "${@:2}") 2>/dev/null
 }
 
 get_ol_modulefiles_root(){
 	# $1	overlay name
 	# ${@:2} files
-	yq -Ne e ".$1.modulefiles_root" - < <(cat "${@:2}") 2>/dev/null
+	yq -Ne e ".overlays.$1.modulefiles_root" - < <(cat "${@:2}") 2>/dev/null
 }
 
 get_ol_type(){
 	# $1	overlay name
 	# ${@:2} files
-	yq -Ne e ".$1.type" - < <(cat "${@:2}") 2>/dev/null
+	yq -Ne e ".overlays.$1.type" - < <(cat "${@:2}") 2>/dev/null
 }
 
 get_ol_names(){
 	# ${@} files
-	yq -Ne e "keys" - < <(cat "$@") 2>/dev/null | cut -b3-
+	yq -Ne e ".overlays|keys" - < <(cat "$@") 2>/dev/null | cut -b3-
 }
 
 get_ol_info(){
