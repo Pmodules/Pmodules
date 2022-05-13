@@ -5,26 +5,25 @@ if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
 	exit 1
 fi
 
-declare -r OS=$(uname -s)
-
 declare	BOOTSTRAP_DIR=$(dirname "$0")
 source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash" || { echo "Oops!" 1>&2; exit 42; }
+source "${BOOTSTRAP_DIR}/Pmodules/libpbuild.bash" || { echo "Oops!" 1>&2; exit 42; }
 
 declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
-# these variables need to be defined but must be initialized with an empty string
-declare -x PMODULES_HOME=''
-declare -x PMODULES_DISTFILESDIR=''
-declare -x PMODULES_TMPDIR=''
+declare -x PMODULES_ROOT
+declare -x PMODULES_HOME
+declare -x PMODULES_DISTFILESDIR
+declare -x PMODULES_TMPDIR
 
 declare -rx CONFIG_DIR='config'
-declare -rx CONFIG_FILE='modbuild.conf'
+declare -rx CONFIG_FILE='Pmodules.yaml'
+declare -rx VERSIONS_CFG_FILE="${CONFIG_DIR}/versions.conf"
 
 # defaults
 declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
 declare -rx DEFAULT_DISTFILES_DIR="var/distfiles"
-declare -rx DEFAULT_VERSIONS_CONFIG="${CONFIG_DIR}/versions.conf"
 declare -rx DEFAULT_TMPDIR='var/tmp/${USER}'
 
 # directory where the required tools will be installed (like bash, tclsh, etc)
@@ -32,11 +31,20 @@ declare -rx UTILBIN_DIR='libexec'
 
 #-----------------------------------------------------------------------------
 #
+# Get version from config file.
+#
+# The format of the config file is:
+#
+# <PackageName> <version>
+#
 get_version() {
 	local -r name="$1"
-	echo $(awk "/^$1[[:blank:]]/ {print \$2}" "${DEFAULT_VERSIONS_CONFIG}")
+	echo $(awk "/^$1[[:blank:]]/ {print \$2}" "${VERSIONS_CFG_FILE}")
 }
 
+#
+# the Pmodules version is defined in the config file
+#
 declare -rx PMODULES_VERSION=$(get_version 'Pmodules')
 
 #-----------------------------------------------------------------------------
@@ -81,39 +89,6 @@ pmodules::help() {
 	esac
 }
 
-#-----------------------------------------------------------------------------
-#
-read_config_file() {
-	local var="$1"
-	local fname="${!var}"
-	if [[ ! -r "${fname}" ]]; then
-		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
-	fi
-
-	source "${fname}" || std::die 1 "Cannot read configuration file '${fname}'"
-
-	if [[ -z "${PMODULES_ROOT}" ]]; then
-		std::die 1 "Error in configuration file '${fname}': PMODULE_ROOT not defined!"
-	fi
-	if [[ -z "${PMODULES_VERSION}" ]]; then
-		std::die 1 "Error in configuration file '${fname}': PMODULE_VERSION not defined!"
-	fi
-	if [[ -z "${PMODULES_DISTFILESDIR}" ]]; then
-		std::die 1 "Error in configuration file '${fname}': PMODULES_DISTFILESDIR not defined!"
-	fi
-	if [[ -z "${PMODULES_TMPDIR}" ]]; then
-		std::die 1 "Error in configuration file '${fname}': PMODULE_TMPDIR not defined!"
-	fi
-
-	# we have to make these variables global, otherwise they are not set
-	# in the calling function
-	declare -g PMODULES_ROOT="${PMODULES_ROOT}"
-	declare -g PMODULES_HOME="${PMODULES_HOME}"
-	declare -g PMODULES_DISTFILESDIR="${PMODULES_DISTFILESDIR}"
-	declare -g PMODULES_TMPDIR="${PMODULES_TMPDIR}"
-
-	std::upvar "${var}" "${fname}"
-}
 
 #-----------------------------------------------------------------------------
 #
@@ -218,7 +193,7 @@ Use the option --force to override.\nAborting..."
 	[[ -z "${distfilesdir}" ]] && distfilesdir="${prefix}/${DEFAULT_DISTFILES_DIR}"
 	[[ -z "${tmpdir}" ]] && tmpdir="${prefix}/${DEFAULT_TMPDIR}"
 
-	sed_cmd="s:@PMODULES_ROOT@:${prefix}:g;"
+	sed_cmd="s:@INSTALL_ROOT@:${prefix}:g;"
 	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
 	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
         sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
@@ -230,11 +205,16 @@ Use the option --force to override.\nAborting..."
 	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" > "${SRC_DIR}/libpmodules.bash"
 	chmod 0755 "${SRC_DIR}/libpmodules.bash"
 
-	read_config_file 'config_file'
+	read_config_file "${config_file}"
 	install -d -m 0755 "${PMODULES_HOME}/bin"
 	install -d -m 0755 "${PMODULES_HOME}/init"
 	install -d -m 0755 "${PMODULES_HOME}/lib"
 	install -d -m 0755 "${PMODULES_HOME}/libexec"
+	install -d -m 0755 "${PMODULES_ROOT}/Tools/modulefiles/Pmodules"
+	install -d -m 0755 "${PMODULES_ROOT}/Libraries/modulefiles"
+	install -d -m 0755 "${PMODULES_ROOT}/Programming/modulefiles"
+	install -d -m 0755 "${distfilesdir}"
+
 	echo "Configuration:"
 	echo "  root of Pmodules environment: ${prefix}"
 	echo "  Pmodule prefix:               ${PMODULES_HOME}"
@@ -331,7 +311,7 @@ pmodules::compile() {
 	done
 
 	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
-	read_config_file config_file
+	read_config_file "${config_file}"
 	install -d -m 0755 "${PMODULES_HOME}/bin"
 	install -d -m 0755 "${PMODULES_HOME}/init"
 	install -d -m 0755 "${PMODULES_HOME}/lib"
@@ -410,7 +390,11 @@ Options:
 }
 
 pmodules::install() {
-	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
+	if [[ -v PMOULES_HOME ]]; then
+		local prefix="${PMODULES_HOME%%/Tools*}"
+	else
+		local prefix="${DEFAULT_PMODULES_ROOT}"
+	fi
 	local config_file=''
 	local opt_force='no'
 
@@ -443,14 +427,14 @@ pmodules::install() {
 	done
 
 	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
-	read_config_file 'config_file'
+	read_config_file "${config_file}"
 
 	###
 	#
 	# begin installation
 	#
 	echo "Configuration:"
-	echo "  root of Pmodules environment: ${PMODULES_ROOT}"
+	echo "  root of Pmodules environment: ${prefix}"
 	echo "  Pmodule prefix:               ${PMODULES_HOME}"
 	sed_cmd="s:@PMODULES_HOME@:${PMODULES_HOME}:g;"
 	sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g;"
@@ -525,11 +509,7 @@ pmodules::install() {
 		"${BOOTSTRAP_DIR}/mkindex.tcl"
 	}
 
-	install -m 0755 -d "${PMODULES_ROOT}/Tools/modulefiles/Pmodules"
 	install -m 0644 "${SRC_DIR}/modulefile" "${PMODULES_ROOT}/Tools/modulefiles/Pmodules/${PMODULES_VERSION}"
-	mkdir -p "${PMODULES_ROOT}/Libraries/modulefiles"
-	mkdir -p "${PMODULES_ROOT}/Programming/modulefiles"
-	test -e "${PMODULES_DISTFILESDIR}" || mkdir -p "$_"
 
 	echo "Done..."
 }
@@ -559,6 +539,7 @@ while (( $# > 0 )); do
 			shift 1
 			subcmd_args=( "$@" )
 			shift $#
+			break
 			;;
 		* )
 			std::die 1 "Invalid sub-command '$1'.\n\nUse 'build --help' to get help..."
