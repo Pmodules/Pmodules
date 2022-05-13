@@ -314,11 +314,11 @@ proc ModulesHelp { } {
 # intialize global vars
 # Modulefile is something like
 #
-#   ${PMODULES_ROOT}/group/modulefiles/name/version
+#   <root_dir>/group/modulefiles/name/version
 # or
-#   ${PMODULES_ROOT}/group/modulefiles/X1/Y1/name/version
+#   <root_dir>/group/modulefiles/X1/Y1/name/version
 # or
-#   ${PMODULES_ROOT}/group/modulefiles/X1/Y1//X2/Y2/name/version
+#   <root_dir>/group/modulefiles/X1/Y1//X2/Y2/name/version
 #
 proc _find_overlay { modulefile_components } {
         debug "_find_overlay()"

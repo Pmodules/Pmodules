@@ -34,6 +34,7 @@ source libstd.bash    || {
 # can be set in the configuration file
 declare         PMODULES_DISTFILESDIR=''
 declare         PMODULES_TMPDIR=''
+declare		pm_root="${PMODULES_HOME%%/Tools*}"
 
 source libpbuild.bash    || \
         std::die 3 "Oops: cannot source library -- '$_'"
@@ -131,7 +132,7 @@ MISCELLANEOUS OPTIONS:
         Directory used for building a module.
 
 --overlay
-        Install in this overlay. Defaults to '${PMODULES_ROOT}'.
+        Install in this overlay. Defaults to '${PMODULES_HOME%%/Tools*}'.
 "
 	exit 1
 }
@@ -147,7 +148,7 @@ MISCELLANEOUS OPTIONS:
 # versions to be build, '.*' or none means all
 declare -a      versions=()
 declare         opt_bootstrap='no'
-declare 	opt_build_config='modbuild.conf'
+declare 	opt_build_config='Pmodules.yaml'
 declare         opt_build_target='all'
 declare         opt_dry_run='no'
 declare         opt_enable_cleanup_build='yes'
@@ -408,10 +409,10 @@ build_modules_legacy() {
                 done
                 std::die 10 "Aborting..."
         fi
-	declare ol_name='default'
+	declare ol_name='base'
 	declare ol_type=''
-	declare ol_dir="${PMODULES_ROOT}"
-	declare ol_install_dir="${PMODULES_ROOT}"
+	declare ol_dir="${pm_root}"
+	declare ol_install_dir="${pm_root}"
         local -i i=0
         local -i num_variants=${#variants[@]}
         for ((i = 0; i < num_variants; i++)); do
@@ -430,27 +431,52 @@ build_modules_yaml(){
 	local variants_file="${BUILDBLOCK_DIR}/files/"
 	variants_file+="${BNAME_VARIANTS}.${opt_system}.yaml"
 
+	#
+	# $1 file name
+	# $2 module name
+	# $3 index
+	#
 	yaml_get_overlay(){
-		local ol=$(yq e ".overlay" "${variants_file}")
-		[[ "${ol}" == 'null' ]] && ol='default'
-		echo "${ol}"
+		local ol=$(yq e ".$2.variants[$3].overlay" "$1")
+		if [[ "${ol}" != 'null' ]]; then
+			echo "${ol}"
+			return
+		fi
+		ol=$(yq e ".$2.overlay" "$1")
+		if [[ "${ol}" != 'null' ]]; then
+			echo "${ol}"
+			return
+		fi
+		echo 'base'
 	}
 	yaml_get_versions(){
-		yq e "with_entries(select(.key | test(\"$1\"))) | keys" \
-		   "${variants_file}"|cut -b3-
-	}
-	yaml_get_num_variants(){
-		yq e ".[\"$1\"].variants | length" \
-		   "${variants_file}"
-	}
-	yaml_get_dependencies(){
-		yq e ".[\"$1\"].variants[$2].dependencies[]" \
-		   "${variants_file}"
+		yq e ".$2.variants[].version" "$1"
 	}
 
-	yaml_get_rel_stage(){
-		yq e ".[\"$1\"].variants[$2].relstage" \
-		   "${variants_file}"
+	yaml_get_num_variants(){
+		yq e ".$2.variants | length" "$1"
+	}
+
+	yaml_get_version(){
+		yq e ".$2.variants[$3].version" "$1"
+	}
+	
+	yaml_get_dependencies(){
+		yq e ".$2.variants[$2].dependencies[]" "$1"
+	}
+
+	yaml_get_relstage(){
+		local relstage=$(yq e ".$2.variants[$3].relstage" "$1")
+		if [[ "${relstage}" != 'null' ]]; then
+			echo "${relstage}"
+			return
+		fi
+		relstage=$(yq e ".$2.relstage" "$1")
+		if [[ "${relstage}" != 'null' ]]; then
+			echo "${relstage}"
+			return
+		fi
+		echo 'unstable'
 	}
 	
         local name="$1"
@@ -464,39 +490,38 @@ build_modules_yaml(){
 		pattern+=" && /${m//\//\\/}( |$)/"
 	done
 
-	# precidency:
-	# 1. overlay passed as argument
-	# 2. overlay defined for the variant
-	# 3. default in variants file
-	# 4. default overlay
-	local ol_name_or_dir=$(yaml_get_overlay)
-	get_ol_info "${ol_name_or_dir}" \
-			 ol_name \
-			 ol_type \
-			 ol_dir \
-			 ol_install_dir \
-		|| std::die 3 "${variants_file##*/}: unknown overlay -- ${ol_name_or_dir}"
-	
-	# loop over all matching versions and all variants
-	local key=''
-	local -a keys=( $(yaml_get_versions "${version}") )
-	for key in "${keys[@]}"; do
-		local -i n_variants=$(yaml_get_num_variants "${key}")
-		for ((i=0; i<n_variants; i++)); do
-			# check dependencies
-			local with_modules=()
-			local -a deps=( $(yaml_get_dependencies "${key}" "$i") )
-			if (( ${#deps[@]} > 0 )); then
-				with_modules=( $(brace_expand ${deps[@]} | awk "${pattern}") )
-				(( ${#with_modules[@]} == 0 )) && continue
-			fi
-			local name="${key%/*}"
-			local version="${key#*/}"
-			local relstage=$(yaml_get_rel_stage "${key}" "$i")
-			pbuild.build_module \
-				"${name}" "${version}" \
-				"${relstage}" "${with_modules[@]}"
-		done
+	local -i n_variants=$(yaml_get_num_variants \
+				      "${variants_file}" "${name}")
+	local i
+	for (( i=0; i<n_variants; i++ )); do
+		local vers=$(yaml_get_version "${variants_file}" "${name}" $i)
+		[[ "${vers}" != "${version}" ]] && continue
+		# check dependencies
+		local with_modules=()
+		local -a deps=( $(yaml_get_dependencies \
+					  "${variants_file}" \
+					  "${name}" "$i") )
+		if (( ${#deps[@]} > 0 )); then
+			with_modules=( $(brace_expand ${deps[@]} | awk "${pattern}") )
+			(( ${#with_modules[@]} == 0 )) && continue
+		fi
+		local relstage=$(yaml_get_relstage \
+					 "${variants_file}" \
+					 "${name}" \
+					 "$i")
+		local ol=$(yaml_get_overlay \
+				   "${variants_file}" \
+				   "${name}" \
+				   "$i")
+		get_ol_info "${ol}" \
+			    ol_name \
+			    ol_type \
+			    ol_install_dir \
+			    ol_dir \
+			|| std::die 3 "${variants_file##*/}: unknown overlay -- ${ol_name_or_dir}"
+		pbuild.build_module \
+			"${name}" "${version}" \
+			"${relstage}" "${with_modules[@]}"
 	done
 }
 
@@ -526,26 +551,21 @@ pbuild.update_modulefiles "${opt_update_modulefiles}"
 pbuild.system "${opt_system}"
 pbuild.verbose "${opt_verbose}"
 
+#
+# read configuration for modbuild
+#
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
         test -d "${BUILDBLOCK_DIR}/../../config" && PATH+=":$_"
-else
-        # Please note: if we trap DEBUG a statement like
-        #              test -d ... && PATH+=$_
-        #              does not work (at least on macOS with bash 4 and 5)
-        if [[ -d "${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}" ]]; then
-                PATH+=":${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}"
-        fi
 fi
 
-source "${opt_build_config}" || \
-        std::die 3 "Oops: Cannot source configuration file -- '$_'"
+read_config_file "${pm_root}/${PMODULES_CONFIG_DIR}/${opt_build_config}"
 
 # :FIXME: should go dist files to
-#         ${PMODULES_ROOT}/var/distfiles
+#         ${pm_root}/var/distfiles
 #         or
 #         ${overlay}/var/distfiles
 #         ?
-: ${PMODULES_DISTFILESDIR:=${PMODULES_ROOT}/var/distfiles}
+: ${PMODULES_DISTFILESDIR:=${pm_root}/var/distfiles}
 : ${PMODULES_TMPDIR:=/var/tmp/${USER}}
 
 declare -r BUILD_SCRIPT
@@ -559,10 +579,10 @@ module_name=${fname[${#fname[@]}-2]}
 # are we bootstrapping? If yes, go for it...
 #
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
-	declare ol_name='default'
+	declare ol_name='base'
 	declare ol_type=''
-	declare ol_dir="${PMODULES_ROOT}"
-	declare ol_install_dir="${PMODULES_ROOT}"
+	declare ol_dir="${pm_root}"
+	declare ol_install_dir="${pm_root}"
 	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
         exit $?
 fi

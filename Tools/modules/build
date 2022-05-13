@@ -5,7 +5,7 @@ declare -rx CC=gcc
 
 pbuild::set_download_url "https://amas.web.psi.ch/Downloads/$P/$P-$V.tar.bz2"
 
-TCL_DIR="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
+TCL_DIR="${PMODULES_HOME}"
 
 PATH="${TCL_DIR}/bin:${PATH}"
 
@@ -21,7 +21,7 @@ pbuild::configure() {
 	CPPFLAGS="-DUSE_INTERP_ERRORLINE" "${SRC_DIR}"/configure \
 		--prefix="${PREFIX}" \
 		--exec-prefix="${PREFIX}" \
-		--with-module-path="${PMODULES_ROOT}/Tools/${PMODULES_MODULEFILES_DIR}" \
+		--with-module-path="${PMODULES_HOME%%/Tools*}/Tools/${PMODULES_MODULEFILES_DIR}" \
 		--with-tcl="${TCL_DIR}/lib" \
 		--without-x \
 		--disable-versioning \

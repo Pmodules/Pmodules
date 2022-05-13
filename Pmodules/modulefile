@@ -10,7 +10,7 @@ Pmodules are a hierarchical module environment based on Environment Modules.
 "
 
 #
-# It might be that '${PMODULES_ROOT}/Tools/Pmodules/VERSION' is in PATH.
+# It might be that '${PMODULES_HOME}' is in PATH.
 # Why? With older version the PATH might have been set without loading
 # a module.
 #

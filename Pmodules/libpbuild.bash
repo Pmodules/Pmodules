@@ -941,7 +941,7 @@ pbuild::make_all() {
 	}
 
  	#......................................................................
-	# Install modulefile in ${PMODULES_ROOT}/${GROUP}/modulefiles/...
+	# Install modulefile in ${pm_root}/${GROUP}/modulefiles/...
 	#
 	# Arguments
 	#     none
@@ -1436,10 +1436,10 @@ pbuild.build_module() {
 
 	# :FIXME: this is a hack!!!
 	# shouldn't this be set in the build-script?
-	if [[ -e "${PMODULES_ROOT}/Libraries" ]]; then
+	if [[ -e "${PMODULES_HOME%%/Tools*}/Libraries" ]]; then
 		eval $( "${MODULECMD}" bash use Libraries )
 	fi
-	if [[ -e "${PMODULES_ROOT}/System" ]]; then
+	if [[ -e "${PMODULES_HOME%%/Tools*}/System" ]]; then
 		eval $( "${MODULECMD}" bash use System )
 	fi
 	unset	C_INCLUDE_PATH
@@ -1491,6 +1491,26 @@ pbuild.bootstrap() {
 	PATH+=":${PREFIX}/bin"
 	PATH+=":${PREFIX}/sbin"
 	pbuild::make_all
+}
+
+#-----------------------------------------------------------------------------
+#
+read_config_file() {
+	local fname="$1"
+	if [[ ! -r "${fname}" ]]; then
+		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
+	fi
+
+	eval $(std::parse_yaml "${fname}" '') || std::die 1 "Cannot read configuration file '${fname}'"
+
+	PMODULES_ROOT="${Overlays_base_install_root}"
+	PMODULES_DISTFILESDIR="${DistfilesDir}"
+	PMODULES_TMPDIR="${TmpDir}"
+	PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
+	
+	if [[ -z "${PMODULES_HOME}" ]]; then
+		std::die 1 "Error in configuration file '${fname}': PMODULE_HOME not defined!"
+	fi
 }
 
 # Local Variables:

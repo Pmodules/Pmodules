@@ -9,7 +9,7 @@ declare -A Help=()
 
 # initialize help text of 'module --version'
 Help['version']="
-Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
+Pmodules @PMODULES_VERSION@ using Tcl Environment Modules 
 Copyright GNU GPL v2
 "
 
@@ -78,14 +78,14 @@ get_ol_config_files(){
 	if [[ -r "${HOME}/.Pmodules/Pmodules.yaml" ]]; then
 		files+=("${HOME}/.Pmodules/Pmodules.yaml")
 	fi
-	test -r "${PMODULES_ROOT}/config/Pmodules.yaml" || \
+	test -r "${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml" || \
 		std::die 3 \
 			 "%s %s -- %s" \
 			 "base overlay definition file" \
 			 "does not exist or is not readable" \
 			 "$_"
 
-	files+=("${PMODULES_ROOT}/config/Pmodules.yaml")
+	files+=("${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml")
 
 	std::upvar "$1" "${files[@]}"
 }
@@ -93,24 +93,24 @@ get_ol_config_files(){
 get_ol_install_root(){
 	# $1	 overlay name
 	# ${@:2} files
-	yq -Ne e ".overlays.$1.install_root" - < <(cat "${@:2}") 2>/dev/null
+	yq -Ne e ".Overlays.$1.install_root" - < <(cat "${@:2}") 2>/dev/null
 }
 
 get_ol_modulefiles_root(){
 	# $1	overlay name
 	# ${@:2} files
-	yq -Ne e ".overlays.$1.modulefiles_root" - < <(cat "${@:2}") 2>/dev/null
+	yq -Ne e ".Overlays.$1.modulefiles_root" - < <(cat "${@:2}") 2>/dev/null
 }
 
 get_ol_type(){
 	# $1	overlay name
 	# ${@:2} files
-	yq -Ne e ".overlays.$1.type" - < <(cat "${@:2}") 2>/dev/null
+	yq -Ne e ".Overlays.$1.type" - < <(cat "${@:2}") 2>/dev/null
 }
 
 get_ol_names(){
 	# ${@} files
-	yq -Ne e ".overlays|keys" - < <(cat "$@") 2>/dev/null | cut -b3-
+	yq -Ne e ".Overlays|keys" - < <(cat "$@") 2>/dev/null | cut -b3-
 }
 
 get_ol_info(){
@@ -154,19 +154,20 @@ get_ol_info(){
 				  "${ol_name}" \
 				  "${files[@]}") || \
 			ol_type="${ol_normal}"
-	elif [[ "${name_or_dir}" == 'default' ]]; then
-		ol_name='default'
+	elif [[ "${name_or_dir}" == 'base' ]]; then
+		ol_name='base'
 		ol_type="${ol_normal}"
-		ol_modulefiles_root="${PMODULES_ROOT}"
-		ol_install_root="${PMODULES_ROOT}"
-	else
+		ol_modulefiles_root="${PMODULES_HOME%%/Tools*}"
+		ol_install_root="${PMODULES_HOME%%/Tools*}"
+        else
 		return 1
 	fi
-	
+
 	[[ -n "$2" ]] && std::upvar "$2" "${ol_name}"
 	[[ -n "$3" ]] && std::upvar "$3" "${ol_type}"
 	[[ -n "$4" ]] && std::upvar "$4" "${ol_install_root}"
-	[[ -n "$5" ]] && std::upvar "$5" "${ol_modulefiles_root}"
+	[[ -n "$5" ]] && std::upvar "$5" "$(eval "echo ${ol_modulefiles_root}")"
+	return 0
 }
 
 # Local Variables:

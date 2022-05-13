@@ -17,8 +17,10 @@ declare -r  libexecdir="${prefix}/libexec"
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
+declare -r os_name="$(uname -s)"
+
 path="/bin:/usr/bin"
-[[ $(uname -s) == 'Darwin' ]] && path="${libexecdir}:${path}"
+[[ ${os_name} == 'Darwin' ]] && path="${libexecdir}:${path}"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sort' 'find'
@@ -38,7 +40,7 @@ declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 declare    Shell=''
 
-declare -r pmodules_config_file="${PMODULES_ROOT}/${PMODULES_CONFIG_DIR}/Pmodules.yaml"
+declare -r pmodules_config_file="${PMODULES_HOME%%/Tools*}/${PMODULES_CONFIG_DIR}/Pmodules.yaml"
 
 # the following settings are used if the config file doesn't exist
 
@@ -92,6 +94,21 @@ export_env() {
 #
 declare g_env_must_be_saved='no'
 
+encode_base64(){
+	case "${os_name}" in
+		Linux )
+			"${base64}" --wrap=0 <<< "$1"
+			;;
+		Darwin )
+			# does not wrap if running in a script
+			"${base64}"  <<< "$1"
+			;;
+		* )
+			std::die 255 "Oops: Unsupported OS"
+			;;
+	esac
+}
+
 save_env() {
         [[ $1 == 'no' ]] && return 0
         local vars=( Version )
@@ -104,7 +121,7 @@ save_env() {
         vars+=( OverlayDict Dir2OverlayMap)
 
 	local s=$(typeset -p ${vars[@]})
-	declare -g PMODULES_ENV=$( "${base64}" --wrap=0 <<< "$s" )
+	declare -g PMODULES_ENV=$( encode_base64 "$s" )
 	export_env 'PMODULES_ENV'
 }
 
@@ -172,7 +189,7 @@ get_release_stage() {
 }
 
 is_release_stage() {
-	[[ ${ReleaseStages} =~ :$1: ]]
+	[[ :${ReleaseStages}: =~ :$1: ]]
 }
 
 #
@@ -1627,7 +1644,7 @@ subcommand_unuse() {
                                          "is not an overlay directory" \
                                          "${ol_name_or_dir%:*}"
 
-                        [[ "${ol_dir}" == "${PMODULES_ROOT}" ]] && \
+                        [[ "${ol_dir}" == "${PMODULES_HOME%%/Tools*}" ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${subcommand}" \
                                          "cannot remove root overlay" \
@@ -1862,13 +1879,13 @@ init_manpath() {
 }
 
 pmodules_init() {
-	if [[ -r "${pmodules_config_file}" ]]; then
-		eval $(yq -Ne e ".defaults"  ${pmodules_config_file} | \
-			       awk '/DefaultGroups|ReleaseStages|DefaultReleaseStages/ {
-			       printf "%s=%s\n",substr($1,1,length($1)-1), $2}') || \
-				       std::die 3 "Oops: cannot parse config file  -- %s\n" \
-						"${pmodules_config_file}"
-	fi
+	[[ -r "${pmodules_config_file}" ]] || \
+		std::die 3 "Oops: cannot read config file  -- %s\n" \
+			 "${pmodules_config_file}"
+	
+	eval $(std::parse_yaml "${pmodules_config_file}" '') || \
+		       std::die 3 "Oops: cannot parse config file  -- %s\n" \
+				"${pmodules_config_file}"
 	declare -gx LOADEDMODULES=''
 	declare -gx _LMFILES_=''
 	declare -gx UsedGroups=''
@@ -2445,7 +2462,7 @@ subcommand_search() {
 
         # :FIXME: do we need this?
 	if (( ${#GroupDepths[@]} == 0 )) || \
-                   [[ ${src_prefix} != ${PMODULES_ROOT} ]]; then
+                   [[ ${src_prefix} != ${PMODULES_HOME%%/Tools*} ]]; then
 		scan_groups "${src_prefix}"
 		g_env_must_be_saved='yes'
 	fi
@@ -2768,9 +2785,10 @@ if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 fi
 
 init_overlay_vars() {
-	declare -ag OverlayList=( "${PMODULES_ROOT}" )
-	declare -Ag OverlayNames=( [${PMODULES_ROOT}]='base' )
-	declare -Ag OverlayDict=([${PMODULES_ROOT}]="0:${PMODULES_ROOT}")
+	local -r pm_root="${PMODULES_HOME%%/Tools*}"
+	declare -ag OverlayList=( "${pm_root}" )
+	declare -Ag OverlayNames=( [${pm_root}]='base' )
+	declare -Ag OverlayDict=([${pm_root}]="0:${pm_root}")
 	declare -Ag Dir2OverlayMap=()
 	local overlay
 	for overlay in "${!OverlayDict[@]}"; do

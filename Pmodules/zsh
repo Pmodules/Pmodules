@@ -1,105 +1,19 @@
 #!/bin/zsh
 
-#############################################################################
-# implement module comand as function
+############################################################################
+# some sanity checks
 #
-module() {
-	local -r modulecmd="${PMODULES_HOME}/bin/modulecmd"
-
-	local -a args=()
-	local -a modulecmd_opts=()
-	local -a subcmd_opts=()
-
-	while (( $# > 0 )); do
-		case $1 in
-		-* )
-			modulecmd_opts+=( $1 )
-			shift
-			;;
-		* )
-			break
-			;;
-		esac
-	done
-	local -r subcmd="$1"
-	shift
-	while (( $# > 0 )); do
-		case $1 in
-		-* )
-			subcmd_opts+=( $1 )
-			;;
-		[/~a-zA-Z]* )
-			args+=( $1 )
-			;;
-		esac
-		shift
-	done
-
-	[[ -z ${subcmd} ]] && args+=( 'help' )
-	[[ ${#args[@]} == 0 ]] && args+=( '--' )
-
-	# Loop over all modules to load.
-	# Note: We have to eval here, otherwise we cannot do something like
-	# $ module load gcc/5.2.0 openmpi/1.8.8 hdf5/1.8.15
-	local m
-	for module in ${args[@]}; do
-		eval $( "${modulecmd}" zsh "${modulecmd_opts[@]}" "${subcmd}" \
-				       "${subcmd_opts[@]}" "${module}" )
-	done
-}
-export -f module
+if [[ ! -d ${PMODULES_HOME} ]]; then
+        echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
+        return 1
+fi
 
 #############################################################################
-# helper functions
+# initialize bash completion
 #
-save_env() {
-	local s=''
-	while (( $# > 0 )); do
-		s+="$( typeset -p $1 );"
-		shift
-	done
-	echo export PMODULES_ENV=$( "${PMODULES_HOME}/sbin/base64" --wrap=0 <<< "$s" )	
-}
-
-#############################################################################
-# setup environment
-#
-declare -x LOADEDMODULES=''
-declare -x _LMFILES_=''
-
-# build initial MODULEPATH
-declare -x MODULEPATH=''
-typeset -T MODULEPATH modulepath
-for group in ${DefaultGroups[@]}; do
-	dir="${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
-	modulepath=( "${dir}" ${(m)modulepath:#${dir}} )
-done
-
-# build initial list of used releases
-declare -x UsedReleases=''
-typeset -T UsedReleases usedreleases
-for r in ${DefaultReleaseStages[@]}; do
-	usedreleases=( "${r}" ${(m)usedreleases:#${r}} )
-done
-
-eval $(save_env UsedReleases DefaultReleaseStages DefaultGroups ReleaseStages)
-
-unset UsedReleases
-unset DefaultReleaseStages
-unset DefaultGroups
-unset ReleaseStages
-
-# initialize MANPATH with output of `man --path` if not set
-[[ -z "${MANPATH}" ]] && manpath=$( man --path )
-
-# add man pages of Pmodules and remove all other Pmodules man pages
-manpath=( "${PMODULES_HOME}/share/man" ${(m)manpath:#${dirs_to_remove}} )
-
-# initialize completion
-test -r "${PMODULES_HOME}/init/zsh_completion" && source "$_"
-
-# cleanup
-unset group dir r dirs_to_remove
+if [[ -r "${PMODULES_HOME}/init/bash_completion" ]]; then
+	source "${PMODULES_HOME}/init/bash_completion"
+fi
 
 #############################################################################
 # legacy...
@@ -107,6 +21,18 @@ unset group dir r dirs_to_remove
 unset MODULE_VERSION
 unset MODULE_VERSION_STACK
 unset MODULESHOME
+unset PMODULES_ENV
+
+declare -x PMODULES_DIR="${PMODULES_HOME}"
+
+
+#############################################################################
+# implement module comand as shell function
+#
+module() {
+	eval $("${PMODULES_HOME}/bin/modulecmd" bash "$@")
+}
+export -f module
 
 # Local Variables:
 # mode: sh
