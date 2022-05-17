@@ -3,6 +3,7 @@
 
 # set default version
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
+export PMODULES_VERSION
 
 ##### no changes below this line ######
 

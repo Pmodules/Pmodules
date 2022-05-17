@@ -40,6 +40,9 @@ proc _pmodules_parse_pmodules_env { } {
 			continue
 		}
 		switch $name {
+			Dir2OverlayMap {
+				array set ::Dir2OverlayMap [regsub -all  {[]=[]} $value " "]
+			}
 			OverlayDict {
 				array set ::OverlayDict [regsub -all  {[]=[]} $value " "]
 			}
@@ -322,17 +325,21 @@ proc ModulesHelp { } {
 #
 proc _find_overlay { modulefile_components } {
         debug "_find_overlay()"
-        foreach ol_dir $::OverlayList  {
-                debug "$ol_dir"
+        foreach ol $::OverlayList  {
+                debug "$ol"
+		set ol_dir $::OverlayDict(${ol}:mod_root)
                 if { [string range $ol_dir end end] == "/" } {
                         set ol_dir [string range $ol_dir 0 end-1]
                 }
+		debug "$ol_dir"
                 set ol_dir_splitted [file split $ol_dir]
                 set modulefile_root [file join \
 					 {*}[lrange \
 						 $modulefile_components \
 						 0 [expr [llength $ol_dir_splitted] - 1]]]
+		debug "$modulefile_root"
                 if { [string compare $ol_dir $modulefile_root] == 0 } {
+			debug "$ol_dir_splitted"
                         return $ol_dir_splitted
                 }
         }
@@ -343,6 +350,7 @@ proc _find_overlay { modulefile_components } {
 proc _is_in_overlay { } {
 	debug "_is_in_overlay?"
 	set parts [_find_overlay [file split $::ModulesCurrentModulefile]]
+	debug "_is_in_overlay: $parts"
 	expr {[string compare $parts ""] == 0 }
 }
 
@@ -376,8 +384,11 @@ proc _pmodules_init_global_vars { } {
 	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 	set	variant 	[lrange $rel_modulefile 2 end]
-	set key [file join {*}$ol_dir_splitted]
-	set install_prefix [file split [lindex [split $::OverlayDict($key) ":"] 1]]
+	set mod_root [file join {*}$ol_dir_splitted]
+	debug "mod_root=$mod_root"
+	set ol $::Dir2OverlayMap($mod_root)
+	debug "ol=$ol"
+	set install_prefix [file split $::OverlayDict(${ol}:inst_root)]
 	set	prefix		"$install_prefix $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
 	debug "PREFIX=$PREFIX"

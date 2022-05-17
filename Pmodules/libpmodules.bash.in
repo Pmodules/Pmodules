@@ -7,6 +7,11 @@ declare -A Subcommands=()
 declare -A Options=()
 declare -A Help=()
 
+declare -a Overlays=()
+declare -A OverlayDict
+declare -a OverlayList
+declare -Ag Dir2OverlayMap
+
 # initialize help text of 'module --version'
 Help['version']="
 Pmodules @PMODULES_VERSION@ using Tcl Environment Modules 
@@ -49,126 +54,95 @@ compute_group_depth () {
 #       $1: array of overlays
 #
 scan_groups () {
-	local -r overlays=( "$@" )
-        local    overlay
-        for overlay in "${overlays[@]}"; do
+        local    ol
+        for ol in "$@"; do
+		local mod_root="${OverlayDict[${ol}:mod_root]}"
 	        local moduledir
-	        for moduledir in ${overlay}/*/${PMODULES_MODULEFILES_DIR}; do
+	        for moduledir in ${mod_root}/*/${PMODULES_MODULEFILES_DIR}; do
 		        compute_group_depth "${moduledir}"
 	        done
         done
 }
 
-
-get_ol_config_files(){
-	#
-	# return array with overlay configuration files
-	#
-	# Args:
-	#	$1	[upvar] result
-	local files=()
-	if [[ -v PMODULES_OVERLAYS_DEF ]]; then
-		test -r "${PMODULES_OVERLAYS_DEF}" || \
+pm::read_config(){
+	local -a config_files=()
+	
+	_get_config_files(){
+		#
+		# return array with overlay configuration files
+		#
+		# Args:
+		#	$1	[upvar] result
+		if [[ -v PMODULES_OVERLAYS_DEF ]]; then
+			test -r "${PMODULES_OVERLAYS_DEF}" || \
+				std::die 3 \
+					 "%s -- %s" \
+					 "overlay definition file is not readable" \
+					 "$_"
+			config_files+=("${PMODULES_OVERLAYS_DEF}")
+		fi
+		if [[ -r "${HOME}/.Pmodules/Pmodules.yaml" ]]; then
+			config_files+=("${HOME}/.Pmodules/Pmodules.yaml")
+		fi
+		test -r "${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml" || \
 			std::die 3 \
-				 "%s -- %s" \
-				 "overlay definition file is not readable" \
+				 "%s %s -- %s" \
+				 "base overlay definition file" \
+				 "does not exist or is not readable" \
 				 "$_"
-		files+=("${PMODULES_OVERLAYS_DEF}")
-	fi
-	if [[ -r "${HOME}/.Pmodules/Pmodules.yaml" ]]; then
-		files+=("${HOME}/.Pmodules/Pmodules.yaml")
-	fi
-	test -r "${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml" || \
-		std::die 3 \
-			 "%s %s -- %s" \
-			 "base overlay definition file" \
-			 "does not exist or is not readable" \
-			 "$_"
+		
+		config_files+=("${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml")
+	}
 
-	files+=("${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml")
+	_get_ol_names(){
+		yq -Ne eval-all '. as $item ireduce ({}; . *+ $item) |.Overlays|keys()' "${config_files[@]}" | awk '{print $2}'
+	}
 
-	std::upvar "$1" "${files[@]}"
+	_get_config_files
+
+	eval $(std::parse_yaml "${config_files[-1]}" 'cfg_')
+	[[ -v cfg_DefaultGroups ]] && DefaultGroups="${cfg_DefaultGroups}"
+	[[ -v cfg_DefaultReleaseStages ]] && DefaultReleaseStages="${cfg_DefaultReleaseStages}"
+	[[ -v cfg_ReleaseStages ]] && ReleaseStages="${cfg_ReleaseStages}"
+	unset ${!cfg_*}
+
+	Overlays=( $(_get_ol_names) )
+	local ol=''
+	for ol in "${Overlays[@]}"; do
+		eval $(yq -Ne eval-all \
+			  ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${ol}" \
+			  "${config_files[@]}" | \
+			       sed 's/: /=/; s/\(.*\)/local \1/')
+		: ${type:=n}
+		case ${type} in
+			${ol_normal} | ${ol_replacing} | ${ol_hiding} )
+				:
+				;;
+			* )
+				std::die 3 "Invalid type for overlay '${ol}' -- ${type}"
+				;;
+		esac
+		OverlayDict[${ol}:type]="${type}"
+
+		: ${modulefiles_root:=${PMODULES_HOME%%/Tools*}}
+		[[ -d ${modulefiles_root} ]] || \
+			std::die 3 \
+				 "Invalid modulefiles root directory for overlay '${ol}' -- ${modulefiles_root}"
+		: ${modulefiles_root:=${PMODULES_HOME%%/Tools*}}
+		OverlayDict[${ol}:mod_root]="${modulefiles_root}"
+		Dir2OverlayMap[${modulefiles_root}]="${ol}"
+
+		: ${install_root:=${PMODULES_HOME%%/Tools*}}
+		[[ -d ${install_root} ]] || \
+			std::die 3 \
+				 "Invalid installation root directory for overlay '${ol}' -- ${install_root}"
+		OverlayDict[${ol}:inst_root]="${install_root:-${PMODULES_HOME%%/Tools*}}"
+
+		OverlayDict[${ol}:used]='no'
+		unset type modulefiles_root install_root
+	done
 }
 
-get_ol_install_root(){
-	# $1	 overlay name
-	# ${@:2} files
-	yq -Ne e ".Overlays.$1.install_root" - < <(cat "${@:2}") 2>/dev/null
-}
-
-get_ol_modulefiles_root(){
-	# $1	overlay name
-	# ${@:2} files
-	yq -Ne e ".Overlays.$1.modulefiles_root" - < <(cat "${@:2}") 2>/dev/null
-}
-
-get_ol_type(){
-	# $1	overlay name
-	# ${@:2} files
-	yq -Ne e ".Overlays.$1.type" - < <(cat "${@:2}") 2>/dev/null
-}
-
-get_ol_names(){
-	# ${@} files
-	yq -Ne e ".Overlays|keys" - < <(cat "$@") 2>/dev/null | cut -b3-
-}
-
-get_ol_info(){
-	# Args:
-	#	$1 [in] overlay name or directory plus optional type
-	#	$2 [upvar] overlay name
-	#	$3 [upvar] overlay type
-	#	$4 [upvar] overlay modulefiles root directory
-	#	$5 [upvar] overlay prefix for software installation
-	#
-	local name_or_dir="${1%:*}"
-	local ol_name=''
-	local ol_install_root=''
-	local ol_modulefiles_root=''
-	local ol_type=''
-	local files=()
-
-	get_ol_config_files files
-	ol_install_root=$(get_ol_install_root "${name_or_dir}" "${files[@]}")
-	if (( $? == 0 )); then
-		# "$name_of_dir" is an overlay name
-		ol_name="${name_or_dir}"
-	else
-		# "$name_or_dir"" might be is a directory
-		local -a names=( $(get_ol_names "${files[@]}") )
-		for name in "${names[@]}"; do
-			ol_install_root=$(get_ol_install_root \
-						  "$name_or_dir" \
-						  "${files[@]}") || continue
-			# found a matching overlay name
-			ol_name="${name}"
-			break
-		done
-	fi
-	if [[ -n "${ol_name}" ]]; then
-		ol_modulefiles_root=$(get_ol_modulefiles_root \
-					      "${ol_name}" \
-					      "${files[@]}") || \
-			ol_modulefiles_root="${root_dir}"
-		ol_type=$(get_ol_type \
-				  "${ol_name}" \
-				  "${files[@]}") || \
-			ol_type="${ol_normal}"
-	elif [[ "${name_or_dir}" == 'base' ]]; then
-		ol_name='base'
-		ol_type="${ol_normal}"
-		ol_modulefiles_root="${PMODULES_HOME%%/Tools*}"
-		ol_install_root="${PMODULES_HOME%%/Tools*}"
-        else
-		return 1
-	fi
-
-	[[ -n "$2" ]] && std::upvar "$2" "${ol_name}"
-	[[ -n "$3" ]] && std::upvar "$3" "${ol_type}"
-	[[ -n "$4" ]] && std::upvar "$4" "${ol_install_root}"
-	[[ -n "$5" ]] && std::upvar "$5" "$(eval "echo ${ol_modulefiles_root}")"
-	return 0
-}
 
 # Local Variables:
 # mode: sh
