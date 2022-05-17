@@ -9,11 +9,11 @@ if [[ ! -d ${PMODULES_HOME} ]]; then
 fi
 
 #############################################################################
-# initialize bash completion
+# initialize zsh completion
 #
-if [[ -r "${PMODULES_HOME}/init/bash_completion" ]]; then
-	source "${PMODULES_HOME}/init/bash_completion"
-fi
+#if [[ -r "${PMODULES_HOME}/init/bash_completion" ]]; then
+#	source "${PMODULES_HOME}/init/bash_completion"
+#fi
 
 #############################################################################
 # legacy...

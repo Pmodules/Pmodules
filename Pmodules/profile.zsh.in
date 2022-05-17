@@ -6,11 +6,11 @@
 
 ##### no changes below this line ######
 
-declare    __pm_root__=$(cd $(dirname "${BASH_SOURCE}")/.. && pwd)
-declare -x PMODULES_HOME="${__pm_root__}/Tools/Pmodules/${PMODULES_VERSION}"
+declare    __pm_root__=${(%):-%N}
+declare -x PMODULES_HOME="${__pm_root__:h:h}/Tools/Pmodules/${PMODULES_VERSION}"
 unset __pm_root__
 
-test -r "${PMODULES_HOME}/init/bash" && source "$_"
+test -r "${PMODULES_HOME}/init/zsh" && source "$_"
 
 if [[ $? != 0 ]]; then
 	echo "Oops: cannot initialize Pmodules!"
