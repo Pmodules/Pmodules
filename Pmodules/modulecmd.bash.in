@@ -31,7 +31,7 @@ path="/bin:/usr/bin"
 [[ ${os_name} == 'Darwin' ]] && path="${libexecdir}:${path}"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
-	      'rm' 'sort' 'find'
+	      'rm' 'sort' 'find' 'yq'
 
 if [[ ${PMODULES_PURETCL} == yes ]]; then
 	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"

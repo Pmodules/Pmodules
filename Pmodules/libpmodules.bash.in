@@ -95,7 +95,7 @@ pm::read_config(){
 	}
 
 	_get_ol_names(){
-		yq -Ne eval-all '. as $item ireduce ({}; . *+ $item) |.Overlays|keys()' "${config_files[@]}" | awk '{print $2}'
+		${yq} -Ne eval-all '. as $item ireduce ({}; . *+ $item) |.Overlays|keys()' "${config_files[@]}" | awk '{print $2}'
 	}
 
 	_get_config_files
@@ -109,7 +109,7 @@ pm::read_config(){
 	Overlays=( $(_get_ol_names) )
 	local ol=''
 	for ol in "${Overlays[@]}"; do
-		eval $(yq -Ne eval-all \
+		eval $(${yq} -Ne eval-all \
 			  ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${ol}" \
 			  "${config_files[@]}" | \
 			       sed 's/: /=/; s/\(.*\)/local \1/')
