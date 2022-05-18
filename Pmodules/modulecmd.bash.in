@@ -1352,6 +1352,32 @@ subcommand_use() {
 
 	#......................................................................
 	print_info() {
+		print_ol_info(){
+			local only_used="$1"
+			local ol=''
+			for ol in "${OverlayList[@]}"; do
+				[[ ${OverlayDict[${ol}:used]} == ${only_used} ]] || continue
+				local inst_root="${OverlayDict[${ol}:inst_root]}"
+				local mod_root="${OverlayDict[${ol}:mod_root]}"
+				local txt="\t${ol}"
+				if [[ ${inst_root} == ${mod_root} ]]; then
+					txt+="\n\t\t${inst_root}"
+				else
+					txt+="\n\t\t${inst_root} (install root)"
+					txt+="\n\t\t${mod_root} (modulefiles root)"
+				fi
+				case "${OverlayDict[${ol}:type]}" in
+					"${ol_hiding}" )
+						txt+='\n\t\t(hiding modules with same name)'
+						;;
+					"${ol_replacing}" )
+						txt+='\n\t\t(replacing groups)'
+						;;
+				esac
+				std::info "${txt}"
+			done
+		}
+
 		local f
 		local r
 		std::info "Used groups:"
@@ -1384,42 +1410,11 @@ subcommand_use() {
 
 		std::info ''
                 std::info "Used overlays:"
-
-		local ol=''
-                for ol in "${OverlayList[@]}"; do
-			local txt="${OverlayDict[${ol}:inst_root]}"
-			if [[ ${OverlayDict[${ol}:inst_root]} != ${OverlayDict[${ol}:mod_root]} ]]; then
-				   txt+="|${OverlayDict[${ol}:mod_root]}"
-			fi
-			case "${OverlayDict[${ol}:type]}" in
-				"${ol_hiding}" )
-					txt+=' (hiding modules with same name)'
-					;;
-				"${ol_replacing}" )
-					txt+=' (replacing groups)'
-					;;
-			esac
-                        std::info "\t${ol}: ${txt}"
-                done
+		print_ol_info 'yes'
 
 		std::info ''
 		std::info "Unused overlays:"
-                for ol in "${Overlays[@]}"; do
-			[[ ${OverlayDict[${ol}:used]} == 'yes' ]] && continue
-			local txt="${OverlayDict[${ol}:inst_root]}"
-			if [[ ${OverlayDict[${ol}:inst_root]} != ${OverlayDict[${ol}:mod_root]} ]]; then
-				   txt+="|${OverlayDict[${ol}:mod_root]}"
-			fi
-			case "${OverlayDict[${ol}:type]}" in
-				"${ol_hiding}" )
-					txt+=' (hiding modules with same name)'
-					;;
-				"${ol_replacing}" )
-					txt+=' (replacing groups)'
-					;;
-			esac
-                        std::info "\t${ol}: ${txt}"
-                done
+		print_ol_info 'no'
 
 		std::info ''
 		std::info "Additonal directories in MODULEPATH:"
