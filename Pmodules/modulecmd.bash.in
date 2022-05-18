@@ -1797,7 +1797,7 @@ subcommand_refresh() {
 #
 # help function, used during initialization and for purging all modules
 #
-reset_modulepath() {
+init_modulepath() {
 	declare -gx MODULEPATH=''
 	local group
 	local ol
@@ -1832,7 +1832,7 @@ init_manpath() {
 }
 
 pmodules_init() {
-	reset_used_groups() {
+	init_used_groups() {
 		declare -gx UsedGroups=''
 		local group
 		for group in ${DefaultGroups//:/ }; do
@@ -1840,7 +1840,7 @@ pmodules_init() {
 		done
 		g_env_must_be_saved='yes'
 	}
-	reset_used_releases() {
+	init_used_releases() {
 		declare -g  UsedReleaseStages=''
 		for r in ${DefaultReleaseStages//:/ }; do
 			std::append_path UsedReleaseStages "${r}"
@@ -1856,11 +1856,11 @@ pmodules_init() {
 	declare -ag UsedFlags=()
 	declare -g  Version="${PMODULES_VERSION}"
 
-        reset_used_groups
-        reset_modulepath
-        reset_used_releases
-        init_manpath
+        init_used_groups
+        init_used_releases
 	init_overlay_vars
+        init_modulepath
+        init_manpath
         export_env \
                 LOADEDMODULES \
                 _LMFILES_ \
@@ -1958,7 +1958,7 @@ subcommand_purge() {
 		# 'unstable module has been loaded'
 		subcommand_load "${pmodule}" 2> /dev/null
 	fi
-        reset_modulepath
+        init_modulepath
 	
 	export_env MODULEPATH PMODULES_HOME
 }
