@@ -1355,7 +1355,7 @@ subcommand_use() {
 		print_ol_info(){
 			local only_used="$1"
 			local ol=''
-			for ol in "${OverlayList[@]}"; do
+			for ol in "${Overlays[@]}"; do
 				[[ ${OverlayDict[${ol}:used]} == ${only_used} ]] || continue
 				local inst_root="${OverlayDict[${ol}:inst_root]}"
 				local mod_root="${OverlayDict[${ol}:mod_root]}"
