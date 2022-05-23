@@ -27,9 +27,15 @@ PATH+=":${mydir}"
 PATH+=":${mydir}/../lib:${mydir}/../config"
 PATH+=":${PMODULES_DIR}/libexec"
 
+path=$PATH
+
 source libstd.bash    || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
+
+std::def_cmds "${path}" \
+	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
+	      'rm' 'sort' 'find' 'yq'
 
 # can be set in the configuration file
 declare         PMODULES_DISTFILESDIR=''
@@ -46,6 +52,9 @@ declare -r ARGS="$@"
 
 shopt -s nocaseglob
 shopt -s extglob
+
+declare		ol_dir
+declare		ol_install_dir
 
 ##############################################################################
 #
@@ -163,6 +172,7 @@ declare -a      opt_with_modules=()
 
 declare         opt_ol_name_or_dir=''
 
+echo "parse_args()"
 
 parse_args() {
 	while (( $# > 0 )); do
@@ -317,7 +327,7 @@ parse_args() {
 #   "text gcc/10.3.0 openmpi/4.0.5"
 #   "text gcc/10.3.0 openmpi/4.1.0"
 #
-brace_expand_with_prefix(){
+bash_expand(){
 	local text="$1"
 	shift
 	local to_expand=( "${@}" )
@@ -328,14 +338,12 @@ brace_expand_with_prefix(){
 		eval list=( ${to_expand[0]} )
 		local s
 		for s in ${list[*]}; do
-			brace_expand_with_prefix "${text} ${s}" "${to_expand[@]:1}"
+			bash_expand "${text} ${s}" "${to_expand[@]:1}"
 		done;
 	fi;
 }
 
-brace_expand(){
-	brace_expand_with_prefix "" "$@"
-}
+echo "build_modules_legacy()"
 
 build_modules_legacy() {
 	find_variants_files(){
@@ -361,7 +369,7 @@ build_modules_legacy() {
 			[[ -z ${toks} ]] && continue
 			[[ ${toke:0:1} == '#' ]] && continue
 			local -a deps=( ${toks[*]:2} )
-			brace_expand_with_prefix "${toks[0]} ${toks[1]}" "${deps[@]}"
+			bash_expand "${toks[0]} ${toks[1]}" "${deps[@]}"
 		done < "${input}"
 	}
 
@@ -427,107 +435,125 @@ build_modules_legacy() {
         done
 }
 
-build_modules_yaml(){
-	local variants_file="${BUILDBLOCK_DIR}/files/"
-	variants_file+="${BNAME_VARIANTS}.${opt_system}.yaml"
+echo "build_modules_yaml()"
 
-	#
-	# $1 file name
-	# $2 module name
-	# $3 index
-	#
-	yaml_get_overlay(){
-		local ol=$(yq e ".$2.variants[$3].overlay" "$1")
-		if [[ "${ol}" != 'null' ]]; then
-			echo "${ol}"
-			return
-		fi
-		ol=$(yq e ".$2.overlay" "$1")
-		if [[ "${ol}" != 'null' ]]; then
-			echo "${ol}"
-			return
-		fi
-		echo 'base'
-	}
+build_modules_yaml(){
+	local fnames=()
+	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}.yaml" )
+	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.yaml" )
+	fnames+=( '__zzzzz__' )
+	for fname in "${fnames[@]}"; do
+		[[ -r "${fname}" ]] && break
+	done
+	[[ ${fname} == '__zzzzz__' ]] && \
+		std::die 3 "New suitable YAML variants file found"
+	echo "Using ${fname}..."
 	yaml_get_versions(){
-		yq e ".$2.variants[].version" "$1"
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		_result=( $(yq -Ne e \
+			       "with_entries(select(.key | test(\"^${version}\$\")))|keys" \
+			       "${fname}" 2>/dev/null | awk '{print $2}') )
 	}
 
 	yaml_get_num_variants(){
-		yq e ".$2.variants | length" "$1"
-	}
-
-	yaml_get_version(){
-		yq e ".$2.variants[$3].version" "$1"
-	}
-	
-	yaml_get_dependencies(){
-		yq e ".$2.variants[$2].dependencies[]" "$1"
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		_result=$(yq -Ne e ".\"${version}\"|length" \
+			     "${fname}" 2>/dev/null)
+		if (( $? != 0 )); then
+			_result=0
+		fi
 	}
 
 	yaml_get_relstage(){
-		local relstage=$(yq e ".$2.variants[$3].relstage" "$1")
-		if [[ "${relstage}" != 'null' ]]; then
-			echo "${relstage}"
-			return
-		fi
-		relstage=$(yq e ".$2.relstage" "$1")
-		if [[ "${relstage}" != 'null' ]]; then
-			echo "${relstage}"
-			return
-		fi
-		echo 'unstable'
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(yq -Ne e ".\"${version}\"[${idx}].relstage" \
+			     "${fname}" 2>/dev/null)
+		(( $? != 0 )) && relstage='unstable' || :
 	}
 	
-        local name="$1"
+	yaml_get_overlay(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(yq -Ne e ".\"${version}\"[${idx}].overlay" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return || :
+		_result=$(yq -Ne e ".overlay" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return || :
+		_result='base'
+	}
+
+	yaml_get_dependencies(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+       		_result=( $(yq -Ne e ".\"${version}\"[${idx}].dependencies[]" \
+			       "${fname}" 2>/dev/null) )
+		(( $? == 0 )) && return || :
+		_result=()
+	}
+
+	local name="$1"
         local version="$2"
 	shift 2
         local with_modules=( $* )
 
-	# pattern used in the for-loop to filter dependencies via awk
+	local m
 	local pattern="//"
 	for m in "${with_modules[@]}"; do
-		pattern+=" && /${m//\//\\/}( |$)/"
+                if [[ -n $(awk "/${m%/*}[\/ ]/" "${files[@]}") ]]; then
+		        pattern+=" && /${m//\//\\/}/"
+                fi
 	done
 
-	local -i n_variants=$(yaml_get_num_variants \
-				      "${variants_file}" "${name}")
-	local i
-	for (( i=0; i<n_variants; i++ )); do
-		local vers=$(yaml_get_version "${variants_file}" "${name}" $i)
-		[[ "${vers}" != "${version}" ]] && continue
-		# check dependencies
-		local with_modules=()
-		local -a deps=( $(yaml_get_dependencies \
-					  "${variants_file}" \
-					  "${name}" "$i") )
-		if (( ${#deps[@]} > 0 )); then
-			with_modules=( $(brace_expand ${deps[@]} | awk "${pattern}") )
-			(( ${#with_modules[@]} == 0 )) && continue
-		fi
-		local relstage=$(yaml_get_relstage \
-					 "${variants_file}" \
-					 "${name}" \
-					 "$i")
-		local ol=$(yaml_get_overlay \
-				   "${variants_file}" \
-				   "${name}" \
-				   "$i")
-		get_ol_info "${ol}" \
-			    ol_name \
-			    ol_type \
-			    ol_install_dir \
-			    ol_dir \
-			|| std::die 3 "${variants_file##*/}: unknown overlay -- ${ol_name_or_dir}"
-		pbuild.build_module \
-			"${name}" "${version}" \
-			"${relstage}" "${with_modules[@]}"
+	local -a versions
+	yaml_get_versions versions "${fname}" "${name}/${version}"
+	echo versions=${versions[@]}
+	echo ${#versions[@]}
+	for v in "${versions[@]}"; do
+		echo version=$v
+		local -i n_variants
+		yaml_get_num_variants n_variants "${fname}" "${v}"
+		local -i i
+		local -a deps=()
+		local relstage
+		local ol_name
+		for (( i=0; i<n_variants; i++)); do
+			yaml_get_relstage relstage "${fname}" "${v}" $i
+			yaml_get_overlay  ol_name  "${fname}" "${v}" $i
+			yaml_get_dependencies deps "${fname}" "${v}" $i
+			ol_install_dir="${OverlayDict[${ol_name}:inst_root]}"
+			ol_dir="${OverlayDict[${ol_name}:mod_root]}"
+			
+			if (( ${#deps[@]} > 0 )); then
+				while read -a with_modules; do
+					pbuild.build_module \
+					     "${name}" "${v##*/}" \
+					     "${relstage}" "${with_modules[@]}"
+				done < <(bash_expand "" ${deps[@]}|awk "${pattern}")
+			else
+				pbuild.build_module \
+				     "${name}" "${v##*/}" \
+				     "${relstage}"
+			fi
+		done
 	done
 }
 
+
+echo "build_modules_yaml()"
 build_modules() {
-	local variants_file="${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}"
-	if [[ -e "${variants_file}.yaml" ]]; then
+	local variants_file="${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"
+	if [[ -n "${variants_file}*.yaml" ]]; then
 		build_modules_yaml "$@"
 	else
 		build_modules_legacy "$@"
@@ -555,10 +581,10 @@ pbuild.verbose "${opt_verbose}"
 # read configuration for modbuild
 #
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
-        test -d "${BUILDBLOCK_DIR}/../../config" && PATH+=":$_"
+        pm::read_config "${BUILDBLOCK_DIR}/../../config/Pmodules.yaml"
+else
+	pm::read_config
 fi
-
-read_config_file "${pm_root}/${PMODULES_CONFIG_DIR}/${opt_build_config}"
 
 # :FIXME: should go dist files to
 #         ${pm_root}/var/distfiles
