@@ -37,7 +37,7 @@ declare -A SOURCE_UNPACK_DIRS
 #
 # $1	exit code
 #
-set -o errexit
+#set -o errexit
 
 error_handler() {
 	local -i ec=$?
