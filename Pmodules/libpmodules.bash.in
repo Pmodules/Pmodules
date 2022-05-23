@@ -12,6 +12,11 @@ declare -A OverlayDict
 declare -a OverlayList
 declare -Ag Dir2OverlayMap
 
+declare -r ol_normal='n'
+declare -r ol_hiding='h'
+declare -r ol_replacing='r'
+
+
 # initialize help text of 'module --version'
 Help['version']="
 Pmodules @PMODULES_VERSION@ using Tcl Environment Modules 
@@ -113,7 +118,8 @@ pm::read_config(){
 			  ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${ol}" \
 			  "${config_files[@]}" | \
 			       sed 's/: /=/; s/\(.*\)/local \1/')
-		: ${type:=n}
+		: ${type:=${ol_normal}}
+		echo type=${type}
 		case ${type} in
 			${ol_normal} | ${ol_replacing} | ${ol_hiding} )
 				:

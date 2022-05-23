@@ -44,10 +44,6 @@ else
 	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
 fi
 
-declare -r ol_normal='n'
-declare -r ol_hiding='h'
-declare -r ol_replacing='r'
-
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
 declare    Shell=''
