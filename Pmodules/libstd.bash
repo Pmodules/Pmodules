@@ -91,25 +91,24 @@ std::append_path () {
 }
 
 std::prepend_path () {
-        local -r P="$1"
+        local -nr P="$1"
 	shift 1
-	local new_path="$1"
+	local path="$1"
 	shift 1
 	local dir
 
-        if [[ -z ${!P} ]]; then
+        if [[ -z ${P} ]]; then
 		for dir in "$@"; do
-			new_path+=":${dir}"
+			path+=":${dir}"
 		done
-                export "$P=${new_path}"
+                P="${path}"
         else
 		for dir in "$@"; do
-			[[ "${!P}" == @(|*:)${dir}@(|:*) ]] && continue
-			new_path+=":${dir}"
+			[[ "${P}" == @(|*:)${dir}@(|:*) ]] && continue
+			path+=":${dir}"
 		done
-		new_path+=":${!P}"
+		P="${path}:${P}"
         fi
-        std::upvar "$P" "${new_path}"
 }
 
 std::remove_path() {
