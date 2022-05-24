@@ -8,9 +8,9 @@ declare -A Options=()
 declare -A Help=()
 
 declare -a Overlays=()
-declare -A OverlayDict
-declare -a OverlayList
-declare -Ag Dir2OverlayMap
+declare -A OverlayInfo
+declare -a UsedOverlays
+declare -A Dir2OverlayMap
 
 declare -r ol_normal='n'
 declare -r ol_hiding='h'
@@ -61,7 +61,7 @@ compute_group_depth () {
 scan_groups () {
         local    ol
         for ol in "$@"; do
-		local mod_root="${OverlayDict[${ol}:mod_root]}"
+		local mod_root="${OverlayInfo[${ol}:mod_root]}"
 	        local moduledir
 	        for moduledir in ${mod_root}/*/${PMODULES_MODULEFILES_DIR}; do
 		        compute_group_depth "${moduledir}"
@@ -128,23 +128,23 @@ pm::read_config(){
 				std::die 3 "Invalid type for overlay '${ol}' -- ${type}"
 				;;
 		esac
-		OverlayDict[${ol}:type]="${type}"
+		OverlayInfo[${ol}:type]="${type}"
 
 		: ${modulefiles_root:=${PMODULES_HOME%%/Tools*}}
 		[[ -d ${modulefiles_root} ]] || \
 			std::die 3 \
 				 "Invalid modulefiles root directory for overlay '${ol}' -- ${modulefiles_root}"
 		: ${modulefiles_root:=${PMODULES_HOME%%/Tools*}}
-		OverlayDict[${ol}:mod_root]="${modulefiles_root}"
+		OverlayInfo[${ol}:mod_root]="${modulefiles_root}"
 		Dir2OverlayMap[${modulefiles_root}]="${ol}"
 
 		: ${install_root:=${PMODULES_HOME%%/Tools*}}
 		[[ -d ${install_root} ]] || \
 			std::die 3 \
 				 "Invalid installation root directory for overlay '${ol}' -- ${install_root}"
-		OverlayDict[${ol}:inst_root]="${install_root:-${PMODULES_HOME%%/Tools*}}"
+		OverlayInfo[${ol}:inst_root]="${install_root:-${PMODULES_HOME%%/Tools*}}"
 
-		OverlayDict[${ol}:used]='no'
+		OverlayInfo[${ol}:used]='no'
 		unset type modulefiles_root install_root
 	done
 }

@@ -531,8 +531,8 @@ build_modules_yaml(){
 			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_overlay  ol_name  "${fname}" "${v}" $i
 			yaml_get_dependencies deps "${fname}" "${v}" $i
-			ol_install_dir="${OverlayDict[${ol_name}:inst_root]}"
-			ol_dir="${OverlayDict[${ol_name}:mod_root]}"
+			ol_install_dir="${OverlayInfo[${ol_name}:inst_root]}"
+			ol_dir="${OverlayInfo[${ol_name}:mod_root]}"
 			
 			if (( ${#deps[@]} > 0 )); then
 				while read -a with_modules; do
