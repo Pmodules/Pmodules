@@ -1,5 +1,34 @@
 # Changelog of Pmodules
 
+## Version 1.1.8
+* **modulecmd**
+  * *User visible changes*
+    * configuration in YAML files
+    * modulefiles and software must not
+      have a common root directory
+    * the installation root must be specified, it doesn't default
+      to the base 'overlay' any more.
+    * zsh initialisation fixed.
+  * *Internal changes and fixes*
+    * std::upvar() replaced with reference variables in part of the 
+      code.
+    * environment variable `PMODULES_ROOT` removed.
+    * unsetting aliases fixed.
+    * update to bash 5.1.16
+    * update to findutils 4.9 (macOS only)
+    * minor fixes
+* **build-system**
+  * *User visible changes*
+    * YAML format for variants files
+  * *Internal changes and fixes*
+    * use lib `libpmodules.bash`
+    * bugfixes
+* **modmanage**
+  * *User visible changes*
+    * none, support for overlays still missing
+  * *Internal changes and fixes*
+    * none
+
 ## Version 1.1.7
 * **modulecmd**
   * list of available overlays in subcommand `use` is now better readable
