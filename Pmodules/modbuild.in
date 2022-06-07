@@ -528,8 +528,11 @@ build_modules_yaml(){
 		local relstage
 		local ol_name
 		for (( i=0; i<n_variants; i++)); do
-			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_overlay  ol_name  "${fname}" "${v}" $i
+			if [[ ! -v OverlayInfo[${ol_name}:inst_root] ]]; then
+				std::die 3 "Overlay is not defined -- ${ol_name}"
+			fi
+			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_dependencies deps "${fname}" "${v}" $i
 			ol_install_dir="${OverlayInfo[${ol_name}:inst_root]}"
 			ol_dir="${OverlayInfo[${ol_name}:mod_root]}"
