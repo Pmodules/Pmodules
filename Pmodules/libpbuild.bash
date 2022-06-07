@@ -601,7 +601,7 @@ pbuild::pre_install() {
 }
 
 pbuild::install() {
-	make install || \
+	make install || \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "compilation failed!"
