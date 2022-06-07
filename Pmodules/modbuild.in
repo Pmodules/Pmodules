@@ -446,7 +446,7 @@ build_modules_yaml(){
 		[[ -r "${fname}" ]] && break
 	done
 	[[ ${fname} == '__zzzzz__' ]] && \
-		std::die 3 "New suitable YAML variants file found"
+		std::die 3 "No suitable YAML variants file found"
 	echo "Using ${fname}..."
 	yaml_get_versions(){
 		local -n _result="$1"
