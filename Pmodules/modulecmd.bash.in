@@ -27,8 +27,7 @@ source "${libdir}/libpmodules.bash"
 
 declare -r os_name="$(uname -s)"
 
-path="/bin:/usr/bin"
-[[ ${os_name} == 'Darwin' ]] && path="${libexecdir}:${path}"
+path="${libexecdir}:/bin:/usr/bin"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sort' 'find' 'yq'
