@@ -111,6 +111,13 @@ pm::read_config(){
 	[[ -v cfg_ReleaseStages ]] && ReleaseStages="${cfg_ReleaseStages}"
 	unset ${!cfg_*}
 
+	#
+	# loop over all overlays and save config in OverlayInfo and Dir2OverlayMap
+	#
+	# - at least install_root must be specified
+	# - modulefiles_root default so install_root
+	# - the type defaults to ${ol_normal}
+	#
 	Overlays=( $(_get_ol_names) )
 	local ol=''
 	for ol in "${Overlays[@]}"; do
@@ -118,8 +125,23 @@ pm::read_config(){
 			  ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${ol}" \
 			  "${config_files[@]}" | \
 			       sed 's/: /=/; s/\(.*\)/local \1/')
+
+		[[ -n ${install_root} ]] || \
+			std::die 3 \
+				 "install_root missing for overlay -- ${ol}"
+		[[ -d ${install_root} ]] || \
+			std::die 3 \
+				 "Invalid installation root directory for overlay '${ol}' -- ${install_root}"
+		OverlayInfo[${ol}:inst_root]="${install_root}"
+
+		: ${modulefiles_root:=${install_root}}
+		[[ -d ${modulefiles_root} ]] || \
+			std::die 3 \
+				 "Invalid modulefiles root directory for overlay '${ol}' -- ${modulefiles_root}"
+		OverlayInfo[${ol}:mod_root]="${modulefiles_root}"
+		Dir2OverlayMap[${modulefiles_root}]="${ol}"
+		
 		: ${type:=${ol_normal}}
-		echo type=${type}
 		case ${type} in
 			${ol_normal} | ${ol_replacing} | ${ol_hiding} )
 				:
@@ -129,20 +151,6 @@ pm::read_config(){
 				;;
 		esac
 		OverlayInfo[${ol}:type]="${type}"
-
-		: ${modulefiles_root:=${PMODULES_HOME%%/Tools*}}
-		[[ -d ${modulefiles_root} ]] || \
-			std::die 3 \
-				 "Invalid modulefiles root directory for overlay '${ol}' -- ${modulefiles_root}"
-		: ${modulefiles_root:=${PMODULES_HOME%%/Tools*}}
-		OverlayInfo[${ol}:mod_root]="${modulefiles_root}"
-		Dir2OverlayMap[${modulefiles_root}]="${ol}"
-
-		: ${install_root:=${PMODULES_HOME%%/Tools*}}
-		[[ -d ${install_root} ]] || \
-			std::die 3 \
-				 "Invalid installation root directory for overlay '${ol}' -- ${install_root}"
-		OverlayInfo[${ol}:inst_root]="${install_root:-${PMODULES_HOME%%/Tools*}}"
 
 		OverlayInfo[${ol}:used]='no'
 		unset type modulefiles_root install_root
