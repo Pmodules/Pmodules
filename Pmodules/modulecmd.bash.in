@@ -715,6 +715,9 @@ subcommand_load() {
 	LOADEDMODULES="${_LMFILES_}"
         local dir
 	while read dir; do
+		# if the first or last character of MODULEPATH is ':',
+		# we read an empty string.
+		[[ -z ${dir} ]] && continue
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
 		map_moduledir2ol_name overlay "${dir}"
