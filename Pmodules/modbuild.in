@@ -7,6 +7,7 @@
 #
 #.............................................................................
 
+#set -x
 declare VERSION='@PMODULES_VERSION@'
 
 # get absolute path of script
@@ -343,8 +344,6 @@ bash_expand(){
 	fi;
 }
 
-echo "build_modules_legacy()"
-
 build_modules_legacy() {
 	find_variants_files(){
 		shopt -q nullglob || :
@@ -434,8 +433,6 @@ build_modules_legacy() {
                         "${release}" "${with_modules[@]}"
         done
 }
-
-echo "build_modules_yaml()"
 
 build_modules_yaml(){
 	local fnames=()
