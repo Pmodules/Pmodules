@@ -43,6 +43,14 @@ module() {
 }
 export -f module
 
+modbuild(){
+	(
+		eval $("${PMODULES_HOME}/bin/modulecmd" bash load System:bash)
+		"${PMODULES_HOME}/bin/modbuild" "$@"
+	)
+}
+export -f modbuild
+
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
