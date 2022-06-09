@@ -320,7 +320,14 @@ parse_args() {
 		esac
 		shift
 	done	
-	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
+	if [[ -z ${BUILD_SCRIPT} ]]; then
+		if [[ -r "${PWD}/build" ]]; then
+			BUILD_SCRIPT="${PWD}/build"
+			BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
+		else
+			std::die 1 "No build-block specified!"
+		fi
+	fi
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
 }
 
