@@ -2416,7 +2416,10 @@ subcommand_search() {
 		shift
 	done
 	if [[ -z "${src_prefix}" ]]; then
-		local -a src_prefix=( "${UsedOverlays[@]}" )
+		local ol=''
+		for ol in "${UsedOverlays[@]}"; do
+			src_prefix+=( "${OverlayInfo[${ol}:mod_root]}" )
+		done
 	fi
 
 	if [[ "${opt_use_rel_stages}" == ":" ]]; then
