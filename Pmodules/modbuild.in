@@ -175,6 +175,7 @@ declare         opt_force_rebuild='no'
 declare -i      opt_jobs=0
 declare         opt_update_modulefiles='no'
 declare         opt_system=''
+declare		opt_overlay=''
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
@@ -540,7 +541,11 @@ build_modules_yaml(){
 		local relstage
 		local ol_name
 		for (( i=0; i<n_variants; i++)); do
-			yaml_get_overlay  ol_name  "${fname}" "${v}" $i
+			if [[ -z ${opt_overlay} ]]; then
+				yaml_get_overlay  ol_name  "${fname}" "${v}" $i
+			else
+				ol_name="${opt_overlay}"
+			fi
 			if [[ ! -v OverlayInfo[${ol_name}:inst_root] ]]; then
 				std::die 3 "Overlay is not defined -- ${ol_name}"
 			fi
