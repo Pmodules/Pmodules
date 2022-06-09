@@ -907,6 +907,12 @@ subcommand_show() {
 # Find all modules in a given modulepath matching a specific string.
 # The search can be restricted to certain release stages.
 #
+# Args:
+#	$1	upvar for results
+#	$2	search pattern
+#	$3	release stages
+#	$4...	module directories
+#
 # return list like
 #	modulename_1 rel_stage_1 modulefile_1 ...
 #
@@ -1042,12 +1048,18 @@ find_module() {
                         # no version has been specified. This makes it more
                         # difficult. We have to load the newest version taking
                         # the used release stages and flags into account.
+
+			# get list of reverse sorted version numbers
                         (( col += ${#module} + 1 ))
                         modules=( $(${find} -L "${dir}" -type f -not -name ".*" \
                                          -ipath "${dir}/${module}/*"  \
                                             | cut -b${col}- \
                                             | sort -rV ) )
+			# prepend module name
                         modules=( "${modules[@]/#/${module}/}" )
+
+			# now modules contains a reverse sorted list of
+			# available modules in the form name/version
                         for mod in "${modules[@]}"; do
                                 #
                                 # loop over all used flags. If a module with
