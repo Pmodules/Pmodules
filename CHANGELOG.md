@@ -1,5 +1,28 @@
 # Changelog of Pmodules
 
+## Version 1.1.9
+* **modulecmd**
+  * *User visible changes*
+    * ...
+  * *Internal changes and fixes*
+	* the shell's init file is sourced, when Pmodules is loaded as module
+	* bug fixed in libmodules.tcl:module-addgroup() which crashed 
+	  "module load".
+	* don't crash if MODULEPATH starts or ends with a colon 
+	* add overlay info to output of sub-command 'search'
+* **build-system**
+  * *User visible changes*
+    * modbuild is now defined as shell function analog to module()
+	* modbuild can be called without specifying a build-script,
+	  if a build-script exist in the current working directory
+	* abort build on error
+	* with option `--overlay`
+	  - an overlay can be set if legacy variants files are used
+	  - the overlay in the YAML variants file can overriden
+  * *Internal changes and fixes*
+	* bugfix in setting PATH
+	* requires bash 5 or later
+
 ## Version 1.1.8
 * **modulecmd**
   * *User visible changes*
