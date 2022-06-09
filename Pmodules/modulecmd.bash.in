@@ -608,13 +608,13 @@ subcommand_load() {
                                                  "${CMD}" "${subcommand}" \
                                                  "illegal group name" \
                                                  "${group}"
-				MODULEPATH=""
+				#MODULEPATH=""
 				modulepath=()
-				group+="${PMODULES_MODULEFILES_DIR}"
+				group+="/${PMODULES_MODULEFILES_DIR}"
                                 for overlay in "${UsedOverlays[@]}"; do
 					local mod_root="${OverlayInfo[${overlay}:mod_root]}"
-                                        MODULEPATH="${mod_root}/${group}/:${MODULEPATH}"
-				        modulepath=( "${mod_root}/${group}/" "${modulepath[@]}" )
+                                        #MODULEPATH="${mod_root}/${group}:${MODULEPATH}"
+				        modulepath=( "${mod_root}/${group}" "${modulepath[@]}" )
                                 done
 			fi
 			if [[ -n ${rel_stage} ]]; then

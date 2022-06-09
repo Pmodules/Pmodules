@@ -62,9 +62,10 @@ scan_groups () {
         local    ol
         for ol in "$@"; do
 		local mod_root="${OverlayInfo[${ol}:mod_root]}"
-	        local moduledir
-	        for moduledir in ${mod_root}/*/${PMODULES_MODULEFILES_DIR}; do
-		        compute_group_depth "${moduledir}"
+	        local dir
+	        for dir in ${mod_root}/*/${PMODULES_MODULEFILES_DIR}; do
+		        compute_group_depth "${dir}"
+			Dir2OverlayMap[${dir}]="${ol}"
 	        done
         done
 }
