@@ -1063,7 +1063,10 @@ pbuild::make_all() {
 			# might/need to be set.
 			#
 			cd "${dir}"
-			typeset -F "$t" 2>/dev/null && "$t" || :
+			if typeset -F "$t" 2>/dev/null; then
+				"$t" || \
+					std::die 10 "Aborting..."
+			fi
 		done
 		touch "${BUILD_DIR}/.${target}"
 	}
