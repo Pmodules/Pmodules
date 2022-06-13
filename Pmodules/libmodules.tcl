@@ -329,20 +329,20 @@ proc _find_overlay { modulefile_components } {
         debug "_find_overlay()"
         foreach ol $::UsedOverlays  {
                 debug "$ol"
-		set ol_dir $::OverlayInfo(${ol}:mod_root)
-                if { [string range $ol_dir end end] == "/" } {
-                        set ol_dir [string range $ol_dir 0 end-1]
+		set ol_mod_root $::OverlayInfo(${ol}:mod_root)
+                if { [string range $ol_mod_root end end] == "/" } {
+                        set ol_mod_root [string range $ol_mod_root 0 end-1]
                 }
-		debug "$ol_dir"
-                set ol_dir_splitted [file split $ol_dir]
+		debug "$ol_mod_root"
+                set ol_mod_root_splitted [file split $ol_mod_root]
                 set modulefile_root [file join \
 					 {*}[lrange \
 						 $modulefile_components \
-						 0 [expr [llength $ol_dir_splitted] - 1]]]
+						 0 [expr [llength $ol_mod_root_splitted] - 1]]]
 		debug "$modulefile_root"
-                if { [string compare $ol_dir $modulefile_root] == 0 } {
-			debug "$ol_dir_splitted"
-                        return $ol_dir_splitted
+                if { [string compare $ol_mod_root $modulefile_root] == 0 } {
+			debug "$ol_mod_root_splitted"
+                        return $ol_mod_root_splitted
                 }
         }
         debug "not found"
@@ -374,8 +374,8 @@ proc _pmodules_init_global_vars { } {
 
 	set	modulefile_splitted	[file split $::ModulesCurrentModulefile]
 
-	set     ol_dir_splitted [_find_overlay ${modulefile_splitted}]
-	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_dir_splitted] end]
+	set     ol_mod_root_splitted [_find_overlay ${modulefile_splitted}]
+	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_mod_root_splitted] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	GROUP		"${group}"
 	set	name		[lindex $modulefile_splitted end-1]
@@ -386,7 +386,7 @@ proc _pmodules_init_global_vars { } {
 	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 	set	variant 	[lrange $rel_modulefile 2 end]
-	set mod_root [file join {*}$ol_dir_splitted]
+	set mod_root [file join {*}$ol_mod_root_splitted]
 	debug "mod_root=$mod_root"
 	set ol $::Dir2OverlayMap($mod_root)
 	debug "ol=$ol"

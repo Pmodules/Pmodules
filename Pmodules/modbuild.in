@@ -62,8 +62,8 @@ declare -r ARGS="$@"
 shopt -s nocaseglob
 shopt -s extglob
 
-declare		ol_dir
-declare		ol_install_dir
+declare		ol_mod_root
+declare		ol_inst_root
 
 ##############################################################################
 #
@@ -434,8 +434,8 @@ build_modules_legacy() {
         fi
 	declare ol_name='base'
 	declare ol_type=''
-	declare ol_dir="${pm_root}"
-	declare ol_install_dir="${pm_root}"
+	declare ol_mod_root="${pm_root}"
+	declare ol_inst_root="${pm_root}"
         local -i i=0
         local -i num_variants=${#variants[@]}
         for ((i = 0; i < num_variants; i++)); do
@@ -534,7 +534,7 @@ build_modules_yaml(){
 	local m
 	local pattern="//"
 	for m in "${with_modules[@]}"; do
-                if [[ -n $(awk "/${m%/*}[\/ ]/" "${files[@]}") ]]; then
+                if [[ -n $(awk "/${m%/*}[\/ ]/" "${fname}") ]]; then
 		        pattern+=" && /${m//\//\\/}/"
                 fi
 	done
@@ -561,8 +561,8 @@ build_modules_yaml(){
 			fi
 			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_dependencies deps "${fname}" "${v}" $i
-			ol_install_dir="${OverlayInfo[${ol_name}:inst_root]}"
-			ol_dir="${OverlayInfo[${ol_name}:mod_root]}"
+			ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
+			ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
 			
 			if (( ${#deps[@]} > 0 )); then
 				while read -a with_modules; do
@@ -636,8 +636,8 @@ module_name=${fname[${#fname[@]}-2]}
 if [[ "${opt_bootstrap}" == 'yes' ]]; then
 	declare ol_name='base'
 	declare ol_type=''
-	declare ol_dir="${pm_root}"
-	declare ol_install_dir="${pm_root}"
+	declare ol_mod_root="${pm_root}"
+	declare ol_inst_root="${pm_root}"
 	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
         exit $?
 fi
