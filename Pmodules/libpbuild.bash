@@ -656,7 +656,7 @@ pbuild::post_install() {
 pbuild::make_all() {
 	source "${BUILD_SCRIPT}"
 
-	set -e
+	#set -o errexit
 	local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
 	# module name including path in hierarchy and version
 	# (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
