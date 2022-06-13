@@ -289,11 +289,11 @@ std::upvar() {
 }
 
 std.get_os_release_linux() {
-        local lsb_release=$(which lsb_release)
+        #local lsb_release=$(which lsb_release)
         local ID=''
         local VERSION_ID=''
 
-        if [[ -n $(which lsb_release) ]]; then
+        if [[ -n $(which lsb_release 2>/dev/null) ]]; then
                 ID=$(lsb_release -is)
                 VERSION_ID=$(lsb_release -rs)
         elif [[ -r '/etc/os-release' ]]; then
