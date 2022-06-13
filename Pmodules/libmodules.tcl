@@ -92,10 +92,11 @@ proc module-addgroup { group } {
 			debug "group=$group"
 			debug "::variant=$::variant"
 			set dir [file join \
-				     $overlay \
+				     $::OverlayInfo($overlay:mod_root) \
 				     $group \
 				     $::MODULEFILES_DIR \
 				     {*}$::variant]
+		        debug "dir=$dir"
 			if { [file isdirectory $dir] } {
 				debug "prepend $dir to MODULEPATH "
 				prepend-path MODULEPATH $dir
