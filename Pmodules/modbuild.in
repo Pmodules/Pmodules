@@ -498,9 +498,9 @@ build_modules_yaml(){
 		local idx="$4"
 		_result=$(yq -Ne e ".\"${version}\"[${idx}].overlay" \
 			     "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return || :
+		(( $? == 0 )) && return
 		_result=$(yq -Ne e ".overlay" "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return || :
+		(( $? == 0 )) && return
 		_result='base'
 	}
 
@@ -542,7 +542,6 @@ build_modules_yaml(){
 	local -a versions
 	yaml_get_versions versions "${fname}" "${name}/${version}"
 	echo versions=${versions[@]}
-	echo ${#versions[@]}
 	for v in "${versions[@]}"; do
 		echo version=$v
 		local -i n_variants
@@ -581,7 +580,6 @@ build_modules_yaml(){
 }
 
 
-echo "build_modules_yaml()"
 build_modules() {
 	local variants_file="${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"
 	if [[ -n "${variants_file}*.yaml" ]]; then

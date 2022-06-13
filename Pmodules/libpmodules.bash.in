@@ -56,7 +56,7 @@ compute_group_depth () {
 # (Re-)Scan available groups in given overlays and compute group depth's
 #
 # Args:
-#       $1: array of overlays
+#       $@: overlay names
 #
 scan_groups () {
         local    ol
@@ -65,7 +65,7 @@ scan_groups () {
 	        local dir
 	        for dir in ${mod_root}/*/${PMODULES_MODULEFILES_DIR}; do
 		        compute_group_depth "${dir}"
-			Dir2OverlayMap[${dir}]="${ol}"
+			Dir2OverlayMap[${dir%/${PMODULES_MODULEFILES_DIR}*}]="${ol}"
 	        done
         done
 }
