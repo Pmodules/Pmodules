@@ -509,10 +509,21 @@ build_modules_yaml(){
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-       		_result=( $(yq -Ne e ".\"${version}\"[${idx}].dependencies" \
+       		_result=( $(yq -Ne e ".\"${version}\"[${idx}]|(.with, .dependencies)" \
 			       "${fname}" 2>/dev/null) )
-		(( $? == 0 )) && return || :
-		_result=()
+		if (( $? != 0 )); then
+			# neither .with nor .dependencies are set
+			_result=()
+			return
+		fi
+		# if one of .with, .dependencies is not set, the vaulue is
+		# returned as 'null'.
+		local -i i
+		for ((i=0; i<${#_result[@]}; i++)); do
+			if [[ ${_result[$i]} == 'null' ]]; then
+				unset _result[$i]
+			fi
+		done
 	}
 
 	local name="$1"
