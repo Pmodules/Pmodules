@@ -764,7 +764,7 @@ pbuild::make_all() {
 		fi
 
 		modulefile_dir=$(join_by '/' \
-					 "${ol_dir}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+					 "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
 					 "${names[@]}" \
 					 "${module_name}")
 		modulefile_name="${modulefile_dir}/${module_version}"
