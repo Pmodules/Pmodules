@@ -1496,26 +1496,6 @@ pbuild.bootstrap() {
 	pbuild::make_all
 }
 
-#-----------------------------------------------------------------------------
-#
-read_config_file() {
-	local fname="$1"
-	if [[ ! -r "${fname}" ]]; then
-		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
-	fi
-
-	eval $(std::parse_yaml "${fname}" '') || std::die 1 "Cannot read configuration file '${fname}'"
-
-	PMODULES_ROOT="${Overlays_base_install_root}"
-	PMODULES_DISTFILESDIR="${DistfilesDir}"
-	PMODULES_TMPDIR="${TmpDir}"
-	PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
-	
-	if [[ -z "${PMODULES_HOME}" ]]; then
-		std::die 1 "Error in configuration file '${fname}': PMODULE_HOME not defined!"
-	fi
-}
-
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
