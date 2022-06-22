@@ -433,7 +433,7 @@ build_modules_legacy() {
                 std::die 10 "Aborting..."
         fi
 	declare ol_name='base'
-	declare ol_type=''
+	declare ol_type='n'
 	declare ol_mod_root="${pm_root}"
 	declare ol_inst_root="${pm_root}"
         local -i i=0
@@ -581,8 +581,7 @@ build_modules_yaml(){
 
 
 build_modules() {
-	local variants_file="${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"
-	if [[ -n "${variants_file}*.yaml" ]]; then
+	if [[ -n $(ls "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"*.yaml 2>/dev/null) ]]; then
 		build_modules_yaml "$@"
 	else
 		build_modules_legacy "$@"
