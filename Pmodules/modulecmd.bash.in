@@ -2216,7 +2216,7 @@ subcommand_search() {
                 ${func_print_header}
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
-                done < <("${sort}" --version-sort -k 1,1 -k 4,4 -k 5,5 "${tmpfile}" | \
+                done < <("${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${tmpfile}" | \
                                  ${awk} "${with_modules}")
         }
 
