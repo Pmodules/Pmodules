@@ -958,9 +958,33 @@ pbuild::make_all() {
 		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
-			"installing modulefile '${modulefile_name}' ..."
+			"adding modulefile to overlay '${ol_name}' ..."
 		mkdir -p "${modulefile_dir}"
 		install -m 0644 "${src}" "${modulefile_name}"
+	}
+
+	cleanup_modulefiles(){
+		local ol=''
+		for ol in "${Overlays[@]}"; do
+			[[ "${ol}" == "${ol_name}" ]] && continue
+			local mod_root="${OverlayInfo[${ol}:mod_root]}"
+			local dir="${modulefile_dir/${ol_mod_root}/${mod_root}}"
+			local fname="${dir}/${module_version}"
+			if [[ -e "${fname}" ]]; then
+				std::info "%s "\
+					  "${module_name}/${module_version}:" \
+					  "removing modulefile from overlay '${ol}' ..."
+				rm "${fname}"
+			fi
+			fname="${dir}/.release-${module_version}"
+			if [[ -e "${fname}" ]]; then
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"removing release file from overlay '${ol}' ..."
+				rm "${fname}"
+			fi
+		done
 	}
 
 	install_release_file() {
@@ -1074,12 +1098,6 @@ pbuild::make_all() {
 	#......................................................................
 	# build module ${module_name}/${module_version}
 	build_module() {
- 		std::info \
-			"%s " \
-			"${module_name}/${module_version}:" \
-			"start building" \
-			${with_modules:+with ${with_modules[@]}} \
-			"..."
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 
 		mkdir -p "${SRC_DIR}"
@@ -1154,37 +1172,50 @@ pbuild::make_all() {
 		check_supported_os
 		check_supported_compilers
 		set_full_module_name_and_prefix
-		if [[ -e "${modulefile_name}" ]] \
-			   && [[ -d ${PREFIX} ]] \
-			   && [[ ${force_rebuild} != 'yes' ]]; then
+ 		std::info \
+			"%s " \
+			"${module_name}/${module_version}:" \
+			${with_modules:+build with ${with_modules[@]}}
+		if [[ -d ${PREFIX} ]] && [[ ${force_rebuild} != 'yes' ]]; then
+			# don't (re-)build the module, but
+			# - if the release stage has been changed to 'removed',
+			#   remove the module.
+			# - if requested, update the modulefile.
+			# - if modulefile does not exist, install it.
+			# - update release stage.
 			if [[ "${module_release}" == 'removed' ]]; then
 				remove_module
-			else
- 				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					${with_modules:+with ${with_modules[@]}} \
-					"already exists, not rebuilding ..."
-				if [[ "${opt_update_modulefiles}" == "yes" ]]; then
-					install_modulefile
-				fi
-				install_release_file
+				return $?
 			fi
-		else
-			if [[ "${module_release}" == 'deprecated' ]]; then
-				std::info \
-					"%s " "${module_name}/${module_version}:" \
-					${with_modules:+with ${with_modules[@]}} \
-					"is deprecated, skiping!"
-				install_release_file
-			else
-				build_module
+ 			std::info \
+				"%s " \
+				"${module_name}/${module_version}:" \
+				"already exists, not rebuilding ..."
+			if [[ "${opt_update_modulefiles}" == "yes" ]] || \
+			   [[ ! -e "${modulefile_name}" ]]; then
+				install_modulefile
 			fi
+			install_release_file
+			cleanup_modulefiles
+			return $?
 		fi
-	else
-		build_module
+		if [[ "${module_release}" == 'deprecated' ]]; then
+			std::info \
+				"%s " \
+				"${module_name}/${module_version}:" \
+				"is deprecated, skiping!"
+			install_release_file
+			cleanup_modulefiles
+			return $?
+		fi
 	fi
-	return 0
+	std::info \
+		"%s " \
+		"${module_name}/${module_version}:" \
+		"start building ..."
+
+	build_module
+	return $?
 }
 
 pbuild.init_env() {
