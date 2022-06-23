@@ -1,5 +1,21 @@
 # Changelog of Pmodules
 
+## Version 1.1.10
+* **modulecmd**
+  * *User visible changes*
+    * ...
+  * *Internal changes and fixes*
+    * ...
+
+* **build-system**
+  * *User visible changes*
+    * ...
+  * *Internal changes and fixes*
+    * ...
+
+* **other changes**
+ * ...
+
 ## Version 1.1.9
 * **modulecmd**
   * *User visible changes*
