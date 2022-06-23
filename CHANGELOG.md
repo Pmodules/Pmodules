@@ -3,27 +3,27 @@
 ## Version 1.1.9
 * **modulecmd**
   * *User visible changes*
-    * Overlay info added to output of sub-command 'search'
-    * Output of 'module search --verbose' revised for better readability.
+    * Overlay info added to output of sub-command `search`.
+    * Output of `module search --verbose` revised for better readability.
   * *Internal changes and fixes*
     * The shell`s init file is sourced, when Pmodules is loaded as module.
       This is required if there are changes in the module function or too
       define new shell functions.
-    * A bug in libmodules.tcl:module-addgroup() which crashed 
-      'module load ...' has been fixed.
-    * In versions before 1.1.9 a colon at the beginning or end of MODULEPATH
+    * A bug in `libmodules.tcl:module-addgroup()` which crashed 
+      `module load ...` has been fixed.
+    * In versions before 1.1.9 a colon at the beginning or end of `MODULEPATH`
       crashed the module function. This has been fixed. 
 
 * **build-system**
   * *User visible changes*
-    * The command 'modbuild' is now defined as shell function analog to
-      the 'module' command. The main reason to introduce this function
+    * The command `modbuild` is now defined as shell function analog to
+      the `module` command. The main reason to introduce this function
       is due to the fact that Bash version 5 or newer is now required
-      by 'modbuild'. The function 'modbuild' load Bash 5.x as module
+      by `modbuild`. The function `modbuild` load Bash 5.x as module
       before calling the modbuild-script. If you want to use the script
       directly, a Bash binary with version 5.x must be in PATH.
     * If a build-script is in the current working directory,
-      'modbuild' can now be called without specifying the build-script.
+      `modbuild` can now be called without specifying the build-script.
     * In case of an error in a build-step the build process did not 
       abort as it should. This has been fixed.
     * The option `--overlay` can now be used
@@ -32,8 +32,8 @@
     * The new keyword `with` has been introduced in YAML variants file
       to specified hierarchical dependencies.
 
-* *Internal changes and fixes*
-    * bugfix in setting PATH
+* **Internal changes and fixes**
+    * bugfix in setting `PATH`
     * requires bash 5 or later
 
 ## Version 1.1.8
