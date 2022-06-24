@@ -330,24 +330,6 @@ Options:
 }
 
 pmodules::compile() {
-	build () {
-		local -r name="$1"
-		local -r version=$(get_version "${name}")
-		shift
-
-		"${BOOTSTRAP_DIR}/Pmodules/modbuild.in" \
-			"--config=${config_file}" \
-			"--disable-cleanup" \
-			"--force-rebuild" \
-			"--debug" \
-			"--verbose" \
-			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
-			"${build_opts[@]}" "$@" "${version}" || \
-			std::die 3 "Compiling '${name}' failed!"
-		# :FIXME: this must be fixed in modbuild!
-		rm -f "${BOOTSTRAP_DIR}/Tools/modulefiles/.release-$V"
-	}
-
 	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
 	local opt_force='no'
 	local config_file=''
@@ -396,11 +378,11 @@ pmodules::compile() {
 
 	if [[ "${OS}" == 'Darwin' ]]; then
 		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
-			build getopt
+			: build getopt
 		fi
 
 		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/find" ]] || [[ ${opt_force} == 'yes' ]]; then
-			build findutils
+			: build findutils
 		fi
 	fi
 
