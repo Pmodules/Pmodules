@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# https://www.gnu.org/software/bash/
+#
+
+set -x
+
+P=bash
+V=${BASH5_VERSION:-5.1.16}
+
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="https://ftp.gnu.org/gnu/$P/${FNAME}"
+
+PREFIX="${PMODULES_HOME}"
+SRC_FILE="${PMODULES_DISTFILESDIR}/${FNAME}"
+SRC_DIR="${PMODULES_TMPDIR}/$P-$V/src"
+BUILD_DIR="${PMODULES_TMPDIR}/$P-$V/build"
+
+trap "pb_exit" EXIT
+
+# download
+test -r "${SRC_FILE}" || curl -L --output "$_" "${DOWNLOAD_URL}" || exit ${PB_ERR_DOWNLOAD}
+
+# unpack
+mkdir -p "${SRC_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+tar --directory "${SRC_DIR}" --strip-components 1 -xv -f "${SRC_FILE}" || exit ${PB_ERR_UNTAR}
+
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+loadablesdir="${PREFIX}/${UTILBIN_DIR}/builtins" \
+"${SRC_DIR}/configure" \
+	--prefix="${PREFIX}" \
+	--bindir="${PREFIX}/${UTILBIN_DIR}" \
+        || exit ${PB_ERR_CONFIGURE}
+
+# compile & install
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make -C examples/loadables -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make install || exit ${PB_ERR_INSTALL}
+
+# post-install
+rm -rf "${PREFIX}/include/bash"
+rm -rf "${PREFIX}/share/locale"
+
+# Local Variables:
+# mode: shell-script-mode
+# sh-basic-offset: 8
+# End:

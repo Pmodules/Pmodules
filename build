@@ -29,6 +29,57 @@ declare -rx DEFAULT_TMPDIR='var/tmp/${USER}'
 # directory where the required tools will be installed (like bash, tclsh, etc)
 declare -rx UTILBIN_DIR='libexec'
 
+declare -ix PB_ERR_ARG=1
+declare -ix PB_ERR_SETUP=2
+declare -ix PB_ERR_SYSTEM=3
+declare -ix PB_ERR_DOWNLOAD=4
+declare -ix PB_ERR_UNTAR=5
+declare -ix PB_ERR_CONFIGURE=6
+declare -ix PB_ERR_MAKE=7
+declare -ix PB_ERR_PRE_INSTALL=8
+declare -ix PB_ERR_INSTALL=9
+declare -ix PB_ERR_POST_INSTALL=10
+declare -ix PB_ERR=255
+declare -ix NJOBS=4
+
+pb_exit() {
+        local -i ec=$?
+        if [[ -n "${BASH_VERSION}" ]]; then
+                local -i n=${#BASH_SOURCE[@]}
+                local -r recipe_name="${BASH_SOURCE[n]}"
+        else
+                local -r recipe_name="${ZSH_ARGZERO}"
+        fi
+        echo -n "${recipe_name}: "
+        if (( ec == 0 )); then
+                echo "done!"
+        elif (( ec == PB_ERR_ARG )); then
+                echo "argument error!"
+        elif (( ec == PB_ERR_SETUP )); then
+                echo "error in setting everything up!"
+        elif (( ec == PB_ERR_SYSTEM )); then
+                echo "unexpected system error!"
+        elif (( ec == PB_ERR_DOWNLOAD )); then
+                echo "error in downloading the source file!"
+        elif (( ec == PB_ERR_UNTAR )); then
+                echo "error in un-taring the source file!"
+        elif (( ec == PB_ERR_CONFIGURE )); then
+                echo "error in configuring the software!"
+        elif (( ec == PB_ERR_MAKE )); then
+                echo "error in compiling the software!"
+        elif (( ec == PB_ERR_PRE_INSTALL )); then
+                echo "error in pre-installing the software!"
+        elif (( ec == PB_ERR_INSTALL )); then
+                echo "error in installing the software!"
+        elif (( ec == PB_ERR_POST_INSTALL )); then
+                echo "error in post-installing the software!"
+        else
+                echo "oops, unknown error!!!"
+        fi
+        exit ${ec}
+}
+export -f pb_exit > /dev/null
+
 #-----------------------------------------------------------------------------
 #
 # Get version from config file.
@@ -354,27 +405,27 @@ pmodules::compile() {
 	fi
 
 	if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/bash" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build bash
+		./10-build-bash
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/${UTILBIN_DIR}/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build Tcl
+		./20-build-tcl
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/lib/tcllib1.20" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build tcllib
+		./30-build-tcllib
 	fi
 
 	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build modules
+		./40-build-modules
 	fi
-	rm -rf "${PMODULES_HOME}/include"
-	rm -rf "${PMODULES_HOME}/lib/"*.a
-	rm -rf "${PMODULES_HOME}/lib/"*.la
-	rm -rf "${PMODULES_HOME}/lib/bash"
-	rm -rf "${PMODULES_HOME}/lib/pkginfo"
-	rm -rf "${PMODULES_HOME}/man"
-	rm -rf "${PMODULES_HOME}/share"
+	#rm -rf "${PMODULES_HOME}/include"
+	#rm -rf "${PMODULES_HOME}/lib/"*.a
+	#rm -rf "${PMODULES_HOME}/lib/"*.la
+	#rm -rf "${PMODULES_HOME}/lib/bash"
+	#rm -rf "${PMODULES_HOME}/lib/pkginfo"
+	#rm -rf "${PMODULES_HOME}/man"
+	#rm -rf "${PMODULES_HOME}/share"
 
 	echo "Done..."
 }
