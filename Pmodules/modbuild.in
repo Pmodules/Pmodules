@@ -165,7 +165,6 @@ MISCELLANEOUS OPTIONS:
 
 # versions to be build, '.*' or none means all
 declare -a      versions=()
-declare         opt_bootstrap='no'
 declare 	opt_build_config='Pmodules.yaml'
 declare         opt_build_target='all'
 declare         opt_dry_run='no'
@@ -287,9 +286,6 @@ parse_args() {
 			;;
 		--prep | --configure | --compile | --install | --all )
 			opt_build_target=${1:2}
-			;;
-		--bootstrap )
-			opt_bootstrap='yes'
 			;;
 		--update-modulefiles )
 			opt_update_modulefiles='yes'
@@ -608,11 +604,7 @@ pbuild.verbose "${opt_verbose}"
 #
 # read configuration for modbuild
 #
-if [[ "${opt_bootstrap}" == 'yes' ]]; then
-        pm::read_config "${BUILDBLOCK_DIR}/../../config/Pmodules.yaml"
-else
-	pm::read_config
-fi
+pm::read_config
 
 # :FIXME: should go dist files to
 #         ${pm_root}/var/distfiles
@@ -629,21 +621,6 @@ declare -r BUILDBLOCK_DIR
 IFS=/ read -r -a fname <<< "${BUILD_SCRIPT:1}"
 module_name=${fname[${#fname[@]}-2]}
 
-#
-# are we bootstrapping? If yes, go for it...
-#
-if [[ "${opt_bootstrap}" == 'yes' ]]; then
-	declare ol_name='base'
-	declare ol_type=''
-	declare ol_mod_root="${pm_root}"
-	declare ol_inst_root="${pm_root}"
-	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
-        exit $?
-fi
-
-#
-# else
-#
 for version in "${versions[@]}"; do
         build_modules "${module_name}" "${version}" "${opt_with_modules[@]}"
 done

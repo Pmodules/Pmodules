@@ -927,10 +927,8 @@ pbuild::make_all() {
 				"${PREFIX}/${FNAME_IDEPS}" \
 				"${install_dependencies[@]}"
 		fi
-		if [[ "${bootstrap}" == 'no' ]]; then
-			install_modulefile
-			install_release_file
-		fi
+		install_modulefile
+		install_release_file
 		cleanup_build
 		cleanup_src
 		std::info \
@@ -1167,47 +1165,45 @@ pbuild::make_all() {
 	#
 
 	# setup module specific environment
-	if [[ "${bootstrap}" == 'no' ]]; then
-		check_supported_systems
-		check_supported_os
-		check_supported_compilers
-		set_full_module_name_and_prefix
+	check_supported_systems
+	check_supported_os
+	check_supported_compilers
+	set_full_module_name_and_prefix
+ 	std::info \
+		"%s " \
+		"${module_name}/${module_version}:" \
+		${with_modules:+build with ${with_modules[@]}}
+	if [[ -d ${PREFIX} ]] && [[ ${force_rebuild} != 'yes' ]]; then
+		# don't (re-)build the module, but
+		# - if the release stage has been changed to 'removed',
+		#   remove the module.
+		# - if requested, update the modulefile.
+		# - if modulefile does not exist, install it.
+		# - update release stage.
+		if [[ "${module_release}" == 'removed' ]]; then
+			remove_module
+			return $?
+		fi
  		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
-			${with_modules:+build with ${with_modules[@]}}
-		if [[ -d ${PREFIX} ]] && [[ ${force_rebuild} != 'yes' ]]; then
-			# don't (re-)build the module, but
-			# - if the release stage has been changed to 'removed',
-			#   remove the module.
-			# - if requested, update the modulefile.
-			# - if modulefile does not exist, install it.
-			# - update release stage.
-			if [[ "${module_release}" == 'removed' ]]; then
-				remove_module
-				return $?
-			fi
- 			std::info \
-				"%s " \
-				"${module_name}/${module_version}:" \
-				"already exists, not rebuilding ..."
-			if [[ "${opt_update_modulefiles}" == "yes" ]] || \
+			"already exists, not rebuilding ..."
+		if [[ "${opt_update_modulefiles}" == "yes" ]] || \
 			   [[ ! -e "${modulefile_name}" ]]; then
-				install_modulefile
-			fi
-			install_release_file
-			cleanup_modulefiles
-			return $?
+			install_modulefile
 		fi
-		if [[ "${module_release}" == 'deprecated' ]]; then
-			std::info \
-				"%s " \
-				"${module_name}/${module_version}:" \
-				"is deprecated, skiping!"
-			install_release_file
-			cleanup_modulefiles
-			return $?
-		fi
+		install_release_file
+		cleanup_modulefiles
+		return $?
+	fi
+	if [[ "${module_release}" == 'deprecated' ]]; then
+		std::info \
+			"%s " \
+			"${module_name}/${module_version}:" \
+			"is deprecated, skiping!"
+		install_release_file
+		cleanup_modulefiles
+		return $?
 	fi
 	std::info \
 		"%s " \
@@ -1312,7 +1308,6 @@ pbuild.build_module() {
 	with_modules=( "$@" )
 
 	# used in pbuild::make_all
-	declare bootstrap='no'
 	declare -a runtime_dependencies=()
 	declare -a install_dependencies=()
 
@@ -1500,31 +1495,6 @@ pbuild.build_module() {
 	pbuild.init_env "${module_name}" "${module_version}"
 	pbuild::make_all
 	std::info "* * * * *\n"
-}
-
-pbuild.bootstrap() {
-	local -r module_name="$1"
-	local -r module_version="$2"
-
-	# used in pbuild::make_all
-	bootstrap='yes'
-
-	pbuild.init_env "${module_name}" "${module_version}"
-
-	MODULECMD=$(which true)
-	GROUP='Tools'
-	PREFIX="${ol_mod_root}/${GROUP}/Pmodules/${PMODULES_VERSION}"
-
-	C_INCLUDE_PATH="${PREFIX}/include"
-	CPLUS_INCLUDE_PATH="${PREFIX}/include"
-	CPP_INCLUDE_PATH="${PREFIX}/include"
-	LIBRARY_PATH="${PREFIX}/lib"
-	LD_LIBRARY_PATH="${PREFIX}/lib"
-	DYLD_LIBRARY_PATH="${PREFIX}/lib"
-
-	PATH+=":${PREFIX}/bin"
-	PATH+=":${PREFIX}/sbin"
-	pbuild::make_all
 }
 
 # Local Variables:
