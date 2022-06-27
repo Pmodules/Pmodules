@@ -165,6 +165,9 @@ Options:
 #-----------------------------------------------------------------------------
 # sub-command 'configure'
 #
+# Create basic directory hierachy and the configuration file in the given
+# installation root directory
+#
 build::configure() {
 	local opt_force='no'
 
@@ -302,6 +305,9 @@ Options:
 #-----------------------------------------------------------------------------
 # sub-command 'compile'
 #
+# compile all required tools like bash, tclsh etc for a Pmodules module.
+# The version is defined at the beginning of this file.
+#
 build::compile() {
 	local opt_force='no'
 	local opt_cleanup='yes'
@@ -380,6 +386,8 @@ Options:
 
 #-----------------------------------------------------------------------------
 # sub-command 'install'
+#
+# Install Pmodules files.
 #
 build::install() {
 	while (( $# > 0 )); do
