@@ -1,0 +1,59 @@
+#!/bin/bash
+#
+# https://core.tcl-lang.org
+#
+P=modules
+V=${MODULES_VERSION:-3.2.10.1}
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="https://amas.web.psi.ch/Downloads/$P/$P-$V.tar.bz2"
+
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+case $(uname -s) in
+	Linux )
+		declare -x LIBS="-lz -lpthread"
+		;;
+	Darwin )
+		declare -x LIBS="-lz -framework CoreFoundation"
+		;;
+	* )
+		echo "Oops: unsupported OS!" 1>&2
+		exit ${PB_ERR_SYSTEM}
+		;;
+esac
+CPPFLAGS="-DUSE_INTERP_ERRORLINE" \
+"${SRC_DIR}"/configure \
+	--prefix="${PREFIX}" \
+	--exec-prefix="${PREFIX}" \
+	--with-module-path="${PREFIX%%/Tools*}/Tools/${PMODULES_MODULEFILES_DIR}" \
+	--with-tcl="${PREFIX}/lib" \
+	--without-x \
+	--disable-versioning \
+        || exit ${PB_ERR_CONFIGURE}
+
+#---
+# compile & install
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+mkdir -p "${PREFIX}/share/man/man1"
+mkdir -p "${PREFIX}/share/man/man4"
+mv -v    "${PREFIX}/Modules/share/man/man1/module.1" "${PREFIX}/share/man/man1"
+mv -v    "${PREFIX}/Modules/share/man/man4/modulefile.4" "${PREFIX}/share/man/man4"
+mkdir -p "${PREFIX}/libexec"
+cp -v    "${BUILD_DIR}/modulecmd" "${PREFIX}/libexec/modulecmd.bin" || exit 1
+
+rm -rf  "${PREFIX}/Modules"
+rm -f	"${PREIX}"/init/{ksh,perl.pm,python.py,ruby.rb,cmake,.modulespath}
+
+#---
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

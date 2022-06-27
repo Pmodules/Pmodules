@@ -1,7 +1,0 @@
-DefaultGroups: Tools:Programming
-DefaultReleaseStages: stable
-ReleaseStages: unstable:stable:deprecated
-
-Overlays:
-  base:
-    install_root: @INSTALL_ROOT@
