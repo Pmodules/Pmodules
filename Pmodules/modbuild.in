@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!@BASH@
 #
 # The following build specific variables are set and used in libpbuild.bash:
 #       ARGS
@@ -33,14 +33,6 @@ path=$PATH
 source libstd.bash    || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
-
-if (( ${BASH_VERSINFO[0]} < 5 )); then
-	std::info "bash >= 5 is required! You are running bash ${BASH_VERSION} ..."
-	std::info "Make sure that bash >= 5 is in your PATH."
-	std::info "bash >= 5 is available as Pmodule:"
-	std::info "  module load System:bash"
-	std::die 3 ""
-fi
 
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
