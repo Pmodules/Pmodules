@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# https://frodo.looijaard.name/project/getopt
+#
+P=getopt
+V=${GETOPT_VERSION:-1.1.6}
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="http://frodo.looijaard.name/system/files/software/$P/$P-$V.tar.gz"
+
+#---
+# build on macOS only
+[[ $(uname -s) == 'Darwin' ]] || exit 0
+
+#---
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+# nothing to configure but we need gettext from Macports
+if [[ ! -d '/opt/local/bin' ]] || [[ ! -x '/opt/local/bin/msgfmt' ]]; then
+	echo "gettext port from Macports is required to build 'getopt'!" 1>&2
+	exit 1
+fi
+
+#---
+# compile
+PATH+=':/opt/local/bin'
+declare -x C_INCLUDE_PATH="${PREFIX}/include:/opt/local/include"
+declare -x LDFLAGS="/opt/local/lib/libintl.a /opt/local/lib/libiconv.a -framework CoreFoundation"
+declare -x LIBRARY_PATH="${PREFIX}/lib"
+
+make -e all || exit 1
+
+#---
+# install
+declare -x DESTDIR="${PREFIX}"
+declare -x prefix='' 
+#PATH="${PREFIX}/${UTILBIN_DIR}:${PATH}"
+make -e install
+
+#---
+# post-install
+mv "${PREFIX}/bin/getopt" "${PREFIX}/${UTILBIN_DIR}"
+rm -rf "${PREFIX}/man"
+rm -rf "${PREFIX}/share/locale"
+
+#---
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
