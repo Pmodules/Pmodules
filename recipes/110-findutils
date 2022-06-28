@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# https://www.gnu.org/software/findutils/
+#
+P=findutils
+V=${FINDUTILS_VERSION:-4.9.0}
+FNAME="$P-$V.tar.xz"
+DOWNLOAD_URL="https://ftp.gnu.org/gnu/$P/${FNAME}"
+
+#---
+# build on macOS only
+[[ $(uname -s) == 'Darwin' ]] || exit 0
+
+#---
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+loadablesdir="${PREFIX}/${UTILBIN_DIR}/builtins" \
+"${SRC_DIR}/configure" \
+	--prefix="${PREFIX}" \
+	--bindir="${PREFIX}/${UTILBIN_DIR}" \
+        || exit ${PB_ERR_CONFIGURE}
+
+#---
+# compile & install
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+rm -vf "${PREFIX}/share/man/man5/locatedb.5"
+rm -vf "${PREFIX}/share/man/man1/updatedb.1"
+rm -vf "${PREFIX}/share/man/man1/xargs.1"
+rm -vf "${PREFIX}/share/man/man1/locate.1"
+rm -vf "${PREFIX}/share/man/man1/find.1"
+
+#---
+# Local Variables:
+# mode: shell-script-mode
+# sh-basic-offset: 8
+# End:
