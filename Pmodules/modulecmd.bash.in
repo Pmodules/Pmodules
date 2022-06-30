@@ -484,7 +484,9 @@ subcommand_load() {
 		local ol=''
 		find_overlay_with_group ol "${group}" || return 1
 		local moduledir="${OverlayInfo[${ol}:mod_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
-		compute_group_depth "${moduledir}" || return 1
+		local -i depth
+		compute_group_depth depth "${moduledir}" || return 1
+		GroupDepths[${group}]=${depth}
 		g_env_must_be_saved='yes'
 	}
 
