@@ -53,6 +53,7 @@ declare -r ARGS="$@"
 
 shopt -s nocaseglob
 shopt -s extglob
+shopt -s nullglob
 
 declare		ol_mod_root
 declare		ol_inst_root
@@ -157,7 +158,6 @@ MISCELLANEOUS OPTIONS:
 
 # versions to be build, '.*' or none means all
 declare -a      versions=()
-declare 	opt_build_config='Pmodules.yaml'
 declare         opt_build_target='all'
 declare         opt_dry_run='no'
 declare         opt_enable_cleanup_build='yes'
@@ -172,8 +172,6 @@ declare         opt_verbose='no'
 declare -a      opt_with_modules=()
 
 declare         opt_ol_name_or_dir=''
-
-echo "parse_args()"
 
 parse_args() {
 	while (( $# > 0 )); do
@@ -204,13 +202,6 @@ parse_args() {
 		--dry-run )
 			opt_dry_run='yes'
 			;;
-		--config )
-			opt_build_config="$2"
-			shift 1
-			;;
-		--config=* )
-			opt_build_config="${1#*=}"
-			;;
 		--enable-cleanup )
 			opt_enable_cleanup_build='yes'
 			opt_enable_cleanup_src='yes'
@@ -231,19 +222,21 @@ parse_args() {
 		--disable-cleanup-src )
 			opt_enable_cleanup_src='no'
 			;;
-		--distdir )
-			PMODULES_DISTFILESDIR="$2"
-			shift
+		--distdir | --distdir=* )
+			if [[ $1 == *=* ]]; then
+				PMODULES_DISTFILESDIR="${1/--distdir=}"
+			else
+				PMODULES_DISTFILESDIR="$2"
+				shift
+			fi
 			;;
-		--distdir=* )
-			PMODULES_DISTFILESDIR="${1/--distdir=}"
-			;;
-		--tmpdir )
-                        PMODULES_TMPDIR="$2"
-			shift
-			;;
-		--tmpdir=* )
-			PMODULES_TMPDIR="${1/--tmpdir=}"
+		--tmpdir | --tmpdir=* )
+			if [[ $1 == *=* ]]; then
+				PMODULES_TMPDIR="${1#--*=}"
+			else
+				PMODULES_TMPDIR="$2"
+				shift
+			fi
 			;;
 		--system | --system=* )
 			if [[ $1 == *=* ]]; then
@@ -261,20 +254,21 @@ parse_args() {
 				shift
 			fi
 			;;
-		--use-flags )
-			USE_FLAGS="y:$2:"
-			shift
+		--use-flags | --use-flags=* )
+			if [[ $1 == *=* ]]; then
+				USE_FLAGS=":${1#--*=}:"
+			else
+				USE_FLAGS=":$2:"
+				shift
+			fi
 			;;
-		--use-flags=* )
-			USE_FLAGS=":${1/--use-flags=}:"
-			;;
-		--with )
-			opt_with_modules+=( "$2" )
-			shift
-			;;
-		--with=*/* )
-			m="${1/--with=}"
-			opt_with_modules+=( ${m} )
+		--with | --with=*/* )
+			if [[ $1 == *=* ]]; then
+				opt_with_modules+=( "${1#--*=}" )
+			else
+				opt_with_modules+=( "$2" )
+				shift
+			fi
 			;;
 		--prep | --configure | --compile | --install | --all )
 			opt_build_target=${1:2}
