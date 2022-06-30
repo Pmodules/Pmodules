@@ -1514,7 +1514,7 @@ subcommand_use() {
                 if [[ ! -v GroupDepths[${arg}] ]]; then
                         # this scan is required if a new group has been
                         # create inside an used overlay
-			scan_groups "${!OverlayInfo[@]}"
+			scan_groups "${UsedOverlays[@]}"
 			g_env_must_be_saved='yes'
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
