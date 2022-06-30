@@ -305,10 +305,13 @@ parse_args() {
 	done	
 	if [[ -z ${BUILD_SCRIPT} ]]; then
 		if [[ -r "${PWD}/build" ]]; then
-			BUILD_SCRIPT="${PWD}/build"
-			BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
-		else
-			std::die 1 "No build-block specified!"
+			if grep -q '#!.* modbuild' "${PWD}/build"; then
+				BUILD_SCRIPT="${PWD}/build"
+				BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
+			fi
+		fi
+		if [[ -z ${BUILD_SCRIPT} ]]; then
+			std::die 1 "Don't know what to build!"
 		fi
 	fi
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
