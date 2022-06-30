@@ -519,16 +519,12 @@ build_modules_yaml(){
 	local m
 	local pattern="//"
 	for m in "${with_modules[@]}"; do
-                if [[ -n $(awk "/${m%/*}[\/ ]/" "${fname}") ]]; then
-		        pattern+=" && /${m//\//\\/}/"
-                fi
+		pattern+=" && /${m//\//\\/}/"
 	done
 
 	local -a versions
 	yaml_get_versions versions "${fname}" "${name}/${version}"
-	echo versions=${versions[@]}
 	for v in "${versions[@]}"; do
-		echo version=$v
 		local -i n_variants
 		yaml_get_num_variants n_variants "${fname}" "${v}"
 		local -i i
