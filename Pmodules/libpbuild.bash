@@ -739,10 +739,60 @@ pbuild::make_all() {
 	#	PREFIX
 	#
 	set_full_module_name_and_prefix() {
-		join_by() {
-			local IFS="$1"
-			shift
-			echo "$*"
+		do_simple_group(){
+			modulefile_dir=$(join_by '/' \
+						 "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+						 "${module_name}")
+			modulefile_name="${modulefile_dir}/${module_version}"
+			PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
+		}
+		do_hierarchical_group(){
+			join_by() {
+				local IFS="$1"
+				shift
+				echo "$*"
+			}
+			# define hierarchies
+			if [[ -v COMPILER_VERSION ]]; then
+				Compiler_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
+			fi
+			if [[ -v COMPILER_VERSION ]] && [[ -v HDF5_SERIAL_VERSION ]]; then
+				HDF5_serial_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
+				HDF5_serial_HIERARCHY+=' hdf5_serial/${HDF5_SERIAL_VERSION}'
+			fi
+			if [[ -v COMPILER_VERSION ]] && [[ -v MPI_VERSION ]]; then
+				MPI_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
+				MPI_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
+			fi
+			if [[ -v COMPILER_VERSION ]] && [[ -v MPI_VERSION ]] && [[ HDF5_VERSION ]]; then
+				HDF5_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
+				HDF5_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
+				HDF5_HIERARCHY+=' hdf5/${HDF5_VERSION}'
+			fi
+
+			# evaluate
+			local names=()
+			local vname="${GROUP}_HIERARCHY"
+			if [[ -n ${!vname} ]]; then
+				names=( $(eval echo ${!vname}) )
+			else
+				std::die 1 \
+					 "%s: %s" \
+					 "${module_name}/${module_version}" \
+					 "not all hierarchical dependencies loaded!"
+			fi
+
+			modulefile_dir=$(join_by '/' \
+						 "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+						 "${names[@]}" \
+						 "${module_name}")
+			modulefile_name="${modulefile_dir}/${module_version}"
+
+			PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
+			local -i i=0
+			for ((i=${#names[@]}-1; i >= 0; i--)); do
+				PREFIX+="/${names[i]}"
+			done
 		}
 
 		[[ -n ${GROUP} ]] || std::die 1 \
@@ -750,47 +800,13 @@ pbuild::make_all() {
 					      "${module_name}/${module_version}" \
 					      "group not set."
 
-		# define hierarchies
-		if [[ -v COMPILER_VERSION ]]; then
-			Compiler_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-		fi
-		if [[ -v COMPILER_VERSION ]] && [[ -v HDF5_SERIAL_VERSION ]]; then
-			HDF5_serial_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-			HDF5_serial_HIERARCHY+=' hdf5_serial/${HDF5_SERIAL_VERSION}'
-		fi
-		if [[ -v COMPILER_VERSION ]] && [[ -v MPI_VERSION ]]; then
-			MPI_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-			MPI_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
-		fi
-		if [[ -v COMPILER_VERSION ]] && [[ -v MPI_VERSION ]] && [[ HDF5_VERSION ]]; then
-			HDF5_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-			HDF5_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
-			HDF5_HIERARCHY+=' hdf5/${HDF5_VERSION}'
-		fi
-
-		# evaluate
-		local names=()
-		local vname="${GROUP}_HIERARCHY"
-		if [[ -n ${!vname} ]]; then
-			names=( $(eval echo ${!vname}) )
+		local -i grp_depth
+		compute_group_depth grp_depth "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}"
+		if (( grp_depth == 0 )); then
+			do_simple_group
 		else
-			std::die 1 \
-				 "%s: %s" \
-				 "${module_name}/${module_version}" \
-				 "not all hierarchical dependencies loaded!"
+			do_hierarchical_group
 		fi
-
-		modulefile_dir=$(join_by '/' \
-					 "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
-					 "${names[@]}" \
-					 "${module_name}")
-		modulefile_name="${modulefile_dir}/${module_version}"
-		
-		PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
-		local -i i=0
-		for ((i=${#names[@]}-1; i >= 0; i--)); do
-			PREFIX+="/${names[i]}"
-		done
 	}
 	
 	#......................................................................
