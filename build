@@ -461,10 +461,6 @@ build::install() {
 	chmod 0755 "${PREFIX}/libexec/modulecmd.tcl"
 
 	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" \
-	    > "${SRC_DIR}/libpmodules.bash"
-	chmod 0755 "${SRC_DIR}/libpmodules.bash"
-
-	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" \
 	    > "${PREFIX}/lib/libpmodules.bash"
 	chmod 0755 "${PREFIX}/lib/libpmodules.bash"
 
