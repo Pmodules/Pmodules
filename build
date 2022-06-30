@@ -489,7 +489,6 @@ build::install() {
 	install -m 0644 "${SRC_DIR}/zsh"		"${PREFIX}/init"
 
 	install -m 0644 "${SRC_DIR}/libpbuild.bash"	"${PREFIX}/lib"
-	install -m 0644 "${SRC_DIR}/libpbuild_dyn.bash"	"${PREFIX}/lib"
 	install -m 0644 "${SRC_DIR}/libstd.bash"	"${PREFIX}/lib"
 	install -m 0755 -d				"${PREFIX}/lib/Pmodules"
 	install -m 0644 "${SRC_DIR}/libmodules.tcl"	"${PREFIX}/lib/Pmodules"
