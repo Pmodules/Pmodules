@@ -29,10 +29,8 @@ fi
 unset MODULE_VERSION
 unset MODULE_VERSION_STACK
 unset MODULESHOME
-#unset PMODULES_ENV
 
 declare -x PMODULES_DIR="${PMODULES_HOME}"
-
 
 #############################################################################
 # implement module comand as shell function
@@ -44,9 +42,7 @@ module() {
 export -f module
 
 modbuild(){
-	(
-		"${PMODULES_HOME}/bin/modbuild" "$@"
-	)
+	"${PMODULES_HOME}/bin/modbuild" "$@"
 }
 export -f modbuild
 
