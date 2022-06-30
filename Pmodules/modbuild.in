@@ -489,6 +489,19 @@ build_modules_yaml(){
 		_result='base'
 	}
 
+	yaml_get_systems(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(yq -Ne e ".\"${version}\"[${idx}].systems" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=$(yq -Ne e ".systems" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result='any'
+	}
+
 	yaml_get_dependencies(){
 		local -n _result="$1"
 		local fname="$2"
@@ -519,16 +532,12 @@ build_modules_yaml(){
 	local m
 	local pattern="//"
 	for m in "${with_modules[@]}"; do
-                if [[ -n $(awk "/${m%/*}[\/ ]/" "${fname}") ]]; then
-		        pattern+=" && /${m//\//\\/}/"
-                fi
+		pattern+=" && /${m//\//\\/}/"
 	done
 
 	local -a versions
 	yaml_get_versions versions "${fname}" "${name}/${version}"
-	echo versions=${versions[@]}
 	for v in "${versions[@]}"; do
-		echo version=$v
 		local -i n_variants
 		yaml_get_num_variants n_variants "${fname}" "${v}"
 		local -i i
@@ -548,7 +557,21 @@ build_modules_yaml(){
 			yaml_get_dependencies deps "${fname}" "${v}" $i
 			ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
 			ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
-			
+
+			local systems
+			yaml_get_systems systems "${fname}" "${v}" $i
+			# build module if
+			# - systems is any
+			# - opt_system is listed in systems
+			local build_it='no'
+			if [[ "${systems}" == 'any' ]]; then
+				build_it='yes'
+			fi
+			if [[ ,${systems}, == *,${opt_system},* ]]; then
+				build_it='yes'
+			fi
+			[[ ${build_it} == 'no' ]] && continue
+
 			if (( ${#deps[@]} > 0 )); then
 				while read -a with_modules; do
 					pbuild.build_module \

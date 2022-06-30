@@ -740,9 +740,8 @@ pbuild::make_all() {
 	#
 	set_full_module_name_and_prefix() {
 		do_simple_group(){
-			modulefile_dir=$(join_by '/' \
-						 "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
-						 "${module_name}")
+			modulefile_dir="${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}/"
+			modulefile_dir+="${module_name}"
 			modulefile_name="${modulefile_dir}/${module_version}"
 			PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
 		}
@@ -783,7 +782,9 @@ pbuild::make_all() {
 			fi
 
 			modulefile_dir=$(join_by '/' \
-						 "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
+						 "${ol_mod_root}" \
+						 "${GROUP}" \
+						 "${PMODULES_MODULEFILES_DIR}" \
 						 "${names[@]}" \
 						 "${module_name}")
 			modulefile_name="${modulefile_dir}/${module_version}"
