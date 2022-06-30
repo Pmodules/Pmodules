@@ -79,17 +79,24 @@ pm::read_config(){
 		#
 		# Args:
 		#	$1	[upvar] result
+		local -n fnames="$1"
+
+		# user defined via environment variable
 		if [[ -v PMODULES_OVERLAYS_DEF ]]; then
 			test -r "${PMODULES_OVERLAYS_DEF}" || \
 				std::die 3 \
 					 "%s -- %s" \
 					 "overlay definition file is not readable" \
 					 "$_"
-			config_files+=("${PMODULES_OVERLAYS_DEF}")
+			fnames+=("${PMODULES_OVERLAYS_DEF}")
 		fi
+
+		# user defined
 		if [[ -r "${HOME}/.Pmodules/Pmodules.yaml" ]]; then
-			config_files+=("${HOME}/.Pmodules/Pmodules.yaml")
+			fnames+=("${HOME}/.Pmodules/Pmodules.yaml")
 		fi
+
+		# system config file
 		test -r "${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml" || \
 			std::die 3 \
 				 "%s %s -- %s" \
@@ -97,14 +104,19 @@ pm::read_config(){
 				 "does not exist or is not readable" \
 				 "$_"
 		
-		config_files+=("${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml")
+		fnames+=("${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml")
 	}
 
 	_get_ol_names(){
-		${yq} -Ne eval-all '. as $item ireduce ({}; . *+ $item) |.Overlays|keys()' "${config_files[@]}" | awk '{print $2}'
+		#
+		# get the names of all overlays
+		#
+		local -n fnames="$1"
+		${yq} -Ne eval-all '. as $item ireduce ({}; . *+ $item) |.Overlays|keys()' \
+		      "${fnames[@]}" | awk '{print $2}'
 	}
 
-	_get_config_files
+	_get_config_files config_files
 
 	eval $(std::parse_yaml "${config_files[-1]}" 'cfg_')
 	[[ -v cfg_DefaultGroups ]] && DefaultGroups="${cfg_DefaultGroups}"
@@ -119,7 +131,7 @@ pm::read_config(){
 	# - modulefiles_root default so install_root
 	# - the type defaults to ${ol_normal}
 	#
-	Overlays=( $(_get_ol_names) )
+	Overlays=( $(_get_ol_names config_files) )
 	local ol=''
 	for ol in "${Overlays[@]}"; do
 		eval $(${yq} -Ne eval-all \
