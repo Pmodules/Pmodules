@@ -2757,8 +2757,21 @@ if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
 if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
+	# this can only happen if the last command was
+	#   module load Pmodules/${PMODULES_VERSION}
+	#
+	# the values these two variables must be saved before initialising
+	declare _tmp_loaded_modules_="${LOADEDMODULES}"
+	declare _tmp_lmfiles_="${_LMFILES_}"
+
 	pmodules_init
-	#g_env_must_be_saved='yes'
+
+	# restore and export
+	LOADEDMODULES="${_tmp_loaded_modules_}"
+	_LMFILES_="${_tmp_lmfiles_}"
+        export_env \
+                LOADEDMODULES \
+                _LMFILES_
 fi
 
 if (( ${#GroupDepths[@]} == 0 )); then
