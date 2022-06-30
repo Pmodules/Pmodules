@@ -45,7 +45,6 @@ export -f module
 
 modbuild(){
 	(
-		eval $("${PMODULES_HOME}/bin/modulecmd" bash load System:bash)
 		"${PMODULES_HOME}/bin/modbuild" "$@"
 	)
 }
