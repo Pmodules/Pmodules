@@ -452,7 +452,7 @@ build_modules_yaml(){
 		local -n _result="$1"
 		local fname="$2"
 		local version="$3"
-		_result=( $(yq -Ne e \
+		_result=( $(${yq} -Ne e \
 			       "with_entries(select(.key | test(\"^${version}\$\")))|keys" \
 			       "${fname}" 2>/dev/null | awk '{print $2}') )
 	}
@@ -461,7 +461,7 @@ build_modules_yaml(){
 		local -n _result="$1"
 		local fname="$2"
 		local version="$3"
-		_result=$(yq -Ne e ".\"${version}\"|length" \
+		_result=$(${yq} -Ne e ".\"${version}\"|length" \
 			     "${fname}" 2>/dev/null)
 		if (( $? != 0 )); then
 			_result=0
@@ -473,7 +473,7 @@ build_modules_yaml(){
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-		_result=$(yq -Ne e ".\"${version}\"[${idx}].relstage" \
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].relstage" \
 			     "${fname}" 2>/dev/null)
 		(( $? != 0 )) && relstage='unstable' || :
 	}
@@ -483,10 +483,10 @@ build_modules_yaml(){
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-		_result=$(yq -Ne e ".\"${version}\"[${idx}].overlay" \
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].overlay" \
 			     "${fname}" 2>/dev/null)
 		(( $? == 0 )) && return
-		_result=$(yq -Ne e ".overlay" "${fname}" 2>/dev/null)
+		_result=$(${yq} -Ne e ".overlay" "${fname}" 2>/dev/null)
 		(( $? == 0 )) && return
 		_result='base'
 	}
@@ -496,10 +496,10 @@ build_modules_yaml(){
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-		_result=$(yq -Ne e ".\"${version}\"[${idx}].systems" \
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].systems" \
 			     "${fname}" 2>/dev/null)
 		(( $? == 0 )) && return
-		_result=$(yq -Ne e ".systems" "${fname}" 2>/dev/null)
+		_result=$(${yq} -Ne e ".systems" "${fname}" 2>/dev/null)
 		(( $? == 0 )) && return
 		_result='any'
 	}
@@ -509,7 +509,7 @@ build_modules_yaml(){
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-       		_result=( $(yq -Ne e ".\"${version}\"[${idx}]|(.with, .dependencies)" \
+       		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}]|(.with, .dependencies)" \
 			       "${fname}" 2>/dev/null) )
 		if (( $? != 0 )); then
 			# neither .with nor .dependencies are set
