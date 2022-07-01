@@ -436,7 +436,9 @@ build_modules_legacy() {
 }
 
 build_modules_yaml(){
-	local fnames=()
+	local -a fnames=()
+	local -A mod_overlays=()
+
 	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}.yaml" )
 	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.yaml" )
 	fnames+=( '__zzzzz__' )
@@ -524,6 +526,30 @@ build_modules_yaml(){
 		done
 	}
 
+	cleanup_modulefiles(){
+		local ol=''
+		for ol in "${Overlays[@]}"; do
+			[[ -v mod_overlays[${ol}] ]] && continue
+			local mod_root="${OverlayInfo[${ol}:mod_root]}"
+			local dir="${modulefile_dir/${ol_mod_root}/${mod_root}}"
+			local fname="${dir}/${module_version}"
+			if [[ -e "${fname}" ]]; then
+				std::info "%s "\
+					  "${module_name}/${module_version}:" \
+					  "removing modulefile from overlay '${ol}' ..."
+				rm "${fname}"
+			fi
+			fname="${dir}/.release-${module_version}"
+			if [[ -e "${fname}" ]]; then
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"removing release file from overlay '${ol}' ..."
+				rm "${fname}"
+			fi
+		done
+	}
+
 	local name="$1"
         local version="$2"
 	shift 2
@@ -550,6 +576,7 @@ build_modules_yaml(){
 			else
 				ol_name="${opt_overlay}"
 			fi
+			mod_overlays[${ol_name}]=1
 			if [[ ! -v OverlayInfo[${ol_name}:inst_root] ]]; then
 				std::die 3 "Overlay is not defined -- ${ol_name}"
 			fi
@@ -570,8 +597,11 @@ build_modules_yaml(){
 			if [[ ,${systems}, == *,${opt_system},* ]]; then
 				build_it='yes'
 			fi
-			[[ ${build_it} == 'no' ]] && continue
-
+			if [[ ${build_it} == 'no' ]]; then
+				# we don't build, but we remember the overlay for
+				# cleaning up the modulefiles later.
+				continue
+			fi
 			if (( ${#deps[@]} > 0 )); then
 				while read -a with_modules; do
 					pbuild.build_module \
@@ -584,6 +614,7 @@ build_modules_yaml(){
 				     "${relstage}"
 			fi
 		done
+		cleanup_modulefiles
 	done
 }
 

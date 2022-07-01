@@ -995,29 +995,6 @@ pbuild::make_all() {
 		install -m 0644 "${src}" "${modulefile_name}"
 	}
 
-	cleanup_modulefiles(){
-		local ol=''
-		for ol in "${Overlays[@]}"; do
-			[[ "${ol}" == "${ol_name}" ]] && continue
-			local mod_root="${OverlayInfo[${ol}:mod_root]}"
-			local dir="${modulefile_dir/${ol_mod_root}/${mod_root}}"
-			local fname="${dir}/${module_version}"
-			if [[ -e "${fname}" ]]; then
-				std::info "%s "\
-					  "${module_name}/${module_version}:" \
-					  "removing modulefile from overlay '${ol}' ..."
-				rm "${fname}"
-			fi
-			fname="${dir}/.release-${module_version}"
-			if [[ -e "${fname}" ]]; then
-				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					"removing release file from overlay '${ol}' ..."
-				rm "${fname}"
-			fi
-		done
-	}
 
 	install_release_file() {
  		local -r release_file="${modulefile_dir}/.release-${module_version}"
@@ -1227,7 +1204,6 @@ pbuild::make_all() {
 			install_modulefile
 		fi
 		install_release_file
-		cleanup_modulefiles
 		return $?
 	fi
 	if [[ "${module_release}" == 'deprecated' ]]; then
@@ -1236,7 +1212,6 @@ pbuild::make_all() {
 			"${module_name}/${module_version}:" \
 			"is deprecated, skiping!"
 		install_release_file
-		cleanup_modulefiles
 		return $?
 	fi
 	std::info \
