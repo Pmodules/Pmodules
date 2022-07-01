@@ -1895,13 +1895,15 @@ subcommand_purge() {
 
 	# is a Pmodule module loaded?
 	# if yes, save name in variable 'pmodule'
-	local pmodule=''
+	# We also have to save PMODULES_HOME since it will be
+	# unset while sourcing the shell's init script.
 	IFS=':'
 	local -a lmfiles=($_LMFILES_)
 	unset IFS
 	for f in "${lmfiles[@]}"; do
 		if [[ $f == */${PMODULES_MODULEFILES_DIR}/Pmodules/* ]]; then
-			pmodule="${f##*/${PMODULES_MODULEFILES_DIR}/}"
+			local pm_home="${PMODULES_HOME}"
+			local pmodule="${f##*/${PMODULES_MODULEFILES_DIR}/}"
 			break;
 		fi
 	done
@@ -1931,13 +1933,14 @@ subcommand_purge() {
                 echo "${error}" 1>&2
 	fi
 
-	if [[ -n "${pmodule}" ]]; then
+	if [[ -v pmodule ]]; then
 		# reload a previously loaded Pmodule module
 		# stderr is redirected to /dev/null, otherwise
 		# we may get output like
 		# 'unstable module has been loaded'
+		PMODULES_HOME="${pm_home}"
+		export_env PMODULES_HOME
 		subcommand_load "${pmodule}" 2> /dev/null
-		# export_env PMODULES_HOME
 	fi
         init_modulepath
 	
