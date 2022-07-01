@@ -22,7 +22,7 @@ if { [module-info mode load] } {
     }
     remove-path C_INCLUDE_PATH "$PREFIX/include"
     remove-path CPLUS_INCLUDE_PATH "$PREFIX/include"
-}
 
-set shell [module-info shell]
-puts "source \"$PREFIX/init/$shell\""
+    set shell [module-info shell]
+    puts "source \"$PREFIX/init/$shell\""
+}
