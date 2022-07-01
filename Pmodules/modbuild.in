@@ -49,11 +49,11 @@ source libpmodules.bash    || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
 # save arguments, (still) required for building dependencies
-declare -r ARGS="$@"
+declare -r	ARGS="$@"
 
-shopt -s nocaseglob
-shopt -s extglob
-shopt -s nullglob
+shopt -s	nocaseglob
+shopt -s	extglob
+shopt -s	nullglob
 
 declare		ol_mod_root
 declare		ol_inst_root
