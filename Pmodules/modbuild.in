@@ -51,6 +51,7 @@ source libpmodules.bash    || \
 # save arguments, (still) required for building dependencies
 declare -r	ARGS="$@"
 
+#set   -o	nounset
 shopt -s	nocaseglob
 shopt -s	extglob
 shopt -s	nullglob
