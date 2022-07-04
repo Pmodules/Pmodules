@@ -524,35 +524,10 @@ build_modules_yaml(){
 		# if one of .with, .dependencies is not set, the vaulue is
 		# returned as 'null'.
 		local -i i
-		for ((i=0; i<${#_result[@]}; i++)); do
-			if [[ ${_result[$i]} == 'null' ]]; then
-				unset _result[$i]
-			fi
+		for i in "${!_result[@]}"; do
+			[[ ${_result[$i]} == 'null' ]] && unset -v '_result[$i]'
 		done
-	}
-
-	cleanup_modulefiles(){
-		local ol=''
-		for ol in "${Overlays[@]}"; do
-			[[ -v mod_overlays[${ol}] ]] && continue
-			local mod_root="${OverlayInfo[${ol}:mod_root]}"
-			local dir="${modulefile_dir/${ol_mod_root}/${mod_root}}"
-			local fname="${dir}/${module_version}"
-			if [[ -e "${fname}" ]]; then
-				std::info "%s "\
-					  "${module_name}/${module_version}:" \
-					  "removing modulefile from overlay '${ol}' ..."
-				rm "${fname}"
-			fi
-			fname="${dir}/.release-${module_version}"
-			if [[ -e "${fname}" ]]; then
-				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					"removing release file from overlay '${ol}' ..."
-				rm "${fname}"
-			fi
-		done
+		_result=("${_result[@]}")
 	}
 
 	local name="$1"
