@@ -568,6 +568,7 @@ build_modules_yaml(){
 	for v in "${versions[@]}"; do
 		local -i n_variants
 		yaml_get_num_variants n_variants "${fname}" "${v}"
+		(( n_variants == 0 )) && (( n_variants = 1 ))
 		local -i i
 		local -a deps=()
 		local relstage
