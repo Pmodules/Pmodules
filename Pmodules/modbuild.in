@@ -578,10 +578,14 @@ build_modules_yaml(){
 			else
 				ol_name="${opt_overlay}"
 			fi
-			mod_overlays[${ol_name}]=1
 			if [[ ! -v OverlayInfo[${ol_name}:inst_root] ]]; then
 				std::die 3 "Overlay is not defined -- ${ol_name}"
 			fi
+			mod_overlays[$i]="${ol_name}"
+		done
+
+		for (( i=0; i<n_variants; i++)); do
+			ol_name="${mod_overlays[$i]}"
 			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_dependencies deps "${fname}" "${v}" $i
 			ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
@@ -616,7 +620,6 @@ build_modules_yaml(){
 				     "${relstage}"
 			fi
 		done
-		cleanup_modulefiles
 	done
 }
 
