@@ -301,7 +301,11 @@ pbuild::module_is_avail() {
 pbuild::set_download_url() {
 	local -i _i=${#SOURCE_URLS[@]}
 	SOURCE_URLS[_i]="$1"
-	SOURCE_NAMES[_i]="$2"
+	if (( $# == 2 )); then
+		SOURCE_NAMES[$_i]="$2"
+	else
+		SOURCE_NAMES[$_i]=''
+	fi
 }
 
 pbuild::set_sha256sum() {
@@ -691,7 +695,7 @@ pbuild::make_all() {
 
 	#......................................................................
 	check_supported_systems() {
-		[[ -z "${SUPPORTED_SYSTEMS}" ]] && return 0
+		(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
 		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
 			[[ ${sys,,} == ${system,,} ]] && return 0
 		done
@@ -702,7 +706,7 @@ pbuild::make_all() {
 
 	#......................................................................
 	check_supported_os() {
-		[[ -z "${SUPPORTED_OS}" ]] && return 0
+		(( ${#SUPPORTED_OS[@]} == 0 )) && return 0
 		for os in "${SUPPORTED_OS[@]}"; do
 			[[ ${os,,} == ${OS,,} ]] && return 0
 		done
@@ -713,7 +717,7 @@ pbuild::make_all() {
 
 	#......................................................................
 	check_supported_compilers() {
-		[[ -z "${SUPPORTED_COMPILERS}" ]] && return 0
+		(( ${#SUPPORTED_COMPILERS[@]} == 0 )) && return 0
 		for compiler in "${SUPPORTED_COMPILERS[@]}"; do
 			[[ ${compiler,,} == ${COMPILER,,} ]] && return 0
 		done

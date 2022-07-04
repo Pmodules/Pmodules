@@ -171,6 +171,8 @@ declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
 
+declare		BUILD_SCRIPT=''
+
 declare         opt_ol_name_or_dir=''
 
 parse_args() {

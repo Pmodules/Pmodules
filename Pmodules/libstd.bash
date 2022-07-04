@@ -20,7 +20,7 @@ std::error() {
 }
 
 std::debug() {
-        [[ ${PMODULES_DEBUG} ]] || return 0
+        [[ -v PMODULES_DEBUG ]] || return 0
         std::log 2 "$@"
 }
 
