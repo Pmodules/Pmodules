@@ -483,7 +483,8 @@ pbuild::prep() {
 			std::die 4 \
 				 "%s " "${module_name}/${module_version}:" \
 				 "sources for not found."
-		unpack "${source_fname}" "${SOURCE_UNPACK_DIRS[${source_fname##*/}]}"
+		local dir=${SOURCE_UNPACK_DIRS[${source_fname##*/}]:-''}
+		unpack "${source_fname}" "${dir}"
 	done
 	patch_sources
 	# create build directory
@@ -758,26 +759,34 @@ pbuild::make_all() {
 			# define hierarchies
 			if [[ -v COMPILER_VERSION ]]; then
 				Compiler_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
+			else
+				unset Compiler_HIERARCHY
 			fi
 			if [[ -v COMPILER_VERSION ]] && [[ -v HDF5_SERIAL_VERSION ]]; then
 				HDF5_serial_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
 				HDF5_serial_HIERARCHY+=' hdf5_serial/${HDF5_SERIAL_VERSION}'
+			else
+				unset HDF5_serial_HIERARCHY
 			fi
 			if [[ -v COMPILER_VERSION ]] && [[ -v MPI_VERSION ]]; then
 				MPI_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
 				MPI_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
+			else
+				unset MPI_HIERARCHY
 			fi
 			if [[ -v COMPILER_VERSION ]] && [[ -v MPI_VERSION ]] && [[ HDF5_VERSION ]]; then
 				HDF5_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
 				HDF5_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
 				HDF5_HIERARCHY+=' hdf5/${HDF5_VERSION}'
+			else
+				unset HDF5_HIERARCHY
 			fi
 
 			# evaluate
 			local names=()
-			local vname="${GROUP}_HIERARCHY"
-			if [[ -n ${!vname} ]]; then
-				names=( $(eval echo ${!vname}) )
+			local -n vname="${GROUP}"_HIERARCHY
+			if [[ -v vname ]]; then
+				names=( $(eval echo ${vname}) )
 			else
 				std::die 1 \
 					 "%s: %s" \
@@ -955,12 +964,12 @@ pbuild::make_all() {
 		[[ "${OS}" == "Linux" ]] && post_install_linux
 		install_doc
 		install_pmodules_files
-		if [[ -n "${runtime_dependencies}" ]]; then
+		if [[ -v runtime_dependencies[0] ]]; then
 			write_runtime_dependencies \
 				"${PREFIX}/${FNAME_RDEPS}" \
 				"${runtime_dependencies[@]}"
 		fi
-		if [[ -n "${install_dependencies}" ]]; then
+		if [[ -v install_dependencies[0] ]]; then
 			write_runtime_dependencies \
 				"${PREFIX}/${FNAME_IDEPS}" \
 				"${install_dependencies[@]}"
