@@ -50,21 +50,12 @@ fi
 PATH='/usr/bin:/bin:/usr/sbin:/sbin'
 
 ##############################################################################
-# save arguments, required for building dependencies
-declare -r	ARGS="$@"
-declare         PMODULES_DISTFILESDIR=''
-declare         PMODULES_TMPDIR=''
-declare		pm_root="${PMODULES_HOME%%/Tools*}"
-declare		ol_mod_root=''
-declare		ol_inst_root=''
-
 source "${mydir}/../lib/libpbuild.bash"    || \
         std::die 3 "Oops: cannot source library -- '$_'"
 source "${mydir}/../lib/libpmodules.bash"  || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
 ##############################################################################
-# set some shell options
 set   -o	nounset
 shopt -s	nocaseglob
 shopt -s	extglob
@@ -168,6 +159,11 @@ MISCELLANEOUS OPTIONS:
 # then configuration file
 # last default
 
+# save arguments, required for building dependencies
+declare -r	ARGS="$@"
+declare         PMODULES_DISTFILESDIR=''
+declare         PMODULES_TMPDIR=''
+
 # versions to be build, '.*' or none means all
 declare -a      versions=()
 declare         opt_build_target='all'
@@ -184,8 +180,6 @@ declare         opt_verbose='no'
 declare -a      opt_with_modules=()
 
 declare		BUILD_SCRIPT=''
-
-declare         opt_ol_name_or_dir=''
 
 parse_args() {
 	while (( $# > 0 )); do
@@ -429,8 +423,8 @@ build_modules_legacy() {
         fi
 	declare ol_name='base'
 	declare ol_type='n'
-	declare ol_mod_root="${pm_root}"
-	declare ol_inst_root="${pm_root}"
+	declare ol_mod_root="${PMODULES_HOME%%/Tools*}"
+	declare ol_inst_root="${PMODULES_HOME%%/Tools*}"
         local -i i=0
         local -i num_variants=${#variants[@]}
         for ((i = 0; i < num_variants; i++)); do
@@ -646,7 +640,7 @@ pm::read_config
 #         or
 #         ${overlay}/var/distfiles
 #         ?
-: ${PMODULES_DISTFILESDIR:=${pm_root}/var/distfiles}
+: ${PMODULES_DISTFILESDIR:="${PMODULES_HOME%%/Tools*}/var/distfiles"}
 : ${PMODULES_TMPDIR:=/var/tmp/${USER}}
 
 declare -r BUILD_SCRIPT
