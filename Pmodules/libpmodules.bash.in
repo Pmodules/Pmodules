@@ -40,7 +40,10 @@ print_help() {
 compute_group_depth () {
 	local -n result="$1"
         local -r dir="$2"
-	test -d "${dir}" || return 1
+	if [[ ! -d "${dir}" ]]; then
+		${mkdir} -p "${dir}" || \
+			std::die 1 "Cannot create directory -- ${dir}"
+	fi
         local group=${dir%/*}
         local group=${group##*/}
 	result=$(${find} "${dir}" -depth \( -type f -o -type l \) \
