@@ -1446,7 +1446,6 @@ pbuild.build_module() {
 
 		${mkdir} -p "${SRC_DIR}"
 		${mkdir} -p "${BUILD_DIR}"
-		${mkdir} -p "${PREFIX}"
 
  		std::info \
 			"%s " \
@@ -1469,6 +1468,7 @@ pbuild.build_module() {
 		build_target "${BUILD_DIR}" compile
 		[[ "${build_target}" == "compile" ]] && return 0
 
+		${mkdir} -p "${PREFIX}"
  		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
