@@ -532,6 +532,19 @@ build_modules_yaml(){
 		_result=("${_result[@]}")
 	}
 
+	yaml_get_build_requirements(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+       		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].build_requires" \
+			       "${fname}" 2>/dev/null) )
+		if (( $? != 0 )); then
+			_result=()
+			return
+		fi
+	}
+
 	local name="$1"
         local version="$2"
 	shift 2
@@ -551,6 +564,7 @@ build_modules_yaml(){
 		(( n_variants == 0 )) && (( n_variants = 1 ))
 		local -i i
 		local -a deps=()
+		local -a build_requires=()
 		local relstage
 		local ol_name
 		for (( i=0; i<n_variants; i++)); do
@@ -569,8 +583,16 @@ build_modules_yaml(){
 			ol_name="${mod_overlays[$i]}"
 			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_dependencies deps "${fname}" "${v}" $i
-			ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
-			ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
+			yaml_get_build_requirements build_requires "${fname}" "${v}" $i
+			# :FIXME:
+			# for the time being we prefix the build requirements
+			# with 'b:' and append them to the other dependencies.
+			# With this solution we don't have to change anything
+			# else in the code but have better readable variant
+			# files.
+			deps+=("${build_requires[@]/#/b:}")
+			declare ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
+			declare ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
 
 			local systems
 			yaml_get_systems systems "${fname}" "${v}" $i
