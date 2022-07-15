@@ -460,7 +460,6 @@ pbuild::prep() {
 			${curl} \
 				--location \
 				--fail \
-				--remove-on-error \
 				--output "${output}" \
 				"${url}"
 			# :FIXME: How to handle insecure downloads? 
