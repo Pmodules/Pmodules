@@ -261,7 +261,7 @@ readonly -f pbuild::supported_compilers
 #   $1: group
 #
 pbuild::add_to_group() {
-	if [[ -z ${1} ]]; then
+	if (( $# == 0 )); then
 		std::die 42 \
                          "%s " "${module_name}/${module_version}:" \
                          "${FUNCNAME}: missing group argument."
@@ -385,7 +385,11 @@ pbuild::add_patch() {
 			 "%s " "${module_name}/${module_version}:" \
 			 "${FUNCNAME}: missing argument!"
 	PATCH_FILES+=( "$1" )
-	PATCH_STRIPS+=( "$2" )
+	if (( $# >= 2 )); then
+		PATCH_STRIPS+=( "$2" )
+	else
+		PATCH_STRIPS+=( "${PATCH_STRIP_DEFAULT}" )
+	fi
 }
 readonly -f pbuild::add_patch
 
