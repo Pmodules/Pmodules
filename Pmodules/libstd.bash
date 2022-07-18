@@ -20,7 +20,7 @@ std::error() {
 }
 
 std::debug() {
-        [[ ${PMODULES_DEBUG} ]] || return 0
+        [[ -v PMODULES_DEBUG ]] || return 0
         std::log 2 "$@"
 }
 
@@ -39,7 +39,7 @@ std::def_cmds(){
 	local path="$1"
 	shift
 	for cmd in "$@"; do
-		eval declare -g ${cmd}=$(PATH="${path}" which $cmd 2>/dev/null)
+		eval declare -gr ${cmd}=$(PATH="${path}" /usr/bin/which $cmd 2>/dev/null)
 		if [[ -z "${!cmd}" ]]; then
 			std::die 255 "${cmd} not found"
 		fi
@@ -324,7 +324,7 @@ std::get_os_release() {
 	local -A func_map;
 	func_map['Linux']=std.get_os_release_linux
 	func_map['Darwin']=std.get_os_release_macos
-	${func_map[${OS}]}
+	${func_map[$(uname -s)]}
 }
 
 std::get_type() {
