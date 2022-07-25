@@ -5,6 +5,7 @@
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
 ##### no changes below this line ######
+export PMODULES_VERSION
 
 declare    __pm_root__=${(%):-%N}
 declare -x PMODULES_HOME="${__pm_root__:h:h}/Tools/Pmodules/${PMODULES_VERSION}"
