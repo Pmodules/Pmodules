@@ -1,0 +1,117 @@
+= Overlays
+:TOC:
+:sectnums:
+
+Please note: This document is work in progress!
+
+== What are Overlays and for what can they be used?
+
+== Overlay configuration
+
+=== System wide
+
+==== Example
+.A system wide configuration file `/opt/psi/config/Pmodules.yaml`
+====
+....
+DefaultGroups: Tools:Programming
+DefaultReleaseStages: stable
+ReleaseStages: unstable:stable:deprecated
+TmpDir: /opt/psi/var/tmp/${USER}
+DistfilesDir: /opt/psi/var/distfiles
+
+Overlays:
+  base:
+    install_root: /opt/psi
+    modulefiles_root: /opt/psi
+  devel:
+    install_root: /opt/psi
+    modulefiles_root: ${HOME}/modulefiles
+....
+====
+==== YAML Format
+.Format
+====
+....
+Overlays:
+  <name>:
+    install_root: <installation-root>
+    modulefiles_root: <modulefiles-root>
+    type: <type of overlay>
+  ...
+....
+====
+`<name>`:: Name of overlay. Note: whitespace in the name is not supported.
+`<name>.install_root`:: The root of the software installation. This key is mandatory.
+`<name>.modulefiles_root`:: The root of the modulefile hierarchy. This key is optional and defaults to `<name>.install_root>
+`<name>.type`:: The type of the overlay, see below. This key is optional and the default value is `n`.
+
+==== Overlay types
+`n`:: Normal overlay.
+`h`:: Hiding overlay.
+`r`:: Replacing overlay.
+
+=== User defined overlays
+
+Each user can define his own overlays in `$HOME/.Pmodules/Pmodules.yaml`. 
+
+== Working with overlays
+
+== Building modules
+
+The old format of the variants file is simple but very limited and almost impossible to extend for new features. To overcome the limitations a new format using YAML for variants files has been introduced. For the time being both format are supported. But it is highly recommended to use the YAML format for new modules and to migrate existing variants files in the old format to the new.
+
+=== With a YAML variants file
+
+==== Example of a variants file in YAML format
+.A YAML variants file
+====
+....
+overlay: base
+
+hdf5_serial/1.12.2:
+- with: gcc/{5.5.0,6.5.0,7.5.0,10.2.0,10.3.0} 
+  relstage: stable
+- with: gcc/{8.5.0,9.5.0,11.3.0,12.1.0}
+  relstage: unstable
+  overlay: devel                 
+....
+====
+
+==== Format specification
+.YAML format
+....
+relstage: <default-release-stage>
+overlay: <default-overlay>
+systems: <default-systems>
+
+<name>/<version>:
+  - with: <hierarchical-build-dependencies>
+    dependencies: <other-build-dependencies>
+    relstate: <release-stage>
+    overlay: <overlay>
+    systems: <systems>
+  ...
+...
+....
+==== Defaults
+Default values can be overriden per version/variant.
+
+`overlay`:: The default overlay the module will be installed in. This value can be overriden for dedicated versions/variants.
+`systems`:: The default for supported systems.
+
+==== Versions and Variants
+
+`<name>/<version>`:: An array with variants for this version.
+
+`<name>/<version>.[i].with`:: Hierarchical dependencies for variant `i`.
+
+`<name>/<version>.[i].dependencies`:: Build/run-time dependencies for variant `i`.
+
+`<name>/<version>.[i].relstage`:: Relase stage of variant `i`.
+
+`<name>/<version>.[i].overlay`:: Overlay of variant `i`.
+
+`<name>/<version>.[i].systems`:: Supported systems.
+
+=== Legacy format

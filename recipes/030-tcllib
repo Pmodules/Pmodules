@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# https://core.tcl-lang.org
+#
+P=tcllib
+V=${TCLLIB_VERSION:-1.21}
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="https://core.tcl-lang.org/tcllib/uv/${FNAME}" 
+
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# download
+test -r "${SRC_FILE}" || curl -L --output "$_" "${DOWNLOAD_URL}" || exit ${PB_ERR_DOWNLOAD}
+
+#---
+# unpack
+mkdir -p "${SRC_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+tar --directory "${SRC_DIR}" --strip-components 1 -xv -f "${SRC_FILE}" || exit ${PB_ERR_UNTAR}
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+"${SRC_DIR}"/configure \
+	--prefix="${PREFIX}" \
+	--mandir="${PREFIX}/share/man" \
+        || exit ${PB_ERR_CONFIGURE}
+
+#---
+# compile & install
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+rm -rf "${PREFIX}/share/man/mann"
+rm -f  "${PREFIX}/bin/dtplite"
+rm -f  "${PREFIX}/bin/mkdoc"
+rm -f  "${PREFIX}/bin/nns"
+rm -f  "${PREFIX}/bin/nnsd"
+rm -f  "${PREFIX}/bin/nnslog"
+rm -f  "${PREFIX}/bin/page"
+rm -f  "${PREFIX}/bin/pt"
+rm -f  "${PREFIX}/bin/tcldocstrip"
+
+#---
+# Local Variables:
+# mode: shell-script-mode
+# sh-basic-offset: 8
+# End:

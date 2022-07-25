@@ -1,56 +1,84 @@
 #!/usr/bin/env bash
 #
-if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
-	echo "BASH version >= 4 is required and must be available in PATH!" 1>&2
+
+declare -rx VERSION='1.1.10'
+
+if (( "${BASH_VERSINFO[0]}" < 5 )); then
+	echo "BASH version 5.0 or newer is required and must be available in PATH!" 1>&2
 	exit 1
 fi
 
-declare	BOOTSTRAP_DIR=$(dirname "$0")
-source "${BOOTSTRAP_DIR}/Pmodules/libstd.bash" || { echo "Oops!" 1>&2; exit 42; }
-source "${BOOTSTRAP_DIR}/Pmodules/libpbuild.bash" || { echo "Oops!" 1>&2; exit 42; }
+set -o nounset
+set -o pipefail
+shopt -s nullglob
 
-declare -r BOOTSTRAP_DIR=$(std::get_abspath "${BOOTSTRAP_DIR}")
+declare -r BOOTSTRAP_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
-declare -x PMODULES_ROOT
-declare -x PMODULES_HOME
-declare -x PMODULES_DISTFILESDIR
-declare -x PMODULES_TMPDIR
+source "${SRC_DIR}/libstd.bash"		|| { echo "Oops!" 1>&2; exit 42; }
+source "${SRC_DIR}/libpbuild.bash"	|| { echo "Oops!" 1>&2; exit 42; }
 
+declare -r  PMOD_DIR="Tools/Pmodules/${VERSION}"
+# config directory and file relative to install root
 declare -rx CONFIG_DIR='config'
-declare -rx CONFIG_FILE='Pmodules.yaml'
-declare -rx VERSIONS_CFG_FILE="${CONFIG_DIR}/versions.conf"
-
-# defaults
-declare -rx DEFAULT_PMODULES_ROOT='/opt/psi'
-declare -rx DEFAULT_DISTFILES_DIR="var/distfiles"
-declare -rx DEFAULT_TMPDIR='var/tmp/${USER}'
+declare -rx CONFIG_FILE="${CONFIG_DIR}/Pmodules.yaml"
 
 # directory where the required tools will be installed (like bash, tclsh, etc)
 declare -rx UTILBIN_DIR='libexec'
 
+# defaults
+declare -rx DEFAULT_INSTALL_ROOT='/opt/psi'
+declare -rx DEFAULT_DISTFILES_DIR='var/distfiles'
+declare -rx DEFAULT_TMP_DIR='var/tmp/${USER}'
+
 #-----------------------------------------------------------------------------
 #
-# Get version from config file.
-#
-# The format of the config file is:
-#
-# <PackageName> <version>
-#
-get_version() {
-	local -r name="$1"
-	echo $(awk "/^$1[[:blank:]]/ {print \$2}" "${VERSIONS_CFG_FILE}")
+read_config_file() {
+	local fname="$1"
+	if [[ ! -r "${fname}" ]]; then
+		std::die 1 "Configuration file '${fname}' does not exist or is not readable!"
+	fi
+
+	eval $(std::parse_yaml "${fname}" '') || \
+		std::die 1 "Cannot read configuration file '${fname}'"
+
+	declare -xg INSTALL_ROOT="${Overlays_base_install_root}"
+	if [[ -z "${INSTALL_ROOT}" ]]; then
+		std::die 1 "Error in configuration file '${fname}': install root not defined!"
+	fi
+	declare -xg PREFIX="${INSTALL_ROOT}/${PMOD_DIR}"
+	declare -xg DOWNLOADS_DIR="${DistfilesDir:-${INSTALL_ROOT}/${DEFAULT_DISTFILES_DIR}}"
+	declare -xg TMP_DIR="${TmpDir:-${INSTALL_ROOT}/${DEFAULT_TMP_DIR}}"
 }
 
+#-----------------------------------------------------------------------------
+# The next functions are used in the sub-commands, if an illegal option
+# or argument has been passed.
 #
-# the Pmodules version is defined in the config file
-#
-declare -rx PMODULES_VERSION=$(get_version 'Pmodules')
+illegal_option(){
+	local subcmd="$1"
+	local opt="$2"
+	std::die 1 \
+		 "%s: %s -- %s" \
+		 "$(basename $0) ${subcmd}" \
+		 "Illegal option" \
+		 "${opt}"
+}
+
+illegal_arg(){
+	local subcmd="$1"
+	local arg="$2"
+	std::die 1 \
+		 "%s: %s -- %s" \
+		 "$(basename $0) ${subcmd}" \
+		 "Illegal argument" \
+		 "${arg}"
+}
 
 #-----------------------------------------------------------------------------
-#
-usage() {
-	local prog=$(basename $0)
+# help for sub-command 'help' (usage)
+build::help_help(){
+	local prog="$(basename "$0")"
 	echo "
 Usage: ${prog} help|configure|compile|install
 
@@ -73,26 +101,36 @@ to get help for a specific sub-command.
 }
 
 #-----------------------------------------------------------------------------
+# sub-command 'help'
 #
-pmodules::help() {
-	if (( $# > 1 )); then
-		usage
+# print help for sub-commands
+#
+build::help() {
+	if (( $# == 0 )); then
+		build::help_help
+	else
+		case $1 in
+			configure|compile|install )
+				build::help_$1
+				;;
+			help )
+				build::help_help
+				;;
+			-* )
+				illegal_option 'help' "$1"
+				;;
+			* )
+				std::error "No such command -- $1"
+				build::help_help
+				;;
+		esac
 	fi
-	case $1 in
-		configure|compile|install )
-			pmodules::help_$1
-			;;
-		* )
-			echo -en "$1 - invalid sub-command!\n" 1>&2
-			usage
-			;;
-	esac
 }
 
-
 #-----------------------------------------------------------------------------
+# help for sub-command 'configure'
 #
-pmodules::help_configure() {
+build::help_configure() {
 	echo "
 Usage: $(basename $0) configure [OPTION...]
 
@@ -100,21 +138,24 @@ Configure and setup a new Pmodules environment. You need permissions
 to write to the installation root.
 
 Options:
---prefix=DIR
+--install_root=DIR
 	Root of the Pmodules environment installation. Everything will be
 	installed in a directory hierarchy with 'DIR' as prefix.
-       	The default is '${DEFAULT_PMODULES_ROOT}'.
+       	The default is '${DEFAULT_INSTALL_ROOT}'.
 
 --distfilesdir=DIR
 	Directory where downloaded files are stored.
-	The default is 'PREFIX/${DEFAULT_DISTFILES_DIR}' in the 
+	The default is '${DEFAULT_INSTALL_ROOT}/${DEFAULT_DISTFILES_DIR}' in the 
 	Pmodules root directory.
 
 --tmpdir=DIR
 	Directory for temporary files.
-	The default is 'PREFIX/${DEFAULT_TMPDIR}'
+	The default is '${DEFAULT_INSTALL_ROOT}/${DEFAULT_TMP_DIR}'
 
---help
+--force|-f
+	Override existing configuration.
+
+--help|-h|-?
 	Print this help text.
 
 " 1>&2
@@ -122,110 +163,123 @@ Options:
 }
 
 #-----------------------------------------------------------------------------
+# sub-command 'configure'
 #
-pmodules::configure() {
-	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
-	local distfilesdir=''
-	local tmpdir=''
-	local config_file=''
+# Create basic directory hierachy and the configuration file in the given
+# installation root directory
+#
+build::configure() {
 	local opt_force='no'
 
 	while (( $# > 0 )); do
 		case "$1" in
-			--prefix )
-				prefix="$2"
-				shift 1
-				;;
-			--prefix=* )
-				prefix="${1#*=}"
+			--install_root | --install_root=* )
+				if [[ $1 == *=* ]]; then
+					INSTALL_ROOT="${1#*=}"
+				else
+					INSTALL_ROOT="$2"
+					shift 1
+				fi
 				;;
 			--distfilesdir )
-				distfilesdir="$2"
-				shift 1
-				;;
-			--distfilesdir=* )
-				distfilesdir="${1#*=}"
+				if [[ $1 == *=* ]]; then
+					DOWNLOADS_DIR="${1#*=}"
+				else
+					DOWNLOADS_DIR="$2"
+					shift 1
+				fi
 				;;
 			-f | --force )
 				opt_force='yes'
 				;;
-			--tmpdir )
-				tmpdir="$2"
-				shift 1
-				;;
-			--tmpdir=* )
-				tmpdir="${1#*=}"
+			--tmpdir | --tmpdir=* )
+				if [[ $1 == *=* ]]; then
+					TMP_DIR="${1#*=}"
+				else
+					TMP_DIR="$2"
+					shift 1
+				fi
 				;;
 			--help | -h | -\? )
-				pmodules::help_configure
+				build::help_configure
 				;;
 			-* )
-				std::die 1 "$1: illegal option"
+				illegal_option 'configure' "$1"
 				;;
 			* )
-				std::die 1 "$1: illegal argument to sub-command 'configure'."
+				illegal_arg 'configure' "$1"
 				;;
 		esac
 		shift 1
 	done
-	if [[ ! -d ${prefix} ]]; then
-		echo "The root directory '${prefix}' does not exist, trying to create it..."
-		if ! mkdir -p "${prefix}"; then
-			std::die 1 "Creating the root directory failed!\nAborting..."
+	: ${INSTALL_ROOT:=${DEFAULT_INSTALL_ROOT}}
+	: ${DOWNLOADS_DIR:=${INSTALL_ROOT}/${DEFAULT_DISTFILES_DIR}}
+	: ${TMP_DIR:=${INSTALL_ROOT}/${DEFAULT_TMP_DIR}}
+	PREFIX="${INSTALL_ROOT}/${PMOD_DIR}"
+
+	#---
+	# check/create the install root
+	if [[ ! -d ${INSTALL_ROOT} ]]; then
+		std::info "%s\n%s" \
+			  "The root directory '${INSTALL_ROOT}' does not exist!" \
+			  "Trying to create it..."
+		if ! mkdir -p "${INSTALL_ROOT}"; then
+			std::die 1 "%s\n%s" \
+				 "Creating the root directory failed!" \
+				 "Aborting..."
 		fi
 	fi
-	if [[ ! -w ${prefix} ]]; then
-		std::die 1 "The root directory '${prefix}' is not writable!\nAborting..."
+	if [[ ! -w ${INSTALL_ROOT} ]]; then
+		std::die 1 "%s\n%s" \
+			 "The root directory '${INSTALL_ROOT}' is not writable!" \
+			 "Aborting..."
 	fi
-	mkdir -p "${prefix}/${CONFIG_DIR}" || \
+
+	#---
+	# check/create YAML config file in install root
+	mkdir -p "${INSTALL_ROOT}/${CONFIG_DIR}" || \
 		std::die 1 "Aborting..."
 
-	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
-	if [[ "${opt_force}" == 'yes' ]]; then
-		rm -f "${config_file}"
+	local config_file="${INSTALL_ROOT}/${CONFIG_FILE}"
+	if [[ "${opt_force}" != 'yes' ]] && [[ -e "${config_file}" ]]; then
+		std::die 1 "%s\n%s" \
+			 "The Pmodules environment in '${INSTALL_ROOT}' has already been configured!" \
+			 "Use the option --force to override. Aborting..."
 	fi
 
-	if [[ -e "${config_file}" ]]; then
-		std::die 1 "The Pmodules environment has already been configured!
-Use the option --force to override.\nAborting..."
-	fi
-
-	[[ -z "${distfilesdir}" ]] && distfilesdir="${prefix}/${DEFAULT_DISTFILES_DIR}"
-	[[ -z "${tmpdir}" ]] && tmpdir="${prefix}/${DEFAULT_TMPDIR}"
-
-	sed_cmd="s:@INSTALL_ROOT@:${prefix}:g;"
-	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${distfilesdir}:g;"
-	sed_cmd+="s:@PMODULES_TMPDIR@:${tmpdir}:g;"
-        sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g"
+	sed_cmd="s:@INSTALL_ROOT@:${INSTALL_ROOT}:g;"
+	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${DOWNLOADS_DIR}:g;"
+	sed_cmd+="s:@PMODULES_TMPDIR@:${TMP_DIR}:g;"
+        sed_cmd+="s:@PMODULES_VERSION@:${VERSION}:g"
         
-	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/${CONFIG_DIR}/${CONFIG_FILE}.in" \
+	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/${CONFIG_FILE}.in" \
 		> "${config_file}" || \
 		std::die 1 "Cannot create configuration file in Pmodules root\nAborting..."
 
-	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" > "${SRC_DIR}/libpmodules.bash"
-	chmod 0755 "${SRC_DIR}/libpmodules.bash"
+	#---
+	# create basic directories
+	install -d -m 0755 \
+		"${INSTALL_ROOT}/Tools/modulefiles/Pmodules" \
+		"${INSTALL_ROOT}/Libraries/modulefiles" \
+		"${INSTALL_ROOT}/Programming/modulefiles" \
+		"${DOWNLOADS_DIR}" || \
+		std::die 1 "%s" \
+			 "Creating basic directories failed\n" \
+			 "Aborting..."
 
-	read_config_file "${config_file}"
-	install -d -m 0755 "${PMODULES_HOME}/bin"
-	install -d -m 0755 "${PMODULES_HOME}/init"
-	install -d -m 0755 "${PMODULES_HOME}/lib"
-	install -d -m 0755 "${PMODULES_HOME}/libexec"
-	install -d -m 0755 "${PMODULES_ROOT}/Tools/modulefiles/Pmodules"
-	install -d -m 0755 "${PMODULES_ROOT}/Libraries/modulefiles"
-	install -d -m 0755 "${PMODULES_ROOT}/Programming/modulefiles"
-	install -d -m 0755 "${distfilesdir}"
-
+	#---
 	echo "Configuration:"
-	echo "  root of Pmodules environment: ${prefix}"
-	echo "  Pmodule prefix:               ${PMODULES_HOME}"
-	echo "  tmp directory:                ${tmpdir}"
-	echo "  store for downloaded files:   ${distfilesdir}"
+	echo "  root of Pmodules environment: ${INSTALL_ROOT}"
+	echo "  Pmodule prefix:               ${PREFIX}"
+	echo "  tmp directory:                ${TMP_DIR}"
+	echo "  store for downloaded files:   ${DOWNLOADS_DIR}"
 	echo "Done..."
 }
 
 #-----------------------------------------------------------------------------
+# help for sub-command 'compile'
 #
-pmodules::help_compile() {
+build::help_compile() {
 	echo "
 Usage: $(basename $0) compile [OPTION...]
 
@@ -233,21 +287,13 @@ Compile and install the required tools for a new Pmodules environment.
 ou need the permissions to write to the installation root.
 
 Options:
---prefix=DIR
-	Root of the Pmodules environment installation. The root of the
-       	installation must be either specified via this option or the
-	environment variable PMODULES_ROOT. If this option is used and
-	the PMODULES_ROOT is set, the directory specified with this 
-	option will be used.
+--install_root=DIR
+	Root of the Pmodules environment installation. Everything will be
+	installed in a directory hierarchy with 'DIR' as prefix.
+       	The default is '${DEFAULT_INSTALL_ROOT}'.
 
---debug
-	Enable verbose/debug output.
-
---disable-cleanup )
+--disable-cleanup
 	Do not cleanup the tmp directory after compilation and installation.
-
---force | -f
-	Force compilation.
 
 --help
 	Print this help text.
@@ -256,270 +302,208 @@ Options:
 	std::die 1 ""
 }
 
-pmodules::compile() {
-	build () {
-		local -r name="$1"
-		local -r version=$(get_version "${name}")
-		shift
-
-		"${BOOTSTRAP_DIR}/Pmodules/modbuild.in" \
-			"--config=${config_file}" \
-			"--disable-cleanup" \
-			"--force-rebuild" \
-			"--debug" \
-			"--verbose" \
-			"${BOOTSTRAP_DIR}/Tools/${name}/build" \
-			"${build_opts[@]}" "$@" "${version}" || \
-			std::die 3 "Compiling '${name}' failed!"
-		# :FIXME: this must be fixed in modbuild!
-		rm -f "${BOOTSTRAP_DIR}/Tools/modulefiles/.release-$V"
-	}
-
-	local prefix="${PMODULES_ROOT:-${DEFAULT_PMODULES_ROOT}}"
+#-----------------------------------------------------------------------------
+# sub-command 'compile'
+#
+# compile all required tools like bash, tclsh etc for a Pmodules module.
+# The version is defined at the beginning of this file.
+#
+build::compile() {
 	local opt_force='no'
-	local config_file=''
+	local opt_cleanup='yes'
 
 	while (( $# > 0 )); do
 		case $1 in
-			--prefix )
-				prefix="$2"
-				shift 1
-				;;
-			--prefix=* )
-				prefix="${1#*=}"
+			--install_root | --install_root=* )
+				if [[ $1 == *=* ]]; then
+					INSTALL_ROOT="${1#*=}"
+				else
+					INSTALL_ROOT="$2"
+					shift 1
+				fi
 				;;
 			--disable-cleanup )
-				build_opts+=( "$1" )
-				;;
-			--debug )
-				build_opts+=( "$1" )
-				;;
-			-f | --force )
-				opt_force='yes'
+				opt_cleanup='no'
 				;;
 			--help | -h | -\? )
-				pmodules::help_compile
+				build::help_compile
 				;;
 			-* )
-				std::die 1 "$1: illegal option"
+				illegal_option 'compile' "$1"
 				;;
 			* )
-				std::die 1 "$1: illegal argument for  sub-command 'compile'."
+				illegal_arg 'compile' "$1"
 				;;
 		esac
 		shift 1
 	done
+	: ${INSTALL_ROOT:=${DEFAULT_INSTALL_ROOT}}
+	PREFIX="${INSTALL_ROOT}/${PMOD_DIR}"
 
-	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
-	read_config_file "${config_file}"
-	install -d -m 0755 "${PMODULES_HOME}/bin"
-	install -d -m 0755 "${PMODULES_HOME}/init"
-	install -d -m 0755 "${PMODULES_HOME}/lib"
-	install -d -m 0755 "${PMODULES_HOME}/libexec"
+	read_config_file "${INSTALL_ROOT}/${CONFIG_FILE}"
 
 	echo "Configuration:"
-	echo "  root of Pmodules environment: ${prefix}"
-	echo "  Pmodule prefix:               ${PMODULES_HOME}"
+	echo "  root of Pmodules environment: ${INSTALL_ROOT}"
+	echo "  Pmodule prefix:               ${PREFIX}"
 
-	if [[ "${OS}" == 'Darwin' ]]; then
-		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/getopt" ]] || [[ ${opt_force} == 'yes' ]]; then
-			build getopt
-		fi
+	install -m 0755 -d "${PREFIX}"/{bin,init,lib,libexec} \
 
-		if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/find" ]] || [[ ${opt_force} == 'yes' ]]; then
-			build findutils
-		fi
+	for recipe in recipes/[0-9]*; do
+		"./${recipe}" "${PREFIX}"
+	done
+	if [[ "${opt_cleanup}" == 'yes' ]]; then
+		rm -rf "${TMP_DIR}/*"
+		rm -f  "${PREFIX}/lib/libtcl*.a"
+		rm -rf "${PREFIX}/include"
 	fi
-
-	if [[ ! -f "${PMODULES_HOME}/${UTILBIN_DIR}/bash" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build bash
-	fi
-
-	if [[ ! -e "${PMODULES_HOME}/${UTILBIN_DIR}/tclsh" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build Tcl
-	fi
-
-	if [[ ! -e "${PMODULES_HOME}/lib/tcllib1.20" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build tcllib
-	fi
-
-	if [[ ! -e "${PMODULES_HOME}/libexec/modulecmd.bin" ]] || [[ ${opt_force} == 'yes' ]]; then
-		build modules
-	fi
-	rm -rf "${PMODULES_HOME}/include"
-	rm -rf "${PMODULES_HOME}/lib/"*.a
-	rm -rf "${PMODULES_HOME}/lib/"*.la
-	rm -rf "${PMODULES_HOME}/lib/bash"
-	rm -rf "${PMODULES_HOME}/lib/pkginfo"
-	rm -rf "${PMODULES_HOME}/man"
-	rm -rf "${PMODULES_HOME}/share"
-
 	echo "Done..."
 }
 
 #-----------------------------------------------------------------------------
+# help for sub-command 'install'
 #
-pmodules::help_install() {
+build::help_install() {
 	echo "
 Usage: $(basename $0) install [OPTION...]
 
 Install a new Pmodules version.
 
 Options:
---prefix=DIR
-	Root of the Pmodules environment installation. The root of the
-       	installation must be either specified via this option or the
-	environment variable PMODULES_ROOT. If this option is used and
-	the PMODULES_ROOT is set, the directory specified with this 
-	option will be used.
+--install_root=DIR
+	Root of the Pmodules environment installation. Everything will be
+	installed in a directory hierarchy with 'DIR' as prefix.
+       	The default is '${DEFAULT_INSTALL_ROOT}'.
 
 --debug
 	Enable verbose/debug output.
 
---disable-cleanup )
-	Do not cleanup the tmp directory after compilation and installation.
-
---force | -f
-	Force compilation.
-
---help
+--help|-h|-?
 	Print this help text.
 
 " 1>&2
 	std::die 1 ""
 }
 
-pmodules::install() {
-	if [[ -v PMOULES_HOME ]]; then
-		local prefix="${PMODULES_HOME%%/Tools*}"
-	else
-		local prefix="${DEFAULT_PMODULES_ROOT}"
-	fi
-	local config_file=''
-	local opt_force='no'
-
+#-----------------------------------------------------------------------------
+# sub-command 'install'
+#
+# Install Pmodules files.
+#
+build::install() {
 	while (( $# > 0 )); do
 		case $1 in
 			--debug )
 				set -x
 				;;
-			--prefix )
-				prefix="$2"
-				shift 1
-				;;
-			--prefix=* )
-				prefix="${1#*=}"
-				;;
-			-f | --force )
-				opt_force='yes'
+			--install_root | --install_root=* )
+				if [[ $1 == *=* ]]; then
+					INSTALL_ROOT="${1#*=}"
+				else
+					INSTALL_ROOT="$2"
+					shift 1
+				fi
 				;;
 			--help | -h | -\? )
-				pmodules::help_install
+				build::help_install
 				;;
 			-* )
-				std::die 1 "$1: illegal option"
+				illegal_option 'install' "$1"
 				;;
 			* )
-				std::die 1 "$1: illegal argument to sub-command 'install'."
+				illegal_arg 'install' "$1"
 				;;
 		esac
 		shift 1
 	done
 
-	local config_file="${prefix}/${CONFIG_DIR}/${CONFIG_FILE}"
-	read_config_file "${config_file}"
+	: ${INSTALL_ROOT:=${DEFAULT_INSTALL_ROOT}}
+	PREFIX="${INSTALL_ROOT}/${PMOD_DIR}"
+
+	read_config_file "${INSTALL_ROOT}/${CONFIG_FILE}"
 
 	###
 	#
 	# begin installation
 	#
 	echo "Configuration:"
-	echo "  root of Pmodules environment: ${prefix}"
-	echo "  Pmodule prefix:               ${PMODULES_HOME}"
-	sed_cmd="s:@PMODULES_HOME@:${PMODULES_HOME}:g;"
-	sed_cmd+="s:@PMODULES_VERSION@:${PMODULES_VERSION}:g;"
-	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
-	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${PMODULES_DISTFILESDIR}:g;"
-	sed_cmd+="s:@PMODULES_TMPDIR@:${PMODULES_TMPDIR}:g;"
-	sed_cmd+="s:@TCLSHDIR@:${PMODULES_HOME}/${UTILBIN_DIR}:g;"
-	sed_cmd+="s:@pager@::g;"
-	sed_cmd+="s:@pageropts@::g;"
-	sed_cmd+="s:@etcdir@:${PMODULES_ROOT}/${CONFIG_DIR}:g;"
+	echo "  root of Pmodules environment: ${INSTALL_ROOT}"
+	echo "  Pmodule prefix:               ${PREFIX}"
+	sed_cmd+="s:@PMODULES_VERSION@:${VERSION}:g;"
 	sed_cmd+="s:@VERSIONING@:#:g;"
-	sed_cmd+="s:@prefix@:${PMODULES_HOME}:g;"
-	sed_cmd+="s:@initdir@:${PMODULES_HOME}/init:g;"
-	sed_cmd+="s:@MODULES_RELEASE@:${PMODULES_VERSION}:g;"
-	sed_cmd+="s:@BASH@:${PMODULES_HOME}/${UTILBIN_DIR}/bash:g;"
-	sed_cmd+="s:@MODULECMD@:${PMODULES_HOME}/${UTILBIN_DIR}/modulecmd.bash:g;"
-	sed_cmd+="s:@MODMANAGE@:${PMODULES_HOME}/${UTILBIN_DIR}/modmanage.bash:g;"
+	sed_cmd+="s:@BASH@:${PREFIX}/${UTILBIN_DIR}/bash:g;"
+	sed_cmd+="s:@MODULECMD@:${PREFIX}/${UTILBIN_DIR}/modulecmd.bash:g;"
+
+	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in" \
+	    > "${INSTALL_ROOT}/${CONFIG_DIR}/profile.bash-${VERSION}"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in" \
+	    > "${INSTALL_ROOT}/${CONFIG_DIR}/profile.csh-${VERSION}"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.zsh.in" \
+	    > "${INSTALL_ROOT}/${CONFIG_DIR}/profile.zsh-${VERSION}"
+	chmod 0644 "${INSTALL_ROOT}/${CONFIG_DIR}"/*-${VERSION}
+
+	test -e "${INSTALL_ROOT}/${CONFIG_DIR}/profile.bash" || \
+		install -m 0644 "$_-${VERSION}" "$_"
+
+	test -e "${INSTALL_ROOT}/${CONFIG_DIR}/profile.csh" || \
+		install -m 0644 "$_-${VERSION}" "$_"
+
+	test -e "${INSTALL_ROOT}/${CONFIG_DIR}/profile.zsh" || \
+		install -m 0644 "$_-${VERSION}" "$_"
+
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.in" \
+            > "${PREFIX}/bin/modulecmd"
+	chmod 0755 "${PREFIX}/bin/modulecmd"
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in" \
+	    > "${PREFIX}/libexec/modulecmd.bash"
+	chmod 0755 "${PREFIX}/libexec/modulecmd.bash"
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in" \
+	    > "${PREFIX}/libexec/modulecmd.tcl"
+	chmod 0755 "${PREFIX}/libexec/modulecmd.tcl"
+
+	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" \
+	    > "${PREFIX}/lib/libpmodules.bash"
+	chmod 0755 "${PREFIX}/lib/libpmodules.bash"
+
+        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" \
+            > "${PREFIX}/bin/modbuild"
+	chmod 0755 "${PREFIX}/bin/modbuild"
+
+	sed "${sed_cmd}" "${SRC_DIR}/modmanage.in" \
+            > "${PREFIX}/bin/modmanage"
+	chmod 0755 "${PREFIX}/bin/modmanage"
+	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in" \
+	    > "${PREFIX}/libexec/modmanage.bash"
+	chmod 0755 "${PREFIX}/libexec/modmanage.bash"
+
+	test -e "${INSTALL_ROOT}/${CONFIG_FILE}" || \
+		install -m 0644 "$_"			"${INSTALL_ROOT}/${CONFIG_DIR}"
 	
-	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in"     > "${PMODULES_ROOT}/${CONFIG_DIR}/profile.bash-${PMODULES_VERSION}"
-	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in"      > "${PMODULES_ROOT}/${CONFIG_DIR}/profile.csh-${PMODULES_VERSION}"
-	sed "${sed_cmd}" "${SRC_DIR}/profile.zsh.in"      > "${PMODULES_ROOT}/${CONFIG_DIR}/profile.zsh-${PMODULES_VERSION}"
-	chmod 0644 "${PMODULES_ROOT}/${CONFIG_DIR}"/*-${PMODULES_VERSION}
+	install -m 0755 "${SRC_DIR}/yq.$(uname -m)_$(uname -s)"	"${PREFIX}/libexec/yq"
+	install -m 0644 "${SRC_DIR}/bash"		"${PREFIX}/init"
+	install -m 0644 "${SRC_DIR}/bash_completion"	"${PREFIX}/init"
+	install -m 0644 "${SRC_DIR}/csh"		"${PREFIX}/init"
+	install -m 0644 "${SRC_DIR}/zsh"		"${PREFIX}/init"
 
-	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/profile.bash" || \
-		install -m 0644 "$_-${PMODULES_VERSION}" "$_"
-
-	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/profile.csh" || \
-		install -m 0644 "$_-${PMODULES_VERSION}" "$_"
-
-	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/profile.zsh" || \
-		install -m 0644 "$_-${PMODULES_VERSION}" "$_"
-
-	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.in"        > "${PMODULES_HOME}/bin/modulecmd"
-	chmod 0755 "${PMODULES_HOME}/bin/modulecmd"
-	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in"   > "${PMODULES_HOME}/libexec/modulecmd.bash"
-	chmod 0755 "${PMODULES_HOME}/libexec/modulecmd.bash"
-	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.tcl.in"    > "${PMODULES_HOME}/libexec/modulecmd.tcl"
-	chmod 0755 "${PMODULES_HOME}/libexec/modulecmd.tcl"
-
-	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" > "${SRC_DIR}/libpmodules.bash"
-	chmod 0755 "${SRC_DIR}/libpmodules.bash"
-
-	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in"    > "${PMODULES_HOME}/lib/libpmodules.bash"
-	chmod 0755 "${PMODULES_HOME}/lib/libpmodules.bash"
-
-        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in"         > "${PMODULES_HOME}/bin/modbuild"
-	chmod 0755 "${PMODULES_HOME}/bin/modbuild"
-
-	sed "${sed_cmd}" "${SRC_DIR}/modmanage.in"        > "${PMODULES_HOME}/bin/modmanage"
-	chmod 0755 "${PMODULES_HOME}/bin/modmanage"
-	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in"   > "${PMODULES_HOME}/libexec/modmanage.bash"
-	chmod 0755 "${PMODULES_HOME}/libexec/modmanage.bash"
-
-	test -e "${PMODULES_ROOT}/${CONFIG_DIR}/Pmodules.yaml" || \
-		install -m 0644 "$_"			"${PMODULES_ROOT}/${CONFIG_DIR}"
-	
-	install -m 0755 "${SRC_DIR}/yq.$(uname -m)_$(uname -s)"	"${PMODULES_HOME}/libexec/yq"
-	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
-	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
-	install -m 0644 "${SRC_DIR}/csh"		"${PMODULES_HOME}/init"
-	install -m 0644 "${SRC_DIR}/zsh"		"${PMODULES_HOME}/init"
-
-	install -m 0644 "${SRC_DIR}/libpbuild.bash"	"${PMODULES_HOME}/lib"
-	install -m 0644 "${SRC_DIR}/libpbuild_dyn.bash"	"${PMODULES_HOME}/lib"
-	install -m 0644 "${SRC_DIR}/libstd.bash"	"${PMODULES_HOME}/lib"
-	install -m 0755 -d				"${PMODULES_HOME}/lib/Pmodules"
-	install -m 0644 "${SRC_DIR}/libmodules.tcl"	"${PMODULES_HOME}/lib/Pmodules"
+	install -m 0644 "${SRC_DIR}/libpbuild.bash"	"${PREFIX}/lib"
+	install -m 0644 "${SRC_DIR}/libstd.bash"	"${PREFIX}/lib"
+	install -m 0755 -d				"${PREFIX}/lib/Pmodules"
+	install -m 0644 "${SRC_DIR}/libmodules.tcl"	"${PREFIX}/lib/Pmodules"
 
 	{
-		PATH="${PMODULES_HOME}/${UTILBIN_DIR}:${PATH}"
-		cd "${PMODULES_HOME}/lib/Pmodules"
+		PATH="${PREFIX}/${UTILBIN_DIR}:${PATH}"
+		cd "${PREFIX}/lib/Pmodules"
 		"${BOOTSTRAP_DIR}/mkindex.tcl"
 	}
 
-	install -m 0644 "${SRC_DIR}/modulefile" "${PMODULES_ROOT}/Tools/modulefiles/Pmodules/${PMODULES_VERSION}"
+	install -m 0644 \
+		"${SRC_DIR}/modulefile" \
+		"${INSTALL_ROOT}/Tools/modulefiles/Pmodules/${VERSION}"
 
 	echo "Done..."
 }
 
 #=============================================================================
 #
-
-declare -a build_opts=()
-build_opts+=( '--bootstrap' )
-
 declare subcmd=''
 declare -a subcmd_args=()
 
@@ -550,7 +534,7 @@ done
 
 [[ -n "${subcmd}" ]] || std::die 1 "Missing sub-command.\n\nUse 'build --help' to get help..."
 
-pmodules::${subcmd} "${subcmd_args[@]}"
+build::${subcmd} "${subcmd_args[@]}"
 
 # Local Variables:
 # mode: sh

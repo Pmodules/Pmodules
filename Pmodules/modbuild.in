@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!@BASH@
 #
 # The following build specific variables are set and used in libpbuild.bash:
 #       ARGS
@@ -7,45 +7,59 @@
 #
 #.............................................................................
 
+set -x
 declare VERSION='@PMODULES_VERSION@'
 
 # get absolute path of script
 declare	    mydir=$(dirname "$0")
 declare -r  mydir=$(cd ${mydir} && pwd -P)
 
-# initialize PATH,
-# add library installation directories to the PATH,
-# so 'source' is able find them
-
-if [[ $(uname -s) == 'Darwin' ]]; then
-        PATH='/opt/local/bin:'
-else
-        PATH=''
-fi
-PATH+='/usr/bin:/bin:/usr/sbin:/sbin'
-PATH+=":${mydir}"
-PATH+=":${mydir}/../lib:${mydir}/../config"
-PATH+=":${PMODULES_DIR}/libexec"
-
-source libstd.bash    || {
+source "${mydir}/../lib/libstd.bash" || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
 
-# can be set in the configuration file
-declare         PMODULES_DISTFILESDIR=''
-declare         PMODULES_TMPDIR=''
-declare		pm_root="${PMODULES_HOME%%/Tools*}"
+##############################################################################
+#
+# check availability of used commands and set environment variables
+#   cmd=$(which cmd)
+# in the following we use these environment variable to call binaries.
+#
+declare -r MODULECMD="${PMODULES_HOME}/bin/modulecmd"
+[[ -x ${MODULECMD} ]] || \
+	std::die 1 "Oops: modulecmd binary not available!"
 
-source libpbuild.bash    || \
+std::def_cmds "${mydir}/../libexec" \
+	      'yq'
+
+std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
+	      'awk' 'base64' 'cat' 'cp' 'find' 'getopt' 'grep' \
+	      'install' 'logger' 'make' 'mkdir' 'mktemp' 'patch' 'pwd' \
+	      'rm' 'rmdir' 'sort' 'tar' 'tee' 'uname'
+
+declare -r OS="$(${uname} -s)"
+if [[ ${OS} == 'Darwin' ]]; then
+	std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin' \
+		      'curl' 'otool' 'shasum' 'sysctl'
+	declare -r sha256sum="${shasum -a 256}"
+else
+	std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
+		      'ldd' 'curl' 'sha256sum'
+fi
+
+# for the time being, we still set PATH. Just in case we forgot a binary
+PATH='/usr/bin:/bin:/usr/sbin:/sbin'
+
+##############################################################################
+source "${mydir}/../lib/libpbuild.bash"    || \
         std::die 3 "Oops: cannot source library -- '$_'"
-source libpmodules.bash    || \
+source "${mydir}/../lib/libpmodules.bash"  || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
-# save arguments, (still) required for building dependencies
-declare -r ARGS="$@"
-
-shopt -s nocaseglob
-shopt -s extglob
+##############################################################################
+set   -o	nounset
+shopt -s	nocaseglob
+shopt -s	extglob
+shopt -s	nullglob
 
 ##############################################################################
 #
@@ -145,10 +159,13 @@ MISCELLANEOUS OPTIONS:
 # then configuration file
 # last default
 
+# save arguments, required for building dependencies
+declare -r	ARGS="$@"
+declare         PMODULES_DISTFILESDIR=''
+declare         PMODULES_TMPDIR=''
+
 # versions to be build, '.*' or none means all
 declare -a      versions=()
-declare         opt_bootstrap='no'
-declare 	opt_build_config='Pmodules.yaml'
 declare         opt_build_target='all'
 declare         opt_dry_run='no'
 declare         opt_enable_cleanup_build='yes'
@@ -157,12 +174,12 @@ declare         opt_force_rebuild='no'
 declare -i      opt_jobs=0
 declare         opt_update_modulefiles='no'
 declare         opt_system=''
+declare		opt_overlay=''
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
 
-declare         opt_ol_name_or_dir=''
-
+declare		BUILD_SCRIPT=''
 
 parse_args() {
 	while (( $# > 0 )); do
@@ -193,13 +210,6 @@ parse_args() {
 		--dry-run )
 			opt_dry_run='yes'
 			;;
-		--config )
-			opt_build_config="$2"
-			shift 1
-			;;
-		--config=* )
-			opt_build_config="${1#*=}"
-			;;
 		--enable-cleanup )
 			opt_enable_cleanup_build='yes'
 			opt_enable_cleanup_src='yes'
@@ -220,19 +230,21 @@ parse_args() {
 		--disable-cleanup-src )
 			opt_enable_cleanup_src='no'
 			;;
-		--distdir )
-			PMODULES_DISTFILESDIR="$2"
-			shift
+		--distdir | --distdir=* )
+			if [[ $1 == *=* ]]; then
+				PMODULES_DISTFILESDIR="${1/--distdir=}"
+			else
+				PMODULES_DISTFILESDIR="$2"
+				shift
+			fi
 			;;
-		--distdir=* )
-			PMODULES_DISTFILESDIR="${1/--distdir=}"
-			;;
-		--tmpdir )
-                        PMODULES_TMPDIR="$2"
-			shift
-			;;
-		--tmpdir=* )
-			PMODULES_TMPDIR="${1/--tmpdir=}"
+		--tmpdir | --tmpdir=* )
+			if [[ $1 == *=* ]]; then
+				PMODULES_TMPDIR="${1#--*=}"
+			else
+				PMODULES_TMPDIR="$2"
+				shift
+			fi
 			;;
 		--system | --system=* )
 			if [[ $1 == *=* ]]; then
@@ -250,26 +262,24 @@ parse_args() {
 				shift
 			fi
 			;;
-		--use-flags )
-			USE_FLAGS="y:$2:"
-			shift
+		--use-flags | --use-flags=* )
+			if [[ $1 == *=* ]]; then
+				USE_FLAGS=":${1#--*=}:"
+			else
+				USE_FLAGS=":$2:"
+				shift
+			fi
 			;;
-		--use-flags=* )
-			USE_FLAGS=":${1/--use-flags=}:"
-			;;
-		--with )
-			opt_with_modules+=( "$2" )
-			shift
-			;;
-		--with=*/* )
-			m="${1/--with=}"
-			opt_with_modules+=( ${m} )
+		--with | --with=*/* )
+			if [[ $1 == *=* ]]; then
+				opt_with_modules+=( "${1#--*=}" )
+			else
+				opt_with_modules+=( "$2" )
+				shift
+			fi
 			;;
 		--prep | --configure | --compile | --install | --all )
 			opt_build_target=${1:2}
-			;;
-		--bootstrap )
-			opt_bootstrap='yes'
 			;;
 		--update-modulefiles )
 			opt_update_modulefiles='yes'
@@ -301,7 +311,17 @@ parse_args() {
 		esac
 		shift
 	done	
-	[[ -n ${BUILD_SCRIPT} ]] || std::die 1 "No build-block specified!"
+	if [[ -z ${BUILD_SCRIPT} ]]; then
+		if [[ -r "${PWD}/build" ]]; then
+			if grep -q '#!.* modbuild' "${PWD}/build"; then
+				BUILD_SCRIPT="${PWD}/build"
+				BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
+			fi
+		fi
+		if [[ -z ${BUILD_SCRIPT} ]]; then
+			std::die 1 "Don't know what to build!"
+		fi
+	fi
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
 }
 
@@ -317,7 +337,7 @@ parse_args() {
 #   "text gcc/10.3.0 openmpi/4.0.5"
 #   "text gcc/10.3.0 openmpi/4.1.0"
 #
-brace_expand_with_prefix(){
+bash_expand(){
 	local text="$1"
 	shift
 	local to_expand=( "${@}" )
@@ -328,20 +348,13 @@ brace_expand_with_prefix(){
 		eval list=( ${to_expand[0]} )
 		local s
 		for s in ${list[*]}; do
-			brace_expand_with_prefix "${text} ${s}" "${to_expand[@]:1}"
+			bash_expand "${text} ${s}" "${to_expand[@]:1}"
 		done;
 	fi;
 }
 
-brace_expand(){
-	brace_expand_with_prefix "" "$@"
-}
-
 build_modules_legacy() {
 	find_variants_files(){
-		shopt -q nullglob || :
-		local -i nullglob_set=$?
-		shopt -s nullglob
 		local files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"\.${opt_system} )
 		files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
 		local f
@@ -350,7 +363,6 @@ build_modules_legacy() {
 				|| [[ -e "${f}.$(uname -s)" ]] \
 				|| files+=( "$f" )
 		done
-		(( nullglob_set == 1 )) && shopt -u nullglob
 		std::upvar "$1" "${files[@]}"
 	}
 
@@ -361,7 +373,7 @@ build_modules_legacy() {
 			[[ -z ${toks} ]] && continue
 			[[ ${toke:0:1} == '#' ]] && continue
 			local -a deps=( ${toks[*]:2} )
-			brace_expand_with_prefix "${toks[0]} ${toks[1]}" "${deps[@]}"
+			bash_expand "${toks[0]} ${toks[1]}" "${deps[@]}"
 		done < "${input}"
 	}
 
@@ -384,7 +396,7 @@ build_modules_legacy() {
         local m
 	local pattern="/^${name}\/${version}[[:blank:]]/"
 	for m in "${with_modules[@]}"; do
-                if [[ -n $(awk "/${m%/*}[\/ ]/" "${files[@]}") ]]; then
+                if [[ -n $(${awk} "/${m%/*}[\/ ]/" "${files[@]}") ]]; then
 		        pattern+=" && /${m//\//\\/}/"
                 fi
 	done
@@ -394,7 +406,7 @@ build_modules_legacy() {
                 local line=''
                 while read line; do
                         variants+=( "${line}" )
-                done < <(expand_variants_file "${f}" | awk "${pattern}")
+                done < <(expand_variants_file "${f}" | ${awk} "${pattern}")
         done
         if (( ${#variants[@]} == 0 )); then
 		std::info "%s " \
@@ -410,9 +422,9 @@ build_modules_legacy() {
                 std::die 10 "Aborting..."
         fi
 	declare ol_name='base'
-	declare ol_type=''
-	declare ol_dir="${pm_root}"
-	declare ol_install_dir="${pm_root}"
+	declare ol_type='n'
+	declare ol_mod_root="${PMODULES_HOME%%/Tools*}"
+	declare ol_inst_root="${PMODULES_HOME%%/Tools*}"
         local -i i=0
         local -i num_variants=${#variants[@]}
         for ((i = 0; i < num_variants; i++)); do
@@ -428,106 +440,195 @@ build_modules_legacy() {
 }
 
 build_modules_yaml(){
-	local variants_file="${BUILDBLOCK_DIR}/files/"
-	variants_file+="${BNAME_VARIANTS}.${opt_system}.yaml"
+	local -a fnames=()
+	local -A mod_overlays=()
 
-	#
-	# $1 file name
-	# $2 module name
-	# $3 index
-	#
-	yaml_get_overlay(){
-		local ol=$(yq e ".$2.variants[$3].overlay" "$1")
-		if [[ "${ol}" != 'null' ]]; then
-			echo "${ol}"
-			return
-		fi
-		ol=$(yq e ".$2.overlay" "$1")
-		if [[ "${ol}" != 'null' ]]; then
-			echo "${ol}"
-			return
-		fi
-		echo 'base'
-	}
+	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}.yaml" )
+	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.yaml" )
+	fnames+=( '__zzzzz__' )
+	for fname in "${fnames[@]}"; do
+		[[ -r "${fname}" ]] && break
+	done
+	[[ ${fname} == '__zzzzz__' ]] && \
+		std::die 3 "No suitable YAML variants file found"
+	echo "Using ${fname}..."
 	yaml_get_versions(){
-		yq e ".$2.variants[].version" "$1"
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		_result=( $(${yq} -Ne e \
+			       "with_entries(select(.key | test(\"^${version}\$\")))|keys" \
+			       "${fname}" 2>/dev/null | ${awk} '{print $2}') )
 	}
 
 	yaml_get_num_variants(){
-		yq e ".$2.variants | length" "$1"
-	}
-
-	yaml_get_version(){
-		yq e ".$2.variants[$3].version" "$1"
-	}
-	
-	yaml_get_dependencies(){
-		yq e ".$2.variants[$2].dependencies[]" "$1"
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		_result=$(${yq} -Ne e ".\"${version}\"|length" \
+			     "${fname}" 2>/dev/null)
+		if (( $? != 0 )); then
+			_result=0
+		fi
 	}
 
 	yaml_get_relstage(){
-		local relstage=$(yq e ".$2.variants[$3].relstage" "$1")
-		if [[ "${relstage}" != 'null' ]]; then
-			echo "${relstage}"
-			return
-		fi
-		relstage=$(yq e ".$2.relstage" "$1")
-		if [[ "${relstage}" != 'null' ]]; then
-			echo "${relstage}"
-			return
-		fi
-		echo 'unstable'
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].relstage" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=$(${yq} -Ne e ".relstage" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result='unstable'
 	}
 	
-        local name="$1"
+	yaml_get_overlay(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].overlay" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=$(${yq} -Ne e ".overlay" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result='base'
+	}
+
+	yaml_get_systems(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].systems" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=$(${yq} -Ne e ".systems" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result='any'
+	}
+
+	yaml_get_dependencies(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+       		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}]|(.with, .dependencies)" \
+			       "${fname}" 2>/dev/null) )
+		if (( $? != 0 )); then
+			# neither .with nor .dependencies are set
+			_result=()
+			return
+		fi
+		# if one of .with, .dependencies is not set, the vaulue is
+		# returned as 'null'.
+		local -i i
+		for i in "${!_result[@]}"; do
+			[[ ${_result[$i]} == 'null' ]] && unset -v '_result[$i]'
+		done
+		_result=("${_result[@]}")
+	}
+
+	yaml_get_build_requirements(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+       		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].build_requires" \
+			       "${fname}" 2>/dev/null) )
+		if (( $? != 0 )); then
+			_result=()
+			return
+		fi
+	}
+
+	local name="$1"
         local version="$2"
 	shift 2
         local with_modules=( $* )
 
-	# pattern used in the for-loop to filter dependencies via awk
+	local m
 	local pattern="//"
 	for m in "${with_modules[@]}"; do
-		pattern+=" && /${m//\//\\/}( |$)/"
+		pattern+=" && /${m//\//\\/}/"
 	done
 
-	local -i n_variants=$(yaml_get_num_variants \
-				      "${variants_file}" "${name}")
-	local i
-	for (( i=0; i<n_variants; i++ )); do
-		local vers=$(yaml_get_version "${variants_file}" "${name}" $i)
-		[[ "${vers}" != "${version}" ]] && continue
-		# check dependencies
-		local with_modules=()
-		local -a deps=( $(yaml_get_dependencies \
-					  "${variants_file}" \
-					  "${name}" "$i") )
-		if (( ${#deps[@]} > 0 )); then
-			with_modules=( $(brace_expand ${deps[@]} | awk "${pattern}") )
-			(( ${#with_modules[@]} == 0 )) && continue
-		fi
-		local relstage=$(yaml_get_relstage \
-					 "${variants_file}" \
-					 "${name}" \
-					 "$i")
-		local ol=$(yaml_get_overlay \
-				   "${variants_file}" \
-				   "${name}" \
-				   "$i")
-		get_ol_info "${ol}" \
-			    ol_name \
-			    ol_type \
-			    ol_install_dir \
-			    ol_dir \
-			|| std::die 3 "${variants_file##*/}: unknown overlay -- ${ol_name_or_dir}"
-		pbuild.build_module \
-			"${name}" "${version}" \
-			"${relstage}" "${with_modules[@]}"
+	local -a versions
+	yaml_get_versions versions "${fname}" "${name}/${version}"
+	for v in "${versions[@]}"; do
+		local -i n_variants
+		yaml_get_num_variants n_variants "${fname}" "${v}"
+		(( n_variants == 0 )) && (( n_variants = 1 ))
+		local -i i
+		local -a deps=()
+		local -a build_requires=()
+		local relstage
+		local ol_name
+		for (( i=0; i<n_variants; i++)); do
+			if [[ -z ${opt_overlay} ]]; then
+				yaml_get_overlay  ol_name  "${fname}" "${v}" $i
+			else
+				ol_name="${opt_overlay}"
+			fi
+			if [[ ! -v OverlayInfo[${ol_name}:inst_root] ]]; then
+				std::die 3 "Overlay is not defined -- ${ol_name}"
+			fi
+			mod_overlays[$i]="${ol_name}"
+		done
+
+		for (( i=0; i<n_variants; i++)); do
+			ol_name="${mod_overlays[$i]}"
+			yaml_get_relstage relstage "${fname}" "${v}" $i
+			yaml_get_dependencies deps "${fname}" "${v}" $i
+			yaml_get_build_requirements build_requires "${fname}" "${v}" $i
+			# :FIXME:
+			# for the time being we prefix the build requirements
+			# with 'b:' and append them to the other dependencies.
+			# With this solution we don't have to change anything
+			# else in the code but have better readable variant
+			# files.
+			deps+=("${build_requires[@]/#/b:}")
+			declare ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
+			declare ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
+
+			local systems
+			yaml_get_systems systems "${fname}" "${v}" $i
+			# build module if
+			# - systems is any
+			# - opt_system is listed in systems
+			local build_it='no'
+			if [[ "${systems}" == 'any' ]]; then
+				build_it='yes'
+			fi
+			if [[ ,${systems}, == *,${opt_system},* ]]; then
+				build_it='yes'
+			fi
+			if [[ ${build_it} == 'no' ]]; then
+				# we don't build, but we remember the overlay for
+				# cleaning up the modulefiles later.
+				continue
+			fi
+			if (( ${#deps[@]} > 0 )); then
+				while read -a with_modules; do
+					pbuild.build_module \
+					     "${name}" "${v##*/}" \
+					     "${relstage}" "${with_modules[@]}"
+				done < <(bash_expand "" ${deps[@]}|${awk} "${pattern}")
+			else
+				pbuild.build_module \
+				     "${name}" "${v##*/}" \
+				     "${relstage}"
+			fi
+		done
 	done
 }
 
+
 build_modules() {
-	local variants_file="${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}"
-	if [[ -e "${variants_file}.yaml" ]]; then
+	if [[ -n $(ls "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"*.yaml 2>/dev/null) ]]; then
 		build_modules_yaml "$@"
 	else
 		build_modules_legacy "$@"
@@ -554,18 +655,14 @@ pbuild.verbose "${opt_verbose}"
 #
 # read configuration for modbuild
 #
-if [[ "${opt_bootstrap}" == 'yes' ]]; then
-        test -d "${BUILDBLOCK_DIR}/../../config" && PATH+=":$_"
-fi
+pm::read_config
 
-read_config_file "${pm_root}/${PMODULES_CONFIG_DIR}/${opt_build_config}"
-
-# :FIXME: should go dist files to
+# :FIXME: should dist files go to
 #         ${pm_root}/var/distfiles
 #         or
 #         ${overlay}/var/distfiles
 #         ?
-: ${PMODULES_DISTFILESDIR:=${pm_root}/var/distfiles}
+: ${PMODULES_DISTFILESDIR:="${PMODULES_HOME%%/Tools*}/var/distfiles"}
 : ${PMODULES_TMPDIR:=/var/tmp/${USER}}
 
 declare -r BUILD_SCRIPT
@@ -575,21 +672,6 @@ declare -r BUILDBLOCK_DIR
 IFS=/ read -r -a fname <<< "${BUILD_SCRIPT:1}"
 module_name=${fname[${#fname[@]}-2]}
 
-#
-# are we bootstrapping? If yes, go for it...
-#
-if [[ "${opt_bootstrap}" == 'yes' ]]; then
-	declare ol_name='base'
-	declare ol_type=''
-	declare ol_dir="${pm_root}"
-	declare ol_install_dir="${pm_root}"
-	pbuild.bootstrap "${module_name}"  "${versions[0]}" 'stable'
-        exit $?
-fi
-
-#
-# else
-#
 for version in "${versions[@]}"; do
         build_modules "${module_name}" "${version}" "${opt_with_modules[@]}"
 done
