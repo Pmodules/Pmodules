@@ -115,6 +115,9 @@ MISCELLANEOUS OPTIONS:
 -v | --verbose )
         Verbose output.
 
+--debug )
+	Run in debug mode.
+
 -j N | --jobs=N
         Run N parallel make jobs.
 
@@ -498,6 +501,19 @@ build_modules_yaml(){
 		_result='base'
 	}
 
+	yaml_get_group(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].group" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=$(${yq} -Ne e ".group" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=''
+	}
+
 	yaml_get_systems(){
 		local -n _result="$1"
 		local fname="$2"
@@ -507,6 +523,19 @@ build_modules_yaml(){
 			     "${fname}" 2>/dev/null)
 		(( $? == 0 )) && return
 		_result=$(${yq} -Ne e ".systems" "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result='any'
+	}
+
+	yaml_get_operating_systems(){
+		local -n _result="$1"
+		local fname="$2"
+		local version="$3"
+		local idx="$4"
+		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].operating_systems" \
+			     "${fname}" 2>/dev/null)
+		(( $? == 0 )) && return
+		_result=$(${yq} -Ne e ".operating_systems" "${fname}" 2>/dev/null)
 		(( $? == 0 )) && return
 		_result='any'
 	}
