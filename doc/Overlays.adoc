@@ -10,6 +10,7 @@ Please note: This document is work in progress!
 
 === System wide
 
+==== Example
 .A system wide configuration file `/opt/psi/config/Pmodules.yaml`
 ====
 ....
@@ -22,11 +23,34 @@ DistfilesDir: /opt/psi/var/distfiles
 Overlays:
   base:
     install_root: /opt/psi
+    modulefiles_root: /opt/psi
   devel:
     install_root: /opt/psi
     modulefiles_root: ${HOME}/modulefiles
 ....
 ====
+==== YAML Format
+.Format
+====
+....
+Overlays:
+  <name>:
+    install_root: <installation-root>
+    modulefiles_root: <modulefiles-root>
+    type: <type of overlay>
+  ...
+....
+====
+`<name>`:: Name of overlay. Note: whitespace in the name is not supported.
+`<name>.install_root`:: The root of the software installation. This key is mandatory.
+`<name>.modulefiles_root`:: The root of the modulefile hierarchy. This key is optional and defaults to `<name>.install_root>
+`<name>.type`:: The type of the overlay, see below. This key is optional and the default value is `n`.
+
+==== Overlay types
+`n`:: Normal overlay.
+`h`:: Hiding overlay.
+`r`:: Replacing overlay.
+
 === User defined overlays
 
 Each user can define his own overlays in `$HOME/.Pmodules/Pmodules.yaml`. 
@@ -39,6 +63,7 @@ The old format of the variants file is simple but very limited and almost imposs
 
 === With a YAML variants file
 
+==== Example of a variants file in YAML format
 .A YAML variants file
 ====
 ....
@@ -53,13 +78,15 @@ hdf5_serial/1.12.2:
 ....
 ====
 
-.YAML format of varaints file
+==== Format specification
+.YAML format
 ....
+relstage: <default-release-stage>
 overlay: <default-overlay>
 systems: <default-systems>
 
-<module-name>/<version>:
-  - with: <ohierarchical-build-dependencies>
+<name>/<version>:
+  - with: <hierarchical-build-dependencies>
     dependencies: <other-build-dependencies>
     relstate: <release-stage>
     overlay: <overlay>
@@ -67,6 +94,24 @@ systems: <default-systems>
   ...
 ...
 ....
+==== Defaults
+Default values can be overriden per version/variant.
 
+`overlay`:: The default overlay the module will be installed in. This value can be overriden for dedicated versions/variants.
+`systems`:: The default for supported systems.
 
-=== With a legacy variants file
+==== Versions and Variants
+
+`<name>/<version>`:: An array with variants for this version.
+
+`<name>/<version>.[i].with`:: Hierarchical dependencies for variant `i`.
+
+`<name>/<version>.[i].dependencies`:: Build/run-time dependencies for variant `i`.
+
+`<name>/<version>.[i].relstage`:: Relase stage of variant `i`.
+
+`<name>/<version>.[i].overlay`:: Overlay of variant `i`.
+
+`<name>/<version>.[i].systems`:: Supported systems.
+
+=== Legacy format
