@@ -754,7 +754,7 @@ subcommand_unload() {
         local arg
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
-                eval "$(echo "${output}"|sed -e 's/;unalias [^;]*//g')"
+                eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
 		case ${Shell} in
 			sh | bash | zsh )
 				echo "${output}"
@@ -1922,8 +1922,8 @@ subcommand_purge() {
                          "${error_txt}"
         fi
         if [[ "${Shell}" == "sh" ]]; then
-		# for sh-like shells just echo 
-                echo "${output}"
+		# for sh-like shells just echo
+		eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
         else
 		# re-run with right shell
                 "${modulecmd}" "${Shell}" 'purge'
