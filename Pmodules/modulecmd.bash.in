@@ -1496,20 +1496,21 @@ subcommand_use() {
 		if is_release_stage "${arg}"; then
                         # argument is release stage
 			std::append_path UsedReleaseStages "${arg}"
-                        return
+                        return $?
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
 			UsedFlags+=( "${arg/flag=}" )
-                        return
+                        return $?
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
 			use_overlay "${arg}"
-			return 0
+			return $?
 		fi
 		if [[ -d ${arg} ]]; then
 			local dir=$(cd "${arg}" && pwd -L)
 			${add2path_func} MODULEPATH "${dir}"
+			return $?
 		fi
                 if [[ ! -v GroupDepths[${arg}] ]]; then
                         # this scan is required if a new group has been
@@ -1519,7 +1520,7 @@ subcommand_use() {
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
 			use_group "${arg}"
-                        return
+                        return $?
                 fi
 
 		std::die 3 "%s %s: %s -- %s" \
@@ -2045,10 +2046,12 @@ Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
 Options[search]+='-l all-deps -l wrap '
-Options[search]+='-l glob'
+Options[search]+='-l glob '
+Options[search]+='-l newest '
+Options[search]+='-l group:'
 Help[search]='
 USAGE:
-        module search [switches] STRING...
+        module find|search [switches] STRING...
 		Search installed modules. If an argument is given, search
 		for modules whose name match the argument.
 
@@ -2088,6 +2091,7 @@ SWITCHES:
 subcommand_search() {
 	local -r subcommand='search'
 	local modules=()
+	local groups=()
 	local with_modules='//'
 	local -ir cols=$(tput cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
@@ -2100,6 +2104,7 @@ subcommand_search() {
 	local opt_all_deps='no'
 	local opt_wrap='no'
 	local opt_glob='no'
+	local opt_newest='no'
 
 	#.....................................................................
 	#
@@ -2167,9 +2172,7 @@ subcommand_search() {
                 }
                 
                 print_header_verbose() {
-		        std::info ''
-		        #std::info "${fmt}" "Module" "Rel.stage" "Group" "Overlay" "Dependencies/Modulefile"
-		        #std::info '-%.0s' $(seq 1 ${cols})
+		        :
 	        }
 
                 print_line_verbose() {
@@ -2195,7 +2198,9 @@ subcommand_search() {
                 }
 
                 print_line_modulefile() {
-			std::info "$4"
+			if (( $# >= 4 )) && [[ -n $4 ]]; then
+				std::info "$1 $4"
+			fi
                 }
 
                 print_line_csv() {
@@ -2218,11 +2223,15 @@ subcommand_search() {
                         print_default
                 fi
 
+		local _script=''
+		if [[ ${opt_newest} == 'yes' ]]; then
+			_script='{} END{print}'
+		fi
                 ${func_print_header}
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
                 done < <("${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${tmpfile}" | \
-                                 ${awk} "${with_modules}")
+                                 ${awk} "${with_modules} ${_script}")
         }
 
 	#.....................................................................
@@ -2235,72 +2244,65 @@ subcommand_search() {
 	#   :FIXME:
 	#
 	search () {
-		if [[ ${opt_glob} == 'yes' ]]; then
-			local -r module="$1"
-		else
-			local -r module="${1}*"
-		fi
-
+		local module="$1"
+		local group="$2"
 		# write results to a temporary file for later processing
-		local group
-		# loop over all groups
-		for group in "${!GroupDepths[@]}"; do
-			# loop over all directories which can be added to
-			# MODULEPATH inside current group
-			local depth=${GroupDepths[${group}]}
-			local s=''
-			if (( depth > 0 )); then
-				s=$(printf '/*%.0s' $(seq 1 ${depth}))
-			fi
-			local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+
+		# loop over all directories which can be added to
+		# MODULEPATH inside current group
+		local depth=${GroupDepths[${group}]}
+		local s=''
+		if (( depth > 0 )); then
+			s=$(printf '/*%.0s' $(seq 1 ${depth}))
+		fi
+		local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+		
+		# get and print all available modules in $mpath
+		# with respect to the requested release stage
+		# tmpfile: module/version rel_stage group dependencies...
+		local mods
+		get_available_modules \
+			mods \
+			"${module}" \
+			"${opt_use_rel_stages}" \
+			"${modulepath[@]}"
+		local i=0
+		for (( i=0; i<${#mods[@]}; i+=4 )); do
+			local name=${mods[i]}
+			local rel_stage=${mods[i+1]}
+			local modulefile=${mods[i+2]}
+			local ol=${mods[i+3]}
 			
-			# get and print all available modules in $mpath
-			# with respect to the requested release stage
-			# tmpfile: module/version rel_stage group dependencies...
-			local mods
-			get_available_modules \
-				mods \
-				"${module}" \
-				"${opt_use_rel_stages}" \
-				"${modulepath[@]}" \
-
-			for (( i=0; i<${#mods[@]}; i+=4 )); do
-				local name=${mods[i]}
-				local rel_stage=${mods[i+1]}
-				local modulefile=${mods[i+2]}
-				local ol=${mods[i+3]}
-
-				if (( ${#name} > max_len_modulename)); then
-					max_len_modulename=${#name}
-				fi
-				
-				if [[ "${opt_print_verbose}" == 'yes' ]] || [[ "${opt_all_deps}" == 'yes' ]]; then
-					local prefix=''
-					get_module_prefix prefix "${modulefile}"
-					local dependencies_file="${prefix}/.dependencies"
-					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-						deps=($(< "${dependencies_file}"))
-					else
-						deps=()
-					fi
+			if (( ${#name} > max_len_modulename)); then
+				max_len_modulename=${#name}
+			fi
+			
+			if [[ "${opt_print_verbose}" == 'yes' ]] || \
+				   [[ "${opt_all_deps}" == 'yes' ]]; then
+				local prefix=''
+				get_module_prefix prefix "${modulefile}"
+				local dependencies_file="${prefix}/.dependencies"
+				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
+					deps=($(< "${dependencies_file}"))
 				else
-					# get dependencies encoded in directory name
-					local deps=()
-					local -i j
-					IFS='/'   # note: IFS is used to concat in the for loop!
-					local toks=( ${modulefile} )
-					for ((j = -depth-2; j < -2; j += 2)); do
-						deps+=( "${toks[*]: $j:2}" );
-					done
-					unset IFS
+					deps=()
 				fi
-				
-				echo ${name} ${rel_stage} ${group} ${modulefile} \
-				     ${ol} \
-                                     ${deps[@]} >> "${tmpfile}"
-			done
+			else
+				# get dependencies encoded in directory name
+				local deps=()
+				local -i j
+				IFS='/'   # note: IFS is used to concat in the for loop!
+				local toks=( ${modulefile} )
+				for ((j = -depth-2; j < -2; j += 2)); do
+					deps+=( "${toks[*]: $j:2}" );
+				done
+				unset IFS
+			fi
+			
+			echo ${name} ${rel_stage} ${group} ${modulefile} \
+			     ${ol} \
+                             ${deps[@]} >> "${tmpfile}"
 		done
-		print_result
 	}
 
 	while (( $# > 0 )); do
@@ -2388,6 +2390,18 @@ subcommand_search() {
 			--glob )
 				opt_glob='yes'
 				;;
+			--newest )
+				opt_newest='yes'
+				;;
+			--group | --group=* )
+				if [[ $1 == *=* ]]; then
+					groups+=( ${1/--*=} )
+				else
+					groups+=( $2 )
+					shift
+				fi
+				;;
+					
 			-- )
 				shift 1
 				modules+=( "$@" )
@@ -2422,8 +2436,19 @@ subcommand_search() {
 	fi
 
 	local module
+	if (( ${#groups[@]} == 0 )); then
+		groups=( "${!GroupDepths[@]}" )
+	fi	
 	for module in "${modules[@]}"; do
-		search "${module}"
+		if [[ ${opt_glob} != 'yes' ]]; then
+			module+="*"
+		fi
+		local group
+		for group in "${groups[@]}"; do
+			search "${module}" "${group}"
+		done
+		print_result
+		echo -n > ${tmpfile}
 	done
 }
 
@@ -2508,7 +2533,7 @@ subcommand_help() {
 # whatis
 #
 Subcommands[whatis]='whatis'
-Options[whatis]='-o \?H -l help'
+Options[whatis]='-o \?Ha -l help -l all'
 Help[whatis]='
 USAGE:
         module whatis [modulefile...]
@@ -2518,11 +2543,46 @@ USAGE:
 '
 
 subcommand_whatis() {
-	if (( $# == 0 )); then
-                subcommand_generic0 'whatis'
-	else
-                subcommand_generic1plus 'whatis' "$@"
-	fi
+	local options=()
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-\? | --help )
+				print_help "${subcommand}"
+				;;
+			-a | --all )
+				options+=( '-a' )
+				;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+
+	local group=''
+	for group in "${!GroupDepths[@]}"; do
+		local mod_name=''
+		local file_name=''
+		while read mod_name file_name; do
+			[[ -n ${file_name} ]] || continue
+			local whatis=$("${modulecmd}" bash \
+						      whatis \
+						      "${file_name}" \
+						      2>&1 1>/dev/null)
+			printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
+		done < <(set +x; subcommand_search \
+			--group "${group}" \
+			--print-modulefiles \
+			--newest \
+			"${options[@]}" \
+			"${args[@]}" 2>&1)
+	done
 }
 
 ##############################################################################
@@ -2531,7 +2591,7 @@ subcommand_whatis() {
 #
 Subcommands[apropos]='apropos'
 Subcommands[keyword]='apropos'
-Options[apropos]='-o \?H -l help'
+Options[apropos]='-o \?Ha -l help -l all'
 Help[apropos]='
 USAGE:
         module apropos string
@@ -2541,7 +2601,55 @@ USAGE:
 '
 
 subcommand_apropos() {
-        subcommand_generic1 'apropos' "$@"
+	local options=()
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-\? | --help )
+				print_help "${subcommand}"
+				;;
+			-a | --all )
+				options+=( '-a' )
+				;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "no search string specified"
+	elif (( ${#args[@]} > 1 )); then
+	        std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "more then one search string specified"
+	fi
+	local arg="${args[0]}"
+	local group=''
+	for group in "${!GroupDepths[@]}"; do
+		local mod_name=''
+		local file_name=''
+		while read mod_name file_name; do
+			[[ -n ${file_name} ]] || continue
+			local whatis=$("${modulecmd}" bash \
+						      whatis \
+						      "${file_name}" \
+						      2>&1 1>/dev/null)
+			if [[ ${whatis,,} =~ ${arg,,} ]]; then
+				printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
+			fi
+		done < <(set +x; subcommand_search \
+			--group "${group}" \
+			--print-modulefiles \
+			"${options[@]}" 2>&1)
+	done
 }
 
 ##############################################################################
@@ -2751,6 +2859,9 @@ case ${subcommand} in
 	rm )
 		subcommand='unload'
 		;;
+	find )
+		subcommand='search'
+		;;
 	switch )
 		subcommand='swap'
 		;;
@@ -2783,7 +2894,7 @@ if (( ${#GroupDepths[@]} == 0 )); then
 fi
 
 case ${subcommand} in
-	load|purge|search|swap )
+	load|purge|search|swap|whatis|apropos )
 		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
 			|| std::die 1 "Oops: unable to create tmp file!"
 		;;
