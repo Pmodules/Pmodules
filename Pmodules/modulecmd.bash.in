@@ -2859,6 +2859,9 @@ case ${subcommand} in
 	rm )
 		subcommand='unload'
 		;;
+	find )
+		subcommand='search'
+		;;
 	switch )
 		subcommand='swap'
 		;;
