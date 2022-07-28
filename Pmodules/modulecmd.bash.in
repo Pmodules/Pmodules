@@ -2046,10 +2046,12 @@ Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
 Options[search]+='-l all-deps -l wrap '
-Options[search]+='-l glob'
+Options[search]+='-l glob '
+Options[search]+='-l newest '
+Options[search]+='-l group:'
 Help[search]='
 USAGE:
-        module search [switches] STRING...
+        module find|search [switches] STRING...
 		Search installed modules. If an argument is given, search
 		for modules whose name match the argument.
 
@@ -2089,6 +2091,7 @@ SWITCHES:
 subcommand_search() {
 	local -r subcommand='search'
 	local modules=()
+	local groups=()
 	local with_modules='//'
 	local -ir cols=$(tput cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
@@ -2101,6 +2104,7 @@ subcommand_search() {
 	local opt_all_deps='no'
 	local opt_wrap='no'
 	local opt_glob='no'
+	local opt_newest='no'
 
 	#.....................................................................
 	#
@@ -2168,9 +2172,7 @@ subcommand_search() {
                 }
                 
                 print_header_verbose() {
-		        std::info ''
-		        #std::info "${fmt}" "Module" "Rel.stage" "Group" "Overlay" "Dependencies/Modulefile"
-		        #std::info '-%.0s' $(seq 1 ${cols})
+		        :
 	        }
 
                 print_line_verbose() {
@@ -2196,7 +2198,9 @@ subcommand_search() {
                 }
 
                 print_line_modulefile() {
-			std::info "$4"
+			if (( $# >= 4 )) && [[ -n $4 ]]; then
+				std::info "$1 $4"
+			fi
                 }
 
                 print_line_csv() {
@@ -2219,11 +2223,15 @@ subcommand_search() {
                         print_default
                 fi
 
+		local _script=''
+		if [[ ${opt_newest} == 'yes' ]]; then
+			_script='{} END{print}'
+		fi
                 ${func_print_header}
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
                 done < <("${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${tmpfile}" | \
-                                 ${awk} "${with_modules}")
+                                 ${awk} "${with_modules} ${_script}")
         }
 
 	#.....................................................................
@@ -2236,72 +2244,65 @@ subcommand_search() {
 	#   :FIXME:
 	#
 	search () {
-		if [[ ${opt_glob} == 'yes' ]]; then
-			local -r module="$1"
-		else
-			local -r module="${1}*"
-		fi
-
+		local module="$1"
+		local group="$2"
 		# write results to a temporary file for later processing
-		local group
-		# loop over all groups
-		for group in "${!GroupDepths[@]}"; do
-			# loop over all directories which can be added to
-			# MODULEPATH inside current group
-			local depth=${GroupDepths[${group}]}
-			local s=''
-			if (( depth > 0 )); then
-				s=$(printf '/*%.0s' $(seq 1 ${depth}))
-			fi
-			local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+
+		# loop over all directories which can be added to
+		# MODULEPATH inside current group
+		local depth=${GroupDepths[${group}]}
+		local s=''
+		if (( depth > 0 )); then
+			s=$(printf '/*%.0s' $(seq 1 ${depth}))
+		fi
+		local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+		
+		# get and print all available modules in $mpath
+		# with respect to the requested release stage
+		# tmpfile: module/version rel_stage group dependencies...
+		local mods
+		get_available_modules \
+			mods \
+			"${module}" \
+			"${opt_use_rel_stages}" \
+			"${modulepath[@]}"
+		local i=0
+		for (( i=0; i<${#mods[@]}; i+=4 )); do
+			local name=${mods[i]}
+			local rel_stage=${mods[i+1]}
+			local modulefile=${mods[i+2]}
+			local ol=${mods[i+3]}
 			
-			# get and print all available modules in $mpath
-			# with respect to the requested release stage
-			# tmpfile: module/version rel_stage group dependencies...
-			local mods
-			get_available_modules \
-				mods \
-				"${module}" \
-				"${opt_use_rel_stages}" \
-				"${modulepath[@]}" \
-
-			for (( i=0; i<${#mods[@]}; i+=4 )); do
-				local name=${mods[i]}
-				local rel_stage=${mods[i+1]}
-				local modulefile=${mods[i+2]}
-				local ol=${mods[i+3]}
-
-				if (( ${#name} > max_len_modulename)); then
-					max_len_modulename=${#name}
-				fi
-				
-				if [[ "${opt_print_verbose}" == 'yes' ]] || [[ "${opt_all_deps}" == 'yes' ]]; then
-					local prefix=''
-					get_module_prefix prefix "${modulefile}"
-					local dependencies_file="${prefix}/.dependencies"
-					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-						deps=($(< "${dependencies_file}"))
-					else
-						deps=()
-					fi
+			if (( ${#name} > max_len_modulename)); then
+				max_len_modulename=${#name}
+			fi
+			
+			if [[ "${opt_print_verbose}" == 'yes' ]] || \
+				   [[ "${opt_all_deps}" == 'yes' ]]; then
+				local prefix=''
+				get_module_prefix prefix "${modulefile}"
+				local dependencies_file="${prefix}/.dependencies"
+				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
+					deps=($(< "${dependencies_file}"))
 				else
-					# get dependencies encoded in directory name
-					local deps=()
-					local -i j
-					IFS='/'   # note: IFS is used to concat in the for loop!
-					local toks=( ${modulefile} )
-					for ((j = -depth-2; j < -2; j += 2)); do
-						deps+=( "${toks[*]: $j:2}" );
-					done
-					unset IFS
+					deps=()
 				fi
-				
-				echo ${name} ${rel_stage} ${group} ${modulefile} \
-				     ${ol} \
-                                     ${deps[@]} >> "${tmpfile}"
-			done
+			else
+				# get dependencies encoded in directory name
+				local deps=()
+				local -i j
+				IFS='/'   # note: IFS is used to concat in the for loop!
+				local toks=( ${modulefile} )
+				for ((j = -depth-2; j < -2; j += 2)); do
+					deps+=( "${toks[*]: $j:2}" );
+				done
+				unset IFS
+			fi
+			
+			echo ${name} ${rel_stage} ${group} ${modulefile} \
+			     ${ol} \
+                             ${deps[@]} >> "${tmpfile}"
 		done
-		print_result
 	}
 
 	while (( $# > 0 )); do
@@ -2389,6 +2390,18 @@ subcommand_search() {
 			--glob )
 				opt_glob='yes'
 				;;
+			--newest )
+				opt_newest='yes'
+				;;
+			--group | --group=* )
+				if [[ $1 == *=* ]]; then
+					groups+=( ${1/--*=} )
+				else
+					groups+=( $2 )
+					shift
+				fi
+				;;
+					
 			-- )
 				shift 1
 				modules+=( "$@" )
@@ -2423,8 +2436,19 @@ subcommand_search() {
 	fi
 
 	local module
+	if (( ${#groups[@]} == 0 )); then
+		groups=( "${!GroupDepths[@]}" )
+	fi	
 	for module in "${modules[@]}"; do
-		search "${module}"
+		if [[ ${opt_glob} != 'yes' ]]; then
+			module+="*"
+		fi
+		local group
+		for group in "${groups[@]}"; do
+			search "${module}" "${group}"
+		done
+		print_result
+		echo -n > ${tmpfile}
 	done
 }
 
