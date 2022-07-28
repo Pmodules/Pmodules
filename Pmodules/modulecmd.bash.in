@@ -2533,7 +2533,7 @@ subcommand_help() {
 # whatis
 #
 Subcommands[whatis]='whatis'
-Options[whatis]='-o \?H -l help'
+Options[whatis]='-o \?Ha -l help -l all'
 Help[whatis]='
 USAGE:
         module whatis [modulefile...]
@@ -2543,11 +2543,46 @@ USAGE:
 '
 
 subcommand_whatis() {
-	if (( $# == 0 )); then
-                subcommand_generic0 'whatis'
-	else
-                subcommand_generic1plus 'whatis' "$@"
-	fi
+	local options=()
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-\? | --help )
+				print_help "${subcommand}"
+				;;
+			-a | --all )
+				options+=( '-a' )
+				;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+
+	local group=''
+	for group in "${!GroupDepths[@]}"; do
+		local mod_name=''
+		local file_name=''
+		while read mod_name file_name; do
+			[[ -n ${file_name} ]] || continue
+			local whatis=$("${modulecmd}" bash \
+						      whatis \
+						      "${file_name}" \
+						      2>&1 1>/dev/null)
+			printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
+		done < <(set +x; subcommand_search \
+			--group "${group}" \
+			--print-modulefiles \
+			--newest \
+			"${options[@]}" \
+			"${args[@]}" 2>&1)
+	done
 }
 
 ##############################################################################
@@ -2556,7 +2591,7 @@ subcommand_whatis() {
 #
 Subcommands[apropos]='apropos'
 Subcommands[keyword]='apropos'
-Options[apropos]='-o \?H -l help'
+Options[apropos]='-o \?Ha -l help -l all'
 Help[apropos]='
 USAGE:
         module apropos string
@@ -2566,7 +2601,55 @@ USAGE:
 '
 
 subcommand_apropos() {
-        subcommand_generic1 'apropos' "$@"
+	local options=()
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-\? | --help )
+				print_help "${subcommand}"
+				;;
+			-a | --all )
+				options+=( '-a' )
+				;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "no search string specified"
+	elif (( ${#args[@]} > 1 )); then
+	        std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "more then one search string specified"
+	fi
+	local arg="${args[0]}"
+	local group=''
+	for group in "${!GroupDepths[@]}"; do
+		local mod_name=''
+		local file_name=''
+		while read mod_name file_name; do
+			[[ -n ${file_name} ]] || continue
+			local whatis=$("${modulecmd}" bash \
+						      whatis \
+						      "${file_name}" \
+						      2>&1 1>/dev/null)
+			if [[ ${whatis,,} =~ ${arg,,} ]]; then
+				printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
+			fi
+		done < <(set +x; subcommand_search \
+			--group "${group}" \
+			--print-modulefiles \
+			"${options[@]}" 2>&1)
+	done
 }
 
 ##############################################################################
@@ -2808,7 +2891,7 @@ if (( ${#GroupDepths[@]} == 0 )); then
 fi
 
 case ${subcommand} in
-	load|purge|search|swap )
+	load|purge|search|swap|whatis|apropos )
 		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
 			|| std::die 1 "Oops: unable to create tmp file!"
 		;;
