@@ -1496,20 +1496,21 @@ subcommand_use() {
 		if is_release_stage "${arg}"; then
                         # argument is release stage
 			std::append_path UsedReleaseStages "${arg}"
-                        return
+                        return $?
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
 			UsedFlags+=( "${arg/flag=}" )
-                        return
+                        return $?
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
 			use_overlay "${arg}"
-			return 0
+			return $?
 		fi
 		if [[ -d ${arg} ]]; then
 			local dir=$(cd "${arg}" && pwd -L)
 			${add2path_func} MODULEPATH "${dir}"
+			return $?
 		fi
                 if [[ ! -v GroupDepths[${arg}] ]]; then
                         # this scan is required if a new group has been
@@ -1519,7 +1520,7 @@ subcommand_use() {
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
 			use_group "${arg}"
-                        return
+                        return $?
                 fi
 
 		std::die 3 "%s %s: %s -- %s" \
