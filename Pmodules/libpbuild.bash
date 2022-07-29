@@ -156,6 +156,7 @@ pbuild::add_to_group() {
 }
 readonly -f pbuild::add_to_group
 
+declare -gx GROUP=''
 pbuild.add_to_group(){
 	GROUP="$1"
 }
@@ -302,6 +303,7 @@ pbuild::supported_compilers() {
 }
 readonly -f pbuild::supported_compilers
 
+declare SUPPORTED_COMPILERS=()
 pbuild.supported_compilers(){
 	SUPPORTED_COMPILERS+=( "$@" )
 }
@@ -324,6 +326,7 @@ pbuild::supported_systems() {
 }
 readonly -f pbuild::supported_systems
 
+declare SUPPORTED_SYSTEMS=()
 pbuild.supported_systems() {
 	SUPPORTED_SYSTEMS+=( "$@" )
 }
@@ -1057,7 +1060,6 @@ _build_module() {
 		P="${module_name}"
 		V="${module_version}"
 		parse_version "${module_version}"
-		declare -gx GROUP=''
 		declare -g  PREFIX=''
 		
 		SOURCE_URLS=()
@@ -1065,8 +1067,6 @@ _build_module() {
 		SOURCE_NAMES=()
 		declare -Ag SOURCE_UNPACK_DIRS=()
 		CONFIGURE_ARGS=()
-		SUPPORTED_SYSTEMS=()
-		SUPPORTED_COMPILERS=()
 		PATCH_FILES=()
 		PATCH_STRIPS=()
 		PATCH_STRIP_DEFAULT='1'

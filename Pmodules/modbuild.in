@@ -634,7 +634,7 @@ build_modules_yaml(){
 			pbuild.supported_compilers "${compilers[@]}"
 			if (( ${#deps[@]} > 0 )); then
 				while read -a with_modules; do
-					pbuild.build_module \
+					pbuild.build_module_yaml \
 					     "${name}" "${v##*/}" \
 					     "${relstage}" "${with_modules[@]}"
 				done < <(bash_expand "" ${deps[@]}|${awk} "${pattern}")
