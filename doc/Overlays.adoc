@@ -83,7 +83,9 @@ hdf5_serial/1.12.2:
 ....
 relstage: <default-release-stage>
 overlay: <default-overlay>
+group: <default-group>
 systems: <default-systems>
+compilers: <supported-compilers>
 
 <name>/<version>:
   - with: <hierarchical-build-dependencies>
