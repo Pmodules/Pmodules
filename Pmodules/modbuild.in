@@ -436,7 +436,7 @@ build_modules_legacy() {
                 version="${tokens[0]#*/}"
                 release="${tokens[1]}"
                 with_modules=( "${tokens[@]:2}" )
-                pbuild.build_module \
+                pbuild.build_module_legacy \
                         "${name}" "${version}" \
                         "${release}" "${with_modules[@]}"
         done
@@ -647,14 +647,13 @@ build_modules_yaml(){
 					     "${relstage}" "${with_modules[@]}"
 				done < <(bash_expand "" ${deps[@]}|${awk} "${pattern}")
 			else
-				pbuild.build_module \
+				pbuild.build_module_yaml \
 				     "${name}" "${v##*/}" \
 				     "${relstage}"
 			fi
 		done
 	done
 }
-
 
 build_modules() {
 	if [[ -n $(ls "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"*.yaml 2>/dev/null) ]]; then

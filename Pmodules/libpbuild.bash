@@ -720,9 +720,26 @@ pbuild::install_shared_libs() {
 
 ###############################################################################
 #
-# This is the main entry function called by modbuild!
+# The following two functions are the entry points called by modbuild!
 #
-pbuild.build_module() {
+
+declare yaml_config='yes'
+pbuild.build_module_legacy(){
+	yaml_config='no'
+	_build_module "$@"
+}
+readonly -f pbuild.build_module_legacy
+
+pbuild.build_module_yaml(){
+	_build_module "$@"
+}
+readonly -f pbuild.build_module_yaml
+
+#..............................................................................
+#
+# The real worker function.
+#
+_build_module() {
 	declare -gx module_name="$1"
 	declare -gx module_version="$2"
 	declare -gx module_release="$3"
@@ -1583,7 +1600,7 @@ pbuild.build_module() {
 	cleanup_modulefiles
 	std::info "* * * * *\n"
 }
-readonly -f pbuild.build_module
+readonly -f _build_module
 
 # Local Variables:
 # mode: sh
