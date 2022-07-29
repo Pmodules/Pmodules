@@ -1,20 +1,60 @@
 # Changelog of Pmodules
 
-## Version 1.1.10
+## Version 1.1.10 (not yet tagged)
 * **modulecmd**
   * *User visible changes*
-    * ...
+    * New options for `module search`.
+	  * With the option `--group` the search can be restricted to a
+	    group.
+	  * With the option `--newest` only the newest versions are
+        displayed.
+	* `find` as alias for the sub-command `search` added.
+	* Bugfix: the sub-commands `whatis` and `keyword|apropos` were
+        broken by design. 
+    * Bugfix: after loading a `Pmodules` module, it was not shown with
+      `module list`.
+	* Bugfix in scanning the depth of groups.
+	* Bugfix: after `module purge` the environment variable
+      `PMODULES_HOME` was not defined an more.
+    * Bugfix: source the shell init file only if a `Pmodules` module
+      is loaded.
+	* Bugfix: unsetting aliases in modulefiles was not handled
+      properly in `module purge`
   * *Internal changes and fixes*
-    * ...
+    * initialisation error for bash and zsh fixed
 
 * **build-system**
   * *User visible changes*
-    * ...
-  * *Internal changes and fixes*
-    * ...
+    * `modbuild` is now defined as function like `module`. Therefor no
+	`Pmodules` module must be loaded to build a module with `modbuild`
+	* The system can now be defined in the module (YAML) configuration
+      file.
+	* Build dependencies can (and should) now be specified with
+      `build_requires` in the YAML configuration file.
+	* Bugfix: cleanup of modulefiles in overlays fixed. A module can be in
+      more than one overlay. These overlays must be specified in the
+      module configuration file. 
+	* Bugfix: querying dependencies from YAML configuration file
+      fixed. Under some conditions the string 'null' was in the list
+      of dependencies.
+	* Bugfix: create group directory if it doesn't exist.
+	* Bugfix: create the module `$PREFIX` before processing the
+      install targets not before all targets. If `$PREFIX` is created
+      before processing any target and the build fails, `modbuild`
+      assumes that the module have been already built successfully.
+ * *Internal changes and fixes*
+    * code review/re-factoring
+	* `modbuild` is now using the Bash installed in `Pmodules` itself.
+	* test code with `set -o nounset`, several issues with this
+      setting fixed (not necessarily bugs).
 
 * **other changes**
- * ...
+ * The build script to bootstrap Pmodules itself doesn't use modbuild
+   any more to compile required software packages.  With this change
+   we can remove some special cases from modbuild.
+ * The bootstrap script requires Bash 5.0 or newer now.
+ * Bugfix: in the `Pmodules` modulefile force the sourcing of the
+   shell init script while in mode `load` only.
 
 ## Version 1.1.9
 * **modulecmd**
