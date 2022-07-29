@@ -47,6 +47,10 @@
 	  - to override the overlay in a YAML variants file.
     * The new keyword `with` has been introduced in YAML variants file
       to specified hierarchical dependencies.
+    * The function `pbuild::supported_os` has been
+      removed. `pbuild::supported_systems` provides the same
+      functionality for legacy configuration files. In YAML module
+      configuration files `systems` have to be used.
 
 * **Internal changes and fixes**
     * bugfix in setting `PATH`
