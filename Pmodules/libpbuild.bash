@@ -229,19 +229,6 @@ readonly -f pbuild::supported_systems
 
 ##############################################################################
 #
-# Check whether the script is running on a supported OS.
-#
-# Arguments:
-#   $@: supported opertating systems (like Linux, Darwin).
-#       Default is all.
-#
-pbuild::supported_os() {
-	SUPPORTED_OS+=( "$@" )
-}
-readonly -f pbuild::supported_os
-
-##############################################################################
-#
 # Check whether the loaded compiler is supported.
 #
 # Arguments:
@@ -1013,7 +1000,6 @@ _build_module() {
 		declare -Ag SOURCE_UNPACK_DIRS=()
 		CONFIGURE_ARGS=()
 		SUPPORTED_SYSTEMS=()
-		SUPPORTED_OS=()
 		SUPPORTED_COMPILERS=()
 		PATCH_FILES=()
 		PATCH_STRIPS=()
@@ -1031,17 +1017,6 @@ _build_module() {
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "Not available for ${system}."
-	}
-
-	#......................................................................
-	check_supported_os() {
-		(( ${#SUPPORTED_OS[@]} == 0 )) && return 0
-		for os in "${SUPPORTED_OS[@]}"; do
-			[[ ${os,,} == ${OS,,} ]] && return 0
-		done
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Not available for ${OS}."
 	}
 
 	#......................................................................
@@ -1564,7 +1539,6 @@ _build_module() {
 
 	# check whether this module is supported
 	check_supported_systems
-	check_supported_os
 	check_supported_compilers
 	# setup module name and prefix
 	set_full_module_name_and_prefix
