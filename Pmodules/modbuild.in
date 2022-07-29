@@ -519,25 +519,25 @@ build_modules_yaml(){
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].systems" \
-			     "${fname}" 2>/dev/null)
+		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].systems" \
+			     "${fname}" 2>/dev/null) )
 		(( $? == 0 )) && return
-		_result=$(${yq} -Ne e ".systems" "${fname}" 2>/dev/null)
+		_result=( $(${yq} -Ne e ".systems" "${fname}" 2>/dev/null) )
 		(( $? == 0 )) && return
-		_result='any'
+		_result=()
 	}
 
-	yaml_get_operating_systems(){
+	yaml_get_compilers(){
 		local -n _result="$1"
 		local fname="$2"
 		local version="$3"
 		local idx="$4"
-		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].operating_systems" \
-			     "${fname}" 2>/dev/null)
+		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].compilers" \
+			     "${fname}" 2>/dev/null) )
 		(( $? == 0 )) && return
-		_result=$(${yq} -Ne e ".operating_systems" "${fname}" 2>/dev/null)
+		_result=( $(${yq} -Ne e ".compilers" "${fname}" 2>/dev/null) )
 		(( $? == 0 )) && return
-		_result='any'
+		_result=()
 	}
 
 	yaml_get_dependencies(){
@@ -595,6 +595,7 @@ build_modules_yaml(){
 		local -a deps=()
 		local -a build_requires=()
 		local relstage
+		local group
 		local ol_name
 		for (( i=0; i<n_variants; i++)); do
 			if [[ -z ${opt_overlay} ]]; then
@@ -613,6 +614,8 @@ build_modules_yaml(){
 			yaml_get_relstage relstage "${fname}" "${v}" $i
 			yaml_get_dependencies deps "${fname}" "${v}" $i
 			yaml_get_build_requirements build_requires "${fname}" "${v}" $i
+			yaml_get_group group  "${fname}" "${v}" $i
+			pbuild.add_to_group "${group}"
 			# :FIXME:
 			# for the time being we prefix the build requirements
 			# with 'b:' and append them to the other dependencies.
@@ -623,23 +626,12 @@ build_modules_yaml(){
 			declare ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
 			declare ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
 
-			local systems
+			local -a systems=()
+			local -a compilers=()
 			yaml_get_systems systems "${fname}" "${v}" $i
-			# build module if
-			# - systems is any
-			# - opt_system is listed in systems
-			local build_it='no'
-			if [[ "${systems}" == 'any' ]]; then
-				build_it='yes'
-			fi
-			if [[ ,${systems}, == *,${opt_system},* ]]; then
-				build_it='yes'
-			fi
-			if [[ ${build_it} == 'no' ]]; then
-				# we don't build, but we remember the overlay for
-				# cleaning up the modulefiles later.
-				continue
-			fi
+			yaml_get_compilers compilers "${fname}" "${v}" $i
+			pbuild.supported_systems "${systems[@]}"
+			pbuild.supported_compilers "${compilers[@]}"
 			if (( ${#deps[@]} > 0 )); then
 				while read -a with_modules; do
 					pbuild.build_module \
