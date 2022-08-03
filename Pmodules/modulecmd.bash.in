@@ -2882,6 +2882,8 @@ if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
 
+# restore variables from last call
+unset Version
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
