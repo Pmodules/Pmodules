@@ -2071,6 +2071,7 @@ subcommand_clear() {
 # search [switches] [STRING...]
 #
 Subcommands[search]='search'
+Subcommands[find]='search'
 Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
@@ -2880,27 +2881,6 @@ fi
 if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
-
-case ${subcommand} in
-	add )
-		subcommand='load'
-		;;
-	display )
-		subcommand='show'
-		;;
-	keyword )
-		subcommand='apropos'
-		;;
-	rm )
-		subcommand='unload'
-		;;
-	find )
-		subcommand='search'
-		;;
-	switch )
-		subcommand='swap'
-		;;
-esac
 
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
