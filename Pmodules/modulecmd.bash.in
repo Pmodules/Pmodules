@@ -32,16 +32,12 @@ std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sort' 'yq'
 
-if [[ ${PMODULES_PURETCL} == yes ]]; then
-	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
+if [[ -n ${TCLLIBPATH} ]]; then
+	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
 else
-	if [[ -n ${TCLLIBPATH} ]]; then
-		declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
-	else
-		declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
-	fi
-	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
+	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
 fi
+declare -r modulecmd="${libexecdir}/modulecmd.bin"
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
