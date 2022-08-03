@@ -1870,6 +1870,7 @@ pmodules_init() {
 	init_overlay_vars
         init_modulepath
         init_manpath
+	scan_groups "${UsedOverlays[@]}"
 	save_env
         export_env \
                 LOADEDMODULES \
