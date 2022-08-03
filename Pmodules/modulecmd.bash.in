@@ -2889,30 +2889,23 @@ if [[ -n ${PMODULES_ENV} ]]; then
 fi
 # Version should now be defined again, if not:
 # - PMODULES_ENV was not set
-# - Version was not defined the last time the variables were saved.
+# - Version was not defined the last time the status was saved.
 #   This is true for older Pmodules versions.
 
 # We (re-)initialise the Pmodules system, if
-# - PMODULES_ENV was not set/empty
-# - A Pmodules new version has been loaded
+# - PMODULES_ENV was not set/is empty
+# - A new Pmodules version has been loaded
 if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
-	# this can only happen if the last command was
-	#   module load Pmodules/${PMODULES_VERSION}
-	#
-	# the values these two variables must be saved before initialising
 	declare _tmp_loaded_modules_="${LOADEDMODULES}"
 	declare _tmp_lmfiles_="${_LMFILES_}"
 
 	pmodules_init
 
-	# restore and export
 	LOADEDMODULES="${_tmp_loaded_modules_}"
 	_LMFILES_="${_tmp_lmfiles_}"
         export_env \
                 LOADEDMODULES \
                 _LMFILES_
-fi
-
 fi
 
 # We need a tmp-file in the following sub-commands. It will be removed
