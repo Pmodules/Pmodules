@@ -15,12 +15,12 @@ unset IFS	# use default IFS
 shopt -s nullglob
 
 # used in some output messages only
-declare -r  CMD='module'
+declare -r CMD='module'
 
-declare -r  mydir=$(cd $(dirname "$0") && pwd)
-declare     prefix=$(dirname "${mydir}")
-declare -r  libdir="${prefix}/lib"
-declare -r  libexecdir="${prefix}/libexec"
+declare -r mydir=$(cd $(dirname "$0") && pwd)
+declare -- prefix=$(dirname "${mydir}")
+declare -r libdir="${prefix}/lib"
+declare -r libexecdir="${prefix}/libexec"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
@@ -39,9 +39,9 @@ else
 fi
 declare -r modulecmd="${libexecdir}/modulecmd.bin"
 
-declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
+declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
-declare    Shell=''
+declare -- Shell=''
 
 # the following settings are used if the config file doesn't exist
 
@@ -91,30 +91,31 @@ export_env() {
 }
 
 #
-# Save/cache some variables.
-# This function is called on exit via a trap handler.
+# Save/cache state in the environment variable PMODULES_ENV. The content is
+# base64 encoded. This function is called on exit via a trap handler.
 #
-# Args;
+# Arguments:
 #       none
 #
+
 declare g_env_must_be_saved='no'
 
-encode_base64(){
-	case "${os_name}" in
-		Linux )
-			"${base64}" --wrap=0 <<< "$1"
-			;;
-		Darwin )
-			# does not wrap if running in a script
-			"${base64}"  <<< "$1"
-			;;
-		* )
-			std::die 255 "Oops: Unsupported OS"
-			;;
-	esac
-}
-
 save_env() {
+	encode_base64(){
+		case "${os_name}" in
+			Linux )
+				"${base64}" --wrap=0 <<< "$1"
+				;;
+			Darwin )
+				# does not wrap if running in a script
+				"${base64}"  <<< "$1"
+				;;
+			* )
+				std::die 255 "Oops: Unsupported OS"
+				;;
+		esac
+	}
+
         [[ $1 == 'no' ]] && return 0
         local vars=( Version )
 	vars+=( UsedReleaseStages UsedFlags UsedGroups )
@@ -129,6 +130,9 @@ save_env() {
 	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
 }
 
+#
+# function called on exit
+#
 _exit() {
 	save_env "${g_env_must_be_saved}"
 	export_env 'PMODULES_ENV'
@@ -136,7 +140,6 @@ _exit() {
 		${rm} -f "${tmpfile}" || :
 	fi
 }
-
 trap '_exit' EXIT
 
 #
@@ -175,6 +178,9 @@ get_release_stage() {
 	fi
 }
 
+#
+# check whether the argument in $1 is a valid release stage.
+#
 is_release_stage() {
 	[[ :${ReleaseStages}: =~ :$1: ]]
 }
@@ -184,9 +190,10 @@ is_release_stage() {
 # If yes, return 0 and the overlay with upvar of first argument
 # otherwise return 1
 #
-# $1    upvar to return overlay
-# $2    upvar to return group
-# $3    moduledir to check
+# Arguments
+#	$1	upvar to return overlay
+#	$2	upvar to return group
+#	$3	moduledir to check
 #
 find_overlay () {
         local "$1"
@@ -205,29 +212,52 @@ find_overlay () {
 	return 0
 }
 
+#
+# Check whether the module passed in argument $1 is loaded.
+#
 module_is_loaded() {
 	[[ :${LOADEDMODULES}: =~ :$1: ]]
 }
 
 #
-# check shebang
-# $1: file name to test
+# Check shebang.
+#
+# Arguments:
+#	$1	file name to test
+#
 is_modulefile() {
 	local -r fname="$1"
-	local shebang
+	local -- shebang
 	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
 	[[ "${shebang:0:8}" == '#%Module' ]] || [[ "${shebang:0:9}" == '#%Pmodule' ]]
 }
 
+#
+# Get the value of <module>_PREFIX.
+#
+# Arguments:
+#	$1	upvar to return result
+#	$2	modulefile
+#
 get_module_prefix() {
-	local "$1"
-	local modulefile="$2"
-	local -r _prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
+	local -n _prefix="$1"
+	local -- _prefix=$("${modulecmd}" bash show "$2" 2>&1 | \
 				   ${awk} '/_PREFIX |_HOME / {print $3; exit}')
-	std::upvar $1 "${_prefix}"
 }
 
+#
+# Generic wrappers of 'modulecmd':
+#
+# subcommand_generic0:
+#	no argument allowed
+# subcommand_generic1:
+#	Exact one argument must be passed
+# subcommand_generic1plus:
+#	One or more arguments must be passed
+#
+# The options to output help are always accepted.
+#
 subcommand_generic0() {
 	local -r subcommand="$1"
 	shift
@@ -1768,7 +1798,10 @@ subcommand_refresh() {
 }
 
 #
-# help function, used during initialization and for purging all modules
+# Helper functions, used during initialization and for purging all modules.
+#
+# Arguments:
+#	none
 #
 init_modulepath() {
 	declare -gx MODULEPATH=''
@@ -2795,6 +2828,11 @@ subcommand_initclear() {
 #
 # main
 #
+
+# parse arguments
+#
+
+# first argument must be a shell!
 case "$1" in
 	sh | bash | zsh )
 		declare Shell="sh"
@@ -2808,6 +2846,7 @@ case "$1" in
 esac
 shift
 
+# parse agruments till and including the sub-command
 declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
@@ -2866,6 +2905,14 @@ esac
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
+# Version should now be defined again, if not:
+# - PMODULES_ENV was not set
+# - Version was not defined the last time the variables were saved.
+#   This is true for older Pmodules versions.
+
+# We (re-)initialise the Pmodules system, if
+# - PMODULES_ENV was not set/empty
+# - A Pmodules new version has been loaded
 if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
 	# this can only happen if the last command was
 	#   module load Pmodules/${PMODULES_VERSION}
@@ -2889,6 +2936,8 @@ if (( ${#GroupDepths[@]} == 0 )); then
 	g_env_must_be_saved='yes'
 fi
 
+# We need a tmp-file in the following sub-commands. It will be removed
+# in the exit function if exists.
 case ${subcommand} in
 	load|purge|search|swap|whatis|apropos )
 		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
