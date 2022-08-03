@@ -2911,9 +2911,6 @@ if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
                 _LMFILES_
 fi
 
-if (( ${#GroupDepths[@]} == 0 )); then
-	scan_groups "${UsedOverlays[@]}"
-	g_env_must_be_saved='yes'
 fi
 
 # We need a tmp-file in the following sub-commands. It will be removed
