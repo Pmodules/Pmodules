@@ -15,12 +15,12 @@ unset IFS	# use default IFS
 shopt -s nullglob
 
 # used in some output messages only
-declare -r  CMD='module'
+declare -r CMD='module'
 
-declare -r  mydir=$(cd $(dirname "$0") && pwd)
-declare     prefix=$(dirname "${mydir}")
-declare -r  libdir="${prefix}/lib"
-declare -r  libexecdir="${prefix}/libexec"
+declare -r mydir=$(cd $(dirname "$0") && pwd)
+declare -- prefix=$(dirname "${mydir}")
+declare -r libdir="${prefix}/lib"
+declare -r libexecdir="${prefix}/libexec"
 
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
@@ -32,20 +32,16 @@ std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sort' 'yq'
 
-if [[ ${PMODULES_PURETCL} == yes ]]; then
-	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
+if [[ -n ${TCLLIBPATH} ]]; then
+	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
 else
-	if [[ -n ${TCLLIBPATH} ]]; then
-		declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
-	else
-		declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
-	fi
-	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
+	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
 fi
+declare -r modulecmd="${libexecdir}/modulecmd.bin"
 
-declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
+declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
-declare    Shell=''
+declare -- Shell=''
 
 # the following settings are used if the config file doesn't exist
 
@@ -95,30 +91,31 @@ export_env() {
 }
 
 #
-# Save/cache some variables.
-# This function is called on exit via a trap handler.
+# Save/cache state in the environment variable PMODULES_ENV. The content is
+# base64 encoded. This function is called on exit via a trap handler.
 #
-# Args;
+# Arguments:
 #       none
 #
+
 declare g_env_must_be_saved='no'
 
-encode_base64(){
-	case "${os_name}" in
-		Linux )
-			"${base64}" --wrap=0 <<< "$1"
-			;;
-		Darwin )
-			# does not wrap if running in a script
-			"${base64}"  <<< "$1"
-			;;
-		* )
-			std::die 255 "Oops: Unsupported OS"
-			;;
-	esac
-}
-
 save_env() {
+	encode_base64(){
+		case "${os_name}" in
+			Linux )
+				"${base64}" --wrap=0 <<< "$1"
+				;;
+			Darwin )
+				# does not wrap if running in a script
+				"${base64}"  <<< "$1"
+				;;
+			* )
+				std::die 255 "Oops: Unsupported OS"
+				;;
+		esac
+	}
+
         [[ $1 == 'no' ]] && return 0
         local vars=( Version )
 	vars+=( UsedReleaseStages UsedFlags UsedGroups )
@@ -133,6 +130,9 @@ save_env() {
 	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
 }
 
+#
+# function called on exit
+#
 _exit() {
 	save_env "${g_env_must_be_saved}"
 	export_env 'PMODULES_ENV'
@@ -140,7 +140,6 @@ _exit() {
 		${rm} -f "${tmpfile}" || :
 	fi
 }
-
 trap '_exit' EXIT
 
 #
@@ -179,6 +178,9 @@ get_release_stage() {
 	fi
 }
 
+#
+# check whether the argument in $1 is a valid release stage.
+#
 is_release_stage() {
 	[[ :${ReleaseStages}: =~ :$1: ]]
 }
@@ -188,9 +190,10 @@ is_release_stage() {
 # If yes, return 0 and the overlay with upvar of first argument
 # otherwise return 1
 #
-# $1    upvar to return overlay
-# $2    upvar to return group
-# $3    moduledir to check
+# Arguments
+#	$1	upvar to return overlay
+#	$2	upvar to return group
+#	$3	moduledir to check
 #
 find_overlay () {
         local "$1"
@@ -209,29 +212,52 @@ find_overlay () {
 	return 0
 }
 
+#
+# Check whether the module passed in argument $1 is loaded.
+#
 module_is_loaded() {
 	[[ :${LOADEDMODULES}: =~ :$1: ]]
 }
 
 #
-# check shebang
-# $1: file name to test
+# Check shebang.
+#
+# Arguments:
+#	$1	file name to test
+#
 is_modulefile() {
 	local -r fname="$1"
-	local shebang
+	local -- shebang
 	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
 	[[ "${shebang:0:8}" == '#%Module' ]] || [[ "${shebang:0:9}" == '#%Pmodule' ]]
 }
 
+#
+# Get the value of <module>_PREFIX.
+#
+# Arguments:
+#	$1	upvar to return result
+#	$2	modulefile
+#
 get_module_prefix() {
-	local "$1"
-	local modulefile="$2"
-	local -r _prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
+	local -n _prefix="$1"
+	local -- _prefix=$("${modulecmd}" bash show "$2" 2>&1 | \
 				   ${awk} '/_PREFIX |_HOME / {print $3; exit}')
-	std::upvar $1 "${_prefix}"
 }
 
+#
+# Generic wrappers of 'modulecmd':
+#
+# subcommand_generic0:
+#	no argument allowed
+# subcommand_generic1:
+#	Exact one argument must be passed
+# subcommand_generic1plus:
+#	One or more arguments must be passed
+#
+# The options to output help are always accepted.
+#
 subcommand_generic0() {
 	local -r subcommand="$1"
 	shift
@@ -754,7 +780,7 @@ subcommand_unload() {
         local arg
 	for arg in "${args[@]}"; do
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
-                eval "$(echo "${output}"|sed -e 's/;unalias [^;]*//g')"
+                eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
 		case ${Shell} in
 			sh | bash | zsh )
 				echo "${output}"
@@ -1496,20 +1522,21 @@ subcommand_use() {
 		if is_release_stage "${arg}"; then
                         # argument is release stage
 			std::append_path UsedReleaseStages "${arg}"
-                        return
+                        return $?
                 fi
 		if [[ "${arg}" =~ "flag=" ]]; then
                         # argument is flag
 			UsedFlags+=( "${arg/flag=}" )
-                        return
+                        return $?
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
 			use_overlay "${arg}"
-			return 0
+			return $?
 		fi
 		if [[ -d ${arg} ]]; then
 			local dir=$(cd "${arg}" && pwd -L)
 			${add2path_func} MODULEPATH "${dir}"
+			return $?
 		fi
                 if [[ ! -v GroupDepths[${arg}] ]]; then
                         # this scan is required if a new group has been
@@ -1519,7 +1546,7 @@ subcommand_use() {
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
 			use_group "${arg}"
-                        return
+                        return $?
                 fi
 
 		std::die 3 "%s %s: %s -- %s" \
@@ -1771,7 +1798,10 @@ subcommand_refresh() {
 }
 
 #
-# help function, used during initialization and for purging all modules
+# Helper functions, used during initialization and for purging all modules.
+#
+# Arguments:
+#	none
 #
 init_modulepath() {
 	declare -gx MODULEPATH=''
@@ -1922,8 +1952,8 @@ subcommand_purge() {
                          "${error_txt}"
         fi
         if [[ "${Shell}" == "sh" ]]; then
-		# for sh-like shells just echo 
-                echo "${output}"
+		# for sh-like shells just echo
+		eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
         else
 		# re-run with right shell
                 "${modulecmd}" "${Shell}" 'purge'
@@ -2041,14 +2071,17 @@ subcommand_clear() {
 # search [switches] [STRING...]
 #
 Subcommands[search]='search'
+Subcommands[find]='search'
 Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
 Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options[search]+='-l verbose '
 Options[search]+='-l all-deps -l wrap '
-Options[search]+='-l glob'
+Options[search]+='-l glob '
+Options[search]+='-l newest '
+Options[search]+='-l group:'
 Help[search]='
 USAGE:
-        module search [switches] STRING...
+        module find|search [switches] STRING...
 		Search installed modules. If an argument is given, search
 		for modules whose name match the argument.
 
@@ -2088,6 +2121,7 @@ SWITCHES:
 subcommand_search() {
 	local -r subcommand='search'
 	local modules=()
+	local groups=()
 	local with_modules='//'
 	local -ir cols=$(tput cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
@@ -2100,6 +2134,7 @@ subcommand_search() {
 	local opt_all_deps='no'
 	local opt_wrap='no'
 	local opt_glob='no'
+	local opt_newest='no'
 
 	#.....................................................................
 	#
@@ -2167,9 +2202,7 @@ subcommand_search() {
                 }
                 
                 print_header_verbose() {
-		        std::info ''
-		        #std::info "${fmt}" "Module" "Rel.stage" "Group" "Overlay" "Dependencies/Modulefile"
-		        #std::info '-%.0s' $(seq 1 ${cols})
+		        :
 	        }
 
                 print_line_verbose() {
@@ -2195,7 +2228,9 @@ subcommand_search() {
                 }
 
                 print_line_modulefile() {
-			std::info "$4"
+			if (( $# >= 4 )) && [[ -n $4 ]]; then
+				std::info "$1 $4"
+			fi
                 }
 
                 print_line_csv() {
@@ -2218,11 +2253,15 @@ subcommand_search() {
                         print_default
                 fi
 
+		local _script=''
+		if [[ ${opt_newest} == 'yes' ]]; then
+			_script='{} END{print}'
+		fi
                 ${func_print_header}
                 while read -a toks; do
                         ${func_print_line} "${toks[@]}"
                 done < <("${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${tmpfile}" | \
-                                 ${awk} "${with_modules}")
+                                 ${awk} "${with_modules} ${_script}")
         }
 
 	#.....................................................................
@@ -2235,72 +2274,65 @@ subcommand_search() {
 	#   :FIXME:
 	#
 	search () {
-		if [[ ${opt_glob} == 'yes' ]]; then
-			local -r module="$1"
-		else
-			local -r module="${1}*"
-		fi
-
+		local module="$1"
+		local group="$2"
 		# write results to a temporary file for later processing
-		local group
-		# loop over all groups
-		for group in "${!GroupDepths[@]}"; do
-			# loop over all directories which can be added to
-			# MODULEPATH inside current group
-			local depth=${GroupDepths[${group}]}
-			local s=''
-			if (( depth > 0 )); then
-				s=$(printf '/*%.0s' $(seq 1 ${depth}))
-			fi
-			local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+
+		# loop over all directories which can be added to
+		# MODULEPATH inside current group
+		local depth=${GroupDepths[${group}]}
+		local s=''
+		if (( depth > 0 )); then
+			s=$(printf '/*%.0s' $(seq 1 ${depth}))
+		fi
+		local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+		
+		# get and print all available modules in $mpath
+		# with respect to the requested release stage
+		# tmpfile: module/version rel_stage group dependencies...
+		local mods
+		get_available_modules \
+			mods \
+			"${module}" \
+			"${opt_use_rel_stages}" \
+			"${modulepath[@]}"
+		local i=0
+		for (( i=0; i<${#mods[@]}; i+=4 )); do
+			local name=${mods[i]}
+			local rel_stage=${mods[i+1]}
+			local modulefile=${mods[i+2]}
+			local ol=${mods[i+3]}
 			
-			# get and print all available modules in $mpath
-			# with respect to the requested release stage
-			# tmpfile: module/version rel_stage group dependencies...
-			local mods
-			get_available_modules \
-				mods \
-				"${module}" \
-				"${opt_use_rel_stages}" \
-				"${modulepath[@]}" \
-
-			for (( i=0; i<${#mods[@]}; i+=4 )); do
-				local name=${mods[i]}
-				local rel_stage=${mods[i+1]}
-				local modulefile=${mods[i+2]}
-				local ol=${mods[i+3]}
-
-				if (( ${#name} > max_len_modulename)); then
-					max_len_modulename=${#name}
-				fi
-				
-				if [[ "${opt_print_verbose}" == 'yes' ]] || [[ "${opt_all_deps}" == 'yes' ]]; then
-					local prefix=''
-					get_module_prefix prefix "${modulefile}"
-					local dependencies_file="${prefix}/.dependencies"
-					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-						deps=($(< "${dependencies_file}"))
-					else
-						deps=()
-					fi
+			if (( ${#name} > max_len_modulename)); then
+				max_len_modulename=${#name}
+			fi
+			
+			if [[ "${opt_print_verbose}" == 'yes' ]] || \
+				   [[ "${opt_all_deps}" == 'yes' ]]; then
+				local prefix=''
+				get_module_prefix prefix "${modulefile}"
+				local dependencies_file="${prefix}/.dependencies"
+				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
+					deps=($(< "${dependencies_file}"))
 				else
-					# get dependencies encoded in directory name
-					local deps=()
-					local -i j
-					IFS='/'   # note: IFS is used to concat in the for loop!
-					local toks=( ${modulefile} )
-					for ((j = -depth-2; j < -2; j += 2)); do
-						deps+=( "${toks[*]: $j:2}" );
-					done
-					unset IFS
+					deps=()
 				fi
-				
-				echo ${name} ${rel_stage} ${group} ${modulefile} \
-				     ${ol} \
-                                     ${deps[@]} >> "${tmpfile}"
-			done
+			else
+				# get dependencies encoded in directory name
+				local deps=()
+				local -i j
+				IFS='/'   # note: IFS is used to concat in the for loop!
+				local toks=( ${modulefile} )
+				for ((j = -depth-2; j < -2; j += 2)); do
+					deps+=( "${toks[*]: $j:2}" );
+				done
+				unset IFS
+			fi
+			
+			echo ${name} ${rel_stage} ${group} ${modulefile} \
+			     ${ol} \
+                             ${deps[@]} >> "${tmpfile}"
 		done
-		print_result
 	}
 
 	while (( $# > 0 )); do
@@ -2388,6 +2420,18 @@ subcommand_search() {
 			--glob )
 				opt_glob='yes'
 				;;
+			--newest )
+				opt_newest='yes'
+				;;
+			--group | --group=* )
+				if [[ $1 == *=* ]]; then
+					groups+=( ${1/--*=} )
+				else
+					groups+=( $2 )
+					shift
+				fi
+				;;
+					
 			-- )
 				shift 1
 				modules+=( "$@" )
@@ -2422,8 +2466,19 @@ subcommand_search() {
 	fi
 
 	local module
+	if (( ${#groups[@]} == 0 )); then
+		groups=( "${!GroupDepths[@]}" )
+	fi	
 	for module in "${modules[@]}"; do
-		search "${module}"
+		if [[ ${opt_glob} != 'yes' ]]; then
+			module+="*"
+		fi
+		local group
+		for group in "${groups[@]}"; do
+			search "${module}" "${group}"
+		done
+		print_result
+		echo -n > ${tmpfile}
 	done
 }
 
@@ -2508,7 +2563,7 @@ subcommand_help() {
 # whatis
 #
 Subcommands[whatis]='whatis'
-Options[whatis]='-o \?H -l help'
+Options[whatis]='-o \?Ha -l help -l all'
 Help[whatis]='
 USAGE:
         module whatis [modulefile...]
@@ -2518,11 +2573,46 @@ USAGE:
 '
 
 subcommand_whatis() {
-	if (( $# == 0 )); then
-                subcommand_generic0 'whatis'
-	else
-                subcommand_generic1plus 'whatis' "$@"
-	fi
+	local options=()
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-\? | --help )
+				print_help "${subcommand}"
+				;;
+			-a | --all )
+				options+=( '-a' )
+				;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+
+	local group=''
+	for group in "${!GroupDepths[@]}"; do
+		local mod_name=''
+		local file_name=''
+		while read mod_name file_name; do
+			[[ -n ${file_name} ]] || continue
+			local whatis=$("${modulecmd}" bash \
+						      whatis \
+						      "${file_name}" \
+						      2>&1 1>/dev/null)
+			printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
+		done < <(set +x; subcommand_search \
+			--group "${group}" \
+			--print-modulefiles \
+			--newest \
+			"${options[@]}" \
+			"${args[@]}" 2>&1)
+	done
 }
 
 ##############################################################################
@@ -2531,7 +2621,7 @@ subcommand_whatis() {
 #
 Subcommands[apropos]='apropos'
 Subcommands[keyword]='apropos'
-Options[apropos]='-o \?H -l help'
+Options[apropos]='-o \?Ha -l help -l all'
 Help[apropos]='
 USAGE:
         module apropos string
@@ -2541,7 +2631,55 @@ USAGE:
 '
 
 subcommand_apropos() {
-        subcommand_generic1 'apropos' "$@"
+	local options=()
+	local args=()
+	while (( $# > 0 )); do
+		case $1 in
+			-\? | --help )
+				print_help "${subcommand}"
+				;;
+			-a | --all )
+				options+=( '-a' )
+				;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+				args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+	        std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "no search string specified"
+	elif (( ${#args[@]} > 1 )); then
+	        std::die 3 "%s %s: %s" \
+                         "${CMD}" "${subcommand}" \
+                         "more then one search string specified"
+	fi
+	local arg="${args[0]}"
+	local group=''
+	for group in "${!GroupDepths[@]}"; do
+		local mod_name=''
+		local file_name=''
+		while read mod_name file_name; do
+			[[ -n ${file_name} ]] || continue
+			local whatis=$("${modulecmd}" bash \
+						      whatis \
+						      "${file_name}" \
+						      2>&1 1>/dev/null)
+			if [[ ${whatis,,} =~ ${arg,,} ]]; then
+				printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
+			fi
+		done < <(set +x; subcommand_search \
+			--group "${group}" \
+			--print-modulefiles \
+			"${options[@]}" 2>&1)
+	done
 }
 
 ##############################################################################
@@ -2691,6 +2829,11 @@ subcommand_initclear() {
 #
 # main
 #
+
+# parse arguments
+#
+
+# first argument must be a shell!
 case "$1" in
 	sh | bash | zsh )
 		declare Shell="sh"
@@ -2704,6 +2847,7 @@ case "$1" in
 esac
 shift
 
+# parse agruments till and including the sub-command
 declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
@@ -2738,38 +2882,25 @@ if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
 fi
 
-case ${subcommand} in
-	add )
-		subcommand='load'
-		;;
-	display )
-		subcommand='show'
-		;;
-	keyword )
-		subcommand='apropos'
-		;;
-	rm )
-		subcommand='unload'
-		;;
-	switch )
-		subcommand='swap'
-		;;
-esac
-
+# restore variables from last call
+unset Version
 if [[ -n ${PMODULES_ENV} ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
+# Version should now be defined again, if not:
+# - PMODULES_ENV was not set
+# - Version was not defined the last time the status was saved.
+#   This is true for older Pmodules versions.
+
+# We (re-)initialise the Pmodules system, if
+# - PMODULES_ENV was not set/is empty
+# - A new Pmodules version has been loaded
 if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
-	# this can only happen if the last command was
-	#   module load Pmodules/${PMODULES_VERSION}
-	#
-	# the values these two variables must be saved before initialising
 	declare _tmp_loaded_modules_="${LOADEDMODULES}"
 	declare _tmp_lmfiles_="${_LMFILES_}"
 
 	pmodules_init
 
-	# restore and export
 	LOADEDMODULES="${_tmp_loaded_modules_}"
 	_LMFILES_="${_tmp_lmfiles_}"
         export_env \
@@ -2777,13 +2908,10 @@ if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
                 _LMFILES_
 fi
 
-if (( ${#GroupDepths[@]} == 0 )); then
-	scan_groups "${UsedOverlays[@]}"
-	g_env_must_be_saved='yes'
-fi
-
+# We need a tmp-file in the following sub-commands. It will be removed
+# in the exit function if exists.
 case ${subcommand} in
-	load|purge|search|swap )
+	load|purge|search|swap|whatis|apropos )
 		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
 			|| std::die 1 "Oops: unable to create tmp file!"
 		;;
@@ -2792,12 +2920,10 @@ case ${subcommand} in
 		;;
 esac
 
-
-tmp=$("${getopt}" --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
-        || print_help "${subcommand}"
-eval args=( "$tmp" )
-unset tmp
-subcommand_${Subcommands[$subcommand]} "${args[@]}"
+# parse arguments of the sub-command and call it
+set -- $("${getopt}" --unquoted --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
+	|| print_help "${subcommand}"
+subcommand_${Subcommands[$subcommand]} $@
 
 # Local Variables:
 # mode: sh

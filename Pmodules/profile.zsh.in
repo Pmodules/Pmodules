@@ -7,9 +7,9 @@
 ##### no changes below this line ######
 export PMODULES_VERSION
 
-declare    __pm_root__=${(%):-%N}
-declare -x PMODULES_HOME="${__pm_root__:h:h}/Tools/Pmodules/${PMODULES_VERSION}"
-unset __pm_root__
+declare    __this_file__=${(%):-%N}
+declare -x PMODULES_HOME="${__this_file____:h:h}/Tools/Pmodules/${PMODULES_VERSION}"
+unset __this_file__
 
 test -r "${PMODULES_HOME}/init/zsh" && source "$_"
 

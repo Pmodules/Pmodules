@@ -116,149 +116,26 @@ pbuild.verbose() {
 readonly -f pbuild.verbose
 
 
-###############################################################################
+#******************************************************************************
 #
 # function in the "namespace" (with prefix) 'pbuild::' can be used in
 # build-scripts
 #
 
-#..............................................................................
+###############################################################################
 #
-# compare two version numbers
+# general functions
 #
-# original implementation found on stackoverflow:
-# https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash
-#
-pbuild::version_compare () {
-        is_uint() {
-                [[ $1 =~ ^[0-9]+$ ]]
-        }
-
-        [[ $1 == $2 ]] && return 0
-        local IFS=.
-        local i ver1=($1) ver2=($2)
-
-        # fill empty fields in ver1 with zeros
-        for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
-                ver1[i]=0
-        done
-        for ((i=0; i<${#ver1[@]}; i++)); do
-                [[ -z ${ver2[i]} ]] && ver2[i]=0
-                if is_uint ${ver1[i]} && is_uint ${ver2[i]}; then
-                        ((10#${ver1[i]} > 10#${ver2[i]})) && return 1
-                        ((10#${ver1[i]} < 10#${ver2[i]})) && return 2
-                else
-                        [[ ${ver1[i]} > ${ver2[i]} ]] && return 1
-                        [[ ${ver1[i]} < ${ver2[i]} ]] && return 2
-                fi
-        done
-        return 0
-}
-readonly -f pbuild::version_compare
 
 #..............................................................................
-# version less than
-#
-# return 0 if version passed in $1 is older then $2
-#
-pbuild::version_lt() {
-        pbuild::version_compare "$1" "$2"
-        (( $? == 2 ))
-}
-readonly -f pbuild::version_lt
-
-#..............................................................................
-# version less than or equal
-#
-# return 0 if version passed in $1 is older or equal then $2
-#
-pbuild::version_le() {
-        pbuild::version_compare "$1" "$2"
-        local -i exit_code=$?
-        (( exit_code == 0 || exit_code == 2 ))
-}
-readonly -f pbuild::version_le
-
-#..............................................................................
-# version greater than
-#
-# return 0 if version passed in $1 is newer then $2
-#
-pbuild::version_gt() {
-        pbuild::version_compare "$1" "$2"
-        (( $? == 1 ))
-        local -i exit_code=$?
-        (( exit_code == 0 || exit_code == 1 ))
-}
-readonly -f pbuild::version_gt
-
-#..............................................................................
-# version greater than
-#
-# return 0 if version passed in $1 and $2 are equal
-#
-pbuild::version_eq() {
-        pbuild::version_compare "$1" "$2"
-}
-readonly -f pbuild::version_eq
-
-##############################################################################
-#
-# Set flag to build module in source tree.
-#
-# Arguments:
-#   none
-#
-pbuild::compile_in_sourcetree() {
-	BUILD_DIR="${SRC_DIR}"
-}
-readonly -f pbuild::compile_in_sourcetree
-
-##############################################################################
-#
-# Check whether the script is running on a supported OS.
-#
-# Arguments:
-#   $@: supported opertating systems (something like RHEL6, macOS10.14, ...).
-#       Default is all.
-#
-pbuild::supported_systems() {
-	SUPPORTED_SYSTEMS+=( "$@" )
-}
-readonly -f pbuild::supported_systems
-
-##############################################################################
-#
-# Check whether the script is running on a supported OS.
-#
-# Arguments:
-#   $@: supported opertating systems (like Linux, Darwin).
-#       Default is all.
-#
-pbuild::supported_os() {
-	SUPPORTED_OS+=( "$@" )
-}
-readonly -f pbuild::supported_os
-
-##############################################################################
-#
-# Check whether the loaded compiler is supported.
-#
-# Arguments:
-#   $@: supported compiler (like GCC, Intel, PGI).
-#       Default is all.
-#
-pbuild::supported_compilers() {
-	SUPPORTED_COMPILERS+=( "$@" )
-}
-readonly -f pbuild::supported_compilers
-
-##############################################################################
 #
 # Install module in given group.
 #
+# Note:
+#	This function is deprecated with YAML module configuration files.
+#
 # Arguments:
-#   $1: group
+#	$1: group
 #
 pbuild::add_to_group() {
 	if (( $# == 0 )); then
@@ -266,23 +143,26 @@ pbuild::add_to_group() {
                          "%s " "${module_name}/${module_version}:" \
                          "${FUNCNAME}: missing group argument."
 	fi
-	GROUP="$1"
+	if (( $# > 1 )); then
+		std::die 42 \
+                         "%s " "${module_name}/${module_version}:" \
+                         "${FUNCNAME}: only one argument is allowed."
+	fi
+	if [[ ${yaml_config} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
+	pbuild.add_to_group "$@"
 }
 readonly -f pbuild::add_to_group
 
-##############################################################################
-#
-# Set documentation file to be installed.
-#
-# Arguments:
-#   $@: documentation files relative to source
-#
-pbuild::install_docfiles() {
-	MODULE_DOCFILES+=("$@")
+declare -gx GROUP=''
+pbuild.add_to_group(){
+	GROUP="$1"
 }
-readonly -f pbuild::install_docfiles
+readonly -f pbuild.add_to_group
 
-##############################################################################
+#..............................................................................
 #
 # Test whether a module with the given name is available. If yes, return
 # release
@@ -315,7 +195,154 @@ pbuild::module_is_avail() {
 }
 readonly -f pbuild::module_is_avail
 
+#..............................................................................
+#
+# compare two version numbers
+#
+# pbuild::version_compare
+#	- returns 0 if the version numbers are equal
+#	- returns 1 if first version number is higher
+#	- returns 2 if second version number is higher
+#
+# pbuild::version_lt
+#	- returns 0 if second version number is higher
+# pbuild::version_le
+#	- returns 0 if second version number is higher or equal
+# pbuild::version_gt
+#	- returns 0 if first version number is higher
+# pbuild::version_ge
+#	- returns 0 if first version number is higher or equal
+# pbuild::version_eq
+#	- returns 0 if version numbers are equal
+#
+# otherwise a value != 0 is returned
+#
+# Arguments:
+#	$1 first version number
+#	$2 second version number
+#
+# Note:
+#	Original implementation found on stackoverflow:
+# https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash
+#
+pbuild::version_compare () {
+        is_uint() {
+                [[ $1 =~ ^[0-9]+$ ]]
+        }
+
+        [[ $1 == $2 ]] && return 0
+        local IFS=.
+        local i ver1=($1) ver2=($2)
+
+        # fill empty fields in ver1 with zeros
+        for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+                ver1[i]=0
+        done
+        for ((i=0; i<${#ver1[@]}; i++)); do
+                [[ -z ${ver2[i]} ]] && ver2[i]=0
+                if is_uint ${ver1[i]} && is_uint ${ver2[i]}; then
+                        ((10#${ver1[i]} > 10#${ver2[i]})) && return 1
+                        ((10#${ver1[i]} < 10#${ver2[i]})) && return 2
+                else
+                        [[ ${ver1[i]} > ${ver2[i]} ]] && return 1
+                        [[ ${ver1[i]} < ${ver2[i]} ]] && return 2
+                fi
+        done
+        return 0
+}
+readonly -f pbuild::version_compare
+
+pbuild::version_lt() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 2 ))
+}
+readonly -f pbuild::version_lt
+
+pbuild::version_le() {
+        pbuild::version_compare "$1" "$2"
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code == 2 ))
+}
+readonly -f pbuild::version_le
+
+pbuild::version_gt() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 1 ))
+        local -i exit_code=$?
+        (( exit_code == 1 ))
+}
+readonly -f pbuild::version_gt
+
+pbuild::version_ge() {
+        pbuild::version_compare "$1" "$2"
+        (( $? == 1 ))
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code == 1 ))
+}
+readonly -f pbuild::version_gt
+
+pbuild::version_eq() {
+        pbuild::version_compare "$1" "$2"
+}
+readonly -f pbuild::version_eq
+
+#..............................................................................
+#
+# Check whether the loaded compiler is supported.
+#
+# Arguments:
+#   $@: supported compiler (like GCC, Intel, PGI).
+#       Default is all.
+#
+pbuild::supported_compilers() {
+	if [[ ${yaml_config} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
+	pbuild.supported_compilers "$@"
+}
+readonly -f pbuild::supported_compilers
+
+declare SUPPORTED_COMPILERS=()
+pbuild.supported_compilers(){
+	SUPPORTED_COMPILERS+=( "$@" )
+}
+readonly -f pbuild.supported_compilers
+
+#..............................................................................
+#
+# Check whether the script is running on a supported OS.
+#
+# Arguments:
+#   $@: supported opertating systems (something like RHEL6, macOS10.14, ...).
+#       Default is all.
+#
+pbuild::supported_systems() {
+	if [[ ${yaml_config} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
+	pbuild.supported_systems "$@"
+}
+readonly -f pbuild::supported_systems
+
+declare SUPPORTED_SYSTEMS=()
+pbuild.supported_systems() {
+	SUPPORTED_SYSTEMS+=( "$@" )
+}
+
+#..............................................................................
+#
+pbuild::use_flag() {
+	[[ "${USE_FLAGS}" =~ ":${1}:" ]]
+}
+readonly -f pbuild::use_flag
+
 ##############################################################################
+#
+# functions to prepare the sources
+
+#..............................................................................
 #
 # Set the download URL and name of downloaded file.
 #
@@ -333,7 +360,7 @@ pbuild::set_download_url() {
 }
 readonly -f pbuild::set_download_url
 
-##############################################################################
+#..............................................................................
 #
 # Set hash sum for file.
 #
@@ -348,7 +375,7 @@ pbuild::set_sha256sum() {
 }
 readonly -f pbuild::set_sha256sum
 
-##############################################################################
+#..............................................................................
 #
 # Unpack file $1 in directory $2
 #
@@ -361,23 +388,7 @@ pbuild::set_unpack_dir() {
 }
 readonly -f pbuild::set_unpack_dir
 
-##############################################################################
-#
-# Use this C-compiler
-#
-# Arguments:
-#	$1	C-compiler to use.
-#
-pbuild::use_cc() {
-	[[ -x "$1" ]] || std::die 3 \
-				  "%s " "${module_name}/${module_version}:" \
-				  "Error in setting CC:" \
-				  "'$1' is not an executable!"
-	CC="$1"
-}
-readonly -f pbuild::use_cc
-
-###############################################################################
+#..............................................................................
 #
 pbuild::add_patch() {
 	[[ -z "$1" ]] && \
@@ -393,7 +404,7 @@ pbuild::add_patch() {
 }
 readonly -f pbuild::add_patch
 
-###############################################################################
+#..............................................................................
 #
 pbuild::set_default_patch_strip() {
 	[[ -n "$1" ]] || \
@@ -405,35 +416,7 @@ pbuild::set_default_patch_strip() {
 }
 readonly -f pbuild::set_default_patch_strip
 
-###############################################################################
-#
-pbuild::use_flag() {
-	[[ "${USE_FLAGS}" =~ ":${1}:" ]]
-}
-readonly -f pbuild::use_flag
-
-###############################################################################
-#
-pbuild::add_configure_args() {
-	CONFIGURE_ARGS+=( "$@" )
-}
-readonly -f pbuild::add_configure_args
-
-###############################################################################
-#
-pbuild::use_autotools() {
-	configure_with='autotools'
-}
-readonly -f pbuild::use_autotools
-
-###############################################################################
-#
-pbuild::use_cmake() {
-	configure_with='cmake'
-}
-readonly -f pbuild::use_cmake
-
-###############################################################################
+#..............................................................................
 #
 # extract sources. For the time being only tar-files are supported.
 #
@@ -595,6 +578,59 @@ pbuild::prep() {
 
 ###############################################################################
 #
+# functions to configure the sources
+
+#..............................................................................
+#
+pbuild::add_configure_args() {
+	CONFIGURE_ARGS+=( "$@" )
+}
+readonly -f pbuild::add_configure_args
+
+#..............................................................................
+#
+pbuild::use_autotools() {
+	configure_with='autotools'
+}
+readonly -f pbuild::use_autotools
+
+#..............................................................................
+#
+pbuild::use_cmake() {
+	configure_with='cmake'
+}
+readonly -f pbuild::use_cmake
+
+#..............................................................................
+#
+# Use this C-compiler
+#
+# Arguments:
+#	$1	C-compiler to use.
+#
+pbuild::use_cc() {
+	[[ -x "$1" ]] || std::die 3 \
+				  "%s " "${module_name}/${module_version}:" \
+				  "Error in setting CC:" \
+				  "'$1' is not an executable!"
+	CC="$1"
+}
+readonly -f pbuild::use_cc
+
+#..............................................................................
+#
+# Set flag to build module in source tree.
+#
+# Arguments:
+#   none
+#
+pbuild::compile_in_sourcetree() {
+	BUILD_DIR="${SRC_DIR}"
+}
+readonly -f pbuild::compile_in_sourcetree
+
+#..............................................................................
+#
 # Configure the software to be compiled.
 #
 # Arguments:
@@ -648,7 +684,11 @@ pbuild::configure() {
 }
 
 
-###############################################################################
+##############################################################################
+#
+# functions to compile the sources
+
+#..............................................................................
 #
 # Default compile function.
 #
@@ -663,7 +703,23 @@ pbuild::compile() {
 			 "compilation failed!"
 }
 
-###############################################################################
+##############################################################################
+#
+# functions to install everything
+
+#..............................................................................
+#
+# Set documentation file to be installed.
+#
+# Arguments:
+#   $@: documentation files relative to source
+#
+pbuild::install_docfiles() {
+	MODULE_DOCFILES+=("$@")
+}
+readonly -f pbuild::install_docfiles
+
+#..............................................................................
 #
 # Default install function.
 #
@@ -677,7 +733,7 @@ pbuild::install() {
 			 "compilation failed!"
 }
 
-###############################################################################
+#..............................................................................
 #
 pbuild::install_shared_libs() {
 	local -r binary="$1"
@@ -720,9 +776,26 @@ pbuild::install_shared_libs() {
 
 ###############################################################################
 #
-# This is the main entry function called by modbuild!
+# The following two functions are the entry points called by modbuild!
 #
-pbuild.build_module() {
+
+declare yaml_config='yes'
+pbuild.build_module_legacy(){
+	yaml_config='no'
+	_build_module "$@"
+}
+readonly -f pbuild.build_module_legacy
+
+pbuild.build_module_yaml(){
+	_build_module "$@"
+}
+readonly -f pbuild.build_module_yaml
+
+#..............................................................................
+#
+# The real worker function.
+#
+_build_module() {
 	declare -gx module_name="$1"
 	declare -gx module_version="$2"
 	declare -gx module_release="$3"
@@ -987,7 +1060,6 @@ pbuild.build_module() {
 		P="${module_name}"
 		V="${module_version}"
 		parse_version "${module_version}"
-		declare -gx GROUP=''
 		declare -g  PREFIX=''
 		
 		SOURCE_URLS=()
@@ -995,9 +1067,6 @@ pbuild.build_module() {
 		SOURCE_NAMES=()
 		declare -Ag SOURCE_UNPACK_DIRS=()
 		CONFIGURE_ARGS=()
-		SUPPORTED_SYSTEMS=()
-		SUPPORTED_OS=()
-		SUPPORTED_COMPILERS=()
 		PATCH_FILES=()
 		PATCH_STRIPS=()
 		PATCH_STRIP_DEFAULT='1'
@@ -1014,17 +1083,6 @@ pbuild.build_module() {
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "Not available for ${system}."
-	}
-
-	#......................................................................
-	check_supported_os() {
-		(( ${#SUPPORTED_OS[@]} == 0 )) && return 0
-		for os in "${SUPPORTED_OS[@]}"; do
-			[[ ${os,,} == ${OS,,} ]] && return 0
-		done
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Not available for ${OS}."
 	}
 
 	#......................................................................
@@ -1547,7 +1605,6 @@ pbuild.build_module() {
 
 	# check whether this module is supported
 	check_supported_systems
-	check_supported_os
 	check_supported_compilers
 	# setup module name and prefix
 	set_full_module_name_and_prefix
@@ -1583,7 +1640,7 @@ pbuild.build_module() {
 	cleanup_modulefiles
 	std::info "* * * * *\n"
 }
-readonly -f pbuild.build_module
+readonly -f _build_module
 
 # Local Variables:
 # mode: sh
