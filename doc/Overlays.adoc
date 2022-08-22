@@ -119,12 +119,12 @@ compilers:: (optional) override the default
 ====
 ....
 name: hdf5
-group: Compiler
+group: MPI
 overlay: base
 relstage: stable
 url: https://support.hdfgroup.org/ftp/HDF5/releases/$P-${V_MAJOR}.${V_MINOR}/$P-${V_PKG}/src/$P-${V_PKG}.tar.gz
-systems: [rhel6 rhel7 rhel8]
-compilers: [gcc intel pgi]
+systems: [rhel6,rhel7,rhel8]
+compilers: [gcc,intel,pgi]
 compile_in_sourcetree: no
 configure_with: auto
 
@@ -132,10 +132,23 @@ versions:
   1.12.2:
     shasum: 3016ea56a175d2ca7f2568c8016420f7a2aad8f95e214fe7fa5485f4b80fbe51
     variants:
-      - with: 
-        - gcc [5.5.0,6.5.0,7.5.0,10.2.0,10.3.0]
+      - group_deps: 
+          compiler: 
+            gcc: [5.5.0,6.5.0,7.5.0,10.2.0,10.3.0]
+            intel: ....
+          mpi:
+            openmpi: [...]
+          #hdf5:
+        runtime_deps: 
+          cuda:10.0
+          ...
+        build_deps:
+          name:version
+
+
+
       - with:
-        - gcc [8.5.0,9.5.0,11.3.0,12.1.0]
+        - gcc: [8.5.0,9.5.0,11.3.0,12.1.0]
         relstage: unstable
         overlay: devel                 
 ....
@@ -173,18 +186,23 @@ versions:
 ====
 ....
 name: git
-group: Tools
-overlay: base
-relstage: stable
-url: https://mirrors.edge.kernel.org/pub/software/scm/$P/$P-${V_PKG}.tar.xz
-systems: [rhel6 rhel7 rhel8]
-compilers: [gcc]
-compile_in_sourcetree: yes
-configure_with: auto
-addon_sources:
-  - name: git-lfs/3.2.0
-    url: https://github.com/git-lfs/git-lfs/archive/refs/tags/v3.2.0.tar.gz
-    shasum: f8e6bbe043b97db8a5c16da7289e149a3fed9f4d4f11cffcc6e517c7870cd9e5
+defaults:
+  group: Tools
+  overlay: base
+  relstage: stable
+  url: https://mirrors.edge.kernel.org/pub/software/scm/$P/$P-${V_PKG}.tar.xz
+  systems: [rhel6 rhel7 rhel8]
+  compilers: [gcc]
+  compile_in_sourcetree: yes
+  configure_with: auto
+  script: build
+
+addons:
+  git-lfs/3.2.0:
+    - url: https://github.com/git-lfs/git-lfs/archive/refs/tags/v3.2.0.tar.gz
+      shasum: f8e6bbe043b97db8a5c16da7289e149a3fed9f4d4f11cffcc6e517c7870cd9e5
+      build_requires: [go/1.19] 
+      build_script: build-git-lfs   
 
 versions:
   2.37.2:
@@ -195,8 +213,8 @@ versions:
         relstage: unstable
         overlay: devel
         addons:
-        - git-lfs/3.2.0
-          build_requires: go/1.19    
+          git-lfs: 3.2.0
+      
 ....
 ====
 
