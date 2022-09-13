@@ -2909,6 +2909,9 @@ if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
                 _LMFILES_
 fi
 
+# we need to handle help text and options for sub-cmd aliases
+subcommand=${Subcommands[${subcommand}]}
+
 # We need a tmp-file in the following sub-commands. It will be removed
 # in the exit function if exists.
 case ${subcommand} in
