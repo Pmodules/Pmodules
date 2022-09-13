@@ -30,7 +30,7 @@ declare -r os_name="$(uname -s)"
 path="${libexecdir}:/bin:/usr/bin"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
-	      'rm' 'sort' 'yq'
+	      'rm' 'sed' 'sort' 'yq'
 
 if [[ -n ${TCLLIBPATH} ]]; then
 	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
