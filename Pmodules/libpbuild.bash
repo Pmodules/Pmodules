@@ -418,6 +418,14 @@ readonly -f pbuild::set_default_patch_strip
 
 #..............................................................................
 #
+pbuild::unpack(){
+	local -r file="$1"
+	local -r dir="${2:-${SRC_DIR}}"
+	${tar} --directory="${dir}" -xv --strip-components 1 -f "${file}"
+}
+
+#..............................................................................
+#
 # extract sources. For the time being only tar-files are supported.
 #
 pbuild::prep() {
@@ -510,7 +518,10 @@ pbuild::prep() {
 	unpack() {
 		local -r file="$1"
 		local -r dir="${2:-${SRC_DIR}}"
-		${tar} --directory="${dir}" -xv --strip-components 1 -f "${file}" || {
+		{
+			mkdir -p "${dir}"
+			pbuild::unpack "${file}" "${dir}"
+		} || {
 			${rm} -f "${file}"
 			std::die 4 \
 				 "%s " \
