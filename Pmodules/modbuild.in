@@ -181,6 +181,7 @@ declare		opt_overlay=''
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
+declare --	opt_config_file=''
 
 declare		BUILD_SCRIPT=''
 
@@ -286,6 +287,14 @@ parse_args() {
 			;;
 		--update-modulefiles )
 			opt_update_modulefiles='yes'
+			;;
+		--config-file | --config-file=* )
+			if [[ $1 == *=* ]]; then
+				opt_config_file=( "${1#--*=}" )
+			else
+				opt_config_file=( "$2" )
+				shift
+			fi
 			;;
                 -- )
                         :
@@ -443,17 +452,10 @@ build_modules_legacy() {
 }
 
 build_modules_yaml(){
-	local -a fnames=()
 	local -A mod_overlays=()
-
-	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.${opt_system}.yaml" )
-	fnames+=( "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}.yaml" )
-	fnames+=( '__zzzzz__' )
-	for fname in "${fnames[@]}"; do
-		[[ -r "${fname}" ]] && break
-	done
-	[[ ${fname} == '__zzzzz__' ]] && \
-		std::die 3 "No suitable YAML variants file found"
+	local -- fname="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
+	[[ -r "${fname}" ]] || \
+		std::die 3 "YAML configuration file is not readable -- ${fname}"
 	echo "Using ${fname}..."
 	yaml_get_versions(){
 		local -n _result="$1"
@@ -648,7 +650,7 @@ build_modules_yaml(){
 }
 
 build_modules() {
-	if [[ -n $(ls "${BUILDBLOCK_DIR}/files/${BNAME_VARIANTS}"*.yaml 2>/dev/null) ]]; then
+	if [[ -n $(ls "${BUILDBLOCK_DIR}/files/"*.yaml 2>/dev/null) ]]; then
 		build_modules_yaml "$@"
 	else
 		build_modules_legacy "$@"
