@@ -1290,12 +1290,12 @@ _build_module() {
 		cd "${BUILD_DIR}"
 		[[ "${OS}" == "Linux" ]] && post_install_linux
 		install_doc
-		if [[ -v runtime_dependencies[0] ]]; then
+		if (( ${#runtime_dependencies[@]} > 0 )); then
 			write_runtime_dependencies \
 				"${PREFIX}/${FNAME_RDEPS}" \
 				"${runtime_dependencies[@]}"
 		fi
-		if [[ -v install_dependencies[0] ]]; then
+		if (( ${#install_dependencies[@]} > 0 )); then
 			write_runtime_dependencies \
 				"${PREFIX}/${FNAME_IDEPS}" \
 				"${install_dependencies[@]}"
