@@ -1062,8 +1062,9 @@ _build_module() {
 		local -r module_name="$1"
 		local -r module_version="$2"
 
-		SRC_DIR="${PMODULES_TMPDIR}/${module_name}-${module_version}/src"
-		BUILD_DIR="${PMODULES_TMPDIR}/${module_name}-${module_version}/build"
+		declare -g BUILD_ROOT="${PMODULES_TMPDIR}/${module_name}-${module_version}"
+		SRC_DIR="${BUILD_ROOT}/src"
+		BUILD_DIR="${BUILD_ROOT}/build"
 
 		# P and V can be used in the build-script, so we have to set them here
 		P="${module_name}"
