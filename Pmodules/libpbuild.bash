@@ -546,15 +546,13 @@ pbuild::prep() {
 					 "error patching sources!"
 		done
 	}
-	if [[ -z "${SOURCE_URLS}" ]]; then
-		for fname in ${VERSIONS[@]/#/pbuild::set_download_url_}; do
-			if typeset -F ${fname} 2>/dev/null; then
-				$f
-				break
-			fi
-		done
-	fi
-	[[ -z "${SOURCE_URLS}" ]] && \
+	for fname in ${VERSIONS[@]/#/pbuild::set_download_url_}; do
+		if typeset -F ${fname} 2>/dev/null; then
+			$f
+			break
+		fi
+	done
+	(( ${#SOURCE_URLS[@]} == 0 )) && \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "Download source not set!"
@@ -572,10 +570,10 @@ pbuild::prep() {
 				 "%s " "${module_name}/${module_version}:" \
 				 "sources for not found."
 		local dir=''
-		local key="${SOURCE_URLS[i]##*/}"
+		local key="${SOURCE_NAMES[i]}"
 		if [[ -v SOURCE_UNPACK_DIRS[${key}] ]]; then
 			echo "dir specified"
-			dir="${SOURCE_UNPACK_DIRS[${SOURCE_URLS[i]##*/}]}"
+			dir="${SOURCE_UNPACK_DIRS[${key}]}"
 		else
 			echo "use SRC_DIR"
 			dir="${SRC_DIR}"
@@ -1234,20 +1232,16 @@ _build_module() {
 				${grep} -v "Currently Loaded" > \
 				      "${docdir}/dependencies" || :
 
-			if [[ ! -v MODULE_DOCFILES[0] ]]; then
-				# loop over version specific functions. In these function
-				# more MODULE_DOCFILES can be defined.
-				# :FIXME: maybe we find a better solution.
-				for f in ${VERSIONS[@]/#/pbuild::install_docfiles_}; do
-					if typeset -F "$f" 2>/dev/null; then
-						$f
-						break
-					fi
-				done
-			fi
-			if [[ ! -v MODULE_DOCFILES[0] ]]; then
-				return 0
-			fi
+			# loop over version specific functions. In these function
+			# more MODULE_DOCFILES can be defined.
+			# :FIXME: maybe we find a better solution.
+			for f in ${VERSIONS[@]/#/pbuild::install_docfiles_}; do
+				if typeset -F "$f" 2>/dev/null; then
+					$f
+					break
+				fi
+			done
+			(( ${#MODULE_DOCFILES[@]} == 0 )) && return 0
 			${install} -m0644 \
 				"${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
 				"${docdir}"
