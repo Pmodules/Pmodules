@@ -11,10 +11,6 @@ fi
 ############################################################################
 # some sanity checks
 #
-if [[ ! -d ${PMODULES_ROOT} ]]; then
-        echo "Oops: ${PMODULES_ROOT}: Set as Pmodules root, but this is not a directory." 1>&2
-        return 1
-fi
 if [[ ! -d ${PMODULES_HOME} ]]; then
         echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
         return 1
@@ -33,12 +29,8 @@ fi
 unset MODULE_VERSION
 unset MODULE_VERSION_STACK
 unset MODULESHOME
-unset PMODULES_ENV
 
-declare -x PMODULES_MODULEFILES_DIR='modulefiles'
-declare -x PMODULES_CONFIG_DIR='config'
 declare -x PMODULES_DIR="${PMODULES_HOME}"
-
 
 #############################################################################
 # implement module comand as shell function
@@ -48,6 +40,11 @@ module() {
 	eval $("${PMODULES_HOME}/bin/modulecmd" bash "$@")
 }
 export -f module
+
+modbuild(){
+	"${PMODULES_HOME}/bin/modbuild" "$@"
+}
+export -f modbuild
 
 # Local Variables:
 # mode: sh

@@ -9,28 +9,8 @@ if ( ${PMODULES_VERSION} == "" ) then
 	setenv PMODULES_VERSION "@PMODULES_VERSION@"
 endif
 
-#############################################################################
-#          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
-#############################################################################
+setenv PMODULES_HOME "@PMODULES_ROOT@/Tools/Pmodules/${PMODULES_VERSION}"
 
-setenv PMODULES_MODULEFILES_DIR 'modulefiles'
-setenv ReleaseStages ':unstable:stable:deprecated:'
-
-setenv PMODULES_ROOT "@PMODULES_ROOT@"
-setenv PMODULES_CONFIG_DIR 'config'
-setenv PMODULES_HOME "${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
-setenv PMODULES_DIR "${PMODULES_HOME}"
-
-############################################################################
-# some sanity checks
-#
-
-# fixme: add some checks
-
-
-############################################################################
-# inititialize Pmodules for csh
-#
 set _init_csh="${PMODULES_HOME}/init/csh"
 if ( ! -r "${_init_csh}" ) then
 	echo "Oops: cannot initialize Modules!"

@@ -1,5 +1,147 @@
 # Changelog of Pmodules
 
+## Version 1.1.10 (not yet tagged)
+* **modulecmd**
+  * *User visible changes*
+    * New options for `module search`.
+	  * With the option `--group` the search can be restricted to a
+	    group.
+	  * With the option `--newest` only the newest versions are
+        displayed.
+	* `find` as alias for the sub-command `search` added.
+	* Bugfix: the sub-commands `whatis` and `keyword|apropos` were
+        broken by design. 
+    * Bugfix: after loading a `Pmodules` module, it was not shown with
+      `module list`.
+	* Bugfix in scanning the depth of groups.
+	* Bugfix: after `module purge` the environment variable
+      `PMODULES_HOME` was not defined an more.
+    * Bugfix: source the shell init file only if a `Pmodules` module
+      is loaded.
+	* Bugfix: unsetting aliases in modulefiles was not handled
+      properly in `module purge`
+  * *Internal changes and fixes*
+    * initialisation error for bash and zsh fixed
+
+* **build-system**
+  * *User visible changes*
+    * `modbuild` is now defined as function like `module`. Therefor no
+	`Pmodules` module must be loaded to build a module with `modbuild`
+	* The system can now be defined in the module (YAML) configuration
+      file.
+	* Build dependencies can (and should) now be specified with
+      `build_requires` in the YAML configuration file.
+	* Bugfix: cleanup of modulefiles in overlays fixed. A module can be in
+      more than one overlay. These overlays must be specified in the
+      module configuration file. 
+	* Bugfix: querying dependencies from YAML configuration file
+      fixed. Under some conditions the string 'null' was in the list
+      of dependencies.
+	* Bugfix: create group directory if it doesn't exist.
+	* Bugfix: create the module `$PREFIX` before processing the
+      install targets not before all targets. If `$PREFIX` is created
+      before processing any target and the build fails, `modbuild`
+      assumes that the module have been already built successfully.
+ * *Internal changes and fixes*
+    * code review/re-factoring
+	* `modbuild` is now using the Bash installed in `Pmodules` itself.
+	* test code with `set -o nounset`, several issues with this
+      setting fixed (not necessarily bugs).
+
+* **other changes**
+ * The build script to bootstrap Pmodules itself doesn't use modbuild
+   any more to compile required software packages.  With this change
+   we can remove some special cases from modbuild.
+ * The bootstrap script requires Bash 5.0 or newer now.
+ * Bugfix: in the `Pmodules` modulefile force the sourcing of the
+   shell init script while in mode `load` only.
+
+## Version 1.1.9
+* **modulecmd**
+  * *User visible changes*
+    * Overlay info added to output of sub-command `search`.
+    * Output of `module search --verbose` revised for better readability.
+  * *Internal changes and fixes*
+    * The shell`s init file is sourced, when Pmodules is loaded as module.
+      This is required if there are changes in the module function or too
+      define new shell functions.
+    * A bug in `libmodules.tcl:module-addgroup()` which crashed 
+      `module load ...` has been fixed.
+    * In versions before 1.1.9 a colon at the beginning or end of `MODULEPATH`
+      crashed the module function. This has been fixed. 
+
+* **build-system**
+  * *User visible changes*
+    * The command `modbuild` is now defined as shell function analog to
+      the `module` command. The main reason to introduce this function
+      is due to the fact that Bash version 5 or newer is now required
+      by `modbuild`. The function `modbuild` load Bash 5.x as module
+      before calling the modbuild-script. If you want to use the script
+      directly, a Bash binary with version 5.x must be in PATH.
+    * If a build-script is in the current working directory,
+      `modbuild` can now be called without specifying the build-script.
+    * In case of an error in a build-step the build process did not 
+      abort as it should. This has been fixed.
+    * The option `--overlay` can now be used
+	  - to define an overlay if legacy variants files are used
+	  - to override the overlay in a YAML variants file.
+    * The new keyword `with` has been introduced in YAML variants file
+      to specified hierarchical dependencies.
+    * The function `pbuild::supported_os` has been
+      removed. `pbuild::supported_systems` provides the same
+      functionality for legacy configuration files. In YAML module
+      configuration files `systems` have to be used.
+
+* **Internal changes and fixes**
+    * bugfix in setting `PATH`
+    * requires bash 5 or later
+
+## Version 1.1.8
+* **modulecmd**
+  * *User visible changes*
+    * configuration in YAML files
+    * modulefiles and software must not
+      have a common root directory
+    * the installation root must be specified, it doesn`t default
+      to the base 'overlay' any more.
+    * zsh initialisation fixed.
+  * *Internal changes and fixes*
+    * std::upvar() replaced with reference variables in part of the 
+      code.
+    * environment variable `PMODULES_ROOT` removed.
+    * unsetting aliases fixed.
+    * update to bash 5.1.16
+    * update to findutils 4.9 (macOS only)
+    * minor fixes
+* **build-system**
+  * *User visible changes*
+    * YAML format for variants files
+  * *Internal changes and fixes*
+    * use lib `libpmodules.bash`
+    * bugfixes
+* **modmanage**
+  * *User visible changes*
+    * none, support for overlays still missing
+  * *Internal changes and fixes*
+    * none
+
+## Version 1.1.7
+* **modulecmd**
+  * list of available overlays in subcommand `use` is now better readable
+* **buid-system**
+  * overlay definition must now be in YAML format
+  * support for YAML formatted variant files (the legacy format 
+    is still supported)
+  * build-system in 1.1.6 was still work in progress and broken
+
+## Version 1.1.6
+* **modulecmd**
+  * bugfix in searching/loading modules in a hierarchical
+    group
+
+## Version 1.1.5
+* first public version with the overlay feature
+
 ## Version 1.0.0rc11
 * **modulecmd**
   * *User visible changes*

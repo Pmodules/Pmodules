@@ -4,6 +4,7 @@
 # unload modules if parent removed
 #
 
+
 if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 	proc debug {msg} {
 		set level [expr [info level] -2] 
@@ -24,13 +25,35 @@ debug "loading libmodules"
 
 package require base64
 
+set ::MODULEFILES_DIR "modulefiles"
+set ::ol_replacing "r"
+
 proc _pmodules_parse_pmodules_env { } {
-        debug "enter"
+	#
+	# In this library we need the value of some BASH variables
+	# defined in PMODULES_ENV. In this function we translate
+	# these variables definitions - created in BASH with
+	# 'typeset -p VAR' - to Tcl.
+	#
 	foreach line [split [base64::decode $::env(PMODULES_ENV)] "\n"] {
 		if { ![regexp -- {.* -[aAx]* (.*)=\((.*)\)} $line -> name value] } {
 			continue
 		}
 		switch $name {
+			Dir2OverlayMap {
+				array set ::Dir2OverlayMap [regsub -all  {[]=[]} $value " "]
+			}
+			OverlayInfo {
+				array set ::OverlayInfo [regsub -all  {[]=[]} $value " "]
+			}
+		        UsedOverlays {
+			        array set tmp [regsub -all  {[]=[]} $value " "]
+  			        set ::UsedOverlays {}
+				set l [lsort [array names tmp]]
+			        foreach k $l {
+				        lappend ::UsedOverlays $tmp($k)
+			        }
+			}
 			UsedGroups {
 				set ::UsedGroups $value
 			}
@@ -55,14 +78,32 @@ proc module-addgroup { group } {
 	set	::${group}_version	$version
 
 	if { [module-info mode load] } {
-		prepend-path MODULEPATH [file join \
-                                             $::PmodulesRoot \
-                                             $group \
-                                             $::PmodulesModulfilesDir \
-                                             {*}$::variant]
+	        set overlays_to_add {}
+		foreach overlay $::UsedOverlays {
+			lappend overlays_to_add $overlay
+		        set ol_type $::OverlayInfo($overlay:type)
+		        debug "ol_type=$ol_type"
+			if { [string compare $ol_type $::ol_replacing] == 0 } {
+				break
+			}
+		}
+		foreach overlay [lreverse_n $overlays_to_add 1] {
+			debug "overlay=$overlay"
+			debug "group=$group"
+			debug "::variant=$::variant"
+			set dir [file join \
+				     $::OverlayInfo($overlay:mod_root) \
+				     $group \
+				     $::MODULEFILES_DIR \
+				     {*}$::variant]
+		        debug "dir=$dir"
+			if { [file isdirectory $dir] } {
+				debug "prepend $dir to MODULEPATH "
+				prepend-path MODULEPATH $dir
+			}
+		}
+		debug "end foreach"
 		prepend-path UsedGroups $group
-		debug "mode=load: new MODULEPATH=$env(MODULEPATH)"
-		debug "mode=load: new UsedGroups=$env(UsedGroups)"
 	} elseif { [module-info mode remove] } {
 		set GROUP [string toupper $group]
 		debug "mode=remove: hierarchical group '${GROUP}'"
@@ -83,14 +124,15 @@ proc module-addgroup { group } {
 			debug "mode=remove: no orphan modules to unload"
 		}
 		debug "mode=remove: $env(MODULEPATH)"
-                set dir [file join \
-                             $::PmodulesRoot \
-                             $group \
-                             $::PmodulesModulfilesDir \
-                             {*}$::variant]
-                debug "mode=remove: dir=$dir"
-                remove-path MODULEPATH $dir
-		debug "mode=remove: $env(UsedGroups)"
+                foreach overlay $::UsedOverlays {
+                        set dir [file join \
+                                     $overlay \
+                                     $group \
+                                     $::MODULEFILES_DIR \
+                                     {*}$::variant]
+		        debug "remove $dir"
+                        remove-path MODULEPATH $dir
+                }
 		remove-path UsedGroups $group
                 debug "mode=remove: $env(UsedGroups)"
 	}
@@ -131,7 +173,7 @@ proc _pmodules_setenv { PREFIX name version } {
 		return
 	}
 
-	set		NAME			[string toupper $name]
+	set NAME [string toupper $name]
 	regsub -- "-" ${NAME} "_" NAME
 
 	if { ! [info exist ::dont-setenv] } {
@@ -153,6 +195,9 @@ proc _pmodules_setenv { PREFIX name version } {
 		}
 		if { [lsearch ${::dont-setenv} "${NAME}_HOME"] == -1 } {
 			setenv		${NAME}_HOME		$PREFIX
+		}
+		if { [lsearch ${::dont-setenv} "${NAME}_ROOT"] == -1 } {
+			setenv		${NAME}_ROOT		$PREFIX
 		}
 	} else {
 		debug "$PREFIX is not a directory"
@@ -274,13 +319,45 @@ proc ModulesHelp { } {
 # intialize global vars
 # Modulefile is something like
 #
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/name/version
+#   <root_dir>/group/modulefiles/name/version
 # or
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1/name/version
+#   <root_dir>/group/modulefiles/X1/Y1/name/version
 # or
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1//X2/Y2/name/version
+#   <root_dir>/group/modulefiles/X1/Y1//X2/Y2/name/version
 #
+proc _find_overlay { modulefile_components } {
+        debug "_find_overlay()"
+        foreach ol $::UsedOverlays  {
+                debug "$ol"
+		set ol_mod_root $::OverlayInfo(${ol}:mod_root)
+                if { [string range $ol_mod_root end end] == "/" } {
+                        set ol_mod_root [string range $ol_mod_root 0 end-1]
+                }
+		debug "$ol_mod_root"
+                set ol_mod_root_splitted [file split $ol_mod_root]
+                set modulefile_root [file join \
+					 {*}[lrange \
+						 $modulefile_components \
+						 0 [expr [llength $ol_mod_root_splitted] - 1]]]
+		debug "$modulefile_root"
+                if { [string compare $ol_mod_root $modulefile_root] == 0 } {
+			debug "$ol_mod_root_splitted"
+                        return $ol_mod_root_splitted
+                }
+        }
+        debug "not found"
+        return {}
+}
+
+proc _is_in_overlay { } {
+	debug "_is_in_overlay?"
+	set parts [_find_overlay [file split $::ModulesCurrentModulefile]]
+	debug "_is_in_overlay: $parts"
+	expr {[string compare $parts ""] == 0 }
+}
+
 proc _pmodules_init_global_vars { } {
+	debug "_pmodules_init_global_vars() called"
 	global	group
 	global  GROUP
 	global  name
@@ -292,38 +369,31 @@ proc _pmodules_init_global_vars { } {
 	global	V_PATCHLVL
 	global	V_RELEASE
 	global	V_PKG
-
 	global	variant
 	global	PREFIX		# prefix of package
 
-	debug	"$::ModulesCurrentModulefile"
-	set	::PmodulesRoot		$::env(PMODULES_ROOT)
-	set	::PmodulesModulfilesDir	$::env(PMODULES_MODULEFILES_DIR)
-	set	modulefile		[file split $::ModulesCurrentModulefile]
-	set	pmodules_root		[file split $::PmodulesRoot]
-	set	pmodules_root_num_dirs	[llength $pmodules_root]
+	set	modulefile_splitted	[file split $::ModulesCurrentModulefile]
 
-	set	modulefile_root	[file join {*}[lrange $modulefile 0 \
-                                                   [expr $pmodules_root_num_dirs - 1]]]
-	if { $::PmodulesRoot != $modulefile_root } {
-		debug "stop sourcing: ${::PmodulesRoot} != $modulefile_root"
-		return
-	} 
-	debug	"modulefile is inside our root"
-	set	rel_modulefile	[lrange $modulefile [llength $pmodules_root] end]
+	set     ol_mod_root_splitted [_find_overlay ${modulefile_splitted}]
+	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_mod_root_splitted] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	GROUP		"${group}"
-	set	name		[lindex $modulefile end-1]
+	set	name		[lindex $modulefile_splitted end-1]
 	set	P		"${name}"
-	set	version		[lindex $modulefile end]
+	set	version		[lindex $modulefile_splitted end]
 	set 	V		"${version}"
 	lassign [split $V -]	V_PKG tmp
 	set	V_RELEASE	[lindex [split $tmp _] 0]
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
-	set	variant	[lrange $rel_modulefile 2 end]
-	set	prefix		"$pmodules_root $group [lreverse_n $variant 2]"
+	set	variant 	[lrange $rel_modulefile 2 end]
+	set mod_root [file join {*}$ol_mod_root_splitted]
+	debug "mod_root=$mod_root"
+	set ol $::Dir2OverlayMap($mod_root)
+	debug "ol=$ol"
+	set install_prefix [file split $::OverlayInfo(${ol}:inst_root)]
+	set	prefix		"$install_prefix $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
-
+	debug "PREFIX=$PREFIX"
 	debug "group of module $name: $group"
 }
 
@@ -331,14 +401,13 @@ if { [info exists ::whatis] } {
 	module-whatis	"$whatis"
 }
 
-_pmodules_init_global_vars 
-
-#
-# we cannot load another module with the same name
-#
-conflict	$name
-
-_pmodules_setenv ${PREFIX} ${name} ${version}
-_pmodules_update_loaded_modules ${group} ${name} ${version}
-
+_pmodules_parse_pmodules_env
+if {[_is_in_overlay] == 0} {
+	debug "setup env vars for module in overlay"
+	_pmodules_init_global_vars 
+	conflict	$name
+    	_pmodules_setenv ${PREFIX} ${name} ${version}
+	_pmodules_update_loaded_modules ${group} ${name} ${version}
+}
 debug "return from lib"
+

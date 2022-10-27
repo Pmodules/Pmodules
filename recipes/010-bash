@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# https://www.gnu.org/software/bash/
+#
+P=bash
+V=${BASH5_VERSION:-5.1.16}
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="https://ftp.gnu.org/gnu/$P/${FNAME}"
+
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+loadablesdir="${PREFIX}/${UTILBIN_DIR}/builtins" \
+"${SRC_DIR}/configure" \
+	--prefix="${PREFIX}" \
+	--bindir="${PREFIX}/${UTILBIN_DIR}" \
+        || exit ${PB_ERR_CONFIGURE}
+
+#---
+# compile
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make -C examples/loadables -j ${NJOBS} || exit ${PB_ERR_MAKE}
+
+#---
+# install
+make install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+rm -rf "${PREFIX}/include/bash"
+rm -rf "${PREFIX}/share/locale"
+rm -rf "${PREFIX}/share/doc"
+rm -rf "${PREFIX}/share/info"
+rm -rf "${PREFIX}/share/man/man1/bash"*
+
+#---
+# Local Variables:
+# mode: shell-script-mode
+# sh-basic-offset: 8
+# End:

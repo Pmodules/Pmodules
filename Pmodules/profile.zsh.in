@@ -1,50 +1,20 @@
-#!/bin/bash
-#
-# Notes:
-#	- PMODULES_ROOT is derived from the location of this file.
-#	- Some for PMODULES_CONFIG_DIR.
-#	- The Pmodules software must be installed in
-#	  ${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}
+#!/bin/zsh
 #
 
-declare -xa DefaultGroups
-declare -xa DefaultReleaseStages
-declare -x  PMODULES_VERSION
-
-: ${DefaultGroups:=(Tools Programming)}
-: ${DefaultReleaseStages:=(stable)}
+# set default version
 : ${PMODULES_VERSION:=@PMODULES_VERSION@}
 
-#############################################################################
-#          N O   C H A N G E S   B E L O W   T H I S   L I N E !            #
-#############################################################################
+##### no changes below this line ######
+export PMODULES_VERSION
 
-declare -x PMODULES_MODULEFILES_DIR='modulefiles'
-declare -x ReleaseStages=':unstable:stable:deprecated:'
+declare    __this_file__=${(%):-%N}
+declare -x PMODULES_HOME="${__this_file____:h:h}/Tools/Pmodules/${PMODULES_VERSION}"
+unset __this_file__
 
-declare -x PMODULES_ROOT=$(cd $(dirname "${(%):-%N}")/.. && pwd)
-declare -x PMODULES_CONFIG_DIR=$(basename $(cd $(dirname "${(%):-%N}") && pwd))
-declare -x PMODULES_HOME="${PMODULES_ROOT}/Tools/Pmodules/${PMODULES_VERSION}"
-declare -x PMODULES_DIR="${PMODULES_HOME}"
-
-############################################################################
-# some sanity checks
-#
-if [[ ! -d ${PMODULES_ROOT} ]]; then 
-	echo "Oops: ${PMODULES_ROOT}: Set as Pmodules root, but this is not a directory." 1>&2
-	return 1
-fi
-if [[ ! -d ${PMODULES_HOME} ]]; then
-	echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
-	return 1
-fi
-
-############################################################################
-# inititialize Pmodules for zsh
-#
 test -r "${PMODULES_HOME}/init/zsh" && source "$_"
-if (( $? != 0 )); then
-	echo "Oops: cannot initialize Pmodules environment!"
+
+if [[ $? != 0 ]]; then
+	echo "Oops: cannot initialize Pmodules!"
 	return 1
 fi
 

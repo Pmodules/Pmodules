@@ -20,7 +20,7 @@ std::error() {
 }
 
 std::debug() {
-        [[ ${PMODULES_DEBUG} ]] || return 0
+        [[ -v PMODULES_DEBUG ]] || return 0
         std::log 2 "$@"
 }
 
@@ -39,7 +39,7 @@ std::def_cmds(){
 	local path="$1"
 	shift
 	for cmd in "$@"; do
-		eval declare -g ${cmd}=$(PATH="${path}" which $cmd 2>/dev/null)
+		eval declare -gr ${cmd}=$(PATH="${path}" /usr/bin/which $cmd 2>/dev/null)
 		if [[ -z "${!cmd}" ]]; then
 			std::die 255 "${cmd} not found"
 		fi
@@ -78,42 +78,54 @@ std::get_abspath() {
 }
 
 std::append_path () {
-	local -r P=$1
-	local -r d=$2
+        local -nr P="$1"
+	shift 1
+	local dir
+	local dirs=''
+	for dir in "$@"; do
+		[[ "${P}" == @(|*:)${dir}@(|:*) ]] && continue
+		dirs+=":${dir}"
+	done
 
-        if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
-		if [[ -z ${!P} ]]; then
-			export "$P=${d}"
-		else
-			export "$P=${!P}:${d}"
-        	fi
-	fi
+        if [[ -z ${P} ]]; then
+                P="${dirs:1}"		# remove leading ':'
+        else
+		P="${P}${dirs}"
+        fi
 }
 
 std::prepend_path () {
-        local -r P=$1
-        local -r d=$2
+        local -nr P="$1"
+	shift 1
 
-        if ! echo ${!P} | egrep -q "(^|:)${d}($|:)" ; then
-                if [[ -z ${!P} ]]; then
-                        export "$P=${d}"
-                else
-                        export "$P=${d}:${!P}"
-                fi
+	local dir
+	local dirs=''
+	for dir in "$@"; do
+		[[ "${P}" == @(|*:)${dir}@(|:*) ]] && continue
+		dirs+="${dir}:"
+	done
+
+        if [[ -z ${P} ]]; then
+                P="${dirs:0:-1}"	# remove trailing ':'
+        else
+		P="${dirs}${P}"
         fi
 }
 
 std::remove_path() {
-        local -r P=$1
-        local -r d=$2
+        local -nr P="$1"
+	shift 1
+        local -ar dirs="$@"
 	local new_path=''
 	local -r _P=( ${!P//:/ } )
-	# loop over all entries in path
-	for entry in "${_P[@]}"; do
-		[[ "${entry}" != "${d}" ]] && new_path+=":${entry}"
+	local dir=''
+	for dir in "${dirs[@]}"; do
+		# loop over all entries in path
+		for entry in "${_P[@]}"; do
+			[[ "${entry}" != "${dir}" ]] && new_path+=":${entry}"
+		done
 	done
-	# remove leading ':'
-	eval ${P}="${new_path:1}"
+	P="${new_path:1}"		# remove leading ':'
 }
 
 #
@@ -163,22 +175,23 @@ std::replace_path () {
 #     analog to std::split_abspath() with a relative path.
 #
 std::split_path() {
-	local parts="$1"
-	local  -r path="$2"
+	local -n parts="$1"
+	local -r path="$2"
 
         IFS='/'
         local std__split_path_result=( ${std__split_path_tmp} )
 	unset IFS
-	std::upvar ${parts} "${std__split_path_result[@]}"
+	parts="${std__split_path_result[@]}"
 	if (( $# >= 3 )); then
 		# return number of parts
-	        std::upvar "$3" ${#std__split_path_result[@]}
+		local -n num="$3"
+	        num="${#std__split_path_result[@]}"
 	fi
 }
 
 std::split_abspath() {
-	local parts="$1"
-	local  -r path="$2"
+	local -n parts="$1"
+	local -r path="$2"
 	if [[ "${path:0:1}" == '/' ]]; then
 		local -r std__split_path_tmp="${path:1}"
 	else
@@ -188,16 +201,17 @@ std::split_abspath() {
         IFS='/'
         local std__split_path_result=( ${std__split_path_tmp} )
 	unset IFS
-	std::upvar ${parts} "${std__split_path_result[@]}"
+	parts="${std__split_path_result[@]}"
 	if (( $# >= 3 )); then
 		# return number of parts
-	        std::upvar "$3" ${#std__split_path_result[@]}
+		local -n num="$3"
+	        num="${#std__split_path_result[@]}"
 	fi
 }
 
 std::split_relpath() {
-	local parts="$1"
-	local  -r path="$2"
+	local -n parts="$1"
+	local -r path="$2"
 	if [[ "${path:0:1}" == '/' ]]; then
 		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
 	else
@@ -207,10 +221,11 @@ std::split_relpath() {
         IFS='/'
         local std__split_path_result=( ${std__split_path_tmp} )
 	unset IFS
-	std::upvar ${parts} "${std__split_path_result[@]}"
+	parts="${std__split_path_result[@]}"
 	if (( $# >= 3 )); then
 		# return number of parts
-	        std::upvar "$3" ${#std__split_path_result[@]}
+		local -n num="$3"
+	        num="${#std__split_path_result[@]}"
 	fi
 }
 
@@ -274,11 +289,11 @@ std::upvar() {
 }
 
 std.get_os_release_linux() {
-        local lsb_release=$(which lsb_release)
+        #local lsb_release=$(which lsb_release)
         local ID=''
         local VERSION_ID=''
 
-        if [[ -n $(which lsb_release) ]]; then
+        if [[ -n $(which lsb_release 2>/dev/null) ]]; then
                 ID=$(lsb_release -is)
                 VERSION_ID=$(lsb_release -rs)
         elif [[ -r '/etc/os-release' ]]; then
@@ -309,7 +324,7 @@ std::get_os_release() {
 	local -A func_map;
 	func_map['Linux']=std.get_os_release_linux
 	func_map['Darwin']=std.get_os_release_macos
-	${func_map[${OS}]}
+	${func_map[$(uname -s)]}
 }
 
 std::get_type() {
@@ -339,6 +354,29 @@ std::get_type() {
 	esac
 }
 
+std::parse_yaml() {
+	#
+	# parse a YAML file
+	# See: https://gist.github.com/pkuczynski/8665367
+	#
+	local -r fname="$1"
+	local -r prefix="$2"
+	local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+	sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
+            -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p" "${fname}" |
+		awk -F$fs '{
+		      indent = length($1)/2;	
+		      vname[indent] = $2;	
+		      for (i in vname) {
+                          if (i > indent) {delete vname[i]}
+                      }
+		      if (length($3) > 0) {
+		          vn="";
+                          for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+		          printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+	              }
+                }'
+}
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
