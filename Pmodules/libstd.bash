@@ -302,11 +302,11 @@ std.get_os_release_linux() {
                 std::die 4 "Cannot determin OS release!\n"
         fi
 
-	case "${ID}" in
-		RedHatEnterpriseServer | RedHatEnterprise | Scientific | rhel | centos | CentOS | fedora )
+	case "${ID,,}" in
+		redhatenterpriseserver | redhatenterprise | scientific | springdale | rhel | centos | fedora )
 			echo "rhel${VERSION_ID%%.*}"
 			;;
-		Ubuntu )
+		ubuntu )
 			echo "Ubuntu${VERSION_ID%.*}"
 			;;
 		* )

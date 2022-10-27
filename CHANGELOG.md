@@ -142,6 +142,18 @@
 ## Version 1.1.5
 * first public version with the overlay feature
 
+## Version 1.0.0rc11
+* **modulecmd**
+  * *User visible changes*
+    * handling of set-alias in modulefile fixed
+  * *Internal changes and fixes*
+    * none
+* **build-system**
+  * *User visible changes*
+    * none
+  * *Internal changes and fixes*
+    * none
+
 ## Version 1.0.0rc10
 * **modulecmd**
   * *User visible changes*
