@@ -1,5 +1,24 @@
 # Changelog of Pmodules
 
+## Version 1.0.0rc12
+* **modulecmd**
+  * fix DefaultGroups: Undefined variable in init/csh
+  * the following directories are now added to `CMAKE_MODULE_PATH` (if they
+  exist):
+    * `${PREFIX}/lib/cmake`
+    * `${PREFIX}/share/cmake`
+    * `${PREFIX}/share/MODULENAME/cmake`
+  * the following directories are now added to `PKG_CONFIG_PATH` (if they
+    exist):
+    * `${PREFIX}/lib/pkgconfig`
+    * `${PREFIX}/share/pkgconfig`
+
+* build system
+  * Springdale added as RHEL clone
+  * under some conditions the function to search for a 
+    config/variants file returned an empty list instead
+    of terminating the build process
+
 ## Version 1.0.0rc11
 * **modulecmd**
   * *User visible changes*
