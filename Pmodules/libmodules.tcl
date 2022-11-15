@@ -130,101 +130,59 @@ proc _pmodules_setenv { PREFIX name version } {
 		debug "this is a legacy module..."
 		return
 	}
-
-	set		NAME			[string toupper $name]
-	regsub -- "-" ${NAME} "_" NAME
-
+	if { ![file isdirectory "$PREFIX"] } {
+	    debug "$PREFIX is not a directory"
+	    return
+	}
 	if { ! [info exist ::dont-setenv] } {
 		set ::dont-setenv {}
 	}
 
-	if { ${version} != "" } {
-		if { [lsearch ${::dont-setenv} "${NAME}_VERSION"] == -1 } {
-			setenv		${NAME}_VERSION		$version
-		}
-	}
+	set		NAME			[string toupper $name]
+	regsub -- "-" ${NAME} "_" NAME
 
-	if { [file isdirectory "$PREFIX"] } {
-		if { [lsearch ${::dont-setenv} "${NAME}_PREFIX"] == -1 } {
-			setenv		${NAME}_PREFIX		$PREFIX
-		}
-		if { [lsearch ${::dont-setenv} "${NAME}_DIR"] == -1 } {
-			setenv		${NAME}_DIR		$PREFIX
-		}
-		if { [lsearch ${::dont-setenv} "${NAME}_HOME"] == -1 } {
-			setenv		${NAME}_HOME		$PREFIX
-		}
-	} else {
-		debug "$PREFIX is not a directory"
-	}
+	set prefix_evars [dict create \
+			      "${NAME}_VERSION"			"${version}" \
+			      "${NAME}_PREFIX"			"${PREFIX}" \
+			      "${NAME}_DIR"			"${PREFIX}" \
+			      "${NAME}_HOME"			"${PREFIX}" \
+			   ]
+	set setenv_dirs  [dict create \
+			      "${PREFIX}/include"		"${NAME}_INCLUDE_DIR" \
+			      "${PREFIX}/lib"			"${NAME}_LIBRARY_DIR" \
+			      "${PREFIX}/lib64"			"${NAME}_LIBRARY_DIR" \
+			    ]
+	set prepend_dirs [dict create \
+			      "${PREFIX}/bin"			{ "PATH" } \
+			      "${PREFIX}/sbin"			{ "PATH" } \
+			      "${PREFIX}/share/man"		{ "MANPATH" } \
+			      "${PREFIX}/include"		{ "C_INCLUDE_PATH" "CPLUS_INCLUDE_PATH" } \
+			      "${PREFIX}/lib"			{ "LIBRARY_PATH" "LD_LIBRARY_PATH"} \
+			      "${PREFIX}/lib/pkgconfig"		{ "PKG_CONFIG_PATH" } \
+			      "${PREFIX}/share/pkgconfig"	{ "PKG_CONFIG_PATH" } \
+			      "${PREFIX}/lib/cmake"		{ "CMAKE_MODULE_PATH" } \
+			      "${PREFIX}/share/cmake"		{ "CMAKE_MODULE_PATH" } \
+			      "${PREFIX}/share/${name}/cmake"	{ "CMAKE_MODULE_PATH" } \
+			     ]
 
-	if { [file isdirectory "$PREFIX/bin"] } {
-		if { [lsearch ${::dont-setenv} "PATH"] == -1 } {
-			prepend-path	PATH			$PREFIX/bin
+	dict for {key value} $prefix_evars {
+		if { [lsearch ${::dont-setenv} $key] >= 0 } {
+			continue
 		}
+		setenv $key $value
 	}
-
-	if { [file isdirectory "$PREFIX/sbin"] } {
-		if { [lsearch ${::dont-setenv} "PATH"] == -1 } {
-			prepend-path	PATH			$PREFIX/sbin
+	dict for {key value} $setenv_dirs {
+		if { [lsearch ${::dont-setenv} $key] >= 0 || ![file isdirectory $key] } {
+			continue
 		}
+		setenv $value $key
 	}
-
-	if { [file isdirectory "$PREFIX/share/man"] } {
-		if { [lsearch ${::dont-setenv} "MANPATH"] == -1 } {
-			prepend-path	MANPATH			$PREFIX/share/man
+	dict for {key value} $prepend_dirs {
+		if { [lsearch ${::dont-setenv} $key] >= 0 || ![file isdirectory $key] } {
+			continue
 		}
-	}
-
-	# set various environment variables - as long as they are not blacklisted
-	debug "prepend to include paths"
-	if { [file isdirectory "$PREFIX/include"] } {
-		if { [lsearch ${::dont-setenv} "C_INCLUDE_PATH"] == -1 } {
-			prepend-path	C_INCLUDE_PATH		$PREFIX/include
-		}
-		if { [lsearch ${::dont-setenv} "CPLUS_INCLUDE_PATH"] == -1 } {
-			prepend-path	CPLUS_INCLUDE_PATH	$PREFIX/include
-		}
-		if { [lsearch ${::dont-setenv} "${NAME}_INCLUDE_DIR"] == -1 } {
-			setenv		${NAME}_INCLUDE_DIR	$PREFIX/include
-		}
-	}
-
-	debug "prepend to library paths"
-	if { [file isdirectory "$PREFIX/lib"] } {
-		if { [lsearch ${::dont-setenv} "LIBRARY_PATH"] == -1 } {
-			prepend-path	LIBRARY_PATH		$PREFIX/lib
-		}
-		if { [lsearch ${::dont-setenv} "LD_LIBRARY_PATH"] == -1 } {
-			prepend-path	LD_LIBRARY_PATH		$PREFIX/lib
-		}
-		if { [lsearch ${::dont-setenv} "${NAME}_LIBRARY_DIR"] == -1 } {
-			setenv		${NAME}_LIBRARY_DIR	$PREFIX/lib
-		}
-	}
-
-	if { [file isdirectory "$PREFIX/lib/pkgconfig"] } {
-		if { [lsearch ${::dont-setenv} "PKG_CONFIG_PATH"] == -1 } {
-			prepend-path	PKG_CONFIG_PATH		$PREFIX/lib/pkgconfig
-		}
-	}
-
-	if { [file isdirectory "$PREFIX/lib/cmake"] } {
-		if { [lsearch ${::dont-setenv} "CMAKE_MODULE_PATH"] == -1 } {
-			prepend-path	CMAKE_MODULE_PATH	$PREFIX/lib/cmake
-		}
-	}
-
-	debug "prepend to library paths (64bit)"
-	if { [file isdirectory "$PREFIX/lib64"] } {
-		if { [lsearch ${::dont-setenv} "LIBRARY_PATH"] == -1 } {
-			prepend-path	LIBRARY_PATH		$PREFIX/lib64
-		}
-		if { [lsearch ${::dont-setenv} "LD_LIBRARY_PATH"] == -1 } {
-			prepend-path	LD_LIBRARY_PATH		$PREFIX/lib64
-		}
-		if { [lsearch ${::dont-setenv} "${NAME}_LIBRARY_DIR"] == -1 } {
-			setenv		${NAME}_LIBRARY_DIR	$PREFIX/lib64
+		foreach var $value {
+			prepend-path $var $key
 		}
 	}
 }
