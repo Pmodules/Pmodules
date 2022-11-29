@@ -1,5 +1,13 @@
 # Changelog of Pmodules
 
+## Version 1.0.0rc14
+* **modulecmd**
+  * format of log messages changed, now the message includes the
+    full path of the modulefile and the user name.
+
+## Version 1.0.0rc13
+* same as 1.0.0rc12 but compiled on SL6
+
 ## Version 1.0.0rc12
 * **modulecmd**
   * fix DefaultGroups: Undefined variable in init/csh
