@@ -29,6 +29,7 @@ else
 	declare -rx TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
 	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
 fi
+declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 

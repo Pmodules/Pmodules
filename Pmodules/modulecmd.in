@@ -2,4 +2,4 @@
 
 unset BASH_ENV
 
-"@BASH@" --noprofile --norc "@MODULECMD@" "$@"
+"${PMODULES_HOME}/libexec/bash" --noprofile --norc "${PMODULES_HOME}/libexec/modulecmd.bash" "$@"
