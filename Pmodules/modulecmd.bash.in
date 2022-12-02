@@ -23,13 +23,9 @@ std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sort' 'find'
 
-if [[ ${PMODULES_PURETCL} == yes ]]; then
-	declare -r  modulecmd="${libexecdir}/modulecmd.tcl"
-else
-	declare -rx TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
-	declare -r  modulecmd="${libexecdir}/modulecmd.bin"
-fi
 declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
+declare -rx TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
+declare -r  modulecmd="${libexecdir}/modulecmd.bin"
 
 declare verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
