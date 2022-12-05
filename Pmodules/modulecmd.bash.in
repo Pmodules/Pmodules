@@ -699,15 +699,20 @@ subcommand_load() {
 		if [[ -n "${error}" ]]; then
                        	echo "${error}" 1>&2
 		fi
-
-		local msg=$(printf "%s %s: %s -- %s" \
-                                  "${CMD}" 'load' \
-                                  "${rel_stage} module has been loaded" \
-                                  "${m}")
+		local msg=''
 		if [[ ${verbosity_lvl} != silent ]] && \
-                           [[ ${rel_stage} != stable ]]; then
+			   [[ ${rel_stage} != stable ]]; then
+			msg=$(printf "%s %s: %s -- %s" \
+				     "${CMD}" 'load' \
+				     "${rel_stage} module has been loaded" \
+				     "${m}")
 		        std::info "%s" "${msg}"
 		fi
+		msg=$(printf "%s: %s %s %s" \
+			     'load' \
+			     "modulefile=${current_modulefile}" \
+			     "rel-stage=${rel_stage}" \
+			     "user=${USER}")
 		${logger} -t Pmodules "${msg}"
 	done
 	# fix LOADEDMODULES
@@ -2878,6 +2883,7 @@ done
 if [[ -z "${subcommand}" ]]; then
 	std::die 1 "${CMD}: no sub-command specified."
 fi
+declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 
 if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
