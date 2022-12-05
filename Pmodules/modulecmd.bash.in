@@ -32,11 +32,10 @@ std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sed' 'sort' 'yq'
 
-if [[ -n ${TCLLIBPATH} ]]; then
-	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
-else
-	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
-fi
+declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
+declare -x  TCLLIBPATH
+std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
+
 declare -r modulecmd="${libexecdir}/modulecmd.bin"
 
 declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
