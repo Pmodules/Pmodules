@@ -32,11 +32,10 @@ std::def_cmds "${path}" \
 	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sed' 'sort' 'yq'
 
-if [[ -n ${TCLLIBPATH} ]]; then
-	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules:${TCLLIBPATH}"
-else
-	declare -x TCLLIBPATH="${PMODULES_HOME}/lib/Pmodules"
-fi
+declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
+declare -x  TCLLIBPATH
+std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
+
 declare -r modulecmd="${libexecdir}/modulecmd.bin"
 
 declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
@@ -699,15 +698,20 @@ subcommand_load() {
 		if [[ -n "${error}" ]]; then
                        	echo "${error}" 1>&2
 		fi
-
-		local msg=$(printf "%s %s: %s -- %s" \
-                                  "${CMD}" 'load' \
-                                  "${rel_stage} module has been loaded" \
-                                  "${m}")
+		local msg=''
 		if [[ ${verbosity_lvl} != silent ]] && \
-                           [[ ${rel_stage} != stable ]]; then
+			   [[ ${rel_stage} != stable ]]; then
+			msg=$(printf "%s %s: %s -- %s" \
+				     "${CMD}" 'load' \
+				     "${rel_stage} module has been loaded" \
+				     "${m}")
 		        std::info "%s" "${msg}"
 		fi
+		msg=$(printf "%s: %s %s %s" \
+			     'load' \
+			     "modulefile=${current_modulefile}" \
+			     "rel-stage=${rel_stage}" \
+			     "user=${USER}")
 		${logger} -t Pmodules "${msg}"
 	done
 	# fix LOADEDMODULES
@@ -2878,6 +2882,7 @@ done
 if [[ -z "${subcommand}" ]]; then
 	std::die 1 "${CMD}: no sub-command specified."
 fi
+declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 
 if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"

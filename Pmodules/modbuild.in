@@ -367,6 +367,9 @@ bash_expand(){
 
 build_modules_legacy() {
 	find_variants_files(){
+		shopt -q nullglob || :
+		local -i nullglob_set=$?
+
 		local files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"\.${opt_system} )
 		files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
 		local f
@@ -375,6 +378,10 @@ build_modules_legacy() {
 				|| [[ -e "${f}.$(uname -s)" ]] \
 				|| files+=( "$f" )
 		done
+		if (( ${#files[@]} == 0 )); then
+			std::die 2 "No suitable variants file found!"
+		fi
+		(( nullglob_set == 1 )) && shopt -u nullglob
 		std::upvar "$1" "${files[@]}"
 	}
 
