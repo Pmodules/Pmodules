@@ -6,7 +6,9 @@
     full path of the modulefile and the user name.
   * modulecmd is now relocatable using the environment variable
     `PMODULES_HOME`
-  * experimental support for modulecmd written in Tcl has been removed.
+  * experimental support for modulecmd written in Tcl removed.
+  * The environment variable `PMODULES_TMPDIR` and `PMODILES_DISTFILESDIR`
+    can now be used to override the values set in the configuration file.
   
 ## Version 1.0.0rc13
 * same as 1.0.0rc12 but compiled on SL6
