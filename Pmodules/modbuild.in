@@ -18,7 +18,7 @@ declare -r  mydir=$(cd ${mydir} && pwd -P)
 # so 'source' is able find them
 
 if [[ $(uname -s) == 'Darwin' ]]; then
-        PATH='/usr/local/bin:'
+        PATH='/opt/local/bin:/usr/local/bin:'
 else
         PATH=''
 fi
