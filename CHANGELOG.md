@@ -9,6 +9,8 @@
   * experimental support for modulecmd written in Tcl removed.
   * The environment variable `PMODULES_TMPDIR` and `PMODILES_DISTFILESDIR`
     can now be used to override the values set in the configuration file.
+  * Add /opt/local/bin (for Macports) and /usr/local/bin (for Homebrew) to
+    PATH on macOS.
   
 ## Version 1.0.0rc13
 * same as 1.0.0rc12 but compiled on SL6
