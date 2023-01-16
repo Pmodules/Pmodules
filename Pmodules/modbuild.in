@@ -24,20 +24,18 @@ else
 fi
 PATH+='/usr/bin:/bin:/usr/sbin:/sbin'
 PATH+=":${mydir}"
-PATH+=":${mydir}/../lib:${mydir}/../config"
+PATH+=":${mydir}/../lib"
+
+# path of config files
+PATH+=":${mydir}/../config"
 
 source libstd.bash    || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
-
-# can be set in the configuration file
-declare         PMODULES_DISTFILESDIR=''
-declare         PMODULES_TMPDIR=''
-
 source libpbuild.bash    || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
-# save arguments, (still) required for building dependencies
+# save arguments, required for building dependencies
 declare -r ARGS="$@"
 
 ##############################################################################
