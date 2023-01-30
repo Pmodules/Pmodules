@@ -49,6 +49,12 @@ module() {
 }
 export -f module
 
+modbuild() {
+	unset BASH_ENV
+	"${PMODULES_HOME}/bin/modbuild" "$@"
+}
+export -f modbuild
+
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
