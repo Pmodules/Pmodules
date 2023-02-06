@@ -959,16 +959,16 @@ get_available_modules() {
 					# - new version and not hidden by overlay
 					local name="${mod%/*}"
 					local key="${dir##/${PMODULES_MODULEFILES_DIR}}/${name}"
-					if [[ -z "${modulenames[${key}]}" ]]; then
+					if [[ -z "${modulenames[${name}]}" ]]; then
 						if [[ "${OverlayInfo[${ol}:type]}" == "${ol_hiding}" ]]; then
-							modulenames[${key}]="${ol}"
+							modulenames[${name}]="${ol}"
 						else
-							modulenames[${key}]='0'
+							modulenames[${name}]='0'
 						fi
 						add='yes'
-					elif [[ "${modulenames[${key}]}" == "${ol}" ]]; then
+					elif [[ "${modulenames[${name}]}" == "${ol}" ]]; then
 						add='yes'
-					elif [[ "${modulenames[${key}]}" == '0'  ]] \
+					elif [[ "${modulenames[${name}]}" == '0'  ]] \
 						     && [[ -z ${dict[${mod}]} ]]; then
 						add='yes'
 					fi
@@ -976,7 +976,7 @@ get_available_modules() {
 					# module is NOT in an overlay
 					add='yes'
 				fi
-				[[ "${add}" == 'yes' ]] || continue
+				[[ "${add}" == 'no' ]] && continue
 			        get_release_stage \
 					rel_stage \
 					"${dir}" \
@@ -2882,7 +2882,6 @@ done
 if [[ -z "${subcommand}" ]]; then
 	std::die 1 "${CMD}: no sub-command specified."
 fi
-declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 
 if [[ -z "${Subcommands[${subcommand}]}" ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
