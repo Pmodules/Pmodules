@@ -117,7 +117,7 @@ std::remove_path() {
 	shift 1
         local -ar dirs="$@"
 	local new_path=''
-	local -r _P=( ${!P//:/ } )
+	local -r _P=( ${P//:/ } )
 	local dir=''
 	for dir in "${dirs[@]}"; do
 		# loop over all entries in path
