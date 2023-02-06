@@ -192,7 +192,6 @@ proc _pmodules_setenv { PREFIX name version } {
 	set setenv_dirs  [dict create \
 			      "${PREFIX}/include"		"${NAME}_INCLUDE_DIR" \
 			      "${PREFIX}/lib"			"${NAME}_LIBRARY_DIR" \
-			      "${PREFIX}/lib64"			"${NAME}_LIBRARY_DIR" \
 			    ]
 	set prepend_dirs [dict create \
 			      "${PREFIX}/bin"			{ "PATH" } \
@@ -200,6 +199,7 @@ proc _pmodules_setenv { PREFIX name version } {
 			      "${PREFIX}/share/man"		{ "MANPATH" } \
 			      "${PREFIX}/include"		{ "C_INCLUDE_PATH" "CPLUS_INCLUDE_PATH" } \
 			      "${PREFIX}/lib"			{ "LIBRARY_PATH" "LD_LIBRARY_PATH"} \
+			      "${PREFIX}/lib64"			{ "LIBRARY_PATH" "LD_LIBRARY_PATH"} \
 			      "${PREFIX}/lib/pkgconfig"		{ "PKG_CONFIG_PATH" } \
 			      "${PREFIX}/share/pkgconfig"	{ "PKG_CONFIG_PATH" } \
 			      "${PREFIX}/lib/cmake"		{ "CMAKE_MODULE_PATH" } \
