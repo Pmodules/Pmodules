@@ -7,11 +7,17 @@
   * modulecmd is now relocatable using the environment variable
     `PMODULES_HOME`
   * experimental support for modulecmd written in Tcl removed.
-  * The environment variable `PMODULES_TMPDIR` and `PMODILES_DISTFILESDIR`
-    can now be used to override the values set in the configuration file.
   * Add /opt/local/bin (for Macports) and /usr/local/bin (for Homebrew) to
     PATH on macOS.
-  
+  * zsh initialization fixed
+  * more bugfixes
+* **build system**
+  * The environment variable `PMODULES_TMPDIR` and `PMODILES_DISTFILESDIR`
+    can now be used to override the values set in the configuration file.
+  * Modules can now be build without loading a Pmodules module. `modbuild``
+    is now a bash function. Usage: `modbuild SCRIPT VERSION`
+  * Setting a source URL in a build-script is now optional.
+  * bugfixes
 ## Version 1.0.0rc13
 * same as 1.0.0rc12 but compiled on SL6
 
@@ -28,7 +34,7 @@
     * `${PREFIX}/lib/pkgconfig`
     * `${PREFIX}/share/pkgconfig`
 
-* build system
+* **build system**
   * Springdale added as RHEL clone
   * under some conditions the function to search for a 
     config/variants file returned an empty list instead
