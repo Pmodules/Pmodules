@@ -1126,7 +1126,7 @@ pbuild::make_all() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing modulefile '${modulefile_name}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -v "${modulefile_name}"
+			[[ "${dry_run}" == 'no' ]] && rm -vf "${modulefile_name}"
 		fi
 		local release_file="${modulefile_dir}/.release-${module_version}"
 		if [[ -e "${release_file}" ]]; then
@@ -1134,7 +1134,7 @@ pbuild::make_all() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing release file '${release_file}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
+			[[ "${dry_run}" == 'no' ]] && rm -vf "${release_file}"
 		fi
 		rmdir -p "${modulefile_dir}" 2>/dev/null || :
 	}
@@ -1153,7 +1153,7 @@ pbuild::make_all() {
 		if [[ -e "${modulefile_name}" ]] \
 			   && [[ -d ${PREFIX} ]] \
 			   && [[ ${force_rebuild} != 'yes' ]]; then
-			if [[ "${module_release}" == 'removed' ]]; then
+			if [[ "${module_release}" == 'removed' ]] || [[ "${module_release}" == 'remove' ]]; then
 				remove_module
 			else
  				std::info \
