@@ -454,7 +454,7 @@ pbuild::prep() {
 					 "error patching sources!"
 		done
 	}
-	if [[ -z "${SOURCE_URLS}" ]]; then
+	if (( ${#SOURCE_URLS[@]} == 0 )); then
 		for fname in ${VERSIONS[@]/#/pbuild::set_download_url_}; do
 			if typeset -F ${fname} 2>/dev/null; then
 				$f
@@ -462,10 +462,6 @@ pbuild::prep() {
 			fi
 		done
 	fi
-	[[ -z "${SOURCE_URLS}" ]] && \
-		std::die 3 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Download source not set!"
 	mkdir -p "${PMODULES_DISTFILESDIR}"
 	local i=0
 	local source_fname
