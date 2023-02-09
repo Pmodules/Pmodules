@@ -392,6 +392,17 @@ build_modules() {
                 version="${tokens[0]#*/}"
                 release="${tokens[1]}"
                 with_modules=( "${tokens[@]:2}" )
+		case ${release} in
+			unstable|stable|deprecated|remove|removed)
+				:
+				;;
+			* )
+				std::info "%s " \
+					  "${name}/${version}:" \
+					  "invalid release stage '${release}'!"
+				std::die 10 "Aborting..."
+				;;
+		esac
                 pbuild.build_module \
                         "${name}" "${version}" \
                         "${release}" "${with_modules[@]}"
