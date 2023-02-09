@@ -763,6 +763,9 @@ pbuild::make_all() {
 					 "${PMODULES_ROOT}/${GROUP}/${PMODULES_MODULEFILES_DIR}" \
 					 "${names[@]}" \
 					 "${module_name}")
+		if [[ -L "${modulefile_dir}" ]]; then
+			modulefile_dir=$(readlink -m "${modulefile_dir}")
+		fi
 		modulefile_name="${modulefile_dir}/${module_version}"
 		PREFIX="${PMODULES_ROOT}/${GROUP}/${module_name}/${module_version}"
 		local -i i=0
@@ -954,6 +957,7 @@ pbuild::make_all() {
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"installing modulefile '${modulefile_name}' ..."
+
 		mkdir -p "${modulefile_dir}"
 		install -m 0444 "${src}" "${modulefile_name}"
 	}
