@@ -1,5 +1,9 @@
 # Changelog of Pmodules
 
+## Version 1.0.0rc15
+* **modulecmd**
+  * Improved error handling and messages
+
 ## Version 1.0.0rc14
 * **modulecmd**
   * format of log messages changed, now the message includes the

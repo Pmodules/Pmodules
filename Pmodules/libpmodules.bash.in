@@ -2,6 +2,7 @@
 
 declare    PMODULES_MODULEFILES_DIR='modulefiles'
 declare    PMODULES_CONFIG_DIR='config'
+declare    PMODULES_VERSION='@PMODULES_VERSION@'
 declare -A GroupDepths=()
 declare -A Subcommands=()
 declare -A Options=()
