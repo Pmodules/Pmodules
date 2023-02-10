@@ -1,5 +1,9 @@
 # Changelog of Pmodules
 
+## Version 1.1.11 (not yet tagged)
+* **modulecmd**
+
+
 ## Version 1.1.10 (not yet tagged)
 * **modulecmd**
   * *User visible changes*
