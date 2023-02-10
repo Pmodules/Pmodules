@@ -35,6 +35,16 @@ unset prefix
 unset postfix
 
 setenv MODULEPATH
+if (! $?DefaultGroups ) then
+   setenv DefaultGroups 'Tools Programming'
+endif
+foreach group ( ${DefaultGroups} )
+  if ( "${MODULEPATH}" == "" ) then
+    setenv MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+  else
+    setenv MODULEPATH "${MODULEPATH}:${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+  endif
+end
 
 if (! $?LOADEDMODULES ) then
   setenv LOADEDMODULES ""
