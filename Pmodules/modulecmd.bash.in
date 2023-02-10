@@ -9,6 +9,8 @@ shopt -s nullglob
 # used for some output only
 declare -r  CMD='module'
 
+declare     subcommand=''
+
 declare -r  mydir=$(cd $(dirname "$0") && pwd)
 declare     prefix=$(dirname "${mydir}")
 declare -r  libdir="${prefix}/lib"
@@ -107,6 +109,75 @@ _exit() {
 
 trap '_exit' EXIT
 
+die_missing_arg(){
+	std::die 3 "%s %s: %s\n" \
+                 "${CMD}" "${subcommand}" 'missing argument'
+}
+
+die_too_many_args(){
+	std::die 3 "%s %s: %s\n" \
+                 "${CMD}" "${subcommand}" 'too many arguments'
+}
+
+die_no_args_allowed(){
+	std::die 3 "%s %s: %s\n" \
+                 "${CMD}" "${subcommand}" "no arguments allowed"
+}
+
+die_wrong_number_of_args(){
+	std::die 1 "%s %s: %s\n" \
+                 "${CMD}" "${subcommand}" "wrong number of arguments"
+}
+
+die_illegal_arg(){
+	std::die 3 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${subcommand}" "invalid argument" "$1"
+}
+
+die_illegal_group(){
+        std::die 3 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${subcommand}" "invalid group name" "$1"
+}
+
+die_illegal_rel_stage(){
+        std::die 3 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${subcommand}" "invalid release stage" "$1"
+}
+
+die_cannot_remove_grp(){
+        std::die 3 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${subcommand}" "cannot remove group due to loaded modules" "$1"
+}
+
+die_module_unavail(){
+	std::die 3 "%s %s: %s -- %b\n" \
+		 "${CMD}" "${subcommand}" "not available in the current MODULEPATH" "$1"
+}
+
+die_invalid_value(){
+	std::die 1 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${subcommand}" "invalid value for option $1" "$2"
+}
+
+die_conflict(){
+	std::die 3 "%s %s: %s -- %b\n" \
+		 "${CMD}" "${subcommand}" \
+                 "module conflicts with already loaded modules" "$1"
+}
+
+die_cannot_load(){
+	std::die 3 "%s %s: %s -- %b\n" \
+		 "${CMD}" "${subcommand}" \
+		 "failed" "$1"
+}
+
+die_failed(){
+        local error_txt='failed'
+	std::die 3 "%s %s: %s" \
+                 "${CMD}" "${subcommand}" \
+                 "failed"
+}
+
 #
 # get release stage of module
 # Note:
@@ -171,8 +242,6 @@ is_modulefile() {
 }
 
 subcommand_generic0() {
-	local -r subcommand="$1"
-	shift
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -190,17 +259,12 @@ subcommand_generic0() {
 		esac
 		shift 1
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "no arguments allowed"
-        fi
+        (( ${#args[@]} > 0 )) && \
+		die_no_args_allowed
 	"${modulecmd}" "${Shell}" "${subcommand}"
 }
 
 subcommand_generic1() {
-	local -r subcommand="$1"
-	shift
 	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -218,21 +282,15 @@ subcommand_generic1() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "missing argument"
-	elif (( ${#args[@]} > 1 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "only one argument allowed"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
+	(( ${#args[@]} > 1 ))  && \
+		die_too_many_args
+
 	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
 }
 
 subcommand_generic1plus() {
-	local -r subcommand="$1"
-	shift
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -250,11 +308,8 @@ subcommand_generic1plus() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "missing argument"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
 	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
 }
 
@@ -278,7 +333,6 @@ USAGE:
 '
 
 subcommand_load() {
-        local -r subcommand='load'
 	local rel_stage='undef'
 	local current_modulefile=''
 	local prefix=''
@@ -350,8 +404,8 @@ subcommand_load() {
 	#
 	# Args:
 	#	none
-	output_load_hints() {
-		local output=''
+	get_load_hints() {
+		local -n output="$1"
 		local rel_stage=''
 		while read -a line; do
 			rel_stage=${line[1]}
@@ -365,9 +419,8 @@ subcommand_load() {
 			fi
 			output+="module load ${line[@]:3} ${line[0]}\n"
 		done < <(subcommand_search  "${m}" -a --no-header 2>&1)
-		if [[ -n "${output}" ]]; then
-			std::info "\nTry with one of the following command(s):"
- 			std::die 3 "${output}\n"
+		if [[ -n ${output} ]]; then
+			output="\n\nTry with one of the following command(s):\n${output}"
 		fi
 	}
 
@@ -415,11 +468,9 @@ subcommand_load() {
 			esac
 			shift
 	done
-	if (( ${#args[@]} == 0 )); then
-                std::die 2 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-		         "No module specified"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
+
 	for m in "${args[@]}"; do
 		if [[ "$m" =~ ":" ]]; then
 
@@ -460,26 +511,17 @@ subcommand_load() {
 			fi
 			if [[ -n ${group} ]]; then
 				is_group "${group}" || \
-                                        std::die 3 "%s %s: %s -- %s\n" \
-                                                 "${CMD}" "${subcommand}" \
-                                                 "illegal group name" \
-                                                 "${group}"
+					die_illegal_group "${group}"
 				local -i depth=${GroupDepths[${group}]}
-				(( depth != 0 )) && \
-                                        std::die 3 "%s %s: %s -- %s\n" \
-                                                 "${CMD}" "${subcommand}" \
-                                                 "illegal group name" \
-                                                 "${group}"
+				(( depth == 0 ))    || \
+					die_illegal_group "${group}"
 				MODULEPATH="${PMODULES_ROOT}/${group}/"
                                 MODULEPATH+="${PMODULES_MODULEFILES_DIR}"
 				modulepath=( ${MODULEPATH} )
 			fi
 			if [[ -n ${rel_stage} ]]; then
 			        is_release_stage "${rel_stage}" || \
-                                        std::die 3 "%s %s: %s -- %s\n" \
-                                                 "${CMD}" "${subcommand}" \
-                                                 "illegal release stage"
-                                                 "${rel_stage}"
+					die_illegal_rel_stage "${rel_stage}" 
 				std::append_path UsedReleaseStages "${rel_stage}"
                                 g_env_must_be_saved='yes'
 			fi
@@ -495,10 +537,9 @@ subcommand_load() {
 			fi
 		done
 		if [[ ! "${found}" ]]; then
-			std::info "%s %s: module unavailable -- %s" \
-                                  "${CMD}" 'load' "${m}"
-			[[ ${verbosity_lvl} == 'verbose' ]] && output_load_hints
-			std::die 3 ""
+			local txt=''
+			[[ ${verbosity_lvl} == 'verbose' ]] && get_load_hints txt
+			die_module_unavail "${m}${txt}"
 		fi
                 if [[ ${current_modulefile} =~ ${PMODULES_ROOT} ]] \
                            && [[ ! ${m} =~ / ]]; then
@@ -508,13 +549,7 @@ subcommand_load() {
                         m+="/${current_modulefile##*/}"
                 fi
 		if [[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]]; then
-			std::error "%s %s: %s" \
-				   "${CMD}" "${subcommand}" \
-				   "cannot load a Pmodules module because other modules are already load!"
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "failed" \
-                                 "${m}"
+			die_conflict "${m}"
 		fi
 		if [[ ":${LOADEDMODULES}:" =~ ":${m}:" ]]; then
                         continue
@@ -538,14 +573,9 @@ subcommand_load() {
 		local error=$( < "${tmpfile}")
 		if [[ "${error}" =~ ":ERROR:" ]]; then
                         local s=${error%%$'\n'*}
-                        local error_txt='failed'
-                        if [[ "$s" =~ ' conflicts ' ]]; then
-                                error_txt='conflicts with already loaded modules'
-                        fi
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "${error_txt}" \
-                                 "${m}"
+                        [[ "$s" =~ ' conflicts ' ]] && \
+				die_conflict "${m}"
+			die_cannot_load "${m}"
                 fi
                 if [[ "${Shell}" == "sh" ]]; then
 			# for sh-like shells just echo 
@@ -602,7 +632,6 @@ USAGE:
 "
 
 subcommand_unload() {
-        local -r subcommand='unload'
 	# :FIXME: add dependency tests: don't unload if module is required
         #         be another module.
         #         For the time being the modules requiring this module will
@@ -624,11 +653,8 @@ subcommand_unload() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "missing argument"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
 	
 	# The module() function uses PMODULES_HOME to call modulecmd.
 	# If a Pmodules module is unloaded this evnvironment variable
@@ -675,7 +701,6 @@ USAGE:
 "
 
 subcommand_swap() {
-        local -r subcommand='swap'
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -693,15 +718,11 @@ subcommand_swap() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "missing argument"
-        elif (( ${#args[@]} > 2 )); then
-                std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "too many arguments"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
+        (( ${#args[@]} > 2 ))  && \
+		die_too_many_args
+
         if (( ${#args[@]} == 1 )); then
                 local -r module_to_load=${args[0]}
                 local -r module_to_unload=${module_to_load%/*}
@@ -732,7 +753,6 @@ USAGE:
 '
 
 subcommand_show() {
-        local -r subcommand='show'
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -750,20 +770,20 @@ subcommand_show() {
 		esac
 		shift
 	done
-        if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "missing argument"
-	fi
+        (( ${#args[@]} == 0 )) && \
+		die_missing_arg
 
         local arg
-	for arg in "${args[@]}"; do
-	        "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
-	done
+        for arg in "${args[@]}"; do
+		m=$(subcommand_avail -m "${arg}" 2>&1  1>/dev/null | awk 'END{print $1}')
+                [[ -n $m ]] || \
+			die_module_unavail "${arg}"
+		"${modulecmd}" "${Shell}" "${subcommand}" "${m}"
+        done
 }
 
 #
-# get all available modules in given directory.
+# get all available modules in the directories passed in $4..$n
 # return list like
 #	modulename_1 rel_stage_1 modulefile_1 modulename_2 rel_stage_2 modulefile_1 ...
 #
@@ -836,7 +856,6 @@ SWITCHES:
 "
 
 subcommand_avail() {
-        local -r subcommand='avail'
 	# use this variable in the output functions
 	local -a mods=()
 	local dir=''
@@ -1048,7 +1067,6 @@ SWITCHES:
 "
 
 subcommand_use() {
-        local -r subcommand='use'
 	IFS=':'
 	local -a modulepath=(${MODULEPATH})
 	unset IFS
@@ -1129,35 +1147,22 @@ subcommand_use() {
                         ${add2path_func} MODULEPATH "${dir}"
                         return
                 fi
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} > 0 )); then
-                        # argument is a hierarchical group in our root
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal group" \
-                                 "${arg}"
-                        return
-                fi
-                # arg must be a directory!
-		if [[ ! -d ${arg} ]]; then
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument" \
-                                 "${arg}"
-                        return
-                fi
+		# is argument a hierarchical group in our root? If yes: oops
+                [[ -n ${GroupDepths[${arg}]} ]] &&
+                        (( ${GroupDepths[${arg}]} > 0 )) && \
+				die_illegal_arg "${arg}"
 
+                # arg must be a directory!
+		[[ ! -d ${arg} ]] && \
+			die_illegal_arg "${arg}"
+
+                # is dir in our root? If yes: oops
                 dir="$(cd "${arg}" && pwd)"
-                if [[ ${dir} =~ ^${PMODULES_ROOT} ]]; then
-                        # argument is somehing in our root
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument" \
-                                 "${arg}"
-                        return
-                fi
+                [[ ${dir} =~ ^${PMODULES_ROOT} ]] && \
+			die_illegal_arg "${arg}"
+
                 # argument is a modulepath
-                ${add2path_func} MODULEPATH "$(cd "${arg}" && pwd)"
+                ${add2path_func} MODULEPATH "${dir}"
 	}
 
 	local -a args=()
@@ -1208,7 +1213,6 @@ unuse directory|group|release...
 '
 
 subcommand_unuse() {
-        local -r subcommand='unuse'
         unuse() {
                 local arg=$1
 
@@ -1230,45 +1234,28 @@ subcommand_unuse() {
                            (( ${GroupDepths[${arg}]} == 0 )); then
                         # argument is group in our root with depth 0
                         local var="PMODULES_LOADED_${arg^^}"
-                        if [[ -n "${!var}" ]]; then
-                                std::die 3 "%s %s: %s -- %s\n" \
-                                         "${CMD}" "${subcommand}" \
-                                         "cannot remove group due to loaded modules" \
-                                         "${arg}"
-                        fi
+                        [[ -n "${!var}" ]] && \
+                                die_cannot_remove_grp "${arg}"
                         std::remove_path UsedGroups "${arg}"
                         local dir="${PMODULES_ROOT}/${arg}/"
                         dir+="${PMODULES_MODULEFILES_DIR}"
 			std::remove_path MODULEPATH "${dir}"
                         return
                 fi
-                if [[ -n ${GroupDepths[${arg}]} ]] &&
-                           (( ${GroupDepths[${arg}]} > 0 )); then
-                        # argument is a hierarchical group in our root
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal group" \
-                                 "${arg}"
-                        return
-                fi
-                # arg must be a directory!
-		if [[ ! -d ${arg} ]]; then
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument" \
-                                 "${arg}"
-                        return
-                fi
+                # is argument a hierarchical group in our root? If yes: oops
+                [[ -n ${GroupDepths[${arg}]} ]] &&
+                        (( ${GroupDepths[${arg}]} > 0 )) && \
+				die_illegal_arg "${arg}"
 
+                # arg must be a directory!
+		[[ ! -d ${arg} ]] && \
+			die_illegal_arg "${arg}"
+
+		# is dir in our root? If yes: oops
                 dir="$(cd "${arg}" && pwd)"
-                if [[ ${dir} =~ ^${PMODULES_ROOT} ]]; then
-                        # argument is somehing in our root
-			std::die 3 "%s %s: %s -- %s\n" \
-                                 "${CMD}" "${subcommand}" \
-                                 "illegal argument" \
-                                 "${arg}"
-                        return
-                fi
+                [[ ${dir} =~ ^${PMODULES_ROOT} ]] && \
+			die_illegal_arg "${arg}"
+
                 # argument is a modulepath
                 std::remove_path MODULEPATH "${dir}"
 
@@ -1291,11 +1278,8 @@ subcommand_unuse() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         'missing argument'
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
         for arg in "${args[@]}"; do
                 unuse "${args[@]}"
         done
@@ -1320,7 +1304,7 @@ USAGE:
 '
 
 subcommand_update() {
-        subcommand_generic0 'update' "$@"
+        subcommand_generic0 "$@"
 }
 
 ##############################################################################
@@ -1339,7 +1323,7 @@ USAGE:
 '
 
 subcommand_refresh() {
-        subcommand_generic0 'refresh' "$@"
+        subcommand_generic0 "$@"
 }
 
 reset_modulepath() {
@@ -1434,7 +1418,6 @@ subcommand_purge() {
 	#     If a Pmodule module is loaded, it will *not* be
 	#     unloaded! 
 	#
-        local -r subcommand='purge'
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
@@ -1452,11 +1435,8 @@ subcommand_purge() {
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "no arguments allowd"
-        fi
+        (( ${#args[@]} > 0 )) && \
+		die_no_args_allowed
 
 	# is a Pmodule module loaded?
 	# if yes, save name in variable 'pmodule'
@@ -1477,13 +1457,8 @@ subcommand_purge() {
 	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
 
 	local error=$( < "${tmpfile}")
-	if [[ "${error}" =~ ":ERROR:" ]]; then
-                local s=${error%%$'\n'*}
-                local error_txt='failed'
-		std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "${error_txt}"
-        fi
+	[[ "${error}" =~ ":ERROR:" ]] && \
+		die_failed
         if [[ "${Shell}" == "sh" ]]; then
 		# for sh-like shells just echo 
                 echo "${output}"
@@ -1522,7 +1497,6 @@ USAGE:
 '
 
 subcommand_list() {
-        local -r subcommand='list'
 	local opts=()
         local args=()
 	while (( $# > 0 )); do
@@ -1550,11 +1524,9 @@ subcommand_list() {
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "no arguments allowd"
-        fi
+        (( ${#args[@]} > 0 )) && \
+		die_no_args_allowed
+
 	"${modulecmd}" "${Shell}" list "${opts[@]}"
 }
 
@@ -1573,7 +1545,6 @@ USAGE:
 '
 
 subcommand_clear() {
-        local -r subcommand='clear'
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -1591,11 +1562,9 @@ subcommand_clear() {
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "no arguments allowed"
-        fi
+        (( ${#args[@]} > 0 )) && \
+		die_no_args_allowed
+
 	pmodules_init
 	export_env LOADEDMODULES MODULEPATH _LMFILES_
 }
@@ -1650,7 +1619,6 @@ SWITCHES:
 '
 
 subcommand_search() {
-	local -r subcommand='search'
 	local modules=()
 	local with_modules='//'
 	local -ir cols=$(tput cols)	# get number of columns of terminal
@@ -1895,10 +1863,7 @@ subcommand_search() {
                                         local arg=${1/--release=}
                                 fi
 				is_release_stage "${arg}" || \
-				        std::die 1 "%s %s: %s -- %s" \
-                                                 "${CMD}" 'search' \
-                                                 "illegal release stage" \
-                                                 "${arg}"
+				        die_illegal_rel_stage "${arg}"
 				opt_use_rel_stages+="${arg}:"
 				;;
 			--with | --with=* )
@@ -1909,10 +1874,7 @@ subcommand_search() {
                                         local arg=${1/--with=}
                                 fi
 				if [[ -z ${arg} ]] || [[ "${arg}" =~ "-*" ]]; then
-				        std::die 1 "%s %s: %s -- %s" \
-                                                 "${CMD}" 'search' \
-                                                 "illegal value for --with option" \
-                                                 "${arg}"
+				        die_invalid_value "--with=${arg}"
 				fi
                                 arg=${arg//:/ }
                                 arg=${arg//,/ }
@@ -1930,18 +1892,12 @@ subcommand_search() {
                                 else
                                         local src_prefix="${1/--src=}"
                                 fi
-				if [[ ! -e "${src_prefix}" ]]; then
-					std::die 1 "%s %s: %s -- %s" \
-						 "${CMD}" 'search' \
-                                                 "illegal value for --src option" \
+				[[ -e "${src_prefix}" ]] || \
+					die_invalid_value "--src" \
                                                  "${src_prefix} does not exist"
-				fi
-				if [[ ! -d "${src_prefix}" ]]; then
-					std::die 1 "%s %s: %s -- %s" \
-						 "${CMD}" 'search' \
-                                                 "illegal value for --src option" \
+				[[ -d "${src_prefix}" ]] || \
+					die_invalid_value "--src" \
                                                  "${src_prefix} is not a directory"
-				fi
 				src_prefix=$(std::get_abspath "${src_prefix}")
 				;;
                         -v | --verbose )
@@ -2029,7 +1985,6 @@ SUBCOMMANDS:
 '
 
 subcommand_help() {
-        local -r subcommand='help'
 	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -2058,10 +2013,11 @@ subcommand_help() {
         	if [[ -n "${Help[${arg}]}" ]] ; then
                 	print_help "${arg}"
                 else
-		        # :FIXME: print help of newest *available* module
-		        # (respecting UsedReleaseStages)
-                        "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
-	        fi
+			m=$(subcommand_avail -m "${arg}" 2>&1  1>/dev/null | awk 'END{print $1}')
+                        [[ -n $m ]] || \
+				die_module_unavail "${arg}"
+			"${modulecmd}" "${Shell}" "${subcommand}" "${m}"
+		fi
         done
 }
 
@@ -2154,15 +2110,11 @@ subcommand_apropos() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "no search string specified"
-	elif (( ${#args[@]} > 1 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "more then one search string specified"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_missing_arg
+	(( ${#args[@]} > 1 ))  && \
+		die_too_many_args
+
 	local arg="${args[0]}"
 	local mod_name=''
 	local file_name=''
@@ -2214,7 +2166,7 @@ USAGE:
 "
 
 subcommand_initadd() {
-        subcommand_generic1plus 'initadd' "$@"
+        subcommand_generic1plus "$@"
 }
 
 ##############################################################################
@@ -2231,7 +2183,7 @@ USAGE:
 "
 
 subcommand_initprepend() {
-        subcommand_generic1plus 'initprepend' "$@"
+        subcommand_generic1plus "$@"
 }
 
 ##############################################################################
@@ -2247,7 +2199,7 @@ USAGE:
 "
 
 subcommand_initrm() {
-        subcommand_generic1plus 'initrm' "$@"
+        subcommand_generic1plus "$@"
 }
 
 ##############################################################################
@@ -2282,11 +2234,8 @@ subcommand_initswitch() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} != 2 )); then
-	        std::die 3 "%s %s: %s\n" \
-                         "${CMD}" "${subcommand}" \
-                         "two arguments required not less not more"
-	fi
+	(( ${#args[@]} == 2 )) || \
+		die_wrong_number_of_args
 	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
 }
 
@@ -2304,7 +2253,7 @@ USAGE:
 "
 
 subcommand_initlist() {
-	subcommand_generic0 'initlist' "$@"
+	subcommand_generic0 "$@"
 }
 
 ##############################################################################
@@ -2321,7 +2270,7 @@ USAGE:
 "
 
 subcommand_initclear() {
-	subcommand_generic0 'initclear' "$@"
+	subcommand_generic0 "$@"
 }
 
 ##############################################################################
