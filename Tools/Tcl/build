@@ -1,6 +1,6 @@
 #!/usr/bin/env modbuild
 
-pbuild::set_download_url "ftp://ftp.tcl.tk/pub/tcl/tcl8_6/tcl$V-src.tar.gz"
+pbuild::set_download_url "https://prdownloads.sourceforge.net/tcl/tcl$V-src.tar.gz"
 pbuild::install_docfiles 'license.terms' 'README.md'
 
 pbuild::configure() {
