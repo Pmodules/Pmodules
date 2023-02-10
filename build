@@ -2,12 +2,20 @@
 #
 
 declare -rx VERSION='1.1.11'
+declare -rx BASH5_VERSION='5.2.15'
+declare -rx TCL_VERSION='8.6.13'
+declare -rx TCLLIB_VERSION='1.21'
+declare -rx MODULES_VERSION='3.2.10.1'
+
+# for macOS only
+declare -rx GETOPT_VERSION='1.1.6'
+declare -rx FINDUTILS_VERSION='4.9.0'
+
 
 if (( "${BASH_VERSINFO[0]}" < 5 )); then
 	echo "BASH version 5.0 or newer is required and must be available in PATH!" 1>&2
 	exit 1
 fi
-declare TCL_VERSION='8.6'
 
 set -o nounset
 set -o pipefail
@@ -433,7 +441,7 @@ build::install() {
 	sed_cmd+="s:@VERSIONING@:#:g;"
 	sed_cmd+="s:@BASH@:${PREFIX}/${UTILBIN_DIR}/bash:g;"
 	sed_cmd+="s:@MODULECMD@:${PREFIX}/${UTILBIN_DIR}/modulecmd.bash:g;"
-	sed_cmd+="s:@TCL_VERSION@:${TCL_VERSION}:g;"
+	sed_cmd+="s:@TCL_VERSION@:${TCL_VERSION%.*}:g;"
 
 	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in" \
 	    > "${INSTALL_ROOT}/${CONFIG_DIR}/profile.bash-${VERSION}"
