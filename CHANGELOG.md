@@ -1,5 +1,9 @@
 # Changelog of Pmodules
 
+## Version 1.0.0rc15
+* **modulecmd**
+  * Improved error handling and messages
+
 ## Version 1.0.0rc14
 * **modulecmd**
   * format of log messages changed, now the message includes the
@@ -11,6 +15,7 @@
     can now be used to override the values set in the configuration file.
   * Add /opt/local/bin (for Macports) and /usr/local/bin (for Homebrew) to
     PATH on macOS.
+  * bugfixes
   
 ## Version 1.0.0rc13
 * same as 1.0.0rc12 but compiled on SL6
