@@ -1,5 +1,8 @@
 # Changelog of Pmodules
 
+## Version 1.0.0
+* same as version 1.0.0rc15
+
 ## Version 1.0.0rc15
 * **modulecmd**
   * Improved error handling and messages
