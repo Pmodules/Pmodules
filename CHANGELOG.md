@@ -3,6 +3,7 @@
 ## Version 1.0.0rc15
 * **modulecmd**
   * Improved error handling and messages
+  * Python support added
 
 ## Version 1.0.0rc14
 * **modulecmd**
