@@ -55,6 +55,9 @@ export_env() {
 	csh | tcsh )
 		local -r fmt="setenv %s \"%s\"; "
 		;;
+	python )
+		local -r fmt="os.environ['%s'] = '%s'\n"
+		;;
 	* )
 		std::die 1 "Unsupported shell -- ${Shell}\n"
 		;;
@@ -2283,6 +2286,9 @@ case "$1" in
 		;;
 	csh | tcsh )
 		declare Shell='csh'
+		;;
+	python )
+		declare Shell='python'
 		;;
 	* )
 		std::die 1 "${CMD}: unsupported shell -- $1\n"

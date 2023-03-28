@@ -10,8 +10,9 @@ declare -A Help=()
 
 # initialize help text of 'module --version'
 Help['version']="
-Pmodules @PMODULES_VERSION@ using Tcl Environment Modules @MODULES_VERSION@
-Copyright GNU GPL v2
+Pmodules @PMODULES_VERSION@
+using Tcl Environment Modules
+VERSION = @MODULES_VERSION@
 "
 
 #
