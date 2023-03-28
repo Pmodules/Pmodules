@@ -40,6 +40,7 @@ get_version() {
 }
 
 declare -rx PMODULES_VERSION=$(get_version 'Pmodules')
+declare -rx MODULES_VERSION=$(get_version 'modules')
 
 #-----------------------------------------------------------------------------
 #
@@ -507,6 +508,7 @@ pmodules::install() {
 	install -m 0644 "${SRC_DIR}/bash"		"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/csh"		"${PMODULES_HOME}/init"
+	install -m 0644 "${SRC_DIR}/Pmodules.py"	"${PMODULES_HOME}/init"
 	install -m 0644 "${SRC_DIR}/zsh"		"${PMODULES_HOME}/init"
 
 	install -m 0644 "${SRC_DIR}/libpbuild.bash"	"${PMODULES_HOME}/lib"
