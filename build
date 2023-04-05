@@ -489,6 +489,7 @@ build::install() {
 	install -m 0644 "${SRC_DIR}/bash"		"${PREFIX}/init"
 	install -m 0644 "${SRC_DIR}/bash_completion"	"${PREFIX}/init"
 	install -m 0644 "${SRC_DIR}/csh"		"${PREFIX}/init"
+	install -m 0644 "${SRC_DIR}/Pmodules.py"	"${PREFIX}/init"
 	install -m 0644 "${SRC_DIR}/zsh"		"${PREFIX}/init"
 
 	install -m 0644 "${SRC_DIR}/libpbuild.bash"	"${PREFIX}/lib"
