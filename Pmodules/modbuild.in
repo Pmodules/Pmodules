@@ -451,6 +451,17 @@ build_modules_legacy() {
                 local name="${tokens[0]%/*}"
                 version="${tokens[0]#*/}"
                 release="${tokens[1]}"
+		case ${release} in
+			unstable|stable|deprecated|remove|removed)
+				:
+				;;
+			* )
+				std::info "%s " \
+					  "${name}/${version}:" \
+					  "invalid release stage '${release}'!"
+				std::die 10 "Aborting..."
+				;;
+		esac
                 with_modules=( "${tokens[@]:2}" )
                 pbuild.build_module_legacy \
                         "${name}" "${version}" \

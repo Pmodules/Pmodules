@@ -5,7 +5,7 @@ declare -rx VERSION='1.1.11'
 declare -rx BASH5_VERSION='5.2.15'
 declare -rx TCL_VERSION='8.6.13'
 declare -rx TCLLIB_VERSION='1.21'
-declare -rx MODULES_VERSION='3.2.10.1'
+declare -rx MODULES_VERSION='3.2.10.2'
 
 # for macOS only
 declare -rx GETOPT_VERSION='1.1.6'

@@ -552,10 +552,7 @@ pbuild::prep() {
 			break
 		fi
 	done
-	(( ${#SOURCE_URLS[@]} == 0 )) && \
-		std::die 3 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Download source not set!"
+	(( ${#SOURCE_URLS[@]} == 0 )) && return 0
 	${mkdir} -p "${PMODULES_DISTFILESDIR}"
 	local i=0
 	local source_fname
@@ -1183,6 +1180,9 @@ _build_module() {
 						 "${PMODULES_MODULEFILES_DIR}" \
 						 "${names[@]}" \
 						 "${module_name}")
+			if [[ -L "${modulefile_dir}" ]]; then
+				modulefile_dir=$(readlink -m "${modulefile_dir}")
+			fi
 			modulefile_name="${modulefile_dir}/${module_version}"
 
 			PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
@@ -1382,7 +1382,7 @@ _build_module() {
 				std::info "%s "\
 					  "${module_name}/${module_version}:" \
 					  "removing modulefile from overlay '${ol}' ..."
-				${rm} "${fname}"
+				${rm} -f  "${fname}"
 			fi
 			fname="${dir}/.release-${module_version}"
 			if [[ -e "${fname}" ]]; then
@@ -1390,7 +1390,7 @@ _build_module() {
 					"%s " \
 					"${module_name}/${module_version}:" \
 					"removing release file from overlay '${ol}' ..."
-				${rm} "${fname}"
+				${rm} -f "${fname}"
 			fi
 		done
 	}
@@ -1451,7 +1451,7 @@ _build_module() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"Cleaning up '${SRC_DIR}'..."
-			rm -rf "${SRC_DIR##*/}"
+			${rm} -rf "${SRC_DIR##*/}"
    		};
 		return 0
 	}
@@ -1553,7 +1553,7 @@ _build_module() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing modulefile '${modulefile_name}' ..."
-			[[ "${dry_run}" == 'no' ]] && ${rm} -v "${modulefile_name}"
+			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${modulefile_name}"
 		fi
 		local release_file="${modulefile_dir}/.release-${module_version}"
 		if [[ -e "${release_file}" ]]; then
@@ -1561,7 +1561,7 @@ _build_module() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing release file '${release_file}' ..."
-			[[ "${dry_run}" == 'no' ]] && rm -v "${release_file}"
+			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${release_file}"
 		fi
 		${rmdir} -p "${modulefile_dir}" 2>/dev/null || :
 	}
@@ -1595,7 +1595,7 @@ _build_module() {
 	# :FIXME: add comments what and why we are doing this.
 	#
 	local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
-	rm -f "${logfile}"
+	${rm} -f "${logfile}"
 	if [[ "${verbose}" == 'yes' ]]; then
 		exec  > >(${tee} -a "${logfile}")
 	else

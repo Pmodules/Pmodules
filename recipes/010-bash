@@ -3,7 +3,7 @@
 # https://www.gnu.org/software/bash/
 #
 P=bash
-V=${BASH5_VERSION:-5.1.16}
+V=${BASH5_VERSION:-5.2.15}
 FNAME="$P-$V.tar.gz"
 DOWNLOAD_URL="https://ftp.gnu.org/gnu/$P/${FNAME}"
 
