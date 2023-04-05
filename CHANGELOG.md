@@ -2,9 +2,14 @@
 
 ## Version 1.1.11 (not yet tagged)
 * **modulecmd**
+  * *User visible changes*
+	* Improved error handling and messages
+	* Python support added
+  * *Internal changes and fixes*
+	* Bugfixes
 
 
-## Version 1.1.10 (not yet tagged)
+## Version 1.1.10 
 * **modulecmd**
   * *User visible changes*
     * New options for `module search`.
