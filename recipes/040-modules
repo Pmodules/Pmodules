@@ -3,7 +3,7 @@
 # https://core.tcl-lang.org
 #
 P=modules
-V=${MODULES_VERSION:-3.2.10.1}
+V=${MODULES_VERSION:-3.2.10.2}
 FNAME="$P-$V.tar.gz"
 DOWNLOAD_URL="https://amas.web.psi.ch/Downloads/$P/$P-$V.tar.bz2"
 

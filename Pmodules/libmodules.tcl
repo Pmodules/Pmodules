@@ -192,6 +192,7 @@ proc _pmodules_setenv { PREFIX name version } {
 	set setenv_dirs  [dict create \
 			      "${PREFIX}/include"		"${NAME}_INCLUDE_DIR" \
 			      "${PREFIX}/lib"			"${NAME}_LIBRARY_DIR" \
+			      "${PREFIX}/lib64"			"${NAME}_LIBRARY_DIR" \
 			    ]
 	set prepend_dirs [dict create \
 			      "${PREFIX}/bin"			{ "PATH" } \
