@@ -215,16 +215,19 @@ proc _pmodules_setenv { PREFIX name version } {
 		setenv $key $value
 	}
 	dict for {key value} $setenv_dirs {
-		if { [lsearch ${::dont-setenv} $key] >= 0 || ![file isdirectory $key] } {
+		if { [lsearch ${::dont-setenv} $value] >= 0 || ![file isdirectory $key] } {
 			continue
 		}
 		setenv $value $key
 	}
 	dict for {key value} $prepend_dirs {
-		if { [lsearch ${::dont-setenv} $key] >= 0 || ![file isdirectory $key] } {
+		if { ![file isdirectory $key] } {
 			continue
 		}
 		foreach var $value {
+			if { [lsearch ${::dont-setenv} $var] >= 0 } {
+				continue
+			}
 			prepend-path $var $key
 		}
 	}
