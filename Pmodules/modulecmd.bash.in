@@ -719,6 +719,7 @@ subcommand_load() {
                         [[ "$s" =~ ' conflicts ' ]] && \
 				die_conflict "${m}"
 			die_cmd_failed "${m}"
+		fi
                 if [[ "${Shell}" == "sh" ]]; then
 			# for sh-like shells just echo 
                         echo "${output}"

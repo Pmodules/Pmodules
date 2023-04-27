@@ -1371,8 +1371,8 @@ _build_module() {
 		local ol=''
 		for ol in "${Overlays[@]}"; do
 			local i
-			for ((i=0; i<${#mod_overlays}; i++ )); do
-				[[ "${ol}" == "{mod_overlays[i]}" ]] && continue 2
+			for ((i=0; i<${#mod_overlays[@]}; i++ )); do
+				[[ "${ol}" == "${mod_overlays[i]}" ]] && continue 2
 			done
 			[[ "${ol}" == "${ol_name}" ]] && continue
 			local mod_root="${OverlayInfo[${ol}:mod_root]}"
