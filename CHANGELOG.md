@@ -1,6 +1,6 @@
 # Changelog of Pmodules
 
-## Version 1.1.11 (not yet tagged)
+## Version 1.1.11
 * **modulecmd**
   * *User visible changes*
 	* Improved error handling and messages
@@ -8,6 +8,11 @@
   * *Internal changes and fixes*
 	* Bugfixes
 
+* **build-system**
+  * *User visible changes*
+    * building with legacy variants files fixed.
+    * building with YAML config files is still experimental
+      and not recommended for now
 
 ## Version 1.1.10 
 * **modulecmd**
