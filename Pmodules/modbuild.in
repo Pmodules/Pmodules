@@ -8,6 +8,7 @@
 #.............................................................................
 
 set -x
+
 declare VERSION='@PMODULES_VERSION@'
 
 # get absolute path of script
@@ -182,8 +183,11 @@ declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
 declare --	opt_config_file=''
+declare --      opt_yaml='no'
 
 declare		BUILD_SCRIPT=''
+declare --      yaml_config_file=''
+declare -a      legacy_config_files=()
 
 parse_args() {
 	while (( $# > 0 )); do
@@ -266,6 +270,9 @@ parse_args() {
 				shift
 			fi
 			;;
+		--yaml )
+			opt_yaml='yes'
+			;;
 		--use-flags | --use-flags=* )
 			if [[ $1 == *=* ]]; then
 				USE_FLAGS=":${1#--*=}:"
@@ -335,6 +342,53 @@ parse_args() {
 		fi
 	fi
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
+
+	if [[ ${opt_yaml} == 'no' ]]; then
+		# look for legacy config files
+		# if nothing found, try with YAML
+		if [[ -n ${opt_config_file} ]]; then
+			legacy_config_files=( "${opt_config_file}" )
+		else
+			shopt -q nullglob || :
+			local -i nullglob_set=$?
+				
+			legacy_config_files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}".${opt_system} )
+			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
+			local f
+			for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
+				[[ -e "${f}.${opt_system}" ]] \
+					|| [[ -e "${f}.$(uname -s)" ]] \
+					|| legacy_config_files+=( "$f" )
+			done
+			(( nullglob_set == 1 )) && shopt -u nullglob
+		fi
+		(( ${#legacy_config_files[@]} == 0 )) && opt_yaml='check'
+	fi
+	if [[ ${opt_yaml} != 'no' ]]; then
+		yaml_config_file="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
+	fi
+	if [[ "${opt_yaml}" == 'yes' ]]; then
+		[[ -r "${yaml_config_file}" ]] || \
+			std::die 2 \
+				 "YAML config file doesn't exist or is not readable - ${yaml_config_file}"
+	else
+		if [[ "${opt_yaml}" == 'check' ]]; then
+			[[ -r "${yaml_config_file}" ]] && \
+				std::die 2 \
+					 "No suitable variants or YAML config file found!"
+			opt_yaml='yes'
+		else
+			(( ${#legacy_config_files[@]} == 0 )) && \
+				std::die 2 \
+					 "No suitable variants file found!"
+		fi
+	fi
+	if [[ "${opt_yaml}" == 'yes' ]]; then
+		std::info "Using YAML configuration file - ${yaml_config_file}"
+	else
+		std::info "Using legacy variants files."
+		[[ -n "${opt_overlay}" ]] || opt_overlay='base'
+	fi
 }
 
 #
@@ -366,31 +420,16 @@ bash_expand(){
 }
 
 build_modules_legacy() {
-	find_variants_files(){
-		shopt -q nullglob || :
-		local -i nullglob_set=$?
-
-		local files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"\.${opt_system} )
-		files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
-		local f
-		for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
-			[[ -e "${f}.${opt_system}" ]] \
-				|| [[ -e "${f}.$(uname -s)" ]] \
-				|| files+=( "$f" )
-		done
-		if (( ${#files[@]} == 0 )); then
-			std::die 2 "No suitable variants file found!"
-		fi
-		(( nullglob_set == 1 )) && shopt -u nullglob
-		std::upvar "$1" "${files[@]}"
-	}
-
+	local -a files=( "${legacy_config_files[@]}" )
+	local -A mod_overlays=()
+	
 	expand_variants_file(){
 		local -r input="$1"
+		local -a toks=()
 		while read -a toks; do
 			# skip empty and comment lines
 			[[ -z ${toks} ]] && continue
-			[[ ${toke:0:1} == '#' ]] && continue
+			[[ ${toks:0:1} == '#' ]] && continue
 			local -a deps=( ${toks[*]:2} )
 			bash_expand "${toks[0]} ${toks[1]}" "${deps[@]}"
 		done < "${input}"
@@ -405,8 +444,6 @@ build_modules_legacy() {
         fi
         shift 2
         local with_modules=( $* )
-        local files
-        find_variants_files files
 
         # if we have to build a dependency, we might have less dependencies
         # on it. Or in other words: the list of "with modules" might be
@@ -440,10 +477,12 @@ build_modules_legacy() {
                 done
                 std::die 10 "Aborting..."
         fi
-	declare ol_name='base'
-	declare ol_type='n'
-	declare ol_mod_root="${PMODULES_HOME%%/Tools*}"
-	declare ol_inst_root="${PMODULES_HOME%%/Tools*}"
+	[[ -v OverlayInfo[${opt_overlay}:inst_root] ]] || \
+		std::die 2 "%s" \
+			 "Overlay doesn't exist - ${opt_overlay}"
+	local ol_name="${opt_overlay}"
+	declare ol_inst_root="${OverlayInfo[${opt_overlay}:inst_root]}"
+	declare ol_mod_root="${OverlayInfo[${opt_overlay}:mod_root]}"
         local -i i=0
         local -i num_variants=${#variants[@]}
         for ((i = 0; i < num_variants; i++)); do
@@ -470,11 +509,9 @@ build_modules_legacy() {
 }
 
 build_modules_yaml(){
+	local -- fname="${yaml_config_file}"
 	local -A mod_overlays=()
-	local -- fname="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
-	[[ -r "${fname}" ]] || \
-		std::die 3 "YAML configuration file is not readable -- ${fname}"
-	echo "Using ${fname}..."
+
 	yaml_get_versions(){
 		local -n _result="$1"
 		local fname="$2"
@@ -668,7 +705,7 @@ build_modules_yaml(){
 }
 
 build_modules() {
-	if [[ -n $(ls "${BUILDBLOCK_DIR}/files/"*.yaml 2>/dev/null) ]]; then
+	if [[ "${opt_yaml}" == 'yes' ]]; then
 		build_modules_yaml "$@"
 	else
 		build_modules_legacy "$@"
