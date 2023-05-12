@@ -1917,70 +1917,24 @@ subcommand_purge() {
 				args+=( "$@" )
 				break
 			        ;;
+			-* )
+				die_illegal_opt "$1"
+				;;
 		        * )
 			        args+=( "$1" )
 			        ;;
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "no arguments allowed"
-        fi
+        (( ${#args[@]} > 0 ))  && die_no_args_allowed
 
-	# is a Pmodule module loaded?
-	# if yes, save name in variable 'pmodule'
-	# We also have to save PMODULES_HOME since it will be
-	# unset while sourcing the shell's init script.
-	IFS=':'
-	local -a lmfiles=($_LMFILES_)
-	unset IFS
-	for f in "${lmfiles[@]}"; do
-		if [[ $f == */${PMODULES_MODULEFILES_DIR}/Pmodules/* ]]; then
-			local pm_home="${PMODULES_HOME}"
-			local pmodule="${f##*/${PMODULES_MODULEFILES_DIR}/}"
-			break;
-		fi
+	# get list of loaded modules with stripped MODULEPATH
+	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
+
+	for (( i=${#modules[@]}-1; i>=0; i-- )); do
+		[[ ${modules[$i]} == Pmodules/* ]] && continue
+		subcommand_unload "${modules[$i]}"
 	done
-
-	# run module purge
-	# since we might have to reload a Pmodules module, we cannot
-	# just run 'modulecmd ${Shell} purge'
-	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
-
-	local error=$( < "${tmpfile}")
-	if [[ "${error}" =~ ":ERROR:" ]]; then
-                local s=${error%%$'\n'*}
-                local error_txt='failed'
-		std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "${error_txt}"
-        fi
-        if [[ "${Shell}" == "sh" ]]; then
-		# for sh-like shells just echo
-		eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
-        else
-		# re-run with right shell
-                "${modulecmd}" "${Shell}" 'purge'
-        fi
-	eval "$(echo "${output}"|sed -e 's/;unalias [^;]*//g')"
-	if [[ -n "${error}" ]]; then
-                echo "${error}" 1>&2
-	fi
-
-	if [[ -v pmodule ]]; then
-		# reload a previously loaded Pmodule module
-		# stderr is redirected to /dev/null, otherwise
-		# we may get output like
-		# 'unstable module has been loaded'
-		PMODULES_HOME="${pm_home}"
-		export_env PMODULES_HOME
-		subcommand_load "${pmodule}" 2> /dev/null
-	fi
-        init_modulepath
-	
-	export_env MODULEPATH
 }
 
 ##############################################################################
