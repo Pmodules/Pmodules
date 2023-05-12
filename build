@@ -358,7 +358,8 @@ build::compile() {
 	install -m 0755 -d "${PREFIX}"/{bin,init,lib,libexec} \
 
 	for recipe in recipes/[0-9]*; do
-		"./${recipe}" "${PREFIX}"
+		"./${recipe}" "${PREFIX}" || \
+			std::die 1 "Oops"
 	done
 	if [[ "${opt_cleanup}" == 'yes' ]]; then
 		rm -rf "${TMP_DIR}/*"
