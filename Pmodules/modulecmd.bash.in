@@ -1950,26 +1950,93 @@ USAGE:
 '
 
 subcommand_list() {
-	local opts=()
+
+	human_readable_output(){
+		# get list of loaded modules with stripped MODULEPATH
+		IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
+
+		local strs=()
+		local -i n=1
+		local -i colsize=0
+		for module in "${modules[@]}"; do
+			local s=$(printf "%2d) %-s" $n "${module}")
+			strs+=( "$s" )
+			local -i sizeof_s=${#s}
+			(( sizeof_s > colsize )) && colsize=sizeof_s
+			n+=1
+		done
+		colsize+=2
+
+		local -i cols=$(tput cols)
+		local -i column=0
+		printf "Currently Loaded Modules:\n" 1>&2
+		for s in "${strs[@]}"; do
+			local -i len=${#s}
+			if (( column+len >= cols )); then
+			        printf -- "\n" 1>&2
+				column=0
+			fi
+			if (( column+colsize < cols )); then
+				printf "%-${colsize}s" "$s" 1>&2
+			else
+				printf "%-s" "$s" 1>&2			# last column
+			fi
+			column+=colsize
+		done
+		printf -- "\n\n" 1>&2
+	}
+
+	long_output(){
+		IFS=':' read -r -a modules \
+		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
+		IFS=':' read -r -a lmfiles <<< "${_LMFILES_}"
+		printf "Currently Loaded Modules:\n" 1>&2
+		local -i fmt_field_width=0
+		local -i length=0
+		local module
+		for module in "${modules[@]}"; do
+			length=${#module}
+		        (( length > fmt_field_width )) && fmt_field_width=length
+		done
+		for (( i=0; i<${#lmfiles[@]}; i++ )); do
+			mtime=$(date -r "${lmfiles[i]}" +"%Y-%m-%d %H:%M:%S")
+			printf "%-${fmt_field_width}s\t%s\n" "${modules[i]}" "${mtime}" 1>&2
+		done
+	}
+
+	terse_output(){
+		IFS=':' read -r -a modules \
+		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
+		printf "Currently Loaded Modules:\n" 1>&2
+		for module in "${modules[@]}"; do
+			printf "${module}\n" 1>&2
+		done
+		printf -- "\n\n" 1>&2
+	}
+	
         local args=()
+	local output_function='human_readable_output'
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-h | --human )
-				opts+=( '-h' )
+				output_function='human_readable_output'
 				;;
 			-l | --long )
-				opts+=( '-l' )
+				output_function='long_output'
 				;;
 			-t | --terse )
-				opts+=( '-t' )
+				output_function='terse_output'
 				;;
 			-- )
 				shift 1
 				args+=( "$@" )
 				break
+				;;
+			-* )
+				die_illegal_opt "$1"
 				;;
 			* )
                                 args+=( "$1" )
