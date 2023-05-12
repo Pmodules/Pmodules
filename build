@@ -439,6 +439,7 @@ build::install() {
 	echo "  root of Pmodules environment: ${INSTALL_ROOT}"
 	echo "  Pmodule prefix:               ${PREFIX}"
 	sed_cmd+="s:@PMODULES_VERSION@:${VERSION}:g;"
+	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
 	sed_cmd+="s:@VERSIONING@:#:g;"
 	sed_cmd+="s:@BASH@:${PREFIX}/${UTILBIN_DIR}/bash:g;"
 	sed_cmd+="s:@MODULECMD@:${PREFIX}/${UTILBIN_DIR}/modulecmd.bash:g;"
