@@ -2049,7 +2049,8 @@ subcommand_list() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowed"
         fi
-	"${modulecmd}" "${Shell}" list "${opts[@]}"
+
+	"${output_function}"
 }
 
 ##############################################################################
