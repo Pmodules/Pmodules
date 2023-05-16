@@ -1,5 +1,12 @@
 # Changelog of Pmodules
 
+## Version 1.1.12
+* **modulecmd**
+  * *User visible changes*
+	* experimental support for Lmod
+	* support for use flags has been removed.
+          (A postfix like '_slurm' can still be used)
+
 ## Version 1.1.11
 * **modulecmd**
   * *User visible changes*
