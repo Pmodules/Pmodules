@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 
-declare -rx VERSION='1.1.11'
+declare -rx VERSION='1.1.12'
 declare -rx BASH5_VERSION='5.2.15'
 declare -rx TCL_VERSION='8.6.13'
 declare -rx TCLLIB_VERSION='1.21'
@@ -358,7 +358,8 @@ build::compile() {
 	install -m 0755 -d "${PREFIX}"/{bin,init,lib,libexec} \
 
 	for recipe in recipes/[0-9]*; do
-		"./${recipe}" "${PREFIX}"
+		"./${recipe}" "${PREFIX}" || \
+			std::die 1 "Oops"
 	done
 	if [[ "${opt_cleanup}" == 'yes' ]]; then
 		rm -rf "${TMP_DIR}/*"
@@ -438,6 +439,7 @@ build::install() {
 	echo "  root of Pmodules environment: ${INSTALL_ROOT}"
 	echo "  Pmodule prefix:               ${PREFIX}"
 	sed_cmd+="s:@PMODULES_VERSION@:${VERSION}:g;"
+	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
 	sed_cmd+="s:@VERSIONING@:#:g;"
 	sed_cmd+="s:@BASH@:${PREFIX}/${UTILBIN_DIR}/bash:g;"
 	sed_cmd+="s:@MODULECMD@:${PREFIX}/${UTILBIN_DIR}/modulecmd.bash:g;"

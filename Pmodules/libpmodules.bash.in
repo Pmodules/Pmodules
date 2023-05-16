@@ -20,8 +20,9 @@ declare -r ol_replacing='r'
 
 # initialize help text of 'module --version'
 Help['version']="
-Pmodules @PMODULES_VERSION@ using Tcl Environment Modules 
-Copyright GNU GPL v2
+Pmodules @PMODULES_VERSION@
+using Tcl Environment Modules
+VERSION = @MODULES_VERSION@
 "
 
 #

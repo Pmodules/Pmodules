@@ -37,7 +37,10 @@ declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 declare -x  TCLLIBPATH
 std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
 
-declare -r modulecmd="${libexecdir}/modulecmd.bin"
+declare -r tcl_cmd="${libexecdir}/modulecmd.bin"
+#declare -r lmod_cmd="${PMODULES_HOME}/lmod/lmod/libexec/lmod"
+declare -r lmod_cmd="/usr/share/lmod/lmod/libexec/lmod"
+declare -- modulecmd="${tcl_cmd}"
 
 declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
 
@@ -83,14 +86,14 @@ export_env() {
 	# append-path/remove-path! But we keep the state in PMODULES_ENV
 	# so we don't have to export it.
 	# 
-	case "${Shell}" in
-	sh | bash | zsh )
-		echo "unset UsedGroups; "
-		;;
-	csh | tcsh )
-		echo "unsetenv UsedGroups; "
-		;;
-	esac
+	#case "${Shell}" in
+	#sh | bash | zsh )
+	#	echo "unset UsedGroups; "
+	#	;;
+	#csh | tcsh )
+	#	echo "unsetenv UsedGroups; "
+	#	;;
+	#esac
 }
 
 #
@@ -121,7 +124,7 @@ save_env() {
 
         [[ $1 == 'no' ]] && return 0
         local vars=( Version )
-	vars+=( UsedReleaseStages UsedFlags UsedGroups )
+	vars+=( UsedReleaseStages UsedGroups )
 	vars+=( DefaultGroups DefaultReleaseStages )
         vars+=( ReleaseStages )
 	vars+=( GroupDepths )
@@ -163,6 +166,11 @@ die_no_args_allowed(){
 die_wrong_number_of_args(){
 	std::die 1 "%s %s: %s\n" \
                  "${CMD}" "${subcommand}" "wrong number of arguments"
+}
+
+die_illegal_opt(){
+	std::die 3 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${subcommand}" "illegal option" "$1"
 }
 
 die_illegal_arg(){
@@ -225,6 +233,12 @@ die_overlay_already_in_use(){
 		 "overlay already in use" "$1"
 }
 
+die_not_a_modulefile(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "not a modulefile" "$1"
+}
+
 #
 # get release stage of module
 # Note:
@@ -238,12 +252,12 @@ die_overlay_already_in_use(){
 # 	$3      module name/version
 #
 get_release_stage() {
-	local "$1"
+	local -n grs_rel_stage="$1"
 	local -r dir="$2"
 	local -r modulefile="${dir}/$3"
 
 	if [[ ! -v Dir2OverlayMap[${dir%/${PMODULES_MODULEFILES_DIR}*}] ]]; then
-		std::upvar $1 'stable'
+		grs_rel_stage='stable'
 		return
 	fi
         #
@@ -255,9 +269,9 @@ get_release_stage() {
 	local -r rel_stage_file="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${rel_stage_file} ]]; then
 		# read file, remove empty lines, spaces etc
-		std::upvar $1 $( < "${rel_stage_file}" )
+		grs_rel_stage=$( < "${rel_stage_file}" )
 	else
-		std::upvar $1 'unstable'
+		grs_rel_stage='unstable'
 	fi
 }
 
@@ -270,28 +284,25 @@ is_release_stage() {
 
 #
 # Check whether a given moduledir is in an used overlay.
-# If yes, return 0 and the overlay with upvar of first argument
-# otherwise return 1
+# If yes, return 0 otherwise return 1
 #
 # Arguments
-#	$1	upvar to return overlay
-#	$2	upvar to return group
+#	$1	ref.var to return overlay
+#	$2	ref.var to return group
 #	$3	moduledir to check
 #
 find_overlay () {
-        local "$1"
-        local "$2"
+        local -n fo_ol="$1"
+        local -n fo_group="$2"
 	local path="${3//+(\/)/\/}"	# replace multpile '/' with one
 	path="${path/%\/}"		# remove trailing slash if exist
 	path="${path%/${PMODULES_MODULEFILES_DIR}*}"
 
+	# return if not in an overlay
 	[[ -v Dir2OverlayMap[${path}] ]] || return 1
 
-        local ol="${Dir2OverlayMap[${path}]}"
-        std::upvar $1 "${ol}"
-
-        local group="${path#${OverlayInfo[${ol}:mod_root]}/}"
-        std::upvar $2 "${group}"
+        fo_ol="${Dir2OverlayMap[${path}]}"
+        fo_group="${path#${OverlayInfo[${ol}:mod_root]}/}"
 	return 0
 }
 
@@ -303,17 +314,41 @@ module_is_loaded() {
 }
 
 #
-# Check shebang.
+# test whether the given file is a module file.
+#
+# - for lua: the extension must be .lua
+# - for Tcl: check shebang
+#
+# return interpreter in reference variable
 #
 # Arguments:
-#	$1	file name to test
+#       $1      [out] ref. variable for result
+#	$2	[in]  full qualified file name to test
+#
+# Return value:
+#       0       if file exist, is readable and is either a lua or Tcl module file
+#       1       if file exist but is neither a lua or Tcl module file
+#       2       if file doesn't exist
 #
 is_modulefile() {
-	local -r fname="$1"
+	local -n im_interp="$1"
+	local -r fname="$2"
+
+	# does file exist and is readable?
+	[[ -r ${fname} ]] || return 2
+	
+	if [[ "${fname##*.}" == 'lua' ]]; then
+		im_interp='lmod'
+		return 0
+	fi
 	local -- shebang
-	[[ -r ${fname} ]] || return 1
 	read -n 11 shebang < "${fname}"
-	[[ "${shebang:0:8}" == '#%Module' ]] || [[ "${shebang:0:9}" == '#%Pmodule' ]]
+	if [[ "${shebang:0:8}" == '#%Module' ]] \
+		   || [[ "${shebang:0:9}" == '#%Pmodule' ]]; then
+		im_interp='tcl'
+		return 0
+	fi
+	return 1
 }
 
 #
@@ -436,59 +471,6 @@ subcommand_load() {
 	local current_modulefile=''
 	local prefix=''
 	local m=''
-
-	#......................................................................
-	# Test whether a given module is available.
-	# The passed module-name can be
-	#
-	# - an absolute file- or link-name.
-	#   The module can be either in- or outside our hierarchy.
-	#
-	# - a relative file- or link-name.
-	#   The module can be either in- or outside out hierarchy.
-	#
-	# - specified with name and version (like gcc/5.2.0).
-	#   The module can be either in- or outside our hierarchy.
-	#
-	# - specified with name only (without version, like gcc).
-	#   The module can be either in- or outside our hierarchy.
-	#
-	# - directory in- or outsite our hierarchy (not supported by
-        #   modulecmd.tcl!)
-	#
-	# arguments:
-	# 	$1: module name or file
-	#
-	# possible return values:
-	# 	0: module is loadable
-	# 	1: either not a modulefile or unsused release stage
-	#
-	# The following variables in the enclosing function are set:
-        #       current_modulefile
-        #       prefix
-	#	rel_stage
-	#
-	is_available() {
-		local  m=$1
-		local -a array
-		#
-		# the next command assigns the absolute modulefile path
-		# to ${arry[0]} and - if the module is in our root - the
-		# prefix of the module to ${array[1]}.
-		#
-		# The trick with the first line matching "_PREFIX" is not
-		# 100% reliable: One of the Pmodules extensions must be
-		# called before something like
-		#   setenv FOO_PREFIX bar
-		# can be used.
-		#
-		mapfile -t array  < <("${modulecmd}" 'bash' show "$m" 2>&1 | \
-			${awk} 'NR == 2 {print substr($0, 1, length($0)-1)}; /_PREFIX |_HOME / {print $3; exit}')
-		current_modulefile="${array[0]}"
-		prefix="${array[1]}"
-		test -n "${current_modulefile}" || return 1
-		get_release_stage rel_stage "${current_modulefile}" "${UsedReleaseStages}"
-	}
 
 	#......................................................................
 	# output load 'hints'
@@ -618,9 +600,7 @@ subcommand_load() {
 	(( ${#args[@]} == 0 )) && \
 		die_missing_arg
 
-	IFS=':'
-	local -a modulepath=(${MODULEPATH})
-	unset IFS
+	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 
         local m=''
 	for m in "${args[@]}"; do
@@ -633,6 +613,7 @@ subcommand_load() {
 			# - rel_stage:group:name or
 			# - name:rel_stage
 
+			
 			IFS=':'
 			local -a toks=($m)
 			unset IFS
@@ -667,7 +648,6 @@ subcommand_load() {
 				local -i depth=${GroupDepths[${group}]}
 				(( depth != 0 )) && \
 					die_illegal_group "${group}"
-				modulepath=()
 				group+="/${PMODULES_MODULEFILES_DIR}"
                                 for overlay in "${UsedOverlays[@]}"; do
 					local mod_root="${OverlayInfo[${overlay}:mod_root]}"
@@ -681,7 +661,8 @@ subcommand_load() {
                                 g_env_must_be_saved='yes'
 			fi
 		fi # handle extended module names
-                find_module current_modulefile rel_stage "${m}" "${modulepath[@]}"
+		local moduledir=''
+                find_modulefile current_modulefile rel_stage moduledir "${m}" "${modulepath[@]}"
                 if [[ -z ${current_modulefile} ]]; then
 			local hints=''
 			get_load_hints hints
@@ -696,6 +677,9 @@ subcommand_load() {
 		# continue if already loaded
 		[[ ":${LOADEDMODULES}:" =~ ":${m}:" ]] && continue
 
+		local interp=''
+		is_modulefile interp "${current_modulefile}" || \
+			die_not_a_modulefile "${m}"
 		local prefix=''
 		get_module_prefix prefix "${current_modulefile}"
                 if [[ -n ${prefix} ]]; then
@@ -703,6 +687,12 @@ subcommand_load() {
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
                 fi
 
+		if [[ "${interp}" == 'lmod' ]]; then
+			current_modulefile="${current_modulefile/${moduledir}\/}"
+			modulecmd="${lmod_cmd}"
+		else
+			modulecmd="${tcl_cmd}"
+		fi
 		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
 
@@ -794,6 +784,10 @@ subcommand_unload() {
 				args+=( "$@" )
 				break
 				;;
+			-* )
+				die_illegal_opt "$1"
+				;;
+
 			* )
 				args+=( "$1" )
 				;;
@@ -810,9 +804,28 @@ subcommand_unload() {
 	# with 'Pmodules', we save the value and set it at the end of
 	# the loop again, if it has been unset.
 	local saved_home="${PMODULES_HOME}"
-	
+
+	IFS=: read -r -a _lmfiles_ <<< "${_LMFILES_}"
         local arg
+	local lmfile
 	for arg in "${args[@]}"; do
+		for lmfile in "${_lmfiles_[@]}" '_zzzz_'; do
+			if [[ $lmfile =~ ${arg} ]]; then
+				break
+			fi
+		done
+		if [[ "${lmfile}" == '_zzzz_' ]]; then
+			continue
+		fi
+		local interp
+		is_modulefile interp "${lmfile}" || die_not_a_modulefile "${m}"
+		if [[ "${interp}" == 'lmod' ]]; then
+			current_modulefile="${current_modulefile/${moduledir}\/}"
+			modulecmd="${lmod_cmd}"
+		else
+			modulecmd="${tcl_cmd}"
+		fi
+
 	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
                 eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
 		case ${Shell} in
@@ -825,7 +838,7 @@ subcommand_unload() {
 		esac
 	done
 	if [[ -z ${PMODULES_HOME} ]]; then
-		PMODULES_HOME=${saved_home}
+		PMODULES_HOME="${saved_home}"
 		export_env 'PMODULES_HOME'
 	fi
 	g_env_must_be_saved='yes'
@@ -1017,10 +1030,10 @@ get_available_modules() {
 
 #
 # find module(file) to load. Input arguments are
-#       $1      upvar: return module file
-#       $2      upvar: return module release stage
-#       $3      module to load
-#       $4      a modulepath (usually MODULEPATH)
+#       $1      [out] ref. variable to return module file
+#       $2      [out] ref. variable to return release stage
+#       $3      |in]  module to load
+#       $4      [in]  module search path  (usually splitted MODULEPATH)
 #
 # The module name can be
 #       name
@@ -1028,18 +1041,17 @@ get_available_modules() {
 #       name/version_flag
 #
 # Return
-#       return code 0 and modulefile in first argument
-#       return code 1 and modulefile in first argument
-#               if module
-#       return code 2
-#               if no modulefile could be found
+#       0  if a modulefile has been found
+#       != else
 #       
-find_module() {
-	local "$1"
-	local "$2"
-	local -r module="$3"
-	local -a dirs=("${@:4}")
+find_modulefile() {
+	local -n fm_modulefile="$1"
+	local -n fm_rel_stage="$2"
+	local -n fm_dir="$3"
+	local -r module="$4"
+	local -a dirs=("${@:5}")
 
+	local dir
         for dir in "${dirs[@]}"; do
                 test -d "${dir}" || continue
                 local -i col=$((${#dir} + 2 ))
@@ -1052,20 +1064,21 @@ find_module() {
                                        -ipath "${dir}/${module}*" \
                                           | cut -b${col}-) )
                         for mod in "${modules[@]}"; do
-                                #
-                                # loop over all used flags. If a module with
-                                # a used flag is available load this module.
-				local rel_stage
-		                for flag in "${UseFlags[@]/#/_}" ""; do
-                                        [[ ${mod} == ${module}${flag} ]] || continue
-                                        std::upvar $1 "${dir}/${mod}"
-                                        get_release_stage \
-						rel_stage \
-                                                "${dir}" \
-						"${mod}"
-                                        std::upvar $2 "${rel_stage}"
-                                        return 0
-                                done
+				if [[ ${mod} == ${module} ]]; then
+					:
+				elif [[ ${mod} == ${module}.lua ]]; then
+					mod="${module}.lua"
+				else
+					continue
+				fi
+				get_release_stage \
+					fm_rel_stage \
+                                        "${dir}" \
+					"${mod}"
+
+				fm_modulefile="${dir}/${mod}"
+				fm_dir="${dir}"
+                                return 0
                         done
                 else
                         # no version has been specified. This makes it more
@@ -1084,26 +1097,26 @@ find_module() {
 			# now modules contains a reverse sorted list of
 			# available modules in the form name/version
                         for mod in "${modules[@]}"; do
-                                #
-                                # loop over all used flags. If a module with
-                                # a used flag is available load this module.
-                                local rel_stage=''
-		                for flag in "${UseFlags[@]/#/_}" ""; do
-                                        [[ ${mod} == ${module}/*${flag} ]] || continue
-                                        std::upvar $1 "${dir}/${mod}"
-                                        get_release_stage \
-						rel_stage \
-                                                "${dir}" \
-						"${mod}"
-                                        std::upvar $2 "${rel_stage}"
-                                        [[ :${rel_stage}: =~ :${UsedReleaseStages}: ]] && \
-                                                return 0
-                                done
+				if [[ ${mod} == ${module}/* ]]; then
+					:
+				else
+					continue
+				fi
+                                get_release_stage \
+					fm_rel_stage \
+                                        "${dir}" \
+					"${mod}"
+				# don't load modules with unused release stages
+				if [[ :${fm_rel_stage}: =~ :${UsedReleaseStages}: ]]; then
+					fm_modulefile="${dir}/${mod}"
+					fm_dir="${dir}"
+					return 0
+				fi
                         done
                 fi
         done
         return 1
-} # find_module()
+} # find_modulefile()
 
 ##############################################################################
 #
@@ -1310,24 +1323,40 @@ subcommand_avail() {
 	unset IFS
 	local dir
         local group=''
+	local groups=()
         local ol=''
+	local name=''
         for dir in "${modulepath[@]}"; do
-                group='other'
                 find_overlay ol group "${dir}"
+		if (( $? == 0 )); then
+			name="${group}"
+		else
+			name="${dir}"
+			group="${dir//[\/ .-]/_}"
+		fi
 		if [[ ! -v modulepath_${group} ]]; then
 			typeset -a modulepath_${group}
 		fi
+		# with overlays we can have multiple directories per group!
 		typeset -n path=modulepath_${group}
 		path+=("${dir}")
+		local -i found=0
+		for group in "${groups[@]}"; do
+			if [[ "${group}" == ${name} ]]; then
+				found=1
+			fi
+		done
+		(( found == 0 )) && groups+=( "${name}" )
         done
         local p
 	for string in  "${pattern[@]}"; do
-                for group in ${UsedGroups//:/ } other; do
+                for group in "${groups[@]}"; do
 			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
 				continue
 			fi
-			[[ -v modulepath_${group} ]] || continue
-			typeset -n path=modulepath_${group}
+			local ref="${group//[\/ .-]/_}"
+			[[ -v modulepath_${ref} ]] || continue
+			typeset -n path=modulepath_${ref}
 			get_available_modules \
 				mods \
 				"${string}*" \
@@ -1434,11 +1463,6 @@ subcommand_use() {
 			[[ ! ":${UsedReleaseStages}:" =~ :$r: ]] && std::info "\t${r}"
 		done
 
-		std::info "\nUsed flags:"
-		for flag in "${UsedFlags[@]}"; do
-			std::info "\t${flag}"
-		done
-
 		std::info ''
                 std::info "Used overlays:"
 		print_ol_info 'yes'
@@ -1532,11 +1556,6 @@ subcommand_use() {
 		if is_release_stage "${arg}"; then
                         # argument is release stage
 			std::append_path UsedReleaseStages "${arg}"
-                        return $?
-                fi
-		if [[ "${arg}" =~ "flag=" ]]; then
-                        # argument is flag
-			UsedFlags+=( "${arg/flag=}" )
                         return $?
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
@@ -1706,15 +1725,6 @@ subcommand_unuse() {
 			std::remove_path UsedReleaseStages "${arg}"
                         return
                 fi
-		if [[ "${arg}" =~ "flag=" ]]; then
-                        # argument is flag
-			local flag="${arg/flag=}"
-			local i
-			for i in ${!UsedFlags[@]}; do
-				[[ ${UsedFlags[i]} == ${flag} ]] && unset UsedFlags[i]
-			done
-                        return
-                fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
 			unuse_overlay "${arg}"
 			return 0
@@ -1868,7 +1878,6 @@ pmodules_init() {
 	declare -gx LOADEDMODULES=''
 	declare -gx _LMFILES_=''
 	declare -Ag GroupDepths=()
-	declare -ag UsedFlags=()
 	declare -g  Version="${PMODULES_VERSION}"
 
         init_used_groups
@@ -1917,70 +1926,24 @@ subcommand_purge() {
 				args+=( "$@" )
 				break
 			        ;;
+			-* )
+				die_illegal_opt "$1"
+				;;
 		        * )
 			        args+=( "$1" )
 			        ;;
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "no arguments allowed"
-        fi
+        (( ${#args[@]} > 0 ))  && die_no_args_allowed
 
-	# is a Pmodule module loaded?
-	# if yes, save name in variable 'pmodule'
-	# We also have to save PMODULES_HOME since it will be
-	# unset while sourcing the shell's init script.
-	IFS=':'
-	local -a lmfiles=($_LMFILES_)
-	unset IFS
-	for f in "${lmfiles[@]}"; do
-		if [[ $f == */${PMODULES_MODULEFILES_DIR}/Pmodules/* ]]; then
-			local pm_home="${PMODULES_HOME}"
-			local pmodule="${f##*/${PMODULES_MODULEFILES_DIR}/}"
-			break;
-		fi
+	# get list of loaded modules with stripped MODULEPATH
+	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
+
+	for (( i=${#modules[@]}-1; i>=0; i-- )); do
+		[[ ${modules[$i]} == Pmodules/* ]] && continue
+		subcommand_unload "${modules[$i]}"
 	done
-
-	# run module purge
-	# since we might have to reload a Pmodules module, we cannot
-	# just run 'modulecmd ${Shell} purge'
-	local output=$("${modulecmd}" 'bash' 'purge' 2> "${tmpfile}")
-
-	local error=$( < "${tmpfile}")
-	if [[ "${error}" =~ ":ERROR:" ]]; then
-                local s=${error%%$'\n'*}
-                local error_txt='failed'
-		std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
-                         "${error_txt}"
-        fi
-        if [[ "${Shell}" == "sh" ]]; then
-		# for sh-like shells just echo
-		eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
-        else
-		# re-run with right shell
-                "${modulecmd}" "${Shell}" 'purge'
-        fi
-	eval "$(echo "${output}"|sed -e 's/;unalias [^;]*//g')"
-	if [[ -n "${error}" ]]; then
-                echo "${error}" 1>&2
-	fi
-
-	if [[ -v pmodule ]]; then
-		# reload a previously loaded Pmodule module
-		# stderr is redirected to /dev/null, otherwise
-		# we may get output like
-		# 'unstable module has been loaded'
-		PMODULES_HOME="${pm_home}"
-		export_env PMODULES_HOME
-		subcommand_load "${pmodule}" 2> /dev/null
-	fi
-        init_modulepath
-	
-	export_env MODULEPATH
 }
 
 ##############################################################################
@@ -1996,26 +1959,93 @@ USAGE:
 '
 
 subcommand_list() {
-	local opts=()
+
+	human_readable_output(){
+		# get list of loaded modules with stripped MODULEPATH
+		IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
+
+		local strs=()
+		local -i n=1
+		local -i colsize=0
+		for module in "${modules[@]}"; do
+			local s=$(printf "%2d) %-s" $n "${module}")
+			strs+=( "$s" )
+			local -i sizeof_s=${#s}
+			(( sizeof_s > colsize )) && colsize=sizeof_s
+			n+=1
+		done
+		colsize+=2
+
+		local -i cols=$(tput cols)
+		local -i column=0
+		printf "Currently Loaded Modules:\n" 1>&2
+		for s in "${strs[@]}"; do
+			local -i len=${#s}
+			if (( column+len >= cols )); then
+			        printf -- "\n" 1>&2
+				column=0
+			fi
+			if (( column+colsize < cols )); then
+				printf "%-${colsize}s" "$s" 1>&2
+			else
+				printf "%-s" "$s" 1>&2			# last column
+			fi
+			column+=colsize
+		done
+		printf -- "\n\n" 1>&2
+	}
+
+	long_output(){
+		IFS=':' read -r -a modules \
+		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
+		IFS=':' read -r -a lmfiles <<< "${_LMFILES_}"
+		printf "Currently Loaded Modules:\n" 1>&2
+		local -i fmt_field_width=0
+		local -i length=0
+		local module
+		for module in "${modules[@]}"; do
+			length=${#module}
+		        (( length > fmt_field_width )) && fmt_field_width=length
+		done
+		for (( i=0; i<${#lmfiles[@]}; i++ )); do
+			mtime=$(date -r "${lmfiles[i]}" +"%Y-%m-%d %H:%M:%S")
+			printf "%-${fmt_field_width}s\t%s\n" "${modules[i]}" "${mtime}" 1>&2
+		done
+	}
+
+	terse_output(){
+		IFS=':' read -r -a modules \
+		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
+		printf "Currently Loaded Modules:\n" 1>&2
+		for module in "${modules[@]}"; do
+			printf "${module}\n" 1>&2
+		done
+		printf -- "\n\n" 1>&2
+	}
+	
         local args=()
+	local output_function='human_readable_output'
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
 			-h | --human )
-				opts+=( '-h' )
+				output_function='human_readable_output'
 				;;
 			-l | --long )
-				opts+=( '-l' )
+				output_function='long_output'
 				;;
 			-t | --terse )
-				opts+=( '-t' )
+				output_function='terse_output'
 				;;
 			-- )
 				shift 1
 				args+=( "$@" )
 				break
+				;;
+			-* )
+				die_illegal_opt "$1"
 				;;
 			* )
                                 args+=( "$1" )
@@ -2028,7 +2058,8 @@ subcommand_list() {
                          "${CMD}" "${subcommand}" \
                          "no arguments allowed"
         fi
-	"${modulecmd}" "${Shell}" list "${opts[@]}"
+
+	"${output_function}"
 }
 
 ##############################################################################
