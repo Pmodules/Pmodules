@@ -133,6 +133,7 @@ save_env() {
 
 	local s=$(typeset -p ${vars[@]})
 	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
+	export_env 'PMODULES_ENV'
 }
 
 #
@@ -140,7 +141,6 @@ save_env() {
 #
 _exit() {
 	save_env "${g_env_must_be_saved}"
-	export_env 'PMODULES_ENV'
 	if [[ -n "${tmpfile}" ]] && [[ -e "${tmpfile}" ]]; then
 		${rm} -f "${tmpfile}" || :
 	fi
