@@ -1,6 +1,6 @@
 # Changelog of Pmodules
 
-## Version 1.1.13
+## Version 1.1.13 (not yet released)
 * **modulecmd**
   * *User visible changes*
 	* collections
