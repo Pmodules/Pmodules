@@ -238,6 +238,30 @@ die_not_a_modulefile(){
 		 "not a modulefile" "$1"
 }
 
+die_invalid_collection_name(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "invalid collection name" "$1"
+}
+
+die_cannot_create_directory(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "cannot create directory" "$1"
+}
+
+die_cannot_save_collection(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "cannot save_collection" "$1"
+}
+
+die_collection_doesnt_exist(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "collection doesn't exist or isn't readable" "$1"
+}
+
 #
 # get release stage of module
 # Note:
@@ -1487,8 +1511,8 @@ subcommand_use() {
 				[[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]] && \
 				die_cannot_use_overlay "${ol_name}"
 
-			[[ ${OverlayInfo[${ol_name}:used]} == 'yes' ]] && \
-				die_overlay_already_in_use "${ol_name}"
+			[[ ${OverlayInfo[${ol_name}:used]} == 'yes' ]] && return 0
+			# die_overlay_already_in_use "${ol_name}"
 			
 			if [[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]]; then
 				# if this overlay replaces groups, we have
@@ -2703,6 +2727,308 @@ subcommand_apropos() {
 			--group "${group}" \
 			--print-modulefiles \
 			"${options[@]}" 2>&1)
+	done
+}
+
+##############################################################################
+#
+# save [collection]
+#
+Subcommands[save]='save'
+Options[save]='-o \?H -l help'
+Help[save]="
+USAGE:
+        module save [collection]
+	       Record the currently set MODULEPATH directory list and the
+	       currently loaded modulefiles in a collection file under the
+	       user's collection directory \$HOME/.Pmodules. If collection
+	       name is not specified, then it is assumed to be the default
+	       collection. If collection is a fully qualified path, it is
+	       saved at this location rather than under the user's collection
+	       directory.
+"
+
+declare -r COLLECTIONS_DIR="${HOME}/.Pmodules/collections"
+subcommand_save() {
+        local -a args=()
+	while (( $# > 0 )); do
+		case $1 in
+                        -\? | -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+                                args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+        (( ${#args[@]} > 1 )) && die_too_many_args
+
+	local collection=''
+	if (( ${#args[@]} == 0 )); then
+		collection="${COLLECTIONS_DIR}/default"
+	else
+		if [[ "${args[0]:0:1}" == '/' ]]; then
+			collection="${args[0]}"
+		else
+			[[ ${args[0]} == */* ]] && \
+				die_invalid_collection_name "${args[0]}"
+			collection="${COLLECTIONS_DIR}/${args[0]}"
+		fi
+	fi
+	mkdir -p "${collection%/*}" || \
+		die_cannot create_directory "$_"
+
+	# save used release stages, groups and overlays
+	local -- item=''
+	local -a items=()
+	local -a tmp=()
+
+	IFS=':' read -a tmp <<< "${UsedReleaseStages}"
+	items+=( "${tmp[@]}")
+	IFS=':' read -a tmp <<< "${UsedGroups}"
+	items+=( "${tmp[@]}")
+	IFS=':' read -a tmp <<< "${UsedOverlays}"
+	items+=( "${tmp[@]}")
+	for item in "${items[@]}"; do
+		s+="module use ${item};\n"
+	done
+
+	# save additional module directories
+	local -a modulepath=()
+	IFS=':' read -a modulepath <<< "${MODULEPATH}"
+	local dir=''
+	local ol=''
+	local grp=''
+	for dir in "${modulepath[@]}"; do
+		find_overlay ol grp "${dir}" && continue
+		s+="module use \"${dir}\";\n"
+	done
+
+	# save loaded modules
+	local -a modules=()
+	IFS=':' read -a modules <<< "${LOADEDMODULES}"
+	local -- m=''
+	for m in "${modules[@]}"; do
+		s+="module load $m;\n"
+	done
+
+	# save collection
+	echo -e "$s" > "${collection}" || \
+		die_cannot_save_collection "${collection}"
+}
+
+##############################################################################
+#
+# restore [collection]
+#
+Subcommands[restore]='restore'
+Options[restore]='-o \?H -l help'
+Help[restore]="
+USAGE:
+        module restore [collection]
+	       Restore the environment state as defined in collection.
+	       If collection name is not specified, then it is assumed
+	       to be the default collection.
+
+"
+subcommand_restore() {
+        local -a args=()
+	while (( $# > 0 )); do
+		case $1 in
+                        -\? | -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+                                args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+        (( ${#args[@]} > 1 )) && die_too_many_args
+
+	local collection=''
+	if (( ${#args[@]} == 0 )); then
+		collection="${COLLECTIONS_DIR}/default"
+	else
+		if [[ "${args[0]:0:1}" == '/' ]]; then
+			collection="${args[0]}"
+		else
+			[[ ${args[0]} == */* ]] && \
+				die_invalid_collection_name "${args[0]}"
+			collection="${COLLECTIONS_DIR}/${args[0]}"
+		fi
+	fi
+	[[ -r "${collection}" ]] || \
+		die_collection_doesnt_exist "${collection}"
+	IFS=':' read -a modules <<< "${LOADEDMODULES}"
+	local -- m=''
+	for ((i=${#modules[@]}-1; i>=0; i--)); do
+		subcommand_unload "${modules[$i]}"
+	done
+
+	local -a items=()
+	local -a tmp=()
+
+	IFS=':' read -a tmp <<< "${UsedReleaseStages}"
+	items+=( "${tmp[@]}")
+	IFS=':' read -a tmp <<< "${UsedGroups}"
+	items+=( "${tmp[@]}")
+	IFS=':' read -a tmp <<< "${UsedOverlays}"
+	items+=( "${tmp[@]}")
+
+	local -- item=''
+	for item in "${items[@]}"; do
+		subcommand_unuse "${item}"
+	done
+	save_env
+	export_env PMODULES_ENV
+	cat "${collection}"
+	g_env_must_be_saved='no'
+}
+
+##############################################################################
+#
+# module savelist [pattern...]
+#
+Subcommands[savelist]='savelist'
+Options[savelist]='-o \?H -l help'
+Help[savelist]="
+USAGE:
+        module savelist [pattern...]
+	       List collections that are currently saved under the user's
+	       collection directory.
+	       If a pattern is given, then the collections are filtered to
+	       only list those whose name matches this pattern. It may
+	       contain wildcard characters. pattern is matched in a case
+	       insensitive manner by default. If multiple patterns are
+	       given, collection has to match at least one of them to be
+	       listed.
+"
+subcommand_savelist() {
+        local -a args=()
+	while (( $# > 0 )); do
+		case $1 in
+                        -\? | -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+                                args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+		args[0]='*'
+	fi
+	local -- pattern=''
+	local -a collections=()
+	for pattern in "${args[@]}"; do
+		collections+=( ${COLLECTIONS_DIR}/* )
+	done
+	echo "Saved collections:" 1>&2
+	local collection=''
+	for collection in "${collections[@]}"; do
+		[[ -r "${collection}" ]] || continue
+		echo -e "\t${collection/${COLLECTIONS_DIR}\/}" 1>&2
+	done
+}
+
+##############################################################################
+#
+# module saverm [collection...]
+#
+Subcommands[saverm]='saverm'
+Options[saverm]='-o \?H -l help'
+Help[saverm]="
+USAGE:
+        module saverm [collection]
+	       Delete the collection file under the user's collection
+	       directory. If collection name is not specified, then it
+	       is assumed to be the default collection.
+"
+subcommand_saverm() {
+        local -a args=()
+	while (( $# > 0 )); do
+		case $1 in
+                        -\? | -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+                                args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+		args[0]='default'
+	fi
+	for collection in "${args[@]}"; do
+		test -e "${COLLECTIONS_DIR}/${collection}" || \
+			die_collection_doesnt_exist "${collection}"
+		rm -f "${COLLECTIONS_DIR}/${collection}"
+	done
+}
+
+##############################################################################
+#
+# module saveshow [collection]
+#
+Subcommands[saveshow]='saveshow'
+Options[saveshow]='-o \?H -l help'
+Help[saveshow]="
+USAGE:
+        module saveshow [collection...]
+	       Display the content of collection. If collection name is not
+	       specified, then it is assumed to be the default collection,
+"
+
+subcommand_saveshow() {
+        local -a args=()
+	while (( $# > 0 )); do
+		case $1 in
+                        -\? | -H | --help )
+                                print_help "${subcommand}"
+                                ;;
+			-- )
+				shift 1
+				args+=( "$@" )
+				break
+				;;
+			* )
+                                args+=( "$1" )
+				;;
+		esac
+		shift
+	done
+	if (( ${#args[@]} == 0 )); then
+		args[0]='default'
+	fi
+	for collection in "${args[@]}"; do
+		[[ -e "${COLLECTIONS_DIR}/${collection}" ]] || \
+			die_collection_doesnt_exist "${collection}"
+		echo "Collection '${collection}':" 1>&2
+		cat "${COLLECTIONS_DIR}/${collection}" 1>&2
 	done
 }
 
