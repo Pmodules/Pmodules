@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# https://
+#
+P=lmod
+V=${LMOD_VERSION:-8.7}
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="https://sourceforge.net/projects/lmod/files/Lmod-$V.tar.bz2/download"
+
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+case $(uname -s) in
+	Linux )
+		: declare -x LIBS="-lz -lpthread"
+		;;
+	Darwin )
+		: declare -x LIBS="-lz -framework CoreFoundation"
+		;;
+	* )
+		echo "Oops: unsupported OS!" 1>&2
+		exit ${PB_ERR_SYSTEM}
+		;;
+esac
+
+#export C_INCLUDE_PATH+=":${PREFIX}/include" 
+#export LIBRARY_PATH+=":${PREFIX}/lib"
+#export TCL_INCLUDE="${PREFIX}/include/tcl.h"
+#export TCL_LIBS="${PREFIX}/lib/libtcl8.6.a"
+
+PATH="${PREFIX}/libexec/lua/bin:$PAT:$PATH" 
+LMOD_PREFIX="${PREFIX}/libexec"
+"${SRC_DIR}"/configure \
+	--prefix="${LMOD_PREFIX}" \
+	--exec-prefix="${LMOD_PREFIX}" \
+	--with-module-path="${PREFIX%%/Tools*}/Tools/${PMODULES_MODULEFILES_DIR}" \
+	--with-fastTCLInterp=no \
+        || exit ${PB_ERR_CONFIGURE}
+
+#---
+# compile & install
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+
+#---
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
