@@ -1,5 +1,14 @@
 # Changelog of Pmodules
 
+## Version 1.1.13 (not yet released)
+* **modulecmd**
+  * *User visible changes*
+	* collections
+  * *Internal changes and fixes*
+	* use Lua and Lmod from Pmodules
+	* std::upvar() replaced
+	* Bugfixes
+
 ## Version 1.1.12
 * **modulecmd**
   * *User visible changes*
