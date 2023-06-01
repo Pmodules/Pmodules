@@ -244,50 +244,6 @@ std::read_versions() {
 	done < "${fname}"
 }
 
-#--- upvars.sh ---------------------------------------------------------
-# Bash: Passing variables by reference
-# Copyright (C) 2010 Freddy Vulto
-# Version: upvars-0.9.dev
-# See: http://fvue.nl/wiki/Bash:_Passing_variables_by_reference
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-# Assign variable one scope above the caller
-# Usage: local "$1" && upvar $1 "value(s)"
-# Param: $1  Variable name to assign value to
-# Param: $*  Value(s) to assign.  If multiple values, an array is
-#            assigned, otherwise a single value is assigned.
-# NOTE: For assigning multiple variables, use 'upvars'.  Do NOT
-#       use multiple 'upvar' calls, since one 'upvar' call might
-#       reassign a variable to be used by another 'upvar' call.
-# Example: 
-#
-#    f() { local b; g b; echo $b; }
-#    g() { local "$1" && upvar $1 bar; }
-#    f  # Ok: b=bar
-#
-std::upvar() {
-    if unset -v "$1"; then           # Unset & validate varname
-        if (( $# == 2 )); then
-            eval $1=\"\$2\"          # Return single value
-        else
-            eval $1=\(\"\${@:2}\"\)  # Return array
-        fi
-    fi
-}
-
 std.get_os_release_linux() {
         #local lsb_release=$(which lsb_release)
         local ID=''

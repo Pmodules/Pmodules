@@ -246,7 +246,7 @@ die_not_a_modulefile(){
 #   coresponding file is always 'unstable'
 #
 # Args:
-#       $1      upvar for returned release stage
+#       $1      reference variable to return release stage
 #	$2	modulefile directory (element of MODULEPATH)
 # 	$3      module name/version
 #
@@ -354,13 +354,13 @@ is_modulefile() {
 # Get the value of <module>_PREFIX.
 #
 # Arguments:
-#	$1	upvar to return result
+#	$1	reference variable to return result
 #	$2	modulefile
 #
 get_module_prefix() {
 	local -n _prefix="$1"
-	local -- _prefix=$("${modulecmd}" bash show "$2" 2>&1 | \
-				   ${awk} '/_PREFIX |_HOME / {print $3; exit}')
+	_prefix=$("${modulecmd}" bash show "$2" 2>&1 | \
+			   ${awk} '/_PREFIX |_HOME / {print $3; exit}')
 }
 
 #
@@ -538,23 +538,24 @@ subcommand_load() {
 	# hierarchical depth of a group must always be the same.
 	#
 	is_group () {
-		local "$1"
 		find_overlay_with_group() {
-			local "$1"
+			local -n _ol="$1"
 			local -r group="$2/${PMODULES_MODULEFILES_DIR}"
 			local ol
 			for ol in "${UsedOverlays[@]}"; do
 				local inst_root="${OverlayInfo[${ol}:inst_root]}"
 				if [[ -d "${inst_root}/${group}" ]]; then
-					std::upvar $1 "${ol}"
+					_ol="${ol}"
 					return 0
 				fi
 			done
 			return 1
 		}
+
 		local -r group="$1"
 		# arg isn't emtpy and group already in cache
 		[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]] && return 0
+
 		local ol=''
 		find_overlay_with_group ol "${group}" || return 1
 		local moduledir="${OverlayInfo[${ol}:mod_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
@@ -943,88 +944,79 @@ subcommand_show() {
 # The search can be restricted to certain release stages.
 #
 # Args:
-#	$1	upvar for results
+#	$1	reference variable to return result
 #	$2	search pattern
 #	$3	release stages
-#	$4...	module directories
+#	$4...   module path (fully qualified directory names)
 #
 # return list like
 #	modulename_1 rel_stage_1 modulefile_1 ...
 #
 get_available_modules() {
-        local var="$1"
+        local -n gam_mods="$1"
 	local -r module="$2"
 	local -r used_rel_stages="${3:-${UsedReleaseStages}}"
-	shift 3 # in the for loop below we use $@ to loop over the directories
-	local -a mods=()
+	shift 3 # in the for loop below we use $@ to loop over module path
 	local    rel_stage
 
         local -A dict
 	local -A modulenames
 	local dir
+	gam_mods=()
+	# loop over all entries in given module path
         for dir in "$@"; do
                 test -d "${dir}" || continue
-	        {
-		        cd "${dir}"
-			# there might be no mapping for ${dir}!
-			# - after loading the parent of a hierarchical group
-			# - if we do a search
-			# - if we create a new hierarchical group
-			local ol=''
-			local group=''
-			find_overlay ol group "${dir}"
+		cd "${dir}"
+		# find overlay and group for this directory
+		local ol=''
+		local group=''
+		find_overlay ol group "${dir}"
 
-                        # if no modules are installed in ${dir}, '*' expands to
-                        # the empty string! Using '*' in the find command below
-                        # would cause problems with some non-GNU find
-                        # implementations.
-                        local entries=$(echo *)
-			[[ -n ${entries} ]] || continue
-			local mod=''	# module_name/module_version
-                        while read mod; do
-				local add='no'
-				if [[ -n "${ol}" ]]; then
-					# module is in an overlay
-					#
-					# add to list of available modules, if
-					# - first time found by name only
-					# - in same overlay as first found
-					# - new version and not hidden by overlay
-					local name="${mod%/*}"
-					if [[ -z "${modulenames[${name}]}" ]]; then
-						if [[ "${OverlayInfo[${ol}:type]}" == "${ol_hiding}" ]]; then
-							modulenames[${name}]="${ol}"
-						else
-							modulenames[${name}]='0'
-						fi
-						add='yes'
-					elif [[ "${modulenames[${name}]}" == "${ol}" ]]; then
-						add='yes'
-					elif [[ "${modulenames[${name}]}" == '0'  ]] \
-						     && [[ -z ${dict[${mod}]} ]]; then
-						add='yes'
+		# if directory is empty continue
+                local -a dir_entries=(*)
+		(( ${#dir_entries[@]} > 0 )) || continue
+
+		# loop over all files (and sym-link) in this directory and
+		# its sub-directories
+		local mod=''	# module_name/module_version
+                while read mod; do
+			local add='no'
+			if [[ -n "${ol}" ]]; then
+				# module is in an overlay
+				#
+				# add to list of available modules, if
+				# - first time found by name only
+				# - in same overlay as first found
+				# - new version and not hidden by overlay
+				local name="${mod%/*}"
+				if [[ -z "${modulenames[${name}]}" ]]; then
+					if [[ "${OverlayInfo[${ol}:type]}" == "${ol_hiding}" ]]; then
+						modulenames[${name}]="${ol}"
+					else
+						modulenames[${name}]='0'
 					fi
-				else
-					# module is NOT in an overlay
+					add='yes'
+				elif [[ "${modulenames[${name}]}" == "${ol}" ]]; then
+					add='yes'
+				elif [[ "${modulenames[${name}]}" == '0'  ]] \
+					     && [[ -z ${dict[${mod}]} ]]; then
 					add='yes'
 				fi
-				[[ "${add}" == 'no' ]] && continue
-			        get_release_stage \
-					rel_stage \
-					"${dir}" \
-					"${mod}"
-				[[ :${used_rel_stages}: =~ :${rel_stage}: ]] || continue
+			else
+				add='yes'	# module is NOT in an overlay
+			fi
+			[[ "${add}" == 'no' ]] && continue
+			get_release_stage rel_stage "${dir}" "${mod}"
+			[[ :${used_rel_stages}: =~ :${rel_stage}: ]] || continue
 
-			        mods+=( "${mod}" ${rel_stage} "${dir}/${mod}" "${ol}" )
-                                dict[${mod}]=1
-		        done < <(${find} -L ${entries} \
-					 \( -type f -o -type l \) \
-					 -not -name ".*" \
-                                         -ipath "${module}*" \
-					 | ${sort} --version-sort)
-	        }
+			gam_mods+=( "${mod}" ${rel_stage} "${dir}/${mod}" "${ol}" )
+                        dict[${mod}]=1
+		done < <(${find} -L "${dir_entries[@]}" \
+				 \( -type f -o -type l \) \
+				 -not -name ".*" \
+                                 -ipath "${module}*" \
+				 | ${sort} --version-sort)
         done
-	std::upvar ${var} "${mods[@]}"
 } # get_available_modules()
 
 #
