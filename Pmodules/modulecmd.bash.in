@@ -38,8 +38,7 @@ declare -x  TCLLIBPATH
 std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
 
 declare -r tcl_cmd="${libexecdir}/modulecmd.bin"
-#declare -r lmod_cmd="${PMODULES_HOME}/lmod/lmod/libexec/lmod"
-declare -r lmod_cmd="/usr/share/lmod/lmod/libexec/lmod"
+declare -r lmod_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod"
 declare -- modulecmd="${tcl_cmd}"
 
 declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
