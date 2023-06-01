@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# https://
+#
+P=luarocks
+V=${LUAROCKS_VERSION:-3.9.2}
+FNAME="$P-$V.tar.gz"
+DOWNLOAD_URL="https://luarocks.org/releases/$P-$V.tar.gz"
+
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+LUA_PREFIX="${PREFIX}/libexec/lua"
+PATH="${LUA_PREFIX}/bin:$PATH" 
+"${SRC_DIR}"/configure \
+        --prefix="${LUA_PREFIX}" \
+
+
+#---
+# compile & install
+make -e -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make -e install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+
+#---
+# Local Variables:
+# mode: sh
+# sh-basic-offset: 8
+# tab-width: 8
+# End:

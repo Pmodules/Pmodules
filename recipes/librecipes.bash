@@ -20,7 +20,7 @@ DOWNLOADS_DIR="${PMODULES_DISTFILESDIR:-${TMP_DIR}/Downloads}"
 SRC_DIR="${TMP_DIR}/$P-$V/src"
 BUILD_DIR="${TMP_DIR}/$P-$V/build"
 SRC_FILE="${DOWNLOADS_DIR}/${FNAME}"
-
+UTILBIN_DIR='libexec'
 
 declare -ix PB_ERR_ARG=1
 declare -ix PB_ERR_SETUP=2
