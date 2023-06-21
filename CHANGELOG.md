@@ -4,6 +4,8 @@
 * **modulecmd**
   * *User visible changes*
 	* collections
+	* argument/option handling fixed
+	* using groups/extending MODULEPATH fixed (module use ...)
   * *Internal changes and fixes*
 	* use Lua and Lmod from Pmodules
 	* std::upvar() replaced
