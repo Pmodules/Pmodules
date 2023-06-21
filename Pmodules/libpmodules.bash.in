@@ -132,6 +132,7 @@ pm::read_config(){
 	[[ -v cfg_DefaultGroups ]] && DefaultGroups="${cfg_DefaultGroups}"
 	[[ -v cfg_DefaultReleaseStages ]] && DefaultReleaseStages="${cfg_DefaultReleaseStages}"
 	[[ -v cfg_ReleaseStages ]] && ReleaseStages="${cfg_ReleaseStages}"
+	[[ -v cfg_SysCollectionsDir ]] && SysCollectionsDir="${cfg_SysCollectionsDir}"
 	unset ${!cfg_*}
 
 	#

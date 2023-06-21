@@ -56,6 +56,8 @@ declare -- ReleaseStages=':unstable:stable:deprecated:'
 # set releases which should be available after initialization
 declare -- DefaultReleaseStages='stable'
 
+declare -- SysCollectionsDir='/opt/psi/collections'
+
 # not used here but in modbuild
 declare -- TmpDir="/opt/psi/var/tmp/${USER}"
 declare -- DistfilesDir="/opt/psi/var/distfiles"
@@ -262,6 +264,11 @@ die_collection_doesnt_exist(){
 		 "collection doesn't exist or isn't readable" "$1"
 }
 
+die_removing_collection_failed(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "cannot remove collection" "$1"
+}
 #
 # get release stage of module
 # Note:
@@ -2748,7 +2755,7 @@ USAGE:
 	       directory.
 "
 
-declare -r COLLECTIONS_DIR="${HOME}/.Pmodules/collections"
+declare -r UsrCollectionsDir="${HOME}/.Pmodules/collections"
 subcommand_save() {
         local -a args=()
 	while (( $# > 0 )); do
@@ -2771,14 +2778,14 @@ subcommand_save() {
 
 	local collection=''
 	if (( ${#args[@]} == 0 )); then
-		collection="${COLLECTIONS_DIR}/default"
+		collection="${UsrCollectionsDir}/default"
 	else
 		if [[ "${args[0]:0:1}" == '/' ]]; then
 			collection="${args[0]}"
+		elif [[ "${args[0]:0:1}" == '.' ]]; then
+			collection="$(std::get_abspath "${args[0]}")"
 		else
-			[[ ${args[0]} == */* ]] && \
-				die_invalid_collection_name "${args[0]}"
-			collection="${COLLECTIONS_DIR}/${args[0]}"
+			collection="${UsrCollectionsDir}/${args[0]}"
 		fi
 	fi
 	mkdir -p "${collection%/*}" || \
@@ -2837,6 +2844,25 @@ USAGE:
 	       to be the default collection.
 
 "
+search_collection(){
+	local -n _path="$1"
+	local -- _collection="$2"
+		
+	if [[ -r "${_collection}" ]]; then
+		_path=$(std::get_abspath "${_collection}")
+		return
+	fi
+	local _dirs2search=( "${UsrCollectionsDir}" "${SysCollectionsDir}" )
+	local _dir
+	for _dir in "${_dirs2search[@]}"; do
+		if [[ -r "${_dir}/${_collection}" ]]; then
+			_path="${_dir}/${_collection}"
+			return
+		fi
+	done
+	die_collection_doesnt_exist "${_collection}"
+}
+
 subcommand_restore() {
         local -a args=()
 	while (( $# > 0 )); do
@@ -2858,19 +2884,13 @@ subcommand_restore() {
         (( ${#args[@]} > 1 )) && die_too_many_args
 
 	local collection=''
-	if (( ${#args[@]} == 0 )); then
-		collection="${COLLECTIONS_DIR}/default"
-	else
-		if [[ "${args[0]:0:1}" == '/' ]]; then
-			collection="${args[0]}"
-		else
-			[[ ${args[0]} == */* ]] && \
-				die_invalid_collection_name "${args[0]}"
-			collection="${COLLECTIONS_DIR}/${args[0]}"
-		fi
-	fi
-	[[ -r "${collection}" ]] || \
-		die_collection_doesnt_exist "${collection}"
+	local collections=()
+	for collection in "${args[@]}"; do
+		search_collection collection "${args[0]}"
+		collections+=( "${collection}" )
+	done
+	
+	# reset/unload everything
 	IFS=':' read -a modules <<< "${LOADEDMODULES}"
 	local -- m=''
 	for ((i=${#modules[@]}-1; i>=0; i--)); do
@@ -2893,7 +2913,12 @@ subcommand_restore() {
 	done
 	save_env
 	export_env PMODULES_ENV
-	cat "${collection}"
+
+	# load collection
+	for collection in "${collections[@]}"; do
+		cat "${collection}"
+	done
+
 	g_env_must_be_saved='no'
 }
 
@@ -2916,6 +2941,36 @@ USAGE:
 	       listed.
 "
 subcommand_savelist() {
+
+	get_collections() {
+		local -n _result="$1"
+		local -- _dir="$2"
+		shift 2
+		_result=()
+		local _pattern
+		local _coll
+		for _pattern in "$@"; do
+			while read _coll; do
+				_result+=( "${_coll}" )
+			done < <(find "${_dir}" -type f -ipath "*/${_pattern}" -printf "%P\n")
+		done
+	}
+
+	print_collections() {
+		local -r prt_header="$1"
+		local -r prt_dir="$2"
+		shift 2
+		local -a prt_collections=()
+		get_collections prt_collections "${prt_dir}" "$@"
+
+		(( ${#prt_collections[@]} == 0 )) && return 0
+
+		std::info "${prt_header}"
+		for prt_col in "${prt_collections[@]}"; do
+			std::info "\t${prt_col}"
+		done
+	}
+ 
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -2936,17 +2991,9 @@ subcommand_savelist() {
 	if (( ${#args[@]} == 0 )); then
 		args[0]='*'
 	fi
-	local -- pattern=''
 	local -a collections=()
-	for pattern in "${args[@]}"; do
-		collections+=( ${COLLECTIONS_DIR}/* )
-	done
-	echo "Saved collections:" 1>&2
-	local collection=''
-	for collection in "${collections[@]}"; do
-		[[ -r "${collection}" ]] || continue
-		echo -e "\t${collection/${COLLECTIONS_DIR}\/}" 1>&2
-	done
+	print_collections "User collections:"     "${UsrCollectionsDir}" "${args[@]}"
+	print_collections "\nSystem collections:" "${SysCollectionsDir}" "${args[@]}"
 }
 
 ##############################################################################
@@ -2983,10 +3030,13 @@ subcommand_saverm() {
 	if (( ${#args[@]} == 0 )); then
 		args[0]='default'
 	fi
+	local collection
 	for collection in "${args[@]}"; do
-		test -e "${COLLECTIONS_DIR}/${collection}" || \
+		search_collection collection "${collection}"
+		test -e "${collection}" || \
 			die_collection_doesnt_exist "${collection}"
-		rm -f "${COLLECTIONS_DIR}/${collection}"
+		rm -f "${collection}" 2>/dev/null || \
+			die_removing_collection_failed "${collection}"
 	done
 }
 
@@ -3024,11 +3074,13 @@ subcommand_saveshow() {
 	if (( ${#args[@]} == 0 )); then
 		args[0]='default'
 	fi
+	local collection
 	for collection in "${args[@]}"; do
-		[[ -e "${COLLECTIONS_DIR}/${collection}" ]] || \
+		search_collection collection "${collection}"
+		test -e "${collection}" || \
 			die_collection_doesnt_exist "${collection}"
-		echo "Collection '${collection}':" 1>&2
-		cat "${COLLECTIONS_DIR}/${collection}" 1>&2
+		std::info "Collection '${collection}':"
+		cat "${collection}" 1>&2
 	done
 }
 
