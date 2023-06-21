@@ -1577,11 +1577,6 @@ subcommand_use() {
 			use_overlay "${arg}"
 			return $?
 		fi
-		if [[ -d ${arg} ]]; then
-			local dir=$(cd "${arg}" && pwd -L)
-			${add2path_func} MODULEPATH "${dir}"
-			return $?
-		fi
                 if [[ ! -v GroupDepths[${arg}] ]]; then
                         # this scan is required if a new group has been
                         # create inside an used overlay
@@ -1592,6 +1587,11 @@ subcommand_use() {
 			use_group "${arg}"
                         return $?
                 fi
+		if [[ -d ${arg} ]]; then
+			local dir=$(cd "${arg}" && pwd -L)
+			${add2path_func} MODULEPATH "${dir}"
+			return $?
+		fi
 		die_invalid_value "use flag, group, overlay or directory" \
                          "${arg}"
 	} # use ()
@@ -1745,7 +1745,7 @@ subcommand_unuse() {
 			return 0
 		fi
 		if [[ -d ${arg} ]]; then
-			local dir=$(cd "${arg} && pwd -L")
+			local dir=$(std::get_abspath "${arg}")
 			std::remove_path MODULEPATH "${dir}"
 		fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
