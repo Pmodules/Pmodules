@@ -3276,9 +3276,12 @@ case ${subcommand} in
 esac
 
 # parse arguments of the sub-command and call it
-set -- $("${getopt}" --unquoted --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
+temp=$("${getopt}" --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
 	|| print_help "${subcommand}"
-subcommand_${Subcommands[$subcommand]} $@
+eval set -- "${temp}"
+unset temp
+
+subcommand_${Subcommands[$subcommand]} "$@"
 
 # Local Variables:
 # mode: sh
