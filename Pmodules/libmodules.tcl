@@ -181,7 +181,7 @@ proc _pmodules_setenv { PREFIX name version } {
 	}
 
 	set		NAME			[string toupper $name]
-	regsub -- "-" ${NAME} "_" NAME
+	regsub -all -- "-" ${NAME} "_" NAME
 
 	set prefix_evars [dict create \
 			      "${NAME}_VERSION"			"${version}" \
