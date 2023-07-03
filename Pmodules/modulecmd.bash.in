@@ -1026,7 +1026,7 @@ get_available_modules() {
 				# - in same overlay as first found
 				# - new version and not hidden by overlay
 				local name="${mod%/*}"
-				if [[ -z "${modulenames[${name}]}" ]]; then
+				if [[ ! -v modulenames[${name}] ]]; then
 					if [[ "${OverlayInfo[${ol}:type]}" == "${ol_hiding}" ]]; then
 						modulenames[${name}]="${ol}"
 					else
@@ -1036,7 +1036,7 @@ get_available_modules() {
 				elif [[ "${modulenames[${name}]}" == "${ol}" ]]; then
 					add='yes'
 				elif [[ "${modulenames[${name}]}" == '0'  ]] \
-					     && [[ -z ${dict[${mod}]} ]]; then
+					     && [[ ! -v dict[${mod}] ]]; then
 					add='yes'
 				fi
 			else
