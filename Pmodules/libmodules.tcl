@@ -126,7 +126,7 @@ proc module-addgroup { group } {
 		debug "mode=remove: $env(MODULEPATH)"
                 foreach overlay $::UsedOverlays {
                         set dir [file join \
-                                     $overlay \
+				     $::OverlayInfo($overlay:mod_root) \
                                      $group \
                                      $::MODULEFILES_DIR \
                                      {*}$::variant]
