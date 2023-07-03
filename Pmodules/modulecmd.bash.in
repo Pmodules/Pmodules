@@ -695,14 +695,20 @@ subcommand_load() {
 		local moduledir=''
                 find_modulefile current_modulefile rel_stage moduledir "${m}" "${modulepath[@]}"
                 if [[ -z ${current_modulefile} ]]; then
-			local hints=''
-			get_load_hints hints
-			if [[ -z "${hints}" ]]; then
-	                        die_module_nexist "${m}"
+			local fname=$(std::get_abspath "${m}")
+			if [[ -r "${fname}" ]]; then
+				current_modulefile="${fname}"
+				rel_stage='stable'
 			else
-				die_module_unavail "${m}${hints}"
-                        fi
-                fi
+				local hints=''
+				get_load_hints hints
+				if [[ -z "${hints}" ]]; then
+					die_module_nexist "${m}"
+				else
+					die_module_unavail "${m}${hints}"
+				fi
+			fi
+		fi
 		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
 			die_conflict "${m}"
 		# continue if already loaded
