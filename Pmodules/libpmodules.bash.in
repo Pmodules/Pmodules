@@ -126,6 +126,36 @@ pm::read_config(){
 		      "${fnames[@]}" | awk '{print $2}'
 	}
 
+	_get_install_root(){
+		local -n fnames="$1"
+		local -- _ol="$2"
+		local -- _tmp
+		_tmp=$(${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.install_root" \
+			      "${fnames[@]}" 2>/dev/null) || return 1
+		echo "${_tmp}" | envsubst
+	}
+
+	_get_modulefiles_root(){
+		local -n fnames="$1"
+		local -- _ol="$2"
+		local -- _tmp
+		_tmp=$(${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.modulefiles_root" \
+			      "${fnames[@]}" 2>/dev/null) || return 1
+		echo "${_tmp}" | envsubst
+	}
+	_get_type(){
+		local -n fnames="$1"
+		local -- _ol="$2"
+		${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.type" \
+		      "${fnames[@]}" 2>/dev/null
+	}
+
+	_join_array() {
+		local IFS="$1"
+		shift
+		echo -n "$*"
+	}
+
 	_get_config_files config_files
 
 	eval $(std::parse_yaml "${config_files[-1]}" 'cfg_')
@@ -144,28 +174,32 @@ pm::read_config(){
 	#
 	Overlays=( $(_get_ol_names config_files) )
 	local ol=''
+	local install_root=''
+	local modulefiles_root=''
+	local type=''
 	for ol in "${Overlays[@]}"; do
-		eval $(${yq} -Ne eval-all \
-			  ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${ol}" \
-			  "${config_files[@]}" | \
-			       sed 's/: /=/; s/\(.*\)/local \1/')
-
-		[[ -n ${install_root} ]] || \
+		# install_root
+		install_root=$(_get_install_root config_files "${ol}") || \
 			std::die 3 \
-				 "install_root missing for overlay -- ${ol}"
+				 "Install_root missing for overlay -- ${ol}"
+		install_root=$(envsubst <<< "${install_root}")
 		[[ -d ${install_root} ]] || \
 			std::die 3 \
 				 "Invalid installation root directory for overlay '${ol}' -- ${install_root}"
 		OverlayInfo[${ol}:inst_root]="${install_root}"
 
-		: ${modulefiles_root:=${install_root}}
+		# modulefiles_root
+		modulefiles_root=$(_get_modulefiles_root config_files "${ol}") || \
+			modulefiles_root=${install_root}
 		[[ -d ${modulefiles_root} ]] || \
 			std::die 3 \
 				 "Invalid modulefiles root directory for overlay '${ol}' -- ${modulefiles_root}"
 		OverlayInfo[${ol}:mod_root]="${modulefiles_root}"
 		Dir2OverlayMap[${modulefiles_root}]="${ol}"
-		
-		: ${type:=${ol_normal}}
+
+		# type
+		type=$(_get_type config_files "${ol}") || \
+			type=${ol_normal}
 		case ${type} in
 			${ol_normal} | ${ol_replacing} | ${ol_hiding} )
 				:
