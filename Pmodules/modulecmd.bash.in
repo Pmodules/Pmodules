@@ -855,7 +855,7 @@ subcommand_unload() {
 			continue
 		fi
 		local interp
-		is_modulefile interp "${lmfile}" || die_not_a_modulefile "${m}"
+		is_modulefile interp "${lmfile}" || die_not_a_modulefile "${lmfile}"
 		if [[ "${interp}" == 'lmod' ]]; then
 			current_modulefile="${current_modulefile/${moduledir}\/}"
 			modulecmd="${lmod_cmd}"
