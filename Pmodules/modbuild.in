@@ -7,8 +7,6 @@
 #
 #.............................................................................
 
-set -x
-
 declare VERSION='@PMODULES_VERSION@'
 
 # get absolute path of script
@@ -428,8 +426,8 @@ build_modules_legacy() {
 		local -a toks=()
 		while read -a toks; do
 			# skip empty and comment lines
-			[[ -z ${toks} ]] && continue
-			[[ ${toks:0:1} == '#' ]] && continue
+			(( ${#toks[@]} == 0 )) && continue
+			[[ ${toks[0]:0:1} == '#' ]] && continue
 			local -a deps=( ${toks[*]:2} )
 			bash_expand "${toks[0]} ${toks[1]}" "${deps[@]}"
 		done < "${input}"
