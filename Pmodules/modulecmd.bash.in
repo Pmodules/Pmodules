@@ -1362,26 +1362,35 @@ subcommand_avail() {
 			name="${dir}"
 			group="${dir//[\/ .-]/_}"
 		fi
+		# With overlays we can have multiple directories per group!
+		#
+		# Create an ordered list of directories per group.
+		# Note:
+		# BASH doesn't support list as values of dictionaries. We use
+		# reference variables to work around this.
 		if [[ ! -v modulepath_${group} ]]; then
 			typeset -a modulepath_${group}
 		fi
-		# with overlays we can have multiple directories per group!
 		typeset -n path=modulepath_${group}
 		path+=("${dir}")
-		local -i found=0
+		# Create ordered list of groups. In the next step we
+		# loop over this list.
 		for group in "${groups[@]}"; do
 			if [[ "${group}" == ${name} ]]; then
-				found=1
+				# resume with next dir
+				continue 2
 			fi
 		done
-		(( found == 0 )) && groups+=( "${name}" )
+		groups+=( "${name}" )
         done
-        local p
+        local string
 	for string in  "${pattern[@]}"; do
                 for group in "${groups[@]}"; do
+			# limit output to certain groups
 			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
 				continue
 			fi
+
 			local ref="${group//[\/ .-]/_}"
 			[[ -v modulepath_${ref} ]] || continue
 			typeset -n path=modulepath_${ref}
