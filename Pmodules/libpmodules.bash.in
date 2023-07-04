@@ -143,6 +143,14 @@ pm::read_config(){
 			      "${fnames[@]}" 2>/dev/null) || return 1
 		echo "${_tmp}" | envsubst
 	}
+
+	_get_excludes(){
+		local -n fnames="$1"
+		local -- _ol="$2"
+		${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.excludes[]" \
+		      "${fnames[@]}" 2>/dev/null
+	}
+
 	_get_type(){
 		local -n fnames="$1"
 		local -- _ol="$2"
@@ -177,6 +185,7 @@ pm::read_config(){
 	local install_root=''
 	local modulefiles_root=''
 	local type=''
+	local excludes=()
 	for ol in "${Overlays[@]}"; do
 		# install_root
 		install_root=$(_get_install_root config_files "${ol}") || \
@@ -210,8 +219,13 @@ pm::read_config(){
 		esac
 		OverlayInfo[${ol}:type]="${type}"
 
+		# excludes
+		excludes=$(_get_excludes config_files "${ol}") || \
+			excludes=()
+		OverlayInfo[${ol}:excludes]=$(_join_array ':' "${excludes[@]}")
+
+		# mark as unused
 		OverlayInfo[${ol}:used]='no'
-		unset type modulefiles_root install_root
 	done
 }
 

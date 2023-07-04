@@ -62,6 +62,7 @@ declare -- SysCollectionsDir='/opt/psi/collections'
 declare -- TmpDir="/opt/psi/var/tmp/${USER}"
 declare -- DistfilesDir="/opt/psi/var/distfiles"
 
+declare -A OverlayExcludes
 
 export_env() {
 	case "${Shell}" in
@@ -131,6 +132,7 @@ save_env() {
 	vars+=( GroupDepths )
 	vars+=( Overlays )
         vars+=( UsedOverlays )
+	vars+=( OverlayExcludes )
         vars+=( OverlayInfo Dir2OverlayMap)
 
 	local s=$(typeset -p ${vars[@]})
@@ -1017,6 +1019,8 @@ get_available_modules() {
 		# its sub-directories
 		local mod=''	# module_name/module_version
                 while read mod; do
+			local name="${mod%/*}"
+			[[ -v OverlayExcludes[${name}] ]] && continue
 			local add='no'
 			if [[ -n "${ol}" ]]; then
 				# module is in an overlay
@@ -1025,8 +1029,8 @@ get_available_modules() {
 				# - first time found by name only
 				# - in same overlay as first found
 				# - new version and not hidden by overlay
-				local name="${mod%/*}"
 				if [[ ! -v modulenames[${name}] ]]; then
+					# new entry
 					if [[ "${OverlayInfo[${ol}:type]}" == "${ol_hiding}" ]]; then
 						modulenames[${name}]="${ol}"
 					else
@@ -1566,7 +1570,15 @@ subcommand_use() {
 
                         UsedOverlays=( "${ol_name}" "${UsedOverlays[@]}" )
 			OverlayInfo[${ol_name}:used]='yes'
-                        export_env UsedOverlays
+
+			local excludes=()
+			local item
+			IFS=':' read -r -a excludes <<< "${OverlayInfo[${ol_name}:excludes]}"
+			for item in "${excludes[@]}"; do
+				OverlayExcludes[${item}]=1
+			done
+
+			export_env UsedOverlays
                         g_env_must_be_saved='yes'
 	                scan_groups "${UsedOverlays[@]}"
                 }
@@ -1721,6 +1733,22 @@ subcommand_unuse() {
 
                         OverlayInfo[${ol_name}:used]='no'
 			UsedOverlays=( "${UsedOverlays[@]:1}")
+
+			# rebuild exclude list.
+			# Note:
+			# A module might be excluded in multiple overlays. So, we cannot
+			# just remove the excludes from the overlay to unuse.
+			local excludes=()
+			OverlayExcludes=()
+			local ol
+			local item
+			for ol in "${UsedOverlays}"; do
+				IFS=':' read -r -a excludes <<< "${OverlayInfo[${ol}:excludes]}"
+				for item in "${excludes[@]}"; do
+					OverlayExcludes[${item}]=1
+				done
+			done
+
                         g_env_must_be_saved='yes'
                         export_env UsedOverlays
                         local dir
