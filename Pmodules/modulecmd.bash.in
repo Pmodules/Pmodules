@@ -1066,7 +1066,8 @@ get_available_modules() {
 # The module name can be
 #       name
 #       name/version
-#       name/version_flag
+#	relative path
+#	absolute path
 #
 # Return
 #       0  if a modulefile has been found
@@ -2751,6 +2752,19 @@ subcommand_apropos() {
 			"${options[@]}" 2>&1)
 	done
 }
+
+##############################################################################
+#
+# Collections
+#
+# Collections describe a sequence of module use then module load commands
+# that are interpreted by Modules to set the user environment as described
+# by this sequence.
+#
+# User collections:
+#
+# System collections:
+##
 
 ##############################################################################
 #
