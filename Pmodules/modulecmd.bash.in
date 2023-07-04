@@ -1135,7 +1135,7 @@ find_modulefile() {
                                         "${dir}" \
 					"${mod}"
 				# don't load modules with unused release stages
-				if [[ :${fm_rel_stage}: =~ :${UsedReleaseStages}: ]]; then
+				if [[ :${UsedReleaseStages}: =~ :${fm_rel_stage}: ]]; then
 					fm_modulefile="${dir}/${mod}"
 					fm_dir="${dir}"
 					return 0
