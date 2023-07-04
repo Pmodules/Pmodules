@@ -2911,9 +2911,9 @@ search_collection(){
 		return
 	fi
 	local _dirs2search=( "${UsrCollectionsDir}" )
-	local _dir
-	for _dir in "${UsedOverlays[@]}"; do
-		_dirs2search+=( "${_dir}" )
+	local _ol
+	for _ol in "${UsedOverlays[@]}"; do
+		_dirs2search+=( "${OverlayInfo[${_ol}:inst_root]}/collections" )
 	done
 	for _dir in "${_dirs2search[@]}"; do
 		if [[ -r "${_dir}/${_collection}" ]]; then
