@@ -2879,6 +2879,7 @@ subcommand_save() {
 	IFS=':' read -a modules <<< "${LOADEDMODULES}"
 	local -- m=''
 	for m in "${modules[@]}"; do
+		[[ $m == Pmodules/* ]] && continue
 		s+="module load $m;\n"
 	done
 
