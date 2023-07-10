@@ -1015,6 +1015,7 @@ get_available_modules() {
                 local -a dir_entries=(*)
 		(( ${#dir_entries[@]} > 0 )) || continue
 
+		local sdirs="${dir##*/modulesfiles}"
 		# loop over all files (and sym-link) in this directory and
 		# its sub-directories
 		local mod=''	# module_name/module_version
@@ -1040,7 +1041,7 @@ get_available_modules() {
 				elif [[ "${modulenames[${name}]}" == "${ol}" ]]; then
 					add='yes'
 				elif [[ "${modulenames[${name}]}" == '0'  ]] \
-					     && [[ ! -v dict[${mod}] ]]; then
+					     && [[ ! -v dict[${sdirs}/${mod}] ]]; then
 					add='yes'
 				fi
 			else
@@ -1051,7 +1052,7 @@ get_available_modules() {
 			[[ :${used_rel_stages}: =~ :${rel_stage}: ]] || continue
 
 			gam_mods+=( "${mod}" ${rel_stage} "${dir}/${mod}" "${ol}" )
-                        dict[${mod}]=1
+                        dict[${sdirs}/${mod}]=1
 		done < <(${find} -L "${dir_entries[@]}" \
 				 \( -type f -o -type l \) \
 				 -not -name ".*" \
