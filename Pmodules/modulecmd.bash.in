@@ -2879,6 +2879,7 @@ subcommand_save() {
 	IFS=':' read -a modules <<< "${LOADEDMODULES}"
 	local -- m=''
 	for m in "${modules[@]}"; do
+		[[ $m == Pmodules/* ]] && continue
 		s+="module load $m;\n"
 	done
 
@@ -2909,8 +2910,11 @@ search_collection(){
 		_path=$(std::get_abspath "${_collection}")
 		return
 	fi
-	local _dirs2search=( "${UsrCollectionsDir}" "${SysCollectionsDir}" )
-	local _dir
+	local _dirs2search=( "${UsrCollectionsDir}" )
+	local _ol
+	for _ol in "${UsedOverlays[@]}"; do
+		_dirs2search+=( "${OverlayInfo[${_ol}:inst_root]}/collections" )
+	done
 	for _dir in "${_dirs2search[@]}"; do
 		if [[ -r "${_dir}/${_collection}" ]]; then
 			_path="${_dir}/${_collection}"
@@ -3001,7 +3005,7 @@ subcommand_savelist() {
 
 	get_collections() {
 		local -n _result="$1"
-		local -- _dir="$2"
+		local -n gc_dirs="$2"
 		shift 2
 		_result=()
 		local _pattern
@@ -3009,16 +3013,16 @@ subcommand_savelist() {
 		for _pattern in "$@"; do
 			while read _coll; do
 				_result+=( "${_coll}" )
-			done < <(find "${_dir}" -type f -ipath "*/${_pattern}" -printf "%P\n")
+			done < <(find "${gc_dirs[@]}" -type f -ipath "*/${_pattern}" -printf "%P\n")
 		done
 	}
 
 	print_collections() {
 		local -r prt_header="$1"
-		local -r prt_dir="$2"
+		local -n prt_dirs="$2"
 		shift 2
 		local -a prt_collections=()
-		get_collections prt_collections "${prt_dir}" "$@"
+		get_collections prt_collections prt_dirs "$@"
 
 		(( ${#prt_collections[@]} == 0 )) && return 0
 
@@ -3048,9 +3052,14 @@ subcommand_savelist() {
 	if (( ${#args[@]} == 0 )); then
 		args[0]='*'
 	fi
-	local -a collections=()
-	print_collections "User collections:"     "${UsrCollectionsDir}" "${args[@]}"
-	print_collections "\nSystem collections:" "${SysCollectionsDir}" "${args[@]}"
+	local -a _dirs=( "${UsrCollectionsDir[@]}" )
+	print_collections "User collections:"     _dirs "${args[@]}"
+	_dirs=()
+	local _ol
+	for _ol in "${UsedOverlays[@]}"; do
+		_dirs+=( "${OverlayInfo[${_ol}:inst_root]}/collections" )
+	done
+	print_collections "\nSystem collections:" _dirs "${args[@]}"
 }
 
 ##############################################################################
@@ -3092,7 +3101,7 @@ subcommand_saverm() {
 		search_collection collection "${collection}"
 		test -e "${collection}" || \
 			die_collection_doesnt_exist "${collection}"
-		rm -f "${collection}" 2>/dev/null || \
+		${rm} -f "${collection}" 2>/dev/null || \
 			die_removing_collection_failed "${collection}"
 	done
 }
