@@ -163,8 +163,6 @@ MISCELLANEOUS OPTIONS:
 
 # save arguments, required for building dependencies
 declare -r	ARGS="$@"
-declare         PMODULES_DISTFILESDIR=''
-declare         PMODULES_TMPDIR=''
 
 # versions to be build, '.*' or none means all
 declare -a      versions=()
@@ -739,6 +737,7 @@ pm::read_config
 #         ?
 : ${PMODULES_DISTFILESDIR:="${PMODULES_HOME%%/Tools*}/var/distfiles"}
 : ${PMODULES_TMPDIR:=/var/tmp/${USER}}
+export PMODULES_DISTFILESDIR PMODULES_TMPDIR
 
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
