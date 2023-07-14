@@ -749,7 +749,7 @@ pbuild::install_shared_libs() {
 	install_shared_libs_Linux() {
 		local libs=( $(ldd "${binary}" | \
 				       ${awk} "/ => \// && /${pattern}/ {print \$3}") )
-		if [[ -n "${libs}" ]]; then
+		if (( ${#libs[@]} > 0 )); then
 			${cp} -vL "${libs[@]}" "${dstdir}" || return $?
 		fi
 		return 0
@@ -759,7 +759,7 @@ pbuild::install_shared_libs() {
 		# https://stackoverflow.com/questions/33991581/install-name-tool-to-update-a-executable-to-search-for-dylib-in-mac-os-x
 		local libs=( $(${otool} -L "${binary}" | \
 				       ${awk} "/${pattern}/ {print \$1}"))
-		if [[ -n "${libs}" ]]; then
+		if (( ${#libs[@]} > 0 )); then
 			${cp} -vL "${libs[@]}" "${dstdir}" || return $?
 		fi
 		return 0
