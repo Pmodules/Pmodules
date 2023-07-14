@@ -1,9 +1,11 @@
 # Changelog of Pmodules
 
-## Version 1.1.13 (not yet released)
+## Version 1.1.13
 * **modulecmd**
   * *User visible changes*
 	* collections
+	* shadowing modules with an overlay
+	* Lmod support
 	* argument/option handling fixed
 	* using groups/extending MODULEPATH fixed (module use ...)
   * *Internal changes and fixes*
