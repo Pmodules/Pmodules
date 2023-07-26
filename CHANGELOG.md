@@ -1,5 +1,10 @@
 # Changelog of Pmodules
 
+## Version 1.1.14
+* **modbuild** 
+  * *Internal changes and fixes*
+    * lookup of default legacy config files fixed
+
 ## Version 1.1.13
 * **modulecmd**
   * *User visible changes*
