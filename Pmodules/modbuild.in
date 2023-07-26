@@ -321,7 +321,6 @@ parse_args() {
 				std::die 1 "%s " \
 					 "Build script does not exist" \
 					 "or is not readable -- '$_'"
-			BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 			;;
 		esac
 		shift
@@ -330,14 +329,15 @@ parse_args() {
 		if [[ -r "${PWD}/build" ]]; then
 			if grep -q '#!.* modbuild' "${PWD}/build"; then
 				BUILD_SCRIPT="${PWD}/build"
-				BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 			fi
 		fi
 		if [[ -z ${BUILD_SCRIPT} ]]; then
 			std::die 1 "Don't know what to build!"
 		fi
 	fi
+	BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
+	opt_system="${opt_system:-$(std::get_os_release)}"
 
 	if [[ ${opt_yaml} == 'no' ]]; then
 		# look for legacy config files
@@ -348,8 +348,9 @@ parse_args() {
 			shopt -q nullglob || :
 			local -i nullglob_set=$?
 				
-			legacy_config_files=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}".${opt_system} )
-			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}.$(uname -s)" )
+			legacy_config_files=( "${BUILDBLOCK_DIR}"/*/variants.${opt_system} )
+			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants."$(uname -s)" )
+			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants )
 			local f
 			for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
 				[[ -e "${f}.${opt_system}" ]] \
@@ -505,9 +506,17 @@ build_modules_legacy() {
 }
 
 build_modules_yaml(){
-	local -- fname="${yaml_config_file}"
-	local -A mod_overlays=()
+	local name="$1"
+        local version="$2"
+	shift 2
+        local with_modules=( $* )
 
+	# check whether a configuration for the module '$name'is in the config file
+	# get default values
+	# get versions
+	# loop over matching version
+	#     is this a variant to build? Continue if not
+	#     build it
 	yaml_get_versions(){
 		local -n _result="$1"
 		local fname="$2"
@@ -627,11 +636,8 @@ build_modules_yaml(){
 		fi
 	}
 
-	local name="$1"
-        local version="$2"
-	shift 2
-        local with_modules=( $* )
-
+	local -- fname="${yaml_config_file}"
+	local -A mod_overlays=()
 	local m
 	local pattern="//"
 	for m in "${with_modules[@]}"; do
@@ -713,7 +719,6 @@ build_modules() {
 
 parse_args "$@"
 
-opt_system="${opt_system:-$(std::get_os_release)}"
 
 pbuild.jobs "${opt_jobs}"
 pbuild.force_rebuild "${opt_force_rebuild}"
