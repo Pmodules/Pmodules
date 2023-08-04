@@ -1,5 +1,18 @@
 # Changelog of Pmodules
 
+## Version 1.1.15
+* **modulecmd**
+  * *User visible changes*
+	* prevent loading of a module on dedicated systems via blocklist
+* **modbuild**
+  * *User visible changes*
+    * the function to compare versions can now be called with a single
+	  argument. In this case the given version is compared to version
+	  of currently build module.
+  * *Internal changes and fixes*
+    * bugfix: due to a bug in compiling the list of (legacy) config files,
+	  each module was build twice.
+
 ## Version 1.1.14
 * **modbuild** 
   * *Internal changes and fixes*

@@ -499,6 +499,22 @@ build_modules_legacy() {
         done
 }
 
+yaml_has_config() {
+	: "
+  	Test whether the config file has a configuration for the
+	this module. If yes, return the format version of the config file.
+	"
+	local -n _result="$1"
+	local fname="$2"
+	local mname="$3"
+	${yq} -Ne e ".|has(\"${mname}\")" >& /dev/null || return 1
+	_result=$(${yq} -Ne e ".format" \
+			"${fname}" 2>/dev/null)
+	if (( $? != 0 )); then
+		_result='1.0'
+	fi
+}
+
 build_modules_yaml(){
 	local name="$1"
         local version="$2"
@@ -511,6 +527,39 @@ build_modules_yaml(){
 	# loop over matching version
 	#     is this a variant to build? Continue if not
 	#     build it
+
+
+	local -- fname="${yaml_config_file}"
+} # build_modules_yaml()
+
+build_modules_yaml_old(){
+	local name="$1"
+        local version="$2"
+	shift 2
+        local with_modules=( $* )
+
+	# check whether a configuration for the module '$name'is in the config file
+	# get default values
+	# get versions
+	# loop over matching version
+	#     is this a variant to build? Continue if not
+	#     build it
+
+	yaml_has_config() {
+		: "
+		Test whether the given config file has a configuration for the
+		given module. If yes, return the format of the config file.
+		"
+		local -n _result="$1"
+		local fname="$2"
+		${yq} -Ne e ".|has(\"${name}\")" >& /dev/null || return 1
+		_result=$(${yq} -Ne e ".format" \
+			     "${fname}" 2>/dev/null)
+		if (( $? != 0 )); then
+			_result='1.0'
+		fi
+	}
+
 	yaml_get_versions(){
 		local -n _result="$1"
 		local fname="$2"
