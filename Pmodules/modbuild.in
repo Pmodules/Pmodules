@@ -351,12 +351,6 @@ parse_args() {
 			legacy_config_files=( "${BUILDBLOCK_DIR}"/*/variants.${opt_system} )
 			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants."$(uname -s)" )
 			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants )
-			local f
-			for f in "${BUILDBLOCK_DIR}"/*/"${BNAME_VARIANTS}"; do
-				[[ -e "${f}.${opt_system}" ]] \
-					|| [[ -e "${f}.$(uname -s)" ]] \
-					|| legacy_config_files+=( "$f" )
-			done
 			(( nullglob_set == 1 )) && shopt -u nullglob
 		fi
 		(( ${#legacy_config_files[@]} == 0 )) && opt_yaml='check'
