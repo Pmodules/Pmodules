@@ -253,7 +253,14 @@ pbuild::version_compare () {
 readonly -f pbuild::version_compare
 
 pbuild::version_lt() {
-        pbuild::version_compare "$1" "$2"
+	if (( $# == 1 )); then
+		local vers1="${V_PKG}"
+		local vers2="$1"
+	else
+		local vers1="$1"
+		local vers2="$2"
+	fi
+        pbuild::version_compare "${vers1}" "${vers2}"
         (( $? == 2 ))
 }
 readonly -f pbuild::version_lt
