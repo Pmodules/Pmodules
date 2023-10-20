@@ -26,7 +26,8 @@ declare -r libexecdir="${prefix}/libexec"
 source "${libdir}/libstd.bash"
 source "${libdir}/libpmodules.bash"
 
-declare -r os_name="$(uname -s)"
+declare -r os_name=$(uname -s)
+declare -r os_release=$(std::get_os_release)
 
 path="${libexecdir}:/bin:/usr/bin"
 std::def_cmds "${path}" \
@@ -278,39 +279,89 @@ die_is_blocked(){
 		 "module is blocked on this system" "$1"
 }
 
-#
-# get release stage of module
-# Note:
-# - the release stage of a module outside ${OverlayInfo[@]} is always 'stable'
-# - the release stage of a module inside ${OverlayInfo[@]} without a
-#   coresponding file is always 'unstable'
-#
-# Args:
-#       $1      reference variable to return release stage
-#	$2	modulefile directory (element of MODULEPATH)
-# 	$3      module name/version
-#
-get_release_stage() {
-	local -n grs_rel_stage="$1"
+get_module_config(){
+	: "
+	Read module configuration.
+
+	If a file '.config-<version>' exists, read configuration from this
+	file. The file must be in YAML format. The following keys are
+	supported:
+
+	  RelStage: <relstage>
+	  Systems: <list-of-systems>
+	  Blocklist: <list-of-host-names>
+
+	If the above configuration file doesn't exist, get the release
+	stage from '.release-<version>'. Restrictions to systems or blocking
+	hosts is not possible.
+
+	Note:
+	 - the release stage of a module outside our hierarchy is always
+	   'stable'.
+	 - the release stage of a module inside out hierarchy without a
+	   config file is always 'unstable'.
+
+	"
+	local -n ref_cfg="$1"
 	local -r dir="$2"
 	local -r modulefile="${dir}/$3"
 
+	ref_cfg['rel_stage']='unstable'
+	ref_cfg['systems']=''
+	ref_cfg['blocklist']=''
 	if [[ ! -v Dir2OverlayMap[${dir%/${PMODULES_MODULEFILES_DIR}*}] ]]; then
-		grs_rel_stage='stable'
+		# this module is not in an overlay
+		ref_cfg['rel_stage']='stable'
 		return
 	fi
-        #
-        # In an overlay the name of the module-file is something like
-        #   dir/modulefiles/name/version
-        # the corresponding file is
-        #   dir/modulefiles/name/.release-version
-        #
+	local -r config_file="${modulefile%/*}/.config-${modulefile##*/}"
 	local -r rel_stage_file="${modulefile%/*}/.release-${modulefile##*/}"
-	if [[ -r ${rel_stage_file} ]]; then
-		# read file, remove empty lines, spaces etc
-		grs_rel_stage=$( < "${rel_stage_file}" )
+	if [[ -r ${config_file} ]]; then
+		local -- yaml=$(${yq} -e '.')
+		local -- key=''
+		for key in ${!ref_cfg[@]}; do
+			case "${key,,}" in
+				systems | blocklist )
+					value=$( ${yq} -e ".${key}[]" \
+						       2>/dev/null <<<"${yaml}") ||
+						value='null'
+					;;
+				* )
+					value=$( ${yq} -e ".${key}" \
+						       2>/dev/null <<<"${yaml}") ||
+						value='null'
+					;;
+			esac
+			if [[ "${value}" != 'null' ]]; then
+				ref_cfg[${key}]="${value}"
+			fi
+		done
+		return 0
+	elif [[ -r ${rel_stage_file} ]]; then
+		ref_cfg['rel_stage']=$( < "${rel_stage_file}" )
 	else
-		grs_rel_stage='unstable'
+		ref_cfg['rel_stage']='unstable'
+	fi
+}
+
+is_available(){
+	: "
+	Module is available if
+	- release stage is used
+	- the systems list is empty or the system is in the list
+	- the blocklist is empty or the hostname is NOT in the list
+	"
+	local -n ref_cfg="$1"
+	local -- rel_stages="$2"
+	local -- system="$3"
+	local -- hostname="$4"
+
+	[[ ":${rel_stages}:" =~ ":${ref_cfg['rel_stage']}:" ]] || return 1
+	if [[ "${ref_cfg['systems']}" != "" ]]; then
+		[[ "${ref_cfg['systems']//$'\n'/:}:" =~ "${system}" ]] || return 1
+	fi
+	if [[ "${ref_cfg['blocklist']}" != "" ]]; then
+		[[ "${ref_cfg['blocklist']//$'\n'/:}:" =~ "${hostname}" ]] && return 1
 	fi
 }
 
@@ -1080,10 +1131,11 @@ get_available_modules() {
 				add='yes'	# module is NOT in an overlay
 			fi
 			[[ "${add}" == 'no' ]] && continue
-			get_release_stage rel_stage "${dir}" "${mod}"
-			[[ :${used_rel_stages}: =~ :${rel_stage}: ]] || continue
+			local -A cfg=()
+			get_module_config cfg "${dir}" "${mod}"
+			is_available cfg "${used_rel_stages}" "${os_release}" "${HOSTNAME}" || continue
 
-			gam_mods+=( "${mod}" ${rel_stage} "${dir}/${mod}" "${ol}" )
+			gam_mods+=( "${mod}" "${cfg['rel_stage']}" "${dir}/${mod}" "${ol}" )
                         dict[${sdirs}/${mod}]=1
 		done < <(${find} -L "${dir_entries[@]}" \
 				 \( -type f -o -type l \) \
@@ -1123,9 +1175,9 @@ find_modulefile() {
                 local -i col=$((${#dir} + 2 ))
                 local -a modules
                 if [[ ${module} == */* ]]; then
-                        # a version number has been specified. But we still might
-                        # have the same module/version with different use flags.
-                        # The different release stages we ignore in this case.
+                        # a version number has been specified. The first module
+			# found will be returned, independend from the release
+			# stage.
                         modules=( $(${find} -L "${dir}" -type f -not -name ".*" \
                                        -ipath "${dir}/${module}*" \
                                           | cut -b${col}-) )
@@ -1137,19 +1189,19 @@ find_modulefile() {
 				else
 					continue
 				fi
-				get_release_stage \
-					fm_rel_stage \
-                                        "${dir}" \
-					"${mod}"
+				local -A cfg=()
+				get_module_config cfg "${dir}" "${mod}"
+				is_available cfg "${ReleaseStages}" "${os_release}" "${HOSTNAME}" || continue
 
 				fm_modulefile="${dir}/${mod}"
+				fm_rel_stage="${cfg['rel_stage']}"
 				fm_dir="${dir}"
                                 return 0
                         done
                 else
                         # no version has been specified. This makes it more
                         # difficult. We have to load the newest version taking
-                        # the used release stages and flags into account.
+                        # the used release stages into account.
 
 			# get list of reverse sorted version numbers
                         (( col += ${#module} + 1 ))
@@ -1168,16 +1220,13 @@ find_modulefile() {
 				else
 					continue
 				fi
-                                get_release_stage \
-					fm_rel_stage \
-                                        "${dir}" \
-					"${mod}"
-				# don't load modules with unused release stages
-				if [[ :${UsedReleaseStages}: =~ :${fm_rel_stage}: ]]; then
-					fm_modulefile="${dir}/${mod}"
-					fm_dir="${dir}"
-					return 0
-				fi
+				local -A cfg=()
+				get_module_config cfg "${dir}" "${mod}"
+				is_available cfg "${ReleaseStages}" "${os_release}" "${HOSTNAME}" || continue
+				fm_modulefile="${dir}/${mod}"
+				fm_rel_stage="${cfg['rel_stage']}"
+				fm_dir="${dir}"
+				return 0
                         done
                 fi
         done

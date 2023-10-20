@@ -177,9 +177,11 @@ declare         opt_system=''
 declare		opt_overlay=''
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
-declare -a      opt_with_modules=()
+declare -a      opt_with_modules=()	# :FIXME: legacy build should also use the dict
+declare -A	opt_with_dict=()
 declare --	opt_config_file=''
-declare --      opt_yaml='no'
+declare --      opt_yaml='yes'
+declare --	opt_variant=''
 
 declare		BUILD_SCRIPT=''
 declare --      yaml_config_file=''
@@ -269,6 +271,9 @@ parse_args() {
 		--yaml )
 			opt_yaml='yes'
 			;;
+		--legacy )
+			opt_yaml='no'
+			;;
 		--use-flags | --use-flags=* )
 			if [[ $1 == *=* ]]; then
 				USE_FLAGS=":${1#--*=}:"
@@ -280,8 +285,10 @@ parse_args() {
 		--with | --with=*/* )
 			if [[ $1 == *=* ]]; then
 				opt_with_modules+=( "${1#--*=}" )
+				opt_with_dict[${1#--*=}]=0
 			else
 				opt_with_modules+=( "$2" )
+				opt_with_dict[$2]=0
 				shift
 			fi
 			;;
@@ -296,6 +303,14 @@ parse_args() {
 				opt_config_file=( "${1#--*=}" )
 			else
 				opt_config_file=( "$2" )
+				shift
+			fi
+			;;
+		--variant | --variant=* )
+			if [[ $1 == *=* ]]; then
+				opt_variant=( "${1#--*=}" )
+			else
+				opt_variant=( "$2" )
 				shift
 			fi
 			;;
@@ -324,7 +339,9 @@ parse_args() {
 			;;
 		esac
 		shift
-	done	
+	done
+
+	# BUILD_SCRIPT is not set if called with `modbuild <version> [options]`
 	if [[ -z ${BUILD_SCRIPT} ]]; then
 		if [[ -r "${PWD}/build" ]]; then
 			if grep -q '#!.* modbuild' "${PWD}/build"; then
@@ -336,12 +353,16 @@ parse_args() {
 		fi
 	fi
 	BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
+
+	# if no version is specified on the cmd-line, build all versions
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
+
+	# set system if not set on the cmd-line
 	opt_system="${opt_system:-$(std::get_os_release)}"
 
-	if [[ ${opt_yaml} == 'no' ]]; then
+	# set config file
+	if [[ ${opt_yaml,,} != 'yes' ]]; then
 		# look for legacy config files
-		# if nothing found, try with YAML
 		if [[ -n ${opt_config_file} ]]; then
 			legacy_config_files=( "${opt_config_file}" )
 		else
@@ -353,32 +374,18 @@ parse_args() {
 			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants )
 			(( nullglob_set == 1 )) && shopt -u nullglob
 		fi
-		(( ${#legacy_config_files[@]} == 0 )) && opt_yaml='check'
-	fi
-	if [[ ${opt_yaml} != 'no' ]]; then
+		(( ${#legacy_config_files[@]} == 0 )) && \
+			std::die 1 "No legacy configuration file found!"
+		std::info "Using legacy variants files."
+		opt_overlay="${opt_overlay:-'base'}"
+	else
 		yaml_config_file="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
-	fi
-	if [[ "${opt_yaml}" == 'yes' ]]; then
 		[[ -r "${yaml_config_file}" ]] || \
 			std::die 2 \
-				 "YAML config file doesn't exist or is not readable - ${yaml_config_file}"
-	else
-		if [[ "${opt_yaml}" == 'check' ]]; then
-			[[ -r "${yaml_config_file}" ]] && \
-				std::die 2 \
-					 "No suitable variants or YAML config file found!"
-			opt_yaml='yes'
-		else
-			(( ${#legacy_config_files[@]} == 0 )) && \
-				std::die 2 \
-					 "No suitable variants file found!"
-		fi
-	fi
-	if [[ "${opt_yaml}" == 'yes' ]]; then
+				 "%s -- %s" \
+				 "YAML config file doesn't exist or is not readable" \
+				 "${yaml_config_file}"
 		std::info "Using YAML configuration file - ${yaml_config_file}"
-	else
-		std::info "Using legacy variants files."
-		[[ -n "${opt_overlay}" ]] || opt_overlay='base'
 	fi
 }
 
@@ -499,255 +506,696 @@ build_modules_legacy() {
         done
 }
 
-yaml_has_config() {
+get_yaml_file_fmt(){
 	: "
-  	Test whether the config file has a configuration for the
-	this module. If yes, return the format version of the config file.
+	Get format version of configuration file. Print the version number
+	to stdout if it is valid.
 	"
-	local -n _result="$1"
-	local fname="$2"
-	local mname="$3"
-	${yq} -Ne e ".|has(\"${mname}\")" >& /dev/null || return 1
-	_result=$(${yq} -Ne e ".format" \
-			"${fname}" 2>/dev/null)
-	if (( $? != 0 )); then
-		_result='1.0'
-	fi
+	${yq} -e '.' "$1" &>- || \
+		std::die 3 "%s -- %s" \
+			 "Error in YAML config file, please check with linter" \
+			 "$1"
+	local -- fmt=''
+	fmt=$(${yq} -e ".format" "$1") || \
+		std::die 3 "Error reading config file format -- $1"
+	case "${fmt}" in
+		1 )
+			:
+			;;
+		* )
+			std::die 3 "Unknown YAML Pmodules config file format -- $1"
+			;;
+	esac
+	echo "${fmt}"
+}
+
+read_yaml_config_file() {
+	: "
+  	Test whether the configuration file passed with $1 provides
+	configuration for the module passed with $2. If yes, the
+	configuration for this module is printed.
+	"
+	local -- file_name="$1"
+	local -- module_name="$2"
+	local -- yaml=''
+	yaml=$( ${yq} -Ne e ".${module_name}" "${file_name}" 2>/dev/null ) || \
+		std::die 3 "Configuration for '${module_name}' missing -- ${file_name}"
+	echo "${yaml}"
 }
 
 build_modules_yaml(){
-	local name="$1"
-        local version="$2"
+	local -- name="$1"
+        local -- version="$2"
 	shift 2
-        local with_modules=( $* )
+        local -a with_modules=( $* )
 
-	# check whether a configuration for the module '$name'is in the config file
-	# get default values
-	# get versions
-	# loop over matching version
-	#     is this a variant to build? Continue if not
-	#     build it
+	local -- file_fmt=$(get_yaml_file_fmt "${yaml_config_file}")
+	
+	local -- yaml_mod_config=''
+	yaml_mod_config=$(read_yaml_config_file "${yaml_config_file}" "${name}")
+	case "${file_fmt}" in
+		1 )
+			build_modules_yaml_v1 \
+				"${yaml_mod_config}" \
+				"${name}" "${version}" \
+				"${with_modules[@]}"
+			;;
+		* )
+			std::die 255 "Oops!" # we should never be here!
+			;;
+	esac
+}
+
+# these variables must be export for envsubst(1)
+declare -x P=''
+declare -x V=''
+declare -x V_PKG=''
+declare -x V_MAJOR=''		# first number in version string
+declare -x V_MINOR=''		# second number in version string (or empty)
+declare -x V_PATCHLVL=''	# third number in version string (or empty)
+declare -x V_RELEASE=''		# module release (or empty)
+
+parse_version() {
+	local v="$1"
+	V="$1"
+	: ${USE_FLAGS:=''}		# architectures (or empty)
+
+	local tmp=''
+
+	if [[ "$v" =~ "_" ]]; then
+		tmp="${v#*_}"
+		USE_FLAGS+=":${tmp//_/:}:"
+		v="${v%%_*}"
+	fi
+	V_PKG="${v%%-*}"		# version without the release number
+	if [[ $v == *-* ]]; then
+		V_RELEASE="${v#*-}"	# release number
+	fi
+	case "${V_PKG}" in
+		*.*.* )
+			V_MAJOR="${V_PKG%%.*}"
+			tmp="${V_PKG#*.}"
+			V_MINOR="${tmp%%.*}"
+			V_PATCHLVL="${tmp#*.}"
+			;;
+		*.* )
+			V_MAJOR="${V_PKG%.*}"
+			V_MINOR="${V_PKG#*.}"
+			;;
+		* )
+			V_MAJOR="${V_PKG}"
+			;;
+	esac
+
+	VERSIONS=()
+	if [[ -n ${V_RELEASE} ]]; then
+		VERSIONS+=( ${V_PKG}-${V_RELEASE} )
+	fi
+	if [[ -n ${V_PATCHLVL} ]]; then
+		VERSIONS+=( ${V_MAJOR}.${V_MINOR}.${V_PATCHLVL} )
+	fi
+	if [[ -n ${V_MINOR} ]]; then
+		VERSIONS+=( ${V_MAJOR}.${V_MINOR} )
+	fi
+	VERSIONS+=( ${V_MAJOR} )
+}
+
+declare -A Yaml_valid_keys_for_module=(
+	['defaults']=1
+	['shasums']=1
+	['versions']=1
+)
+declare -A Yaml_default_config=(
+	["build_requires"]=''
+	["compile_in_sourcetree"]='No'
+	["configure_with"]='auto'
+	["default_variant"]=''
+	["group"]='Tools'
+	["group_deps"]=''
+	["overlay"]='base'
+	["relstage"]='unstable'
+	["runtime_deps"]=''
+	["script"]='build'
+	["suffix"]=''
+	["systems"]=''
+	["urls"]=''
+	["variant"]=''
+)
 
 
-	local -- fname="${yaml_config_file}"
-} # build_modules_yaml()
 
-build_modules_yaml_old(){
-	local name="$1"
-        local version="$2"
-	shift 2
-        local with_modules=( $* )
+build_modules_yaml_v1(){
+	: "
+	
+	"
+	local -- yaml_mod_config="$1"
+	local -- name="$2"
+        local -- version="$3"
+	shift 3
+        local -a with_modules=( $* )
 
-	# check whether a configuration for the module '$name'is in the config file
-	# get default values
-	# get versions
-	# loop over matching version
-	#     is this a variant to build? Continue if not
-	#     build it
+	check_yaml_keys(){
+		local -n valid_keys="$1"
+		local -n used_keys="$2"
+		used_keys=()
+		local -- key=''
+		local -a keys=()
+		keys=( $(${yq} '.|keys().[]' <<<"${yaml_mod_config}" 2>/dev/null) )
+		echo "DEBUG: top-level keys: ${keys[@]}"
+		for key in "${keys[@]}"; do
+			[[ -v valid_keys[${key}] ]] || \
+				std::die 3 "Invalid key in YAML configuration file -- ${key}"
+			used_keys[${key}]=1
+		done
+	}
 
-	yaml_has_config() {
+	local -A used_yaml_keys=()
+	#check_yaml_keys Yaml_valid_keys_for_module used_yaml_keys <<<"${yaml_mod_config}"
+	local -a keys=( $(${yq} '.|keys().[]' <<<"${yaml_mod_config}" 2>/dev/null) )
+	local -- key=''
+	echo "DEBUG: top-level keys: ${keys[@]}"
+	for key in "${keys[@]}"; do
+		[[ -v Yaml_valid_keys_for_module[${key}] ]] || \
+			std::die 3 "Invalid key in YAML configuration file -- ${key}"
+		used_yaml_keys[${key}]=1
+	done
+	[[ -v used_yaml_keys['versions'] ]] || \
+		std::die 3 "No version(s) specified in YAML configuration file."
+
+	get_config(){
+		local -- yaml_input="$1"
+		local -n cfg="$2"	# ref. to return configuration
+		local -n dfl="$3"       # ref. to defaults
+		local -- key
+		local -- value
+
+		for key in "${!dfl[@]}"; do
+			cfg[${key}]="${dfl[${key}]}"
+		done
+
+		if [[ -z "${yaml_input}" ]]; then
+			return 0
+		fi
+
+		local -a keys=()
+		keys=( $( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null )) || \
+			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+		echo "DEBUG: config keys: ${keys[@]}"
+		for key in "${keys[@]}"; do
+			[[ -v dfl[$key] ]] || \
+				std::die 3 "%s -- %s\n%s" \
+					 "Ivalid key in configuration" \
+					 "${key}" "${yaml_input}"
+			case ${key} in
+				compile_in_sourcetree )
+					value=$( ${yq} -e ".${key}" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					case ${value,,} in
+						true | on | yes )
+							cfg[${key}]='Yes'
+							;;
+						false | off | no )
+							cfg[${key}]='No'
+							;;
+						* )
+							std::die 3 "%s '%s' -- %s" \
+								 "Invalid value for" \
+								 '${key}' \
+								 "${value}"
+							;;
+					esac
+					;;
+				configure_with )
+					value=$( ${yq} ".${key}" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					case ${value,,} in
+						auto | cmake | autotools )
+							cfg[${key}]="${value,,}"
+							;;
+						* )
+							std::die 3 "%s '%s' -- %s" \
+								 "Invalid value for" \
+								 'configure_with' \
+								 "${value}"
+							;;
+					esac
+					;;
+				urls | group_deps )
+					value=$( ${yq} -e ".${key}" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					cfg[${key}]="${value}"
+					;;
+				systems | variant )
+					value=$( ${yq} -e ".${key}.[]" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					readarray -t tmp <<<"${value}" 
+					printf -v tmp2 ":%s:" "${tmp[@]}"
+					cfg[${key}]="${tmp2}"
+					:
+					;;
+				runtime_deps | build_requires )
+					value=$( ${yq} -e ".${key}[]" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					cfg[${key}]="${value}"
+					;;
+				* )
+					value=$( ${yq} -e ".${key}" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					cfg[${key}]="${value}"
+			esac
+		done
+	}
+
+	get_matching_version_keys(){
 		: "
-		Test whether the given config file has a configuration for the
-		given module. If yes, return the format of the config file.
+		return list of version keys in refvar $1 matching version specified in $2.
+	      	"
+		local -n refvar="$1"
+		local version="$2"
+
+		local -a keys=()
+		keys=( $( ${yq} -e '.versions|keys().[]' 2>/dev/null) ) || \
+			std::die 3 "No version keys in configuration file!"
+
+		refvar=()
+		for key in "${keys[@]}"; do
+			l=()
+			# loop over semicolon separated list of keys
+			for k in ${key//;/ }; do
+				# do curly brackets expansion {}
+				local list=()
+				eval list=( $k )
+				if [[ ${list[@]} =~ ${version} ]]; then
+					refvar+=("${key}")
+					break
+				fi
+			done
+		done
+		(( ${#refvar[@]} == 0 )) && \
+			std::die 3 "No configuration for version -- $1"
+		return 0
+	}
+
+	get_yaml_vk_config(){
+		: "
+		Get configuration for version key $1.
+
+		Please note: this can be the empty string.
 		"
-		local -n _result="$1"
-		local fname="$2"
-		${yq} -Ne e ".|has(\"${name}\")" >& /dev/null || return 1
-		_result=$(${yq} -Ne e ".format" \
-			     "${fname}" 2>/dev/null)
-		if (( $? != 0 )); then
-			_result='1.0'
+		local -- key="$1"
+		result=$( ${yq} ".versions.\"${key}\"" 2>/dev/null ) || \
+			result=""
+		echo "${result}"
+	}
+
+	get_variants(){
+		local yaml
+		yaml=$(${yq} '.variants' 2>/dev/null)
+		echo "${yaml}"
+	}
+
+	get_num_variants(){
+		local -i n=$(${yq}  '.|length' 2>/dev/null)
+		echo "$n"
+	}
+
+	get_variant(){
+		local n="$1"
+		local yaml
+		yaml=$(${yq}  -e ".[$n]" 2>/dev/null)
+		[[ "${yaml}" == 'null' ]] && _result=''
+		echo "${yaml}"
+	}
+
+	get_group_deps(){
+		local -- yaml="$1"		# yaml formatted string with group config
+		local -- group="$2"		# compiler|mpi|hdf5|hdf5_serial
+		local -n with_modules="$3"	# refvar to return a list of modules
+
+		local -a modules=()
+		local keys=()
+		keys=( $(${yq} ".${group}|keys|.[]" <<<"${yaml}" 2>/dev/null) )
+		local key
+		for key in "${keys[@]}"; do
+			local versions=()
+			versions=( $( ${yq} -e ".${group}.${key}[]" <<<"${yaml}" 2>/dev/null) )
+			local version
+			for version in "${versions[@]}"; do
+				if [[ -v opt_with_dict[${key}/${version}] ]]; then
+					with_modules+=( "${key}/${version}" )
+				fi
+				modules+=( "${key}/${version}" )
+			done
+		done
+		if (( ${#with_modules[@]} == 0 )); then
+			with_modules=( "${modules[@]}" )
 		fi
 	}
 
-	yaml_get_versions(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		_result=( $(${yq} -Ne e \
-			       "with_entries(select(.key | test(\"^${version}\$\")))|keys" \
-			       "${fname}" 2>/dev/null | ${awk} '{print $2}') )
+	get_runtime_deps(){
+		local config="$1"
+		local -n with_modules="$2"
+
+		with_modules=( $(${yq} -e '.runtime_deps.[]' <<<"${config}" 2>/dev/null) )
 	}
 
-	yaml_get_num_variants(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		_result=$(${yq} -Ne e ".\"${version}\"|length" \
-			     "${fname}" 2>/dev/null)
-		if (( $? != 0 )); then
-			_result=0
+	get_build_requires(){
+		local -- config="$1"
+		local -n with_modules="$2"
+
+		with_modules=( $(${yq} -e '.build_requires.[]' <<<"${config}" 2>/dev/null) )
+		with_modules=( "${with_modules[@]/#/b:}" )
+	}
+
+	build_modules_compiler(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_cfg="$3"
+		shift 3
+		local -a module_deps=( "$@" )
+
+		local -a with_compiler=()
+		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
+		echo "${with_compiler[@]}"
+		
+		local compiler=''
+		for compiler in "${with_compiler[@]}"; do
+			pbuild.build_module_yaml \
+				"${module_name}" "${module_version}" \
+				"${module_cfg['relstage']}" \
+				"${compiler}" \
+				"${module_deps[@]}"
+		done
+	}
+
+	build_modules_hdf5_serial(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_cfg="$3"
+		shift 3
+		local -a module_deps=( "$@" )
+
+		local -a with_compiler=()
+		local -a with_hdf5=()
+		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
+		get_group_deps  "${module_cfg['group_deps']}" 'hdf5_serial' with_hdf5
+		echo "${with_compiler[@]}"
+		echo "${with_hdf5[@]}"
+		local -- compiler
+		local -- hdf5
+		for compiler in "${with_compiler[@]}"; do
+			for hdf5 in "${with_hdf5[@]}"; do
+				echo "build $module_name/$module_version with $compiler and $hdf5"
+				echo "  runtime deps: ${runtime_deps[@]}"
+				echo "  build requires: ${build_requires[@]}"
+				pbuild.build_module_yaml \
+					"${module_name}" "${module_version}" \
+					"${module_cfg['relstage']}" \
+					"${compiler}" \
+					"${hdf5}" \
+					"${module_deps[@]}"
+			done
+		done
+	}
+
+
+	build_modules_mpi(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_cfg="$3"
+		shift 3
+		local -a module_deps=( "$@" )
+
+		local -a with_compiler=()
+		local -a with_mpi=()
+		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
+		get_group_deps  "${module_cfg['group_deps']}" 'mpi' with_mpi
+
+		echo "${with_compiler[@]}"
+		echo "${with_mpi[@]}"
+
+		local -- compiler
+		local -- mpi
+		for compiler in "${with_compiler[@]}"; do
+			for mpi in "${with_mpi[@]}"; do
+				echo "build $module_name/$module_version with $compiler and $mpi"
+				echo "  runtime deps: ${runtime_deps[@]}"
+				echo "  build requires: ${build_requires[@]}"
+				pbuild.build_module_yaml \
+					"${module_name}" "${module_version}" \
+					"${module_cfg['relstage']}" \
+					"${compiler}" \
+					"${mpi}" \
+					"${module_deps[@]}"
+			done
+		done
+	}
+
+	build_modules_hdf5(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_cfg="$3"
+		shift 3
+		local -a module_deps=( "$@" )
+
+		local -a with_compiler=()
+		local -a with_mpi=()
+		local -a with_hdf5=()
+		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
+		get_group_deps  "${module_cfg['group_deps']}" 'mpi' with_mpi
+		get_group_deps  "${module_cfg['group_deps']}" 'hdf5' with_hdf5
+
+		echo "${with_compiler[@]}"
+		echo "${with_mpi[@]}"
+		echo "${with_hdf5[@]}"
+
+		local -- compiler
+		local -- mpi
+		local -- hdf5
+		for compiler in "${with_compiler[@]}"; do
+			for mpi in "${with_mpi[@]}"; do
+				for hdf5 in "${with_hdf5[@]}"; do
+					echo "build $module_name/$module_version with $compiler, $mpi and $hdf5"
+					echo "  runtime deps: ${runtime_deps[@]}"
+					echo "  build requires: ${build_requires[@]}"
+					pbuild.build_module_yaml \
+						"${module_name}" "${module_version}" \
+						"${module_cfg['relstage']}" \
+						"${compiler}" \
+						"${mpi}" \
+						"${hdf5}" \
+						"${module_deps[@]}"
+				done
+			done
+		done
+
+	}
+
+	build_modules_other(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_cfg="$3"
+		shift 3
+		local -a module_deps=( "$@" )
+		pbuild.build_module_yaml \
+                        "${module_name}" "${module_version}" \
+                        "${module_cfg['relstage']}" \
+			"${module_deps[@]}"
+	}
+
+	set_urls() {
+		local -- yaml="$1"
+
+		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
+			std::die 3 "error parsing YAML configuration"
+		local -i i=0
+		local -- fname=''
+		local -- url_yaml=''
+		for ((i=0; i<l; i++)); do
+			url_yaml=$(${yq} -Ne e ".[$i]" <<<"${yaml}" 2>/dev/null) || \
+				std::die 3 "error parsing YAML configuration"
+			local url=''
+			local fname=''
+			while read key value; do
+				key=${key:0:-1}
+				case "${key}" in
+					url )
+						url=$(envsubst <<<"${value}")
+						;;
+					name )
+						fname=$(envsubst <<<"${value}")
+						;;
+					* )
+						std::die 3 "Invalid key in list of URLs -- ${key}"
+						;;
+				esac
+				if [[ -z ${url} ]]; then
+					std::die 3 "URL missing!"
+				fi
+			done <<<"${url_yaml}"
+			pbuild.set_urls "${url}" "${fname}"
+		done
+	}
+
+	build_modules_variant(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_config="$3"
+		
+		P="${module_name}"
+		parse_version "${module_version}"
+
+		local build_variant="${opt_variant:-${module_config['default_variant']}}"
+
+		# build this variant?
+		if [[ ":${module_config['variant']}:" != *:${build_variant}:* ]]; then
+			echo "DEBUG: don't build this variant: ${module_config['variant']} !=  *:${build_variant}:*"
+			return 0
 		fi
+		
+		# build for this system?
+		if [[ -n ${module_config['systems']} ]] && \
+			   [[ ":${module_config['systems']}:" != *:${opt_system}:* ]]; then
+			echo "DEBUG: don't build for this system: ${module_config['systems']} !=  *:${opt_system}:*"
+			return 0
+		fi
+
+		echo "build variant ${module_name}/${module_version}"
+
+		local ol_name="${module_config['overlay']}"
+		[[ -v OverlayInfo[${ol_name}:inst_root] ]] || \
+			std::die 2 "%s" \
+				 "Overlay doesn't exist - ${ol_name}"
+		declare ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
+		declare ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
+
+		module_version+="${module_config['suffix']}"
+
+		pbuild.compile_in_sourcetree "${module_config['compile_in_sourcetree']}"
+		pbuild.configure_with "${module_config['configure_with']}"
+		pbuild.add_to_group "${module_config['group']}"
+
+		set_urls "${module_config['urls']}"
+		
+		local -a runtime_deps=()
+		if [[ -n ${module_config['runtime_deps']} ]]; then
+			readarray -t runtime_deps <<<"${module_config['runtime_deps']}"
+		fi
+		echo "runtime_deps=${runtime_deps[@]} length: ${#runtime_deps[@]}"
+		local -a build_requires=()
+		if [[ -n ${module_config['build_requires']} ]]; then
+			readarray -t build_requires <<<"${module_config['build_requires']}"
+		fi
+		build_requires=( "${build_requires[@]/#/b:}" )
+		echo "build_requires=${build_requires[@]} length: ${#build_requires[@]}"
+
+		local -A build_functions=(
+			['Compiler']=build_modules_compiler
+			[HDF5_serial]=build_modules_hdf5_serial
+			[MPI]=build_modules_mpi
+			[HDF5]=build_modules_hdf5
+		)
+		local func=build_modules_other
+		if [[ -v build_functions[${module_config['group']}] ]]; then
+			func=${build_functions[${module_config['group']}]}
+		fi
+		${func}	\
+			"${module_name}" \
+			"${module_version}" \
+			module_config \
+			"${runtime_deps[@]}" "${build_requires[@]}"
 	}
 
-	yaml_get_relstage(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].relstage" \
-			     "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return
-		_result=$(${yq} -Ne e ".relstage" "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return
-		_result='unstable'
+	expand_version_key(){
+		local -n ev_result="$1"
+		local -- key="$2"
+		local -- version="$3"
+
+		ev_result=()
+		# loop over comma separated list of keys
+		for k in ${key//;/ }; do
+			# do curly brackets expansion {}
+			local l
+			local list=()
+			eval list=( $k )
+			for l in "${list[@]}"; do
+				if [[ $l =~ ${version} ]]; then
+					ev_result+=("${l}")
+				fi
+			done
+		done
 	}
 	
-	yaml_get_overlay(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].overlay" \
-			     "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return
-		_result=$(${yq} -Ne e ".overlay" "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return
-		_result='base'
-	}
+	local -- yaml_input=''
+	if [[ -v used_yaml_keys['defaults'] ]]; then
+		yaml_input=$(${yq} '.defaults' <<<"${yaml_mod_config}" 2>/dev/null)
+	fi
+	local -A default_config=()
+	get_config "${yaml_input}" default_config Yaml_default_config
 
-	yaml_get_group(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-		_result=$(${yq} -Ne e ".\"${version}\"[${idx}].group" \
-			     "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return
-		_result=$(${yq} -Ne e ".group" "${fname}" 2>/dev/null)
-		(( $? == 0 )) && return
-		_result=''
-	}
+	local -a version_keys
+	get_matching_version_keys version_keys "${version}" <<<"${yaml_mod_config}"
 
-	yaml_get_systems(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].systems" \
-			     "${fname}" 2>/dev/null) )
-		(( $? == 0 )) && return
-		_result=( $(${yq} -Ne e ".systems" "${fname}" 2>/dev/null) )
-		(( $? == 0 )) && return
-		_result=()
-	}
+	local -A valid_vk_yaml_keys=( ['config']=1 ['variants']=1 )
+	
+	local -- version_key=''
+	for version_key in "${version_keys[@]}"; do
+		local yaml_vk_config=$(get_yaml_vk_config "${version_key}" <<<"${yaml_mod_config}")
 
-	yaml_get_compilers(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].compilers" \
-			     "${fname}" 2>/dev/null) )
-		(( $? == 0 )) && return
-		_result=( $(${yq} -Ne e ".compilers" "${fname}" 2>/dev/null) )
-		(( $? == 0 )) && return
-		_result=()
-	}
-
-	yaml_get_dependencies(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-       		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}]|(.with, .dependencies)" \
-			       "${fname}" 2>/dev/null) )
-		if (( $? != 0 )); then
-			# neither .with nor .dependencies are set
-			_result=()
-			return
-		fi
-		# if one of .with, .dependencies is not set, the vaulue is
-		# returned as 'null'.
-		local -i i
-		for i in "${!_result[@]}"; do
-			[[ ${_result[$i]} == 'null' ]] && unset -v '_result[$i]'
-		done
-		_result=("${_result[@]}")
-	}
-
-	yaml_get_build_requirements(){
-		local -n _result="$1"
-		local fname="$2"
-		local version="$3"
-		local idx="$4"
-       		_result=( $(${yq} -Ne e ".\"${version}\"[${idx}].build_requires" \
-			       "${fname}" 2>/dev/null) )
-		if (( $? != 0 )); then
-			_result=()
-			return
-		fi
-	}
-
-	local -- fname="${yaml_config_file}"
-	local -A mod_overlays=()
-	local m
-	local pattern="//"
-	for m in "${with_modules[@]}"; do
-		pattern+=" && /${m//\//\\/}/"
-	done
-
-	local -a versions
-	yaml_get_versions versions "${fname}" "${name}/${version}"
-	for v in "${versions[@]}"; do
-		local -i n_variants
-		yaml_get_num_variants n_variants "${fname}" "${v}"
-		(( n_variants == 0 )) && (( n_variants = 1 ))
-		local -i i
-		local -a deps=()
-		local -a build_requires=()
-		local relstage
-		local group
-		local ol_name
-		for (( i=0; i<n_variants; i++)); do
-			if [[ -z ${opt_overlay} ]]; then
-				yaml_get_overlay  ol_name  "${fname}" "${v}" $i
-			else
-				ol_name="${opt_overlay}"
-			fi
-			if [[ ! -v OverlayInfo[${ol_name}:inst_root] ]]; then
-				std::die 3 "Overlay is not defined -- ${ol_name}"
-			fi
-			mod_overlays[$i]="${ol_name}"
+		# check keys: allowed are 'config' and 'variants'
+		local -A used_vk_yaml_keys=()
+		#check_yaml_keys valid_vk_yaml_keys used_vk_yaml_keys <<<"${yaml_vk_config}"
+		local -a keys=( $(${yq} '.|keys().[]' <<<"${yaml_vk_config}" 2>/dev/null ) )
+		local -- key=''
+		echo "DEBUG: "vk keys: ${keys[@]}
+		for key in "${keys[@]}"; do
+			[[ -v valid_vk_yaml_keys[${key}] ]] || \
+				std::die 3 "Invalid key in YAML configuration file -- ${key}"
+			used_vk_yaml_keys[${key}]=1
 		done
 
-		for (( i=0; i<n_variants; i++)); do
-			ol_name="${mod_overlays[$i]}"
-			yaml_get_relstage relstage "${fname}" "${v}" $i
-			yaml_get_dependencies deps "${fname}" "${v}" $i
-			yaml_get_build_requirements build_requires "${fname}" "${v}" $i
-			yaml_get_group group  "${fname}" "${v}" $i
-			pbuild.add_to_group "${group}"
-			# :FIXME:
-			# for the time being we prefix the build requirements
-			# with 'b:' and append them to the other dependencies.
-			# With this solution we don't have to change anything
-			# else in the code but have better readable variant
-			# files.
-			deps+=("${build_requires[@]/#/b:}")
-			declare ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
-			declare ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
+		# read config if set
+		local -A vk_config=()
+		yaml_input=''
+		if [[ -v used_vk_yaml_keys['config'] ]]; then
+			yaml_input=$(${yq} '.config.[]' <<<"${yaml_vk_config}" 2>/dev/null)
+		fi
+		echo "DEBUG: vk input: ${yaml_input}"
+		get_config "${yaml_input}" vk_config default_config
 
-			local -a systems=()
-			local -a compilers=()
-			yaml_get_systems systems "${fname}" "${v}" $i
-			yaml_get_compilers compilers "${fname}" "${v}" $i
-			pbuild.supported_systems "${systems[@]}"
-			pbuild.supported_compilers "${compilers[@]}"
-			if (( ${#deps[@]} > 0 )); then
-				while read -a with_modules; do
-					pbuild.build_module_yaml \
-					     "${name}" "${v##*/}" \
-					     "${relstage}" "${with_modules[@]}"
-				done < <(bash_expand "" ${deps[@]}|${awk} "${pattern}")
+		local -- yaml_variants=$(get_variants <<<"${yaml_vk_config}")
+		local -i num_variants=$(get_num_variants <<<"${yaml_variants}")
+		local versions=()
+		expand_version_key versions "${version_key}" "${version}"
+		local v=''
+		for v in "${versions[@]}"; do
+			echo "DEBUG: version: $v"
+			if (( num_variants == 0 )); then
+				build_modules_variant \
+					"${name}" "${v}" \
+					vk_config
 			else
-				pbuild.build_module_yaml \
-				     "${name}" "${v##*/}" \
-				     "${relstage}"
+				local -i n=0
+				local -- yaml_variant=''
+				for ((n=0; n<num_variants; n++)); do
+					yaml_variant=$(get_variant "${n}" <<<"${yaml_variants}")
+					
+					local -A mod_config=()
+					get_config "${yaml_variant}" mod_config vk_config
+					build_modules_variant \
+						"${name}" "${v}" \
+						mod_config
+				done
 			fi
 		done
 	done
-}
+} # build_modules_yaml()
 
 build_modules() {
 	if [[ "${opt_yaml}" == 'yes' ]]; then

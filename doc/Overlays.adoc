@@ -6,11 +6,74 @@ Please note: This document is work in progress!
 
 == What are Overlays and for what can they be used?
 
-== Overlay configuration
+* merge multiple Pmodules trees into one single hierarchy
+* provide dedicated modules
+** optimized for a system (example: MPI/Slurm for a HPC system)
+** optimized for an architecture
+** a group of users
+** module development
 
-=== System wide
+== Configuration
 
-==== Example
+=== System wide configuration
+
+`/opt/psi/config/profile.{bash,zsh,csh}`:: In the shell specific profiles the following environment variables (and only these) has to be defined: 
++
+* `PMODULES_ROOT`
+* `PMODULES_VERSION`
+* `PMODULES_HOME`
++
+Furthermore the shell specific initialization file `${PMODULES_HOME}/init/{bash,csh,zsh}` has to be sourced.
+
+`/opt/psi/config/Pmodules.yaml`:: 
+This is the main configuration file for the Pmodules version 1.1 and newer.
++
+.Format
+====
+....
+DefaultGroups: <colon separated list of groups>
+DefaultReleaseStage: <default release stage>
+ReleaseStages: <colon separated list of available release stages>
+TmpDir: <directory for temporary files>
+DistfilesDir: <store for downloaded files>
+
+Overlays:
+  <name>:
+    install_root: <installation-root>
+    modulefiles_root: <modulefiles-root>
+    type: <type of overlay>
+  ...
+....
+====
+`DefaultGroups`:: Colon separated list of groups, which are visible to the user. Example `Tools:Programming`.
+`DefaultReleaseStage`:: The release stage if no release stage is set for a module. This applies only to modules inside the Pmodules hierarchy.
+`ReleaseStages`:: Colon separated list of available release stages plus keywords to remove a module or mark a module as being removed. This should be set to `unstable:stable:deprecated:remove:removed`.
+`TmpDir`:: Directory used to compile software.
+`DistfilesDir`:: Store for downloaded files.
+`Overlays`:: Structure with overlay definitions. 
+`<name>`:: Name of overlay. Note: whitespace in the name is not supported.
+`<name>.install_root`:: The root of the software installation. This key is mandatory.
+`<name>.modulefiles_root`:: The root of the modulefile hierarchy. This key is optional and defaults to `<name>.install_root>
+`<name>.type`:: The type of the overlay, see below. This key is optional and the default value is `n`.
+
+==== Overlay types
+In general overlays can be used to add modules to the existing module hierarchy. Another use case is to shadow existing modules, for example to replace them with optimized versions. Three types of shadowing are implemented.
+
+'normal':: only modules with the exact same name and version are shadowed.
+'hiding':: all modules with the same name are shadowed. Example: to shadow all openmpi modules not build on Merlin6, the openmpi modules compiled for Merlin can be stored in an overlay of type 'hiding'.
+'replacing':: a group with the same name is shadowed
+
+Overlay types in the configuration file:
+
+`n`:: Normal overlay.
+`h`:: Hiding overlay.
+`r`:: Replacing overlay.
+
+=== User defined overlays
+
+Each user can define his own overlays in `$HOME/.Pmodules/Pmodules.yaml`. 
+
+=== Example
 .A system wide configuration file `/opt/psi/config/Pmodules.yaml`
 ====
 ....
@@ -29,248 +92,232 @@ Overlays:
     modulefiles_root: ${HOME}/modulefiles
 ....
 ====
-==== YAML Format
-.Format
-====
-....
-Overlays:
-  <name>:
-    install_root: <installation-root>
-    modulefiles_root: <modulefiles-root>
-    type: <type of overlay>
-  ...
-....
-====
-`<name>`:: Name of overlay. Note: whitespace in the name is not supported.
-`<name>.install_root`:: The root of the software installation. This key is mandatory.
-`<name>.modulefiles_root`:: The root of the modulefile hierarchy. This key is optional and defaults to `<name>.install_root>
-`<name>.type`:: The type of the overlay, see below. This key is optional and the default value is `n`.
-
-==== Overlay types
-`n`:: Normal overlay.
-`h`:: Hiding overlay.
-`r`:: Replacing overlay.
-
-=== User defined overlays
-
-Each user can define his own overlays in `$HOME/.Pmodules/Pmodules.yaml`. 
-
 == Working with overlays
+
+A overlay must be loaded before any module (except a Pmodules module). The command `module use` prints a list of available overlays. A overlay can be loaded with the command `module use <name>`.
 
 == Building modules
 
-The old format of the variants file is simple but very limited and almost impossible to extend for new features. To overcome the limitations a new format using YAML for variants files has been introduced. For the time being both format are supported. But it is highly recommended to use the YAML format for new modules and to migrate existing variants files in the old format to the new.
+The old format of the variants file is simple but very limited and almost impossible to extend for new features. To overcome the limitations a new format using YAML has been introduced. For the time being both format are supported. But it is highly recommended to use the YAML format for new modules and to migrate legacy configuration files to the new format.
 
-=== With a YAML variants file
-
-Information is in the YAML configuration file:
+=== Module configuration file
 
 ==== General structure
+`format``:: format version of configuration file. For now only `1` is allowed. 
+`<name>`:: The name of the Pmodule without version. Example: `hdf5`
+`<name>.defaults`:: (optional) default configuration. Type: structure of type 'configuration'.
+`<name>.shasums`:: (optional) list of SHA256 hashsums. Type: structure of type 'shasums'.
+`<nam>.versions`:: dictionary with configurations for different versions. Type: structure of type 'versions'.
 
-name:: The name of the Pmodule without version. Example: `hdf5`
-group:: group the module is in. Example: `MPI`
-overlay:: (optional) overlay, defaults to `base` if not specified
-relstage:: (optional) default release stage. If not defined,
- it defaults to `unstable`,
-url:: (optional) download URL, Must be either define here or per
- version. The environment variables `$P`, `$V`, `$V_PKG` etc. can be used.  The downloaded file is stored with the file name `$P-${V_PKG}.ext`. Whereby `ext` is derived from the URL.
-addon_sources:: (optional) array of sources for add-ons. Example: `git-lfs`
-use:: (optional) use flags.
-systems:: (optional) array of supported systems, defaults to any. Example: `[rhel6 rhel7]`.
-compilers:: (optional) array pf supported compilers, defaults to any. Example: `[gcc intel]`.
-compile-in-src:: (optional) compile in source tree, allowed vaules are `yes` and `no`, the default is `no`.
-configure-with:: (optional) If a software supports CMake and autotools, this specifies the tool to use. Allowed values are `autotools`, `cmake`, `auto`, `none`. The default is `auto`.
-versions:: array of `version` objects
+==== The 'configuration' structure
 
-==== Objects of type `addon_source`
+`group`:: (optional) the group the module belongs to. Defaults to `Tools`.
+`overlay`:: (optional) the overlay the module belongs to. Defaults to `base`.
+`relstage`:: (optional) release stage of the module. Defaults to `unstable`.
+`systems`:: (optional) list of supported system. If this list is empty, the
+     configuration is valid for all systems. Defaults to the empty list.
+`compile_in_sourcetree`:: (optional) compile software in source tree 
+     (not in a dedicated 'build' directory). The value is boolean and
+     defaults to False.
+`configure_with`:: (optional) set configuration system to be used. This is
+     useful if a package supports more than one configuration system. Values
+     can be `auto`, `cmake`, `autotools`. If set to `auto`, autotools are used
+     if supported.
+`default_variant`:: (optional) build the specified variant if nothing else is
+    specified on the command line. Defaults to the empty string.
+`suffix`:: (optional) add the given suffix to `name/version`. Defaults to the
+    empty string.
+`urls`:: (optional) List of URLs of software to download. 
 
-name:: unique name
-url:: download URL.
-shasum:: (optional) SHA256 sum.
+===== URLs
 
-==== Objects of type `version`
+List of URLs and optional name to be used to save the downloaded file.
 
-dependencies:: other run-time dependencies, if any
-build_with:: dependencies required for building, if any
-overlay:: (optional) override the default. Example: `devel`.
-relstage:: (optional) override the default. Example: `unstable`.
-addon_sources:: (optional) array of sources for add-ons.
-systems:: (optional) override the default
-compilers:: (optional) override the default
-compile-in-src:: (optional) override the default
-configure-with:: (optional) override the default
-variants:: array of `variant` objects
+`url`:: URL environment variable like `$P` and `$V_PKG` can be used.
+`name`:: (optional) file name.
 
-==== Object of type `variant`
-with:: hierarchical dependencies, `with` must be specified only 
-for hierarchical groups.
-dependencies:: other run-time dependencies, if any
-build_requires:: dependencies required for building, if any
-addon_sources:: (optional) array of sources for add-ons.
-use:: (optional) use flags
-overlay:: (optional) override the default. Example: `devel`.
-relstage:: (optional) override the default. Example: `unstable`.
-systems:: (optional) override the default
-compilers:: (optional) override the default
+===== Example of a configuration structure
 
-==== Example of a configuration files in YAML format
-
-.YAML configuration file for serial HDF5
+.YAML 'configuration' structure
 ====
 ....
-name: hdf5
 group: MPI
 overlay: base
 relstage: stable
-url: https://support.hdfgroup.org/ftp/HDF5/releases/$P-${V_MAJOR}.${V_MINOR}/$P-${V_PKG}/src/$P-${V_PKG}.tar.gz
-systems: [rhel6,rhel7,rhel8]
-compilers: [gcc,intel,pgi]
-compile_in_sourcetree: no
+systems: [rhel6, rhel7, rhel8]
+compile_in_sourcetree: False
 configure_with: auto
-
-versions:
-  1.12.2:
-    shasum: 3016ea56a175d2ca7f2568c8016420f7a2aad8f95e214fe7fa5485f4b80fbe51
-    variants:
-      - group_deps: 
-          compiler: 
-            gcc: [5.5.0,6.5.0,7.5.0,10.2.0,10.3.0]
-            intel: ....
-          mpi:
-            openmpi: [...]
-          #hdf5:
-        runtime_deps: 
-          cuda:10.0
-          ...
-        build_deps:
-          name:version
-
-
-
-      - with:
-        - gcc: [8.5.0,9.5.0,11.3.0,12.1.0]
-        relstage: unstable
-        overlay: devel                 
+default_variant: slurm
+suffix: _slurm
+    urls:
+      - url: https://support.hdfgroup.org/ftp/HDF5/releases/$P-${V_MAJOR}.${V_MINOR}/$P-${V_PKG}/src/$P-${V_PKG}.tar.gz
+        name: $P-${V_PKG}.tar.gz
 ....
 ====
 
-.YAML configuration file for HDF5 (serial and parallel)
+===== The 'shasums' structure
+
+The 'shasums' structure is a dictionary with filenames as keys and the corresponding 
+SHA256 hash sum as value.
+
+.YAML 'shasums' structure
 ====
 ....
-name: hdf5
-overlay: base
-relstage: stable
-url: https://support.hdfgroup.org/ftp/HDF5/releases/$P-${V_MAJOR}.${V_MINOR}/$P-${V_PKG}/src/$P-${V_PKG}.tar.gz
-systems: [rhel6 rhel7 rhel8]
-compilers: [gcc intel pgi]
-compile_in_sourcetree: no
-configure_with: auto
-
-versions:
-  1.12.2:
-    shasum: 3016ea56a175d2ca7f2568c8016420f7a2aad8f95e214fe7fa5485f4b80fbe51
-    variants:
-      - with:
-          - gcc [5.5.0 6.5.0 7.5.0 10.2.0 10.3.0] 
-        group: Compiler
-      - with:
-          - gcc [8.5.0,9.5.0,11.3.0,12.1.0]
-          - openmpi [4.0.5-2]
-        group: MPI
-        relstage: unstable
-        overlay: devel                 
+shasums:
+    - hdf5-1.10.8.tar.gz:  3016ea56a175d2ca7f2568c8016420f7a2aad8f95e214fe7fa5485f4b80fbe51
 ....
 ====
 
-.YAML configuration file for Git with git-lfs
+==== The 'versions' structure
+
+The 'versions' structure is a dictionary with version specifiers as keys.
+`<version specifier>`:: comma sepaarated list of versions. Curly bracket expansion is performed
+    per specified version. Example: `2.30.0,2.{35..37}.2`
+`<version specifier>.defaults`:: (optional) 'configuration' structure. These values overrides 
+   default values specified in `.<name>.defaults`. 
+`<version specifier>.variants`:: structure of type 'variants'
+
+===== The 'variants' structure
+
+List with elements of the following structure:
+
+`variant`:: (optional) list of variant names. Defaults to the empty string.
+`defaults`:: (optional) structure of type 'configuration'.
+`group_deps`:: (required for the hierarchical groups) structure of type 'group_deps'.
+`runtime_deps`:: (optional) structure of type 'runtime_deps'
+`build_requires`:: (optional) structure of type 'build_requires'
+
+===== The 'group_deps' structure
+
+The 'group_deps' structure is a dictionary with the following keys:
+
+`compiler`:: for the hierarchical group 'Compiler'
+`compiler`, `MPI`:: for the hierarchical group 'MPI'
+`compiler`, `MPI`, `HDF5`:: for the hierarchical group 'HDF5'
+`compiler`, `MPI`, `HDF5_serial`:: for the hierarchical group 'HDF5_serial'
+
+The value for `compiler` is another dictionary with the compiler name as key and a list of versions 
+as value. Analog for `MPI`, `HDF5` and `HDF5_serial`.
+
+.YAML example of 'group_deps' structure
 ====
 ....
-name: git
-defaults:
-  group: Tools
-  overlay: base
-  relstage: stable
-  url: https://mirrors.edge.kernel.org/pub/software/scm/$P/$P-${V_PKG}.tar.xz
-  systems: [rhel6 rhel7 rhel8]
-  compilers: [gcc]
-  compile_in_sourcetree: yes
-  configure_with: auto
-  script: build
-
-addons:
-  git-lfs/3.2.0:
-    - url: https://github.com/git-lfs/git-lfs/archive/refs/tags/v3.2.0.tar.gz
-      shasum: f8e6bbe043b97db8a5c16da7289e149a3fed9f4d4f11cffcc6e517c7870cd9e5
-      build_requires: [go/1.19] 
-      build_script: build-git-lfs   
-
-versions:
-  2.37.2:
-    shasum: 4c428908e3a2dca4174df6ef49acc995a4fdb1b45205a2c79794487a33bc06e5
-    variants:
-      - dependencies: TclTk/8.6.9
-        build_requires: [perl/5.30.0 asciidoc/8.6.9-1 xmlto/0.0.28 gettext/0.19.8]
-        relstage: unstable
-        overlay: devel
-        addons:
-          git-lfs: 3.2.0
-      
+compiler:
+  gcc: [9.5.0, 10.4.0, 11.4.0, 12.3.0, 13.1.0]
+  intel: [22.1, 22.2]
+mpi:
+  openmpi: [4.1.5, 4.2.0]
+  mpich: [3.3.1, 3.3.2]
 ....
 ====
 
-==== Format specification
-.YAML format
-....
-name: <Pmodule-name-without-version>
-source_url: "https://..."
-overlay: <opt-default-overlay>
-group: <default-group>
-relstage: <opt-default-release-stage>
-systems: [opt-array-of-supported]
-compilers: [opt-array-of-supported-compilers]
-compile-in-src: yes|no
-configure-with: cmake|autotools|auto|none
+===== The 'runtime_deps' structure
 
-versions:
-  - <version1>:
-      overlay: <overlay>
-      group: <group>
-      relstage: <release-stage>
-      systems: [supported-systems]
-      sources:
-        - url: <url>
-          shasum: <shasum>
-      compilers: <default-list-of-supported-compilers>
-      compile-in-src: yes|no
-      configure-with: cmake|autotools|auto|none
+The 'runtime_deps' structure is a list of modules which must be loaded
+at runtime for this module.
+
+.YAML example of 'runtime_deps' structure
+====
+....
+runtime_deps:
+  - TclTk/8.6.9
+....
+====
+
+===== The 'build_requires' structure
+
+The 'build_requires' structure is a list of modules which are required to 
+compile this module.
+
+.YAML example of 'runtime_deps' structure
+====
+....
+build_requires:
+  - gcc/10.4.0
+            - perl/5.30.0
+            - asciidoc/8.6.9-1
+            - xmlto/0.0.28
+            - gettext/0.19.8
+....
+====
+
+===== Example of a 'variants' structure
+
+.YAML example of a 'variants' structure
+====
+....
+ versions:
+    2.42.0:
       variants:
-        - with:
-          - gcc: [5.5.0,6.5.0,7.5.0,10.2.0,10.3.0]
-          dependencies: [array-of-runtime-deps]
-          build_requires: [array-of-build-deps]
-          relstage: <release-stage>
-          use: [array-of-use-flags]
-          overlay: <overlay>
-        ...
+        - config:
+            relstage: unstable
+            overlay: devel
+            runtime_deps:
+              - TclTk/8.6.9
+            build_requires:
+              - gcc/10.4.0
+              - perl/5.30.0
+              - asciidoc/8.6.9-1
+              - xmlto/0.0.28
+              - gettext/0.19.8
+    2.30.0,2.{35..37}.2:
+      variants:
+        - config:
+            relstage: stable
+            overlay: base
+            runtime_deps:
+              - TclTk/8.6.9
+            build_requires: [gcc/10.4.0, perl/5.30.0, asciidoc/8.6.9-1, xmlto/0.0.28, gettext/0.19.8]
+    2.8.1,2.10.0:
+      variants:
+        - config:
+            relstage: stable
+            overlay: base
+            runtime_deps: [TclTk/8.6.9]
+            build_requires: [gcc/9.4.0, perl/5.30.0, asciidoc/8.6.9, xmlto/0.0.28, gettext/0.19.8]               
 ....
-==== Defaults
-Default values can be overriden per version/variant.
+====
 
-`overlay`:: The default overlay the module will be installed in. This value can be overriden for dedicated versions/variants.
-`systems`:: The default for supported systems.
+==== Example of a YAML configuration file
 
-==== Versions and Variants
-
-`<name>/<version>`:: An array with variants for this version.
-
-`<name>/<version>.[i].with`:: Hierarchical dependencies for variant `i`.
-
-`<name>/<version>.[i].dependencies`:: Build/run-time dependencies for variant `i`.
-
-`<name>/<version>.[i].relstage`:: Relase stage of variant `i`.
-
-`<name>/<version>.[i].overlay`:: Overlay of variant `i`.
-
-`<name>/<version>.[i].systems`:: Supported systems.
-
-=== Legacy format
+.YAML the configuration file for the `git` Pmodule
+====
+....
+format: 1
+git:
+  defaults:
+    group: Tools
+    overlay: base
+    relstage: stable
+    systems: [rhel6, rhel7, rhel8]
+    compile_in_sourcetree: True
+    urls:
+      - url: https://mirrors.edge.kernel.org/pub/software/scm/git/git-${V_PKG}.tar.xz
+  shasums:
+    git-2.39.1.tar.gz: ae8d3427e4ccd677abc931f16183c0ec953e3bfcd866493601351e04a2b97398
+    git-2.37.2.tar.gz: 4c428908e3a2dca4174df6ef49acc995a4fdb1b45205a2c79794487a33bc06e5
+    git-2.37.0.tar.gz: fc3ffe6c65c1f7c681a1ce6bb91703866e432c762731d4b57c566d696f6d62c3
+    git-2.33.1.tar.gz: 02047f8dc8934d57ff5e02aadd8a2fe8e0bcf94a7158da375e48086cc46fce1d
+    git-2.30.0.tar.xz: 4c428908e3a2dca4174df6ef49acc995a4fdb1b45205a2c79794487a33bc06e5
+    git-2.22.0.tar.gz: a4b7e4365bee43caa12a38d646d2c93743d755d1cea5eab448ffb40906c9da0b
+    git-2.21.0.tar.gz: 85eca51c7404da75e353eba587f87fea9481ba41e162206a6f70ad8118147bee
+    git-2.8.1.tar.xz:  e6626b43ba4bc63ad4918df4c275f50bd7f8af2ab54bde60496ad75e91e927fc
+    git-2.3.3.tar.gz:  c189e4a48d8805482f450db666330c79bcefae37e0d035c7717517126ddf4305
+  versions:
+    2.42.0:
+      variants:
+        - config:
+            runtime_deps: [TclTk/8.6.9]
+            build_requires: [gcc/10.4.0, perl/5.30.0, asciidoc/8.6.9-1, xmlto/0.0.28, gettext/0.19.8]
+            relstage: unstable
+            overlay: devel
+    2.39.1,2.37.2,2.37.0,2.33.1,2.30.0,2.22.0,2.21.0:
+      variants:
+        - config:
+            runtime_deps: [TclTk/8.6.9]
+            build_requires: [gcc/10.4.0, perl/5.30.0, asciidoc/8.6.9-1, xmlto/0.0.28, gettext/0.19.8]
+    2.3.3,2.8.1:
+      variants:
+        - runtime_deps: [Tcl/8.6.9, Tk/8.6.9]
+....
+====
