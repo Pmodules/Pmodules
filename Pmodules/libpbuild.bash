@@ -23,7 +23,6 @@ declare -a CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
 declare -a PATCH_STRIP_DEFAULT='1'
-declare -a MODULE_DOCFILES=()
 declare -- configure_with='auto'
 
 #.............................................................................
@@ -425,6 +424,10 @@ pbuild.set_urls(){
 #	Maybe we should use a dictionary in the future.
 #
 pbuild::set_sha256sum() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	SOURCE_SHA256_SUMS+=("$1")
 }
 readonly -f pbuild::set_sha256sum
@@ -557,15 +560,25 @@ pbuild::prep() {
 				 "${module_name}/${module_version}:" \
 				 "source file '${_result}' is not readable!"
 
-		local sha256_sum=''
-		local hash=''
-		for hash in "${SOURCE_SHA256_SUMS[@]}"; do
-			if [[ ${hash} =~ $fname: ]]; then
-				sha256_sum="${hash#*:}"
+		local -- sha256_sum=''
+		if [[ "${opt_yaml}" == 'yes' ]]; then
+			if [[ -v SHASUMS[${fname}] ]]; then
+				sha256_sum="${SHASUMS[${fname}]}"
 			fi
-		done
+		else
+			local hash=''
+			for hash in "${SOURCE_SHA256_SUMS[@]}"; do
+				if [[ ${hash} =~ $fname: ]]; then
+					sha256_sum="${hash#*:}"
+					break
+				fi
+			done
+		fi
 		if [[ -n "${sha256_sum}" ]]; then
 			check_hash_sum "${dir}/${fname}" "${sha256_sum}"
+			std::info "${module_name}/${module_version}: SHA256 hash sum is OK ..." 
+		else
+			std::info "${module_name}/${module_version}: SHA256 hash sum missing NOK ..." 
 		fi
 	}
 
@@ -648,6 +661,11 @@ readonly -f pbuild::add_configure_args
 #..............................................................................
 #
 pbuild::use_autotools() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
+
 	configure_with='autotools'
 }
 readonly -f pbuild::use_autotools
@@ -655,6 +673,10 @@ readonly -f pbuild::use_autotools
 #..............................................................................
 #
 pbuild::use_cmake() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	configure_with='cmake'
 }
 readonly -f pbuild::use_cmake
@@ -689,6 +711,10 @@ readonly -f pbuild::use_cc
 declare -- compile_in_sourcetree='No'
 
 pbuild::compile_in_sourcetree() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	compile_in_sourcetree='Yes'
 }
 readonly -f pbuild::compile_in_sourcetree
@@ -791,6 +817,10 @@ pbuild::compile() {
 #   $@: documentation files relative to source
 #
 pbuild::install_docfiles() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	MODULE_DOCFILES+=("$@")
 }
 readonly -f pbuild::install_docfiles

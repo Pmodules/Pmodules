@@ -284,7 +284,7 @@ std::get_os_release() {
 }
 
 std::get_type() {
-	local -a signature=$(typeset -p "$1")
+	local -a signature=( $(typeset -p "$1") )
 	case ${signature[1]} in
 		-Ai* )
 			echo 'int dict'
