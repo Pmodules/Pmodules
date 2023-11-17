@@ -892,8 +892,17 @@ pbuild.build_module_legacy(){
 }
 readonly -f pbuild.build_module_legacy
 
+declare -n Config
+declare -- Systems
 pbuild.build_module_yaml(){
-	_build_module "$@"
+	local -- module_name="$1"
+	local -- module_version="$2"
+	Config=$3
+	local -- module_relstage="${Config['relstage']}"
+	local -- tmp="${Config['systems']//::/, }"
+	Systems="${tmp:1:-1}"
+	shift 3
+	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }
 readonly -f pbuild.build_module_yaml
 

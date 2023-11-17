@@ -858,9 +858,6 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		shift 3
-		local -a module_deps=( "$@" )
-
 		local -a with_compiler=()
 		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
 		debug "${with_compiler[@]}"
@@ -869,9 +866,9 @@ build_modules_yaml_v1(){
 		for compiler in "${with_compiler[@]}"; do
 			pbuild.build_module_yaml \
 				"${module_name}" "${module_version}" \
-				"${module_cfg['relstage']}" \
+				"$3" \
 				"${compiler}" \
-				"${module_deps[@]}"
+				"${@:4}"
 		done
 	}
 
@@ -879,9 +876,6 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		shift 3
-		local -a module_deps=( "$@" )
-
 		local -a with_compiler=()
 		local -a with_hdf5=()
 		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
@@ -897,10 +891,10 @@ build_modules_yaml_v1(){
 				debug "  build requires: ${build_requires[@]}"
 				pbuild.build_module_yaml \
 					"${module_name}" "${module_version}" \
-					"${module_cfg['relstage']}" \
+					"$3" \
 					"${compiler}" \
 					"${hdf5}" \
-					"${module_deps[@]}"
+					"${@:4}"
 			done
 		done
 	}
@@ -910,9 +904,6 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		shift 3
-		local -a module_deps=( "$@" )
-
 		local -a with_compiler=()
 		local -a with_mpi=()
 		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
@@ -930,10 +921,10 @@ build_modules_yaml_v1(){
 				debug "  build requires: ${build_requires[@]}"
 				pbuild.build_module_yaml \
 					"${module_name}" "${module_version}" \
-					"${module_cfg['relstage']}" \
+					"$3" \
 					"${compiler}" \
 					"${mpi}" \
-					"${module_deps[@]}"
+					"${@:4}"
 			done
 		done
 	}
@@ -942,9 +933,6 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		shift 3
-		local -a module_deps=( "$@" )
-
 		local -a with_compiler=()
 		local -a with_mpi=()
 		local -a with_hdf5=()
@@ -967,11 +955,11 @@ build_modules_yaml_v1(){
 					debug "  build requires: ${build_requires[@]}"
 					pbuild.build_module_yaml \
 						"${module_name}" "${module_version}" \
-						"${module_cfg['relstage']}" \
+						"$3" \
 						"${compiler}" \
 						"${mpi}" \
 						"${hdf5}" \
-						"${module_deps[@]}"
+						"${@:4}"
 				done
 			done
 		done
@@ -982,12 +970,10 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		shift 3
-		local -a module_deps=( "$@" )
 		pbuild.build_module_yaml \
                         "${module_name}" "${module_version}" \
-                        "${module_cfg['relstage']}" \
-			"${module_deps[@]}"
+                        "$3" \
+			"${@:4}"
 	}
 
 	set_urls() {
