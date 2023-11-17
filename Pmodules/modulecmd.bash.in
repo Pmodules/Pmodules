@@ -311,7 +311,8 @@ get_module_config(){
 	local -r config_file="${modulefile%/*}/.config-${modulefile##*/}"
 	local -r rel_stage_file="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${config_file} ]]; then
-		local -- yaml=$(${yq} -e '.')
+		local -- yaml=$(${yq} -e '.' < "${config_file}")
+		debug "yaml: ${yaml}"
 		local -- key=''
 		for key in ${!ref_cfg[@]}; do
 			case "${key,,}" in
