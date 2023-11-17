@@ -352,17 +352,39 @@ is_available(){
 	- the blocklist is empty or the hostname is NOT in the list
 	"
 	local -n ref_cfg="$1"
-	local -- rel_stages="$2"
+	local -- relstages="$2"
 	local -- system="$3"
 	local -- hostname="$4"
 
-	[[ ":${rel_stages}:" =~ ":${ref_cfg['rel_stage']}:" ]] || return 1
-	if [[ "${ref_cfg['systems']}" != "" ]]; then
-		[[ "${ref_cfg['systems']//$'\n'/:}:" =~ "${system}" ]] || return 1
-	fi
-	if [[ "${ref_cfg['blocklist']}" != "" ]]; then
-		[[ "${ref_cfg['blocklist']//$'\n'/:}:" =~ "${hostname}" ]] && return 1
-	fi
+	check_relstage(){
+		[[ ":${relstages}:" =~ ":${ref_cfg['relstage']}:" ]]
+	}
+	check_blocklist(){
+		[[ -z ${ref_cfg['blocklist']} ]] && return 0
+		local -- s=''
+		for s in ${ref_cfg['blocklist']}; do
+			if [[ "${system}" == $s ]] || [[ "${HOSTNAME}" == $s ]]; then
+				return 0
+			fi
+		done
+		return 1
+	}
+	check_systems(){
+		[[ -z ${ref_cfg['systems']} ]] && return 0
+		local -- s=''
+		for s in ${ref_cfg['systems']}; do
+			if [[ "${system}" == $s ]] || [[ "${HOSTNAME}" == $s ]]; then
+				return 0
+			fi
+		done
+		return 1
+	}
+	set -o noglob
+	check_relstage && check_blocklist && check_systems
+	local -i ec=$?
+	set +o noglob
+	return ${ec}
+
 }
 
 #
