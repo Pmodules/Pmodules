@@ -698,9 +698,10 @@ build_modules_yaml_v1(){
 			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
 		debug "config keys: ${keys[@]}"
 		for key in "${keys[@]}"; do
+			key="${key,,}"
 			[[ -v dfl[$key] ]] || \
 				std::die 3 "%s -- %s\n%s" \
-					 "Ivalid key in configuration" \
+					 "Invalid key in configuration" \
 					 "${key}" "${yaml_input}"
 			case ${key} in
 				compile_in_sourcetree )
