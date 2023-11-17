@@ -1497,26 +1497,71 @@ _build_module() {
 	}
 
 	install_release_file() {
- 		local -r release_file="${modulefile_dir}/.release-${module_version}"
+ 		local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
+		local -- status_legay_config_file='unchanged'
+ 		local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
+		local -- status_yaml_config_file='unchanged'
 
-		if [[ -r "${release_file}" ]]; then
-			local release
-			read release < "${release_file}"
-			if [[ "${release}" != "${module_release}" ]]; then
+		if [[ -r "${legacy_config_file}" ]]; then
+			local relstage_legacy
+			read relstage_legacy < "${legacy_config_file}"
+			if [[ "${relstage_legacy}" != "${module_release}" ]]; then
+				status_legay_config_file='changed'
+			fi
+		else
+			status_legay_config_file='new'
+		fi
+		if [[ "${status_legay_config_file}" != 'unchanged' ]]; then
+			echo "${module_release}" > "${legacy_config_file}"
+		fi
+
+		if [[ -r "${yaml_config_file}" ]]; then
+			while read key value; do
+				local -n ref="${key:0:-1}"
+				ref="${value}"
+			done < "${yaml_config_file}"
+			if [[ "${relstage}" != "${module_release}" ]]; then
+				status_yaml_config_file='changed'
+			fi
+		else
+			status_yaml_config_file='new'
+		fi
+		if [[ "${status_yaml_config_file}" != 'unchanged' ]]; then
+			echo "relstage: ${module_release}" > "${yaml_config_file}"
+			echo "Systems: [${Systems}]" >> "${yaml_config_file}"
+		fi
+
+		case ${status_yaml_config_file},${status_legay_config_file} in
+			unchanged,unchanged | new,unchanged)
+				:
+				;;
+			unchanged,changed )
 				std::info \
 					"%s " \
 					"${module_name}/${module_version}:" \
-					"changing release from" \
-					"'${release}' to '${module_release}' ..."
-				echo "${module_release}" > "${release_file}"
-			fi
-		else
-			std::info \
-				"%s " \
-				"${module_name}/${module_version}:" \
-				"setting release to '${module_release}' ..."
-			echo "${module_release}" > "${release_file}"
-		fi
+					"changing release stage from" \
+					"'${relstage_legacy}' to '${module_release}' in legacy config file ..."
+				;;
+			unchanged,new )
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"setting release stage to '${module_release}' in legacy config file ..."
+				;;
+			changed,unchanged | changed,changed | changed,new | new,changed )
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"changing release stage from" \
+					"'${relstage_legacy}' to '${module_release}' ..."
+				;;
+			new,new )
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"setting release stage to '${module_release}' ..."
+				;;
+		esac
 	}
 
 	cleanup_build() {
