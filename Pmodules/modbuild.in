@@ -744,7 +744,14 @@ build_modules_yaml_v1(){
 						value=''
 					cfg[${key}]="${value}"
 					;;
-				systems | variant )
+				systems )
+					value=$( ${yq} -e ".${key}.[]" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					readarray -t tmp <<<"${value}"
+					cfg[${key}]="${tmp[@]}"
+					;;
+				variant )
 					value=$( ${yq} -e ".${key}.[]" \
 						       2>/dev/null <<<"${yaml_input}" ) || \
 						value=''
