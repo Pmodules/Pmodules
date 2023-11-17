@@ -802,7 +802,7 @@ build_modules_yaml_v1(){
 			done
 		done
 		(( ${#refvar[@]} == 0 )) && \
-			std::die 3 "No configuration for version -- $1"
+			std::die 3 "No configuration for version -- ${version}"
 		return 0
 	}
 
