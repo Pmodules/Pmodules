@@ -511,7 +511,7 @@ get_yaml_file_fmt(){
 	Get format version of configuration file. Print the version number
 	to stdout if it is valid.
 	"
-	${yq} -e '.' "$1" &>- || \
+	${yq} -e '.' "$1" &>/dev/null || \
 		std::die 3 "%s -- %s" \
 			 "Error in YAML config file, please check with linter" \
 			 "$1"
