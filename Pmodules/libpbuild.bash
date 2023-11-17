@@ -1184,13 +1184,17 @@ _build_module() {
 
 	#......................................................................
 	check_supported_systems() {
-		(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
-		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-			[[ ${sys,,} == ${system,,} ]] && return 0
-		done
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Not available for ${system}."
+		if [[ "${opt_yaml,,}" == 'no' ]]; then
+			(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
+			for sys in "${SUPPORTED_SYSTEMS[@]}"; do
+				[[ ${sys,,} == ${system,,} ]] && return 0
+			done
+			std::die 1 \
+				 "%s " "${module_name}/${module_version}:" \
+				 "Not available for ${system}."
+		else
+			: debug "Systems: $Systems"
+		fi
 	}
 
 	#......................................................................
