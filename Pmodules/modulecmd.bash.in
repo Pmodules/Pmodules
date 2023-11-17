@@ -656,30 +656,6 @@ subcommand_load() {
 		g_env_must_be_saved='yes'
 	}
 
-	is_blocked() {
-		: "
-		test whether a module is blocked or not.
-
-		args:
-			$1: prefix of module
-
-		exit codes:
-			0: if blocked
-			1: otherwise
-		"
-		local _prefix="$1"
-		test -e "${_prefix}/.blocklist" || return 1 # not blocked!
-		local _pattern='//'
-		while read line; do
-			_pattern+=' && !'"/${line}/"
-		done < "${_prefix}/.blocklist"
-		local out=$(awk "${_pattern}"' {print $0}' <<< "${HOSTNAME}")
-		[[ -z "${out}" ]] || return 1  # not blocked!
-		[[ -r "${_prefix}/.blockmsg" ]] || return 0
-		cat "${_prefix}/.blockmsg" 1>&2
-		return 0
-	}
-
 	#......................................................................
 	local args=()
 	local opts=()
@@ -803,7 +779,6 @@ subcommand_load() {
 			die_not_a_modulefile "${m}"
 		local prefix=''
 		get_module_prefix prefix "${current_modulefile}"
-		is_blocked "${prefix}" && die_is_blocked "${m}"
                 if [[ -n ${prefix} ]]; then
                         test -r "${prefix}/.info" && cat "$_" 1>&2
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
