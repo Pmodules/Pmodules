@@ -329,7 +329,7 @@ get_module_config(){
 					;;
 			esac
 			if [[ "${value}" != 'null' ]]; then
-				ref_cfg[${key}]="${value}"
+				ref_cfg[${key,,}]="${value}"
 			fi
 		done
 		return 0
@@ -3392,6 +3392,10 @@ case "$1" in
 esac
 shift
 
+debug(){
+	:
+}
+
 # parse agruments till and including the sub-command
 declare -a opts=()
 while (( $# > 0 )); do
@@ -3403,6 +3407,11 @@ while (( $# > 0 )); do
 			print_help 'version'
 			;;
 		--debug )
+			debug(){
+				echo "DEBUG: " "$@" 1>&2
+			}
+			;;
+		--verbose )
 			set -x
 			;;
 		'' )
