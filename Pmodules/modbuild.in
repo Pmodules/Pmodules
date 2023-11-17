@@ -1014,6 +1014,24 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_config="$3"
+
+		check_system(){
+			[[ -z ${module_config['systems']} ]] && return 0
+
+			set -o noglob
+			local -a systems=( ${module_config['systems']} )
+			set +o noglob
+
+			local -- system
+			for system in "${systems[@]}"; do
+				[[ "${opt_system}" == ${system} ]] && return 0
+				[[ "${HOSTNAME}" == ${system} ]] && return 0
+			done
+			std::info "Skipping variant '${module_version}', neither OS nor hostname match:"
+			std::info  " This system: ${opt_system}; hostname: ${HOSTNAME}"
+			std::info  " Systems to build on: ${systems[@]}"
+			return 1
+		}
 		
 		P="${module_name}"
 		parse_version "${module_version}"
@@ -1027,11 +1045,7 @@ build_modules_yaml_v1(){
 		fi
 		
 		# build for this system?
-		if [[ -n ${module_config['systems']} ]] && \
-			   [[ ":${module_config['systems']}:" != *:${opt_system}:* ]]; then
-			debug "don't build for this system: ${module_config['systems']} !=  *:${opt_system}:*"
-			return 0
-		fi
+		check_system || return 0
 
 		debug "build variant ${module_name}/${module_version}"
 
