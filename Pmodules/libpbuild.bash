@@ -1709,6 +1709,14 @@ _build_module() {
 				"removing release file '${release_file}' ..."
 			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${release_file}"
 		fi
+		release_file="${modulefile_dir}/.config-${module_version}"
+		if [[ -e "${release_file}" ]]; then
+			std::info \
+				"%s " \
+				"${module_name}/${module_version}:" \
+				"removing release file '${release_file}' ..."
+			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${release_file}"
+		fi
 		${rmdir} -p "${modulefile_dir}" 2>/dev/null || :
 	}
 
@@ -1767,7 +1775,7 @@ _build_module() {
 		"${module_name}/${module_version}:" \
 		${with_modules:+build with ${with_modules[@]}}
 
-	if [[ "${module_release}" == 'removed' ]]; then
+	if [[ "${module_release}" == 'remove' ]]; then
 		remove_module
 	elif [[ "${module_release}" == 'deprecated' ]]; then
 		deprecate_module

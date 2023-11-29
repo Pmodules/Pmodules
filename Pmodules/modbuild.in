@@ -739,6 +739,25 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
+				relstage )
+					value=$( ${yq} ".${key}" \
+						       2>/dev/null <<<"${yaml_input}" ) || \
+						value=''
+					case ${value,,} in
+						unstable | stable | deprecated )
+							cfg[${key}]="${value,,}"
+							;;
+						remove | removed )
+							cfg[${key}]='remove'
+							;;
+						* )
+							std::die 3 "%s '%s' -- %s" \
+								 "Invalid value for" \
+								 'relstage' \
+								 "${value}"
+							;;
+					esac
+					;;
 				urls | group_deps )
 					value=$( ${yq} -e ".${key}" \
 						       2>/dev/null <<<"${yaml_input}" ) || \
