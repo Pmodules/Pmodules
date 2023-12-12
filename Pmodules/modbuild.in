@@ -624,32 +624,32 @@ parse_version() {
 }
 
 declare -A Yaml_valid_keys_for_module=(
-	['defaults']=1
-	['shasums']=1
-	['versions']=1
+	['defaults']=1			# !!map
+	['shasums']=1			# !!map
+	['versions']=1			# !!int
 )
 
 declare -A Yaml_default_config=(
-	["build_requires"]=''
-	["compile_in_sourcetree"]='No'
-	["configure_with"]='auto'
-	["default_variant"]=''
-	["docfiles"]=''
-	["group"]='Tools'
-	["group_deps"]=''
-	["overlay"]='base'
-	["relstage"]='unstable'
-	["runtime_deps"]=''
-	["script"]='build'
-	["suffix"]=''
-	["systems"]=''
-	["urls"]=''
-	["variant"]=''
+	["build_requires"]=''		# !!seq of strings
+	["compile_in_sourcetree"]='No'  # !!str
+	["configure_with"]='auto'	# !!str
+	["default_variant"]=''          # !!str
+	["docfiles"]=''			# !!seq of strings
+	["group"]='Tools'		# !!str
+	["group_deps"]=''		# !!map
+	["overlay"]='base'		# !!str
+	["relstage"]='unstable'		# !!str
+	["runtime_deps"]=''		# !!seq of strings
+	["script"]='build'		# !!str
+	["suffix"]=''			# !!str
+	["systems"]=''			# !!seq of strings
+	["urls"]=''			# !!map
+	["variant"]=''			# !!str
 )
 
 declare -A Yaml_valid_vk_keys=(
-	['config']=1
-	['variants']=1
+	['config']=1			# !!map
+	['variants']=1			# !!map
 )
 	
 
@@ -678,6 +678,22 @@ build_modules_yaml_v1(){
 		done
 	}
 
+	get_value(){
+		local -- yaml_input="$1"
+		local -n val="$2"
+		local -- key="$3"
+		local -- expected_type="$4"
+		
+		local -- type=''
+		type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
+		if [[ "${type}" != "${expected_type}" ]]; then
+			std::die 3 "%s" \
+				 "Value of '${key}' must be of type '${expected_type:2}', but is '${type:2}'!"
+		fi
+		val=$( ${yq} -e ".${key}" \
+			       2>/dev/null <<<"${yaml_input}" ) || val=''
+	}
+
 	get_config(){
 		local -- yaml_input="$1"
 		local -n cfg="$2"	# ref. to return configuration
@@ -697,23 +713,21 @@ build_modules_yaml_v1(){
 		keys=( $( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null )) || \
 			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
 		debug "config keys: ${keys[@]}"
+		local -- type;
 		for key in "${keys[@]}"; do
-			key="${key,,}"
-			[[ -v dfl[$key] ]] || \
+			[[ -v dfl[${key,,}] ]] || \
 				std::die 3 "%s -- %s\n%s" \
 					 "Invalid key in configuration" \
 					 "${key}" "${yaml_input}"
 			case ${key} in
 				compile_in_sourcetree )
-					value=$( ${yq} -e ".${key}" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
+					get_value "${yaml_input}" value "${key}" '!!bool'
 					case ${value,,} in
-						true | on | yes )
-							cfg[${key}]='Yes'
+						true )
+							cfg[${key,,}]='Yes'
 							;;
-						false | off | no )
-							cfg[${key}]='No'
+						false )
+							cfg[${key,,}]='No'
 							;;
 						* )
 							std::die 3 "%s '%s' -- %s" \
@@ -724,12 +738,10 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				configure_with )
-					value=$( ${yq} ".${key}" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
+					get_value "${yaml_input}" value "${key}" '!!str'
 					case ${value,,} in
 						auto | cmake | autotools )
-							cfg[${key}]="${value,,}"
+							cfg[${key,,}]="${value,,}"
 							;;
 						* )
 							std::die 3 "%s '%s' -- %s" \
@@ -740,15 +752,13 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				relstage )
-					value=$( ${yq} ".${key}" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
+					get_value "${yaml_input}" value "${key}" '!!str'
 					case ${value,,} in
 						unstable | stable | deprecated )
-							cfg[${key}]="${value,,}"
+							cfg[${key,,}]="${value,,}"
 							;;
 						remove | removed )
-							cfg[${key}]='remove'
+							cfg[${key,,}]='remove'
 							;;
 						* )
 							std::die 3 "%s '%s' -- %s" \
@@ -758,39 +768,35 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
-				urls | group_deps )
-					value=$( ${yq} -e ".${key}" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
-					cfg[${key}]="${value}"
+				urls )
+					get_value "${yaml_input}" value "${key}" '!!seq'
+					cfg[${key,,}]="${value}"
+					;;
+				group_deps )
+					get_value "${yaml_input}" value "${key}" '!!map'
+					cfg[${key,,}]="${value}"
 					;;
 				systems )
-					value=$( ${yq} -e ".${key}.[]" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
+					get_value "${yaml_input}" value "${key}" '!!seq'
 					readarray -t tmp <<<"${value}"
-					cfg[${key}]="${tmp[@]}"
+					cfg[${key,,}]="${tmp[@]}"
 					;;
 				variant )
-					value=$( ${yq} -e ".${key}.[]" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
+					get_value "${yaml_input}" value "${key}" '!!seq'
 					readarray -t tmp <<<"${value}" 
 					printf -v tmp2 ":%s:" "${tmp[@]}"
-					cfg[${key}]="${tmp2}"
+					cfg[${key,,}]="${tmp2}"
 					:
 					;;
 				docfiles | runtime_deps | build_requires )
-					value=$( ${yq} -e ".${key}[]" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
-					cfg[${key}]="${value}"
+					get_value "${yaml_input}" value "${key}" '!!seq'
+					cfg[${key,,}]="${value}"
 					;;
 				* )
 					value=$( ${yq} -e ".${key}" \
 						       2>/dev/null <<<"${yaml_input}" ) || \
 						value=''
-					cfg[${key}]="${value}"
+					cfg[${key,,}]="${value}"
 			esac
 		done
 	}
