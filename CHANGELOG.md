@@ -7,6 +7,7 @@
   * the release stage
   * the list of systems the module is available
   * the list of systems the module shadowed
+
   Wherby the items in list of systems are either
   * hostnames or glob style patterns of hostnames (e.g. merlin-*)
   * OS names like rhel7
