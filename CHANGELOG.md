@@ -24,7 +24,6 @@
 ## Version 1.1.15
 
 ### **modulecmd**
-
 **User visible changes**
 * prevent loading of a module on dedicated systems via blocklist
 
@@ -37,45 +36,52 @@
 **Internal changes and fixes***
 * bugfix: due to a bug in compiling the list of (legacy) config files,
   each module was build twice.
+---
 
 ## Version 1.1.14
-* **modbuild** 
-  * *Internal changes and fixes*
-    * lookup of default legacy config files fixed
+
+### **modbuild** 
+**Internal changes and fixes***
+* lookup of default legacy config files fixed
+---
 
 ## Version 1.1.13
-* **modulecmd**
-  * *User visible changes*
-	* collections
-	* shadowing modules with an overlay
-	* Lmod support
-	* argument/option handling fixed
-	* using groups/extending MODULEPATH fixed (module use ...)
-  * *Internal changes and fixes*
-	* use Lua and Lmod from Pmodules
-	* std::upvar() replaced
-	* Bugfixes
+### **modulecmd**
+**User visible changes**
+* collections
+* shadowing modules with an overlay
+* Lmod support
+* argument/option handling fixed
+* using groups/extending MODULEPATH fixed (module use ...)
+
+**Internal changes and fixes**
+* use Lua and Lmod from Pmodules
+* std::upvar() replaced
+* Bugfixes
+---
 
 ## Version 1.1.12
-* **modulecmd**
-  * *User visible changes*
-	* experimental support for Lmod
-	* support for use flags has been removed.
-          (A postfix like '_slurm' can still be used)
+### **modulecmd**
+**User visible changes**
+* experimental support for Lmod
+* support for use flags has been removed.
+  (A postfix like '_slurm' can still be used)
+---
 
 ## Version 1.1.11
-* **modulecmd**
-  * *User visible changes*
-	* Improved error handling and messages
-	* Python support added
-  * *Internal changes and fixes*
-	* Bugfixes
+### **modulecmd**
+**User visible changes**
+* Improved error handling and messages
+* Python support added
 
-* **build-system**
-  * *User visible changes*
-    * building with legacy variants files fixed.
-    * building with YAML config files is still experimental
-      and not recommended for now
+**Internal changes and fixes**
+* Bugfixes
+
+### **build-system**
+**User visible changes**
+* building with legacy variants files fixed.
+* building with YAML config files is still experimental
+  and not recommended for now
 
 ## Version 1.1.10 
 * **modulecmd**
