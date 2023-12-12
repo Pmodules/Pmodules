@@ -1,6 +1,7 @@
 # Changelog of Pmodules
 
 ## Version 1.1.16
+
 ### **modulecmd**
 **User visible changes**
 * YAML module configuration file. Configured in this file are
@@ -11,26 +12,31 @@
   Wherby the items in list of systems are either
   * hostnames or glob style patterns of hostnames (e.g. merlin-*)
   * OS names like rhel7
+  
+  The filename is `.config-<version>` and is located in the same directory as the modulefile.
+  For now the `.release-<version>` files are still used if no YAML configuration file exist.
 
 ### **modbuild**
 **User visible changes**
-* YAML build configuration files
-
-**Internal changes and fixes**
-
+* YAML build configuration files. For now `variants` files are still supported.
+---
 
 ## Version 1.1.15
-* **modulecmd**
-  * *User visible changes*
-	* prevent loading of a module on dedicated systems via blocklist
-* **modbuild**
-  * *User visible changes*
-    * the function to compare versions can now be called with a single
-	  argument. In this case the given version is compared to version
-	  of currently build module.
-  * *Internal changes and fixes*
-    * bugfix: due to a bug in compiling the list of (legacy) config files,
-	  each module was build twice.
+
+### **modulecmd**
+
+**User visible changes**
+* prevent loading of a module on dedicated systems via blocklist
+
+### **modbuild**
+**User visible changes**
+* the function to compare versions can now be called with a single
+  argument. In this case the given version is compared to version
+  of currently build module.
+
+**Internal changes and fixes***
+* bugfix: due to a bug in compiling the list of (legacy) config files,
+  each module was build twice.
 
 ## Version 1.1.14
 * **modbuild** 
