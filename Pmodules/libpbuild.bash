@@ -23,7 +23,6 @@ declare -a CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
 declare -a PATCH_STRIP_DEFAULT='1'
-declare -a MODULE_DOCFILES=()
 declare -- configure_with='auto'
 
 #.............................................................................
@@ -425,6 +424,10 @@ pbuild.set_urls(){
 #	Maybe we should use a dictionary in the future.
 #
 pbuild::set_sha256sum() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	SOURCE_SHA256_SUMS+=("$1")
 }
 readonly -f pbuild::set_sha256sum
@@ -557,15 +560,25 @@ pbuild::prep() {
 				 "${module_name}/${module_version}:" \
 				 "source file '${_result}' is not readable!"
 
-		local sha256_sum=''
-		local hash=''
-		for hash in "${SOURCE_SHA256_SUMS[@]}"; do
-			if [[ ${hash} =~ $fname: ]]; then
-				sha256_sum="${hash#*:}"
+		local -- sha256_sum=''
+		if [[ "${opt_yaml}" == 'yes' ]]; then
+			if [[ -v SHASUMS[${fname}] ]]; then
+				sha256_sum="${SHASUMS[${fname}]}"
 			fi
-		done
+		else
+			local hash=''
+			for hash in "${SOURCE_SHA256_SUMS[@]}"; do
+				if [[ ${hash} =~ $fname: ]]; then
+					sha256_sum="${hash#*:}"
+					break
+				fi
+			done
+		fi
 		if [[ -n "${sha256_sum}" ]]; then
 			check_hash_sum "${dir}/${fname}" "${sha256_sum}"
+			std::info "${module_name}/${module_version}: SHA256 hash sum is OK ..." 
+		else
+			std::info "${module_name}/${module_version}: SHA256 hash sum missing NOK ..." 
 		fi
 	}
 
@@ -648,6 +661,11 @@ readonly -f pbuild::add_configure_args
 #..............................................................................
 #
 pbuild::use_autotools() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
+
 	configure_with='autotools'
 }
 readonly -f pbuild::use_autotools
@@ -655,6 +673,10 @@ readonly -f pbuild::use_autotools
 #..............................................................................
 #
 pbuild::use_cmake() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	configure_with='cmake'
 }
 readonly -f pbuild::use_cmake
@@ -689,6 +711,10 @@ readonly -f pbuild::use_cc
 declare -- compile_in_sourcetree='No'
 
 pbuild::compile_in_sourcetree() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	compile_in_sourcetree='Yes'
 }
 readonly -f pbuild::compile_in_sourcetree
@@ -791,6 +817,10 @@ pbuild::compile() {
 #   $@: documentation files relative to source
 #
 pbuild::install_docfiles() {
+	if [[ ${opt_yaml} == 'yes' ]]; then
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	fi
 	MODULE_DOCFILES+=("$@")
 }
 readonly -f pbuild::install_docfiles
@@ -862,8 +892,17 @@ pbuild.build_module_legacy(){
 }
 readonly -f pbuild.build_module_legacy
 
+declare -n Config
+declare -- Systems
 pbuild.build_module_yaml(){
-	_build_module "$@"
+	local -- module_name="$1"
+	local -- module_version="$2"
+	Config=$3
+	local -- module_relstage="${Config['relstage']}"
+	local -- tmp="${Config['systems']//::/, }"
+	Systems="${tmp:1:-1}"
+	shift 3
+	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }
 readonly -f pbuild.build_module_yaml
 
@@ -1145,13 +1184,17 @@ _build_module() {
 
 	#......................................................................
 	check_supported_systems() {
-		(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
-		for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-			[[ ${sys,,} == ${system,,} ]] && return 0
-		done
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Not available for ${system}."
+		if [[ "${opt_yaml,,}" == 'no' ]]; then
+			(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
+			for sys in "${SUPPORTED_SYSTEMS[@]}"; do
+				[[ ${sys,,} == ${system,,} ]] && return 0
+			done
+			std::die 1 \
+				 "%s " "${module_name}/${module_version}:" \
+				 "Not available for ${system}."
+		else
+			: debug "Systems: $Systems"
+		fi
 	}
 
 	#......................................................................
@@ -1454,26 +1497,71 @@ _build_module() {
 	}
 
 	install_release_file() {
- 		local -r release_file="${modulefile_dir}/.release-${module_version}"
+ 		local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
+		local -- status_legay_config_file='unchanged'
+ 		local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
+		local -- status_yaml_config_file='unchanged'
 
-		if [[ -r "${release_file}" ]]; then
-			local release
-			read release < "${release_file}"
-			if [[ "${release}" != "${module_release}" ]]; then
+		if [[ -r "${legacy_config_file}" ]]; then
+			local relstage_legacy
+			read relstage_legacy < "${legacy_config_file}"
+			if [[ "${relstage_legacy}" != "${module_release}" ]]; then
+				status_legay_config_file='changed'
+			fi
+		else
+			status_legay_config_file='new'
+		fi
+		if [[ "${status_legay_config_file}" != 'unchanged' ]]; then
+			echo "${module_release}" > "${legacy_config_file}"
+		fi
+
+		if [[ -r "${yaml_config_file}" ]]; then
+			while read key value; do
+				local -n ref="${key:0:-1}"
+				ref="${value}"
+			done < "${yaml_config_file}"
+			if [[ "${relstage}" != "${module_release}" ]]; then
+				status_yaml_config_file='changed'
+			fi
+		else
+			status_yaml_config_file='new'
+		fi
+		if [[ "${status_yaml_config_file}" != 'unchanged' ]]; then
+			echo "relstage: ${module_release}" > "${yaml_config_file}"
+			echo "Systems: [${Systems}]" >> "${yaml_config_file}"
+		fi
+
+		case ${status_yaml_config_file},${status_legay_config_file} in
+			unchanged,unchanged | new,unchanged)
+				:
+				;;
+			unchanged,changed )
 				std::info \
 					"%s " \
 					"${module_name}/${module_version}:" \
-					"changing release from" \
-					"'${release}' to '${module_release}' ..."
-				echo "${module_release}" > "${release_file}"
-			fi
-		else
-			std::info \
-				"%s " \
-				"${module_name}/${module_version}:" \
-				"setting release to '${module_release}' ..."
-			echo "${module_release}" > "${release_file}"
-		fi
+					"changing release stage from" \
+					"'${relstage_legacy}' to '${module_release}' in legacy config file ..."
+				;;
+			unchanged,new )
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"setting release stage to '${module_release}' in legacy config file ..."
+				;;
+			changed,unchanged | changed,changed | changed,new | new,changed )
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"changing release stage from" \
+					"'${relstage_legacy}' to '${module_release}' ..."
+				;;
+			new,new )
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"setting release stage to '${module_release}' ..."
+				;;
+		esac
 	}
 
 	cleanup_build() {
@@ -1621,6 +1709,14 @@ _build_module() {
 				"removing release file '${release_file}' ..."
 			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${release_file}"
 		fi
+		release_file="${modulefile_dir}/.config-${module_version}"
+		if [[ -e "${release_file}" ]]; then
+			std::info \
+				"%s " \
+				"${module_name}/${module_version}:" \
+				"removing release file '${release_file}' ..."
+			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${release_file}"
+		fi
 		${rmdir} -p "${modulefile_dir}" 2>/dev/null || :
 	}
 
@@ -1679,7 +1775,7 @@ _build_module() {
 		"${module_name}/${module_version}:" \
 		${with_modules:+build with ${with_modules[@]}}
 
-	if [[ "${module_release}" == 'removed' ]]; then
+	if [[ "${module_release}" == 'remove' ]]; then
 		remove_module
 	elif [[ "${module_release}" == 'deprecated' ]]; then
 		deprecate_module
