@@ -3,11 +3,14 @@
 ## Version 1.1.16
 ### **modulecmd**
 **User visible changes**
-* YAML module configuration file. Configured in this file
-  * release stage
-  * list of systems the module is available for
-  * list of systems the module shadowed
-	
+* YAML module configuration file. Configured in this file are
+  * the release stage
+  * the list of systems the module is available
+  * the list of systems the module shadowed
+  Wherby the items in list of systems are either
+  * hostnames or glob style patterns of hostnames (e.g. merlin-*)
+  * OS names like rhel7
+
 ### **modbuild**
 **User visible changes**
 * YAML build configuration files
