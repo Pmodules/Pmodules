@@ -1,5 +1,20 @@
 # Changelog of Pmodules
 
+## Version 1.1.16
+### **modulecmd**
+**User visible changes**
+* YAML module configuration file. Configured in this file
+  * release stage
+  * list of systems the module is available for
+  * list of systems the module shadowed
+	
+### **modbuild**
+**User visible changes**
+* YAML build configuration files
+
+**Internal changes and fixes**
+
+
 ## Version 1.1.15
 * **modulecmd**
   * *User visible changes*
