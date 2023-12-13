@@ -2,7 +2,7 @@
 
 ## Version 1.1.16
 
-### **modulecmd**
+### modulecmd
 **User visible changes**
 * YAML module configuration file. Configured in this file are
   * the release stage
@@ -16,18 +16,19 @@
   The filename is `.config-<version>` and is located in the same directory as the modulefile.
   For now the `.release-<version>` files are still used if no YAML configuration file exist.
 
-### **modbuild**
+### build-system
 **User visible changes**
 * YAML build configuration files. For now `variants` files are still supported.
+
 ---
 
 ## Version 1.1.15
 
-### **modulecmd**
+### modulecmd
 **User visible changes**
 * prevent loading of a module on dedicated systems via blocklist
 
-### **modbuild**
+### build-system
 **User visible changes**
 * the function to compare versions can now be called with a single
   argument. In this case the given version is compared to version
@@ -36,17 +37,20 @@
 **Internal changes and fixes***
 * bugfix: due to a bug in compiling the list of (legacy) config files,
   each module was build twice.
+
 ---
 
 ## Version 1.1.14
 
-### **modbuild** 
+### build-system 
 **Internal changes and fixes**
 * lookup of default legacy config files fixed
+
 ---
 
 ## Version 1.1.13
-### **modulecmd**
+
+### modulecmd
 **User visible changes**
 * collections
 * shadowing modules with an overlay
@@ -61,15 +65,18 @@
 ---
 
 ## Version 1.1.12
-### **modulecmd**
+
+### modulecmd
 **User visible changes**
 * experimental support for Lmod
 * support for use flags has been removed.
   (A postfix like '_slurm' can still be used)
+
 ---
 
 ## Version 1.1.11
-### **modulecmd**
+
+### modulecmd
 **User visible changes**
 * Improved error handling and messages
 * Python support added
@@ -77,15 +84,17 @@
 **Internal changes and fixes**
 * Bugfixes
 
-### **build-system**
+### build-system
 **User visible changes**
 * building with legacy variants files fixed.
 * building with YAML config files is still experimental
   and not recommended for now
+
 ---
 
 ## Version 1.1.10 
-### **modulecmd**
+
+### modulecmd
 **User visible changes**
 * New options for `module search`.
   * With the option `--group` the search can be restricted to a
@@ -108,7 +117,7 @@
 **Internal changes and fixes**
 * initialisation error for bash and zsh fixed
 
-### **build-system**
+### build-system
 **User visible changes**
 * `modbuild` is now defined as function like `module`. Therefor no
   `Pmodules` module must be loaded to build a module with `modbuild`
@@ -141,10 +150,12 @@
 * The bootstrap script requires Bash 5.0 or newer now.
 * Bugfix: in the `Pmodules` modulefile force the sourcing of the
   shell init script while in mode `load` only.
+
 ---
 
 ## Version 1.1.9
-### **modulecmd**
+
+### modulecmd
 **User visible changes**
 * Overlay info added to output of sub-command `search`.
 * Output of `module search --verbose` revised for better readability.
@@ -158,7 +169,7 @@
 * In versions before 1.1.9 a colon at the beginning or end of `MODULEPATH`
   crashed the module function. This has been fixed. 
 
-### **build-system**
+### build-system
 **User visible changes**
 * The command `modbuild` is now defined as shell function analog to
   the `module` command. The main reason to introduce this function
@@ -183,10 +194,12 @@
 **Internal changes and fixes**
 * bugfix in setting `PATH`
 * requires bash 5 or later
+
 ---
 
 ## Version 1.1.8
-### **modulecmd**
+
+### modulecmd
 **User visible changes**
 * configuration in YAML files
 * modulefiles and software must not
@@ -204,7 +217,7 @@
 * update to findutils 4.9 (macOS only)
 * minor fixes
 
-### **build-system**
+### build-system
 **User visible changes**
 * YAML format for variants files
 	
@@ -212,177 +225,181 @@
 * use lib `libpmodules.bash`
 * bugfixes
 
-### **modmanage**
+### modmanage
 **User visible changes**
 * none, support for overlays still missing
 
 **Internal changes and fixes**
 * none
+
 ---
 
 ## Version 1.1.7
-### **modulecmd**
+### modulecmd
 * list of available overlays in subcommand `use` is now better readable
 
-### **buid-system**
+### buid-system
 * overlay definition must now be in YAML format
 * support for YAML formatted variant files (the legacy format 
   is still supported)
 * build-system in 1.1.6 was still work in progress and broken
+
 ---
 
 ## Version 1.1.6
-### **modulecmd**
+### modulecmd
 * bugfix in searching/loading modules in a hierarchical
   group
+
 ---
 
 ## Version 1.1.5
-### **modulecmd**
+### modulecmd
 * first public version with the overlay feature
+
 ---
 
 ## Version 1.0.0rc11
-* **modulecmd**
-  * *User visible changes*
-    * handling of set-alias in modulefile fixed
-  * *Internal changes and fixes*
-    * none
-* **build-system**
-  * *User visible changes*
-    * none
-  * *Internal changes and fixes*
-    * none
+### modulecmd
+**User visible changes**
+* handling of set-alias in modulefile fixed
+---
 
 ## Version 1.0.0rc10
-* **modulecmd**
-  * *User visible changes*
-    * The term "releases" has been replaced with "release stages". 
-      The visible changes are the change of the option 
-      `--all-releases` to `--all-release-stages`, adapted
-      help text and configuration files.
-    * New configuration file `Pmodules.conf` to configure the 
-      default visible group, the default visible release stages
-      and the defined releases stages. These information has
-      been stripped from the profiles `profiles.{bash,csh,zsh}`.
-    * module are now sorted numerically in output of
-      `module avail`.
-    * option `-?` added as alias for `--help`.
-    * new option `--glob` for `module search`. This enables 
-      shell glob-pattern searches.
-  * *Internal changes and fixes*
-    * bugfix in removing temp-file in exit function.
-    * terse output of `module avail` fixed.
-    * broken help for sub-commands fixed.
-    * missing group in output of `module avail` fixed.
-    * broken output of `module search --print-modulefiles` fixed.
-    * argument handling fixed after `--`.
-    * cleanup option/argument handling.
-* **build-system**
-  * *User visible changes*
-    * none
-  * *Internal changes and fixes*
-    * bugfixes in the functions `pbuild::version_{le,gt}
-    * bugfix in recognising newer CentOS versions
-* **modmanage**
-  * *User visible changes*
-    * complete re-implementation of (broken) modmanage
+### modulecmd
+**User visible changes**
+* The term "releases" has been replaced with "release stages". 
+  The visible changes are the change of the option 
+  `--all-releases` to `--all-release-stages`, adapted
+  help text and configuration files.
+* New configuration file `Pmodules.conf` to configure the 
+  default visible group, the default visible release stages
+  and the defined releases stages. These information has
+  been stripped from the profiles `profiles.{bash,csh,zsh}`.
+* module are now sorted numerically in output of
+  `module avail`.
+* option `-?` added as alias for `--help`.
+* new option `--glob` for `module search`. This enables 
+  shell glob-pattern searches.
+**Internal changes and fixes**
+* bugfix in removing temp-file in exit function.
+* terse output of `module avail` fixed.
+* broken help for sub-commands fixed.
+* missing group in output of `module avail` fixed.
+* broken output of `module search --print-modulefiles` fixed.
+* argument handling fixed after `--`.
+* cleanup option/argument handling.
+
+### build-system
+**User visible changes**
+* none
+**Internal changes and fixes**
+* bugfixes in the functions `pbuild::version_{le,gt}
+* bugfix in recognising newer CentOS versions
+
+### modmanage
+**User visible changes**
+* complete re-implementation of (broken) modmanage
+---
 
 ## Version 1.0.0rc9
-* **modulecmd**
-  * *User visible changes*
-    * a Pmodules module must be the first module loaded
-    * new option `--group|-g GROUP` to list available modules in `GROUP`
-    * align columns in output of `module avail`
-    * remove path to Pmodules bin directory while unloading a Pmodules module
-    * exclude a Pmodules module from being purged 
-    * follow sym-links in `ROOT/GROUP/modulefiles`
-  * *Internal changes and fixes*
-    * use default field separator by unsetting `IFS`
-    * use read-only variables for all used commands with full path  
-    * better tmp-file creation/deletion
-    * more bugfixes
-* **build-system**
-  * *User visible changes*
-    * group hierarchy can now be defined in a config file
-  * *Internal changes and fixes*
-    * more bugfixes
+### modulecmd
+**User visible changes**
+* a Pmodules module must be the first module loaded
+* new option `--group|-g GROUP` to list available modules in `GROUP`
+* align columns in output of `module avail`
+* remove path to Pmodules bin directory while unloading a Pmodules module
+* exclude a Pmodules module from being purged 
+* follow sym-links in `ROOT/GROUP/modulefiles`
+
+**Internal changes and fixes**
+* use default field separator by unsetting `IFS`
+* use read-only variables for all used commands with full path  
+* better tmp-file creation/deletion
+* more bugfixes
+
+### build-system
+**User visible changes***
+* group hierarchy can now be defined in a config file
+
+**Internal changes and fixes**
+* more bugfixes
+
+---
 
 ## Version 1.0.0rc8
-* **modulecmd**
-  * *User visible changes*
-    * Pmodules can now be loaded as module
-    * Since `${PMODULES_HOME}/bin` has been removed from `PATH` in `1.0.0rc7` a Pmodules
-      module must be loaded to make the build system available.
-  * *Internal changes and fixes*
-    * use system binaries in `/bin:/usr/bin` if possible
+### modulecmd
+**User visible changes**
+* Pmodules can now be loaded as module
+* Since `${PMODULES_HOME}/bin` has been removed from `PATH` in `1.0.0rc7` a Pmodules
+  module must be loaded to make the build system available.
+
+**Internal changes and fixes**
+* use system binaries in `/bin:/usr/bin` if possible
+---
 
 ## Version 1.0.0rc7
+### modulecmd
+**User visible changes**
+* add options to `module search` to show dependencies
 
-* **modulecmd**
-  * *User visible changes*
-    * add options to `module search` to show dependencies
-  * *Internal changes and fixes*
-    * hardcoded path in `profile.csh`fixed
-    * bugfixes
-    * Update to BASH 5.1
-    * Update to Tcl 8.6.10
-* **build-system**
-  * *User visible changes*
-    * building deprecated modules must be forced
-    * support for versioned modulefiles in build-blocks: if a modulefile 
-      `modulefile-X[.Y[.Z]]` exists in the build-block it will be taken
-      in favour of `modulefile`-
-    * bootstrap/build script reviewed, `--config` option removed, help for all  
-      sub-commands added
-  * *Internal changes and fixes*
-    * installation of fallback shared libraries fixed.
-    * bugfixes
-* **modmanage**
-  * *User visible changes*
-    * Support of run-time dependencies which are required but must not be loaded
+**Internal changes and fixes**
+* hardcoded path in `profile.csh`fixed
+* bugfixes
+* Update to BASH 5.1
+* Update to Tcl 8.6.10
+
+### build-system
+**User visible changes**
+* building deprecated modules must be forced
+* support for versioned modulefiles in build-blocks: if a modulefile 
+  `modulefile-X[.Y[.Z]]` exists in the build-block it will be taken
+  in favour of `modulefile`-
+* bootstrap/build script reviewed, `--config` option removed, help for all  
+  sub-commands added
+
+**Internal changes and fixes**
+* installation of fallback shared libraries fixed.
+* bugfixes
+
+### modmanage
+**User visible changes**
+* Support of run-time dependencies which are required but must not be loaded
+---
 
 ## Version 1.0.0rc6
-
-**Added features:**
-
+### modulecmd
 - Support for shell `sh` added (#86, #90).
-- Support added for a wildcard (`.*`) version as argument to `modbuild` (#78)
-
-**Fixed bugs:**
-
-- Handle empty list of be installed shared libraries fixed (#89).
 - Broken 'module load'  with (T)CSH fixed (#88).
 - prepend instead of append Pmodules bin directory to `PATH` (#87).
-- Bugs in bootstrapping Pmodules fixed (#82)
 
+### build-system
+- Support added for a wildcard (`.*`) version as argument to `modbuild` (#78)
+- Handle empty list of be installed shared libraries fixed (#89).
+
+### Building and installing Pmodules
+- Bugs in bootstrapping Pmodules fixed (#82)
+---
 
 ## Version 1.0.0rc5 (since 1.0.0rc2)
-
-**Added features:**
-
+### modulecmd
 - log `module load` commands to system logger (#80)
-
-
-**Changed:**
-
-- The argument passed with the `--system` is not any more a synonym for kernel of the system a build process is running on. It now defines a target operating system like RHEL6, macOS1014 etc (#72).
-
-
-**Deprecated:**
-
-- calling `pbuild::make_all` in a build-script is now deprecate
-
-**Fixed bugs:**
-
 - Bugs fixed in printing load hints (#48, #49)
-- Several bugs in build-systen and `modulecmd` fixed.
 - `--with` option of sub-command search now accepts a comma separated list of strings
 - `PMODULES_ENV` is exported only on content changes
+- more bugfixes
 
+### build-system
+- The argument passed with the option `--system` is not any more a synonym for
+  the kernel of the system (like Linux, Darwin). It now defines a target operating
+  system like RHEL6, macOS1014 etc (#72).
+- calling `pbuild::make_all` in a build-script is now deprecate
+- bugfixes
+---
 
 ## 1.0.0rc4
-  - never tagged
-  
+- never tagged
+---
+
 ## 1.0.0rc3
-  - never tagged
+- never tagged
