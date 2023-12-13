@@ -187,7 +187,7 @@
 
 ## Version 1.1.8
 ### **modulecmd**
-**User visible changes*
+**User visible changes**
 * configuration in YAML files
 * modulefiles and software must not
   have a common root directory
