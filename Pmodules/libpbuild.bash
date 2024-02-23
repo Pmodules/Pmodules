@@ -708,19 +708,19 @@ readonly -f pbuild::use_cc
 # Arguments:
 #   none
 #
-declare -- compile_in_sourcetree='No'
+declare -- compile_in_sourcetree='no'
 
 pbuild::compile_in_sourcetree() {
 	if [[ ${opt_yaml} == 'yes' ]]; then
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
 	fi
-	compile_in_sourcetree='Yes'
+	compile_in_sourcetree='yes'
 }
 readonly -f pbuild::compile_in_sourcetree
 pbuild.compile_in_sourcetree(){
-	if [[ "${1,,}" == 'Yes' ]]; then
-		compile_in_sourcetree='Yes'
+	if [[ "${1,,}" == 'yes' ]]; then
+		compile_in_sourcetree='yes'
 	fi
 }
 
