@@ -1092,7 +1092,7 @@ get_available_modules() {
 		(( ${#dir_entries[@]} > 0 )) || continue
 
 		local sdirs="${dir##*/modulesfiles}"
-		# loop over all files (and sym-link) in this directory and
+		# loop over all files (and sym-links) in this directory and
 		# its sub-directories
 		local mod=''	# module_name/module_version
                 while read mod; do
