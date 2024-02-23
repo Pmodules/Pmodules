@@ -151,6 +151,8 @@ MISCELLANEOUS OPTIONS:
 
 --overlay
         Install in this overlay. Defaults to '${PMODULES_HOME%%/Tools*}'.
+--legacy
+        Use legacy configuration files.
 "
 	exit 1
 }
