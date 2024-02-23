@@ -633,7 +633,7 @@ declare -A Yaml_valid_keys_for_module=(
 
 declare -A Yaml_default_config=(
 	["build_requires"]=''		# !!seq of strings
-	["compile_in_sourcetree"]='No'  # !!str
+	["compile_in_sourcetree"]='no'  # !!str
 	["configure_with"]='auto'	# !!str
 	["default_variant"]=''          # !!str
 	["docfiles"]=''			# !!seq of strings
@@ -693,7 +693,23 @@ build_modules_yaml_v1(){
 				 "Value of '${key}' must be of type '${expected_type:2}', but is '${type:2}'!"
 		fi
 		val=$( ${yq} -e ".${key}" \
-			       2>/dev/null <<<"${yaml_input}" ) || val=''
+			     2>/dev/null <<<"${yaml_input}" ) || val=''
+	}
+
+	get_seq(){
+		local -- yaml_input="$1"
+		local -n val="$2"
+		local -- key="$3"
+		local -- expected_type="$4"
+
+		local -- type=''
+		type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
+		if [[ "${type}" != '!!seq' ]]; then
+			std::die 3 "%s" \
+				 "Value of '${key}' must be of type 'seq', but is of type '${type:2}'!"
+		fi
+		val=$( ${yq} -e ".${key}[]" \
+			     2>/dev/null <<<"${yaml_input}" ) || val=''
 	}
 
 	get_config(){
@@ -726,10 +742,10 @@ build_modules_yaml_v1(){
 					get_value "${yaml_input}" value "${key}" '!!bool'
 					case ${value,,} in
 						true )
-							cfg[${key,,}]='Yes'
+							cfg[${key,,}]='yes'
 							;;
 						false )
-							cfg[${key,,}]='No'
+							cfg[${key,,}]='no'
 							;;
 						* )
 							std::die 3 "%s '%s' -- %s" \
@@ -753,6 +769,14 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
+				default_variant | group | overlay | script | suffix )
+					get_value "${yaml_input}" value "${key}" '!!str'
+					cfg[${key,,}]="${value}"
+					;;
+				group_deps )
+					get_value "${yaml_input}" value "${key}" '!!map'
+					cfg[${key,,}]="${value}"
+					;;
 				relstage )
 					get_value "${yaml_input}" value "${key}" '!!str'
 					case ${value,,} in
@@ -774,31 +798,15 @@ build_modules_yaml_v1(){
 					get_value "${yaml_input}" value "${key}" '!!seq'
 					cfg[${key,,}]="${value}"
 					;;
-				group_deps )
-					get_value "${yaml_input}" value "${key}" '!!map'
-					cfg[${key,,}]="${value}"
-					;;
-				systems )
-					get_value "${yaml_input}" value "${key}" '!!seq'
-					readarray -t tmp <<<"${value}"
-					cfg[${key,,}]="${tmp[@]}"
-					;;
-				variant )
-					get_value "${yaml_input}" value "${key}" '!!seq'
-					readarray -t tmp <<<"${value}" 
-					printf -v tmp2 ":%s:" "${tmp[@]}"
-					cfg[${key,,}]="${tmp2}"
-					:
-					;;
-				docfiles | runtime_deps | build_requires )
-					get_value "${yaml_input}" value "${key}" '!!seq'
+				build_requires | docfiles | runtime_deps | systems | variant )
+					get_seq "${yaml_input}" value "${key}" '!!seq'
 					cfg[${key,,}]="${value}"
 					;;
 				* )
-					value=$( ${yq} -e ".${key}" \
-						       2>/dev/null <<<"${yaml_input}" ) || \
-						value=''
-					cfg[${key,,}]="${value}"
+					std::die 3 "%s '%s' in %s" \
+						 "Oops unhandled key" \
+						 "${key}" \
+						 "${FUNCNAME}"
 			esac
 		done
 	}
@@ -1013,7 +1021,7 @@ build_modules_yaml_v1(){
 
 	set_urls() {
 		local -- yaml="$1"
-
+		local -i l=0
 		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
 			std::die 3 "error parsing YAML configuration"
 		local -i i=0
