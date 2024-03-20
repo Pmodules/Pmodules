@@ -1,5 +1,12 @@
 # Changelog of Pmodules
 
+
+## Version 1.1.17
+### build-system
+**Fixes**
+* usage output reviewed
+* compiling in source tree fixed if YAML config file is used
+
 ## Version 1.1.16
 
 ### modulecmd
