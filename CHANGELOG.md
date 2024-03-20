@@ -1,5 +1,12 @@
 # Changelog of Pmodules
 
+## Version 1.1.18
+### modulecmd
+
+### build-system
+
+### Toolchain
+* update to Tcl 8.6.14 (Issue #239)
 
 ## Version 1.1.17
 ### build-system
