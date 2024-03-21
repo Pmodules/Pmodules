@@ -202,13 +202,7 @@ parse_args() {
 	#     modbuild <build-script> [options]
 	# the build-script MUST be passed as first argument.
 	#
-	BUILD_SCRIPT=$(std::get_abspath "$1")
-	test -r ${BUILD_SCRIPT} || \
-		std::die 1 "%s " \
-			 "Build script does not exist" \
-			 "or is not readable -- '$_'"
-	BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
-	shift 1
+	(( $# == 0 )) && usage
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -345,16 +339,25 @@ parse_args() {
 			;;
 		* )
 			local -- arg="$1"
-			if [[ "${arg}" == */* ]]; then
+			local -- tmpvar=$(std::get_abspath "${arg}")
+			if [[ -r ${tmpvar} ]]; then
+				BUILD_SCRIPT="${tmpvar}"
+				BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
+			elif [[ "${arg}" == */* ]]; then
 				module_name="${arg%/*}"
 				versions+=( {arg#*/} )
 			else
 				versions+=( "$1" )
 			fi
+
 			;;
 		esac
 		shift
 	done
+
+	[[ -z "${BUILD_SCRIPT}" ]] && \
+		std::die 1 "%s " \
+			 "Build script argument missing?"
 
 	# if no version is specified on the cmd-line, build all versions
 	(( ${#versions[@]} > 0)) || versions+=( '.*' )
