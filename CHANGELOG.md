@@ -4,10 +4,13 @@
 ### modulecmd
 
 ### build-system
-* fix in parsing arguments issue (#238)
+* fix in parsing arguments ()issue #238)
 
 ### Toolchain
 * update to Tcl 8.6.14 (issue #239)
+
+### General
+* link to documentation added to usage/help text (issue #237)
 
 ## Version 1.1.17
 ### build-system
