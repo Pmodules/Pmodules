@@ -153,6 +153,10 @@ MISCELLANEOUS OPTIONS:
         Install in this overlay. Defaults to '${PMODULES_HOME%%/Tools*}'.
 --legacy
         Use legacy configuration files.
+
+DOCUMENTATION:
+	Full documentation is available at 
+	http://pmodules.gitpages.psi.ch
 "
 	exit 1
 }

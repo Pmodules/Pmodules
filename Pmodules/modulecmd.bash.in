@@ -2694,6 +2694,10 @@ SUBCOMMANDS:
         + initswitch            modulefile1 modulefile2
         + initlist
         + initclear
+
+DOCUMENTATION:
+	Full documentation is available at 
+	http://pmodules.gitpages.psi.ch
 '
 
 subcommand_help() {
