@@ -904,6 +904,36 @@ build_modules_yaml_v1(){
 		fi
 	}
 
+	is_in_array(){
+		local -r key="$1"
+		shift 1
+		[[ $* =~ (^|[[:space:]])"${key}"($|[[:space:]]) ]]
+	}
+
+	is_subset(){
+		local -n subset="$1"
+		shift 1
+		local el=''
+		for el in "${subset[@]}"; do
+			is_in_array "${el}" "$@" || return 1
+		done
+		return 0
+	}
+
+	: "
+	To compile a module with a certain compiler||mpi||hdf5 dependency
+	the '--with' option can be used. Depending on the hierarchical
+	group the modules specified with the option '--with' must be a
+	subset of
+	- compiler: ( compiler)
+	- mpi: ( compiler mpi )
+	- hdf5: ( compiler mpi hdf5 )
+	- hdf5_serial: ( compiler mpi hdf5_serial )
+	"
+	die_opt_with_error(){
+		std::die 1 "In the hierarchical group '%s' you cannot use the option '--with' more than %s!"
+	}
+
 	build_modules_compiler(){
 		local -- module_name="$1"
 		local -- module_version="$2"
@@ -914,6 +944,13 @@ build_modules_yaml_v1(){
 		
 		local compiler=''
 		for compiler in "${with_compiler[@]}"; do
+			local build_it='no'
+			(( ${#opt_with_modules[@]} > 1 )) && \
+				die_opt_with_error 'Compiler' 'once'
+			# build if opt_with_modules is empty or compiler is in this array
+			(( ${#opt_with_modules[@]} != 0 )) \
+				&& [[ "${compiler}" != "${opt_with_modules[0]}" ]] \
+				&& continue
 			pbuild.build_module_yaml \
 				"${module_name}" "${module_version}" \
 				"$3" \
@@ -936,6 +973,14 @@ build_modules_yaml_v1(){
 		local -- hdf5
 		for compiler in "${with_compiler[@]}"; do
 			for hdf5 in "${with_hdf5[@]}"; do
+				(( ${#opt_with_modules[@]} > 2 )) && \
+					die_opt_with_error 'hdf5_serial' 'twice'
+
+				# build if opt_with_modules is empty or compiler is in this array
+				(( ${#opt_with_modules[@]} != 0 )) \
+					&& ! is_subset opt_with_modules "${compiler}" "${hdf5}" \
+					&& continue
+
 				debug "build $module_name/$module_version with $compiler and $hdf5"
 				debug "  runtime deps: ${runtime_deps[@]}"
 				debug "  build requires: ${build_requires[@]}"
@@ -966,6 +1011,13 @@ build_modules_yaml_v1(){
 		local -- mpi
 		for compiler in "${with_compiler[@]}"; do
 			for mpi in "${with_mpi[@]}"; do
+				(( ${#opt_with_modules[@]} > 2 )) && \
+					die_opt_with_error 'hdf5_serial' 'twice'
+				# build if opt_with_modules is empty or compiler is in this array
+				(( ${#opt_with_modules[@]} != 0 )) \
+					&& ! is_subset opt_with_modules "${compiler}" "${mpi}" \
+					&& continue
+
 				debug "build $module_name/$module_version with $compiler and $mpi"
 				debug "  runtime deps: ${runtime_deps[@]}"
 				debug "  build requires: ${build_requires[@]}"
@@ -1003,6 +1055,14 @@ build_modules_yaml_v1(){
 					debug "build $module_name/$module_version with $compiler, $mpi and $hdf5"
 					debug "  runtime deps: ${runtime_deps[@]}"
 					debug "  build requires: ${build_requires[@]}"
+					(( ${#opt_with_modules[@]} > 3 )) && \
+						die_opt_with_error 'hdf5_serial' 'three times'
+					# build if opt_with_modules is empty or compiler is in this array
+					(( ${#opt_with_modules[@]} != 0 )) \
+						&& ! is_subset opt_with_modules \
+						     "${compiler}" "${mpi}" "${hdf5}" \
+						&& continue
+
 					pbuild.build_module_yaml \
 						"${module_name}" "${module_version}" \
 						"$3" \
