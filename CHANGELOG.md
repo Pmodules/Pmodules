@@ -2,6 +2,8 @@
 
 ## Version 1.1.18
 ### modulecmd
+* BUGFIX: output of load hints fixed
+  (issue #241)
 
 ### build-system
 * BUGFIX: parsing arguments fixed (issue #238)
@@ -11,6 +13,7 @@
   (issue #235)
 * CHANGE: files in `$PMODULES_TMPDIR/<module>` are now removed before
   and after building a module (except cleanup has been disbaled).
+  (issue #242)
 
 ### Toolchain
 * update to Tcl 8.6.14 (issue #239)

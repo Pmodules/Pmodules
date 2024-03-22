@@ -18,8 +18,8 @@ shopt -s nullglob
 declare -r CMD='module'
 declare    subcommand=''
 
-declare -r mydir=$(cd $(dirname "$0") && pwd)
-declare -- prefix=$(dirname "${mydir}")
+declare -r mydir="$(cd $(/usr/bin/dirname "$0") && pwd)"
+declare -- prefix="$(/usr/bin/dirname "${mydir}")"
 declare -r libdir="${prefix}/lib"
 declare -r libexecdir="${prefix}/libexec"
 
@@ -31,7 +31,7 @@ declare -r os_release=$(std::get_os_release)
 
 path="${libexecdir}:/bin:/usr/bin"
 std::def_cmds "${path}" \
-	      'awk' 'base64' 'find' 'getopt' 'logger' 'mktemp' \
+	      'awk' 'base64' 'dirname' 'find' 'getopt' 'logger' 'mktemp' \
 	      'rm' 'sed' 'sort' 'yq'
 
 declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
@@ -380,7 +380,6 @@ is_available(){
 	local -i ec=$?
 	set +o noglob
 	return ${ec}
-
 }
 
 #
@@ -587,10 +586,8 @@ subcommand_load() {
 	#	The variable 'm' from the parent function will be used
 	#	but not changed.
 	#
-	# Args:
-	#	none
 	get_load_hints() {
-		local -n output="$1"
+		local -n output="$1"	# ref.var to store result
 		local relstage=''
 		output=''
 		while read -a line; do
@@ -605,7 +602,7 @@ subcommand_load() {
 				output+="module use ${group}; "
 			fi
 			local -i n=$(( ${GroupDepths[${group}]}/2 ))
-			output+="module load ${line[@]:3:$n} ${line[0]}\n"
+			output+="module load ${line[@]:4:$n} ${line[0]}\n"
 		done < <(set +x; subcommand_search  "${m}" -a --no-header 2>&1)
 		if [[ -n ${output} ]]; then
 			output="\n\nTry with one of the following command(s):\n${output}"
@@ -773,18 +770,12 @@ subcommand_load() {
 		local moduledir=''
                 find_modulefile current_modulefile relstage moduledir "${m}" "${modulepath[@]}"
                 if [[ -z ${current_modulefile} ]]; then
-			local fname=$(std::get_abspath "${m}")
-			if [[ -r "${fname}" ]]; then
-				current_modulefile="${fname}"
-				relstage='stable'
+			local hints=''
+			get_load_hints hints
+			if [[ -z "${hints}" ]]; then
+				die_module_nexist "${m}"
 			else
-				local hints=''
-				get_load_hints hints
-				if [[ -z "${hints}" ]]; then
-					die_module_nexist "${m}"
-				else
-					die_module_unavail "${m}${hints}"
-				fi
+				die_module_unavail "${m}${hints}"
 			fi
 		fi
 		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
@@ -1139,13 +1130,7 @@ get_available_modules() {
 } # get_available_modules()
 
 #
-# find module(file) to load. Input arguments are
-#       $1      [out] ref. variable to return module file
-#       $2      [out] ref. variable to return release stage
-#       $3      |in]  module to load
-#       $4      [in]  module search path  (usually splitted MODULEPATH)
-#
-# The module name can be
+# find module(file) to load. The module name can be
 #       name
 #       name/version
 #	relative path
@@ -1156,12 +1141,14 @@ get_available_modules() {
 #       != else
 #       
 find_modulefile() {
-	local -n fm_modulefile="$1"
-	local -n fm_relstage="$2"
-	local -n fm_dir="$3"
-	local -r module="$4"
-	local -a dirs=("${@:5}")
+	local -n fm_modulefile="$1"	# ref. variable to return module file
+	local -n fm_relstage="$2"	# ref. variable to return release stage
+	local -n fm_dir="$3"		# ref. variable to return dir in modulepath
+	local -r module="$4"		# module to load
+	local -a dirs=("${@:5}")	# module search path (MODULEPATH as bash arra)
 
+	# loop over all dirs in MODULEPATH
+	# if a modulefile is found return from function
 	local dir
         for dir in "${dirs[@]}"; do
                 test -d "${dir}" || continue
@@ -1184,7 +1171,8 @@ find_modulefile() {
 				fi
 				local -A cfg=()
 				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${ReleaseStages}" "${os_release}" "${HOSTNAME}" || continue
+				is_available cfg "${ReleaseStages}" "${os_release}" \
+					     "${HOSTNAME}" || continue
 
 				fm_modulefile="${dir}/${mod}"
 				fm_relstage="${cfg['relstage']}"
@@ -1215,7 +1203,8 @@ find_modulefile() {
 				fi
 				local -A cfg=()
 				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${ReleaseStages}" "${os_release}" "${HOSTNAME}" || continue
+				is_available cfg "${ReleaseStages}" "${os_release}" \
+					     "${HOSTNAME}" || continue
 				fm_modulefile="${dir}/${mod}"
 				fm_relstage="${cfg['relstage']}"
 				fm_dir="${dir}"
@@ -1223,6 +1212,15 @@ find_modulefile() {
                         done
                 fi
         done
+	# Nothing found in MODULEPATH!
+	# The module to be loaded must be either given as relative or absolut
+	# path.
+	if [[ -r "${m}" ]]; then
+		fm_modulefile="$(std::get_abspath "${m}")"
+		fm_relstage='stable'
+		fm_dir="$(${dirname} "${fm_modulefile}")"
+		return 0
+	fi
         return 1
 } # find_modulefile()
 
