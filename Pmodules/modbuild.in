@@ -129,19 +129,12 @@ MISCELLANEOUS OPTIONS:
 	Dry run.
 
 --disable-cleanup-build
---enable-cleanup-build
-	Cleanup files in the build directory. Default is to remove.
-      	all files in the build-directory.
-
 --disable-cleanup-src
---enable-cleanup-src
-	Cleanup files in the source directory. Default is to
-	remove all files in the source directory.
-
 --disable-cleanup
---enable-cleanup
-	Cleanup all files in temporary directory. Default is to
-	remove all files created during building.
+	Disable the cleanup of files in the build and/or source
+	directory. Default is to remove all files in the build
+	respective source directory at the beginning of a build
+	and after a successful build.
 
 --distdir
 	Directory where to store and lookup downloaded files.
@@ -237,22 +230,12 @@ parse_args() {
 		--dry-run )
 			opt_dry_run='yes'
 			;;
-		--enable-cleanup )
-			opt_enable_cleanup_build='yes'
-			opt_enable_cleanup_src='yes'
-			;;
 		--disable-cleanup )
 			opt_enable_cleanup_build='no'
 			opt_enable_cleanup_src='no'
 			;;
-		--enable-cleanup-build )
-			opt_enable_cleanup_build='yes'
-			;;
 		--disable-cleanup-build )
 			opt_enable_cleanup_build='no'
-			;;
-		--enable-cleanup-src )
-			opt_enable_cleanup_src='yes'
 			;;
 		--disable-cleanup-src )
 			opt_enable_cleanup_src='no'

@@ -9,6 +9,8 @@
   (issue #236)
 * BUGFIX: writing list of 'systems' to module configuration file fixed
   (issue #235)
+* CHANGE: files in `$PMODULES_TMPDIR/<module>` are now removed before
+  and after building a module (except cleanup has been disbaled).
 
 ### Toolchain
 * update to Tcl 8.6.14 (issue #239)
