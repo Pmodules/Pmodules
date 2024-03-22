@@ -4,9 +4,11 @@
 ### modulecmd
 
 ### build-system
-* fix in parsing arguments (issue #238)
-* group dependencies specified with the option '--with' were ignored
+* BUGFIX: parsing arguments fixed (issue #238)
+* BUGFIX: group dependencies specified with the option '--with' were ignored
   (issue #236)
+* BUGFIX: writing list of 'systems' to module configuration file fixed
+  (issue #235)
 
 ### Toolchain
 * update to Tcl 8.6.14 (issue #239)

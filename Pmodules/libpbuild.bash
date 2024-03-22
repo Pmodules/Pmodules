@@ -893,14 +893,13 @@ pbuild.build_module_legacy(){
 readonly -f pbuild.build_module_legacy
 
 declare -n Config
-declare -- Systems
+declare -a Systems
 pbuild.build_module_yaml(){
 	local -- module_name="$1"
 	local -- module_version="$2"
 	Config=$3
 	local -- module_relstage="${Config['relstage']}"
-	local -- tmp="${Config['systems']//::/, }"
-	Systems="${tmp:1:-1}"
+	Systems=( ${Config['systems']} )
 	shift 3
 	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }
@@ -1528,7 +1527,13 @@ _build_module() {
 		fi
 		if [[ "${status_yaml_config_file}" != 'unchanged' ]]; then
 			echo "relstage: ${module_release}" > "${yaml_config_file}"
-			echo "Systems: [${Systems}]" >> "${yaml_config_file}"
+			if (( ${#Systems[@]} > 0 )); then
+				echo -n "systems: [${Systems[0]}" >> "${yaml_config_file}"
+				for system in "${Systems[@]:1}"; do
+					echo -n ", ${system}" >> "${yaml_config_file}"
+				done
+				echo "]" >> "${yaml_config_file}"
+			fi
 		fi
 
 		case ${status_yaml_config_file},${status_legay_config_file} in
