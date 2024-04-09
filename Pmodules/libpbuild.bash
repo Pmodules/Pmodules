@@ -897,9 +897,9 @@ declare -a Systems
 pbuild.build_module_yaml(){
 	local -- module_name="$1"
 	local -- module_version="$2"
-	Config=$3
+	Config="$3"
 	local -- module_relstage="${Config['relstage']}"
-	Systems=( ${Config['systems']} )
+	readarray -t Systems <<< "${Config['systems']}"
 	shift 3
 	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }

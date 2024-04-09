@@ -10,7 +10,7 @@
 * BUGFIX: group dependencies specified with the option '--with' were ignored
   (issue #236)
 * BUGFIX: writing list of 'systems' to module configuration file fixed
-  (issue #235)
+  (issues #235, #243)
 * CHANGE: files in `$PMODULES_TMPDIR/<module>` are now removed before
   and after building a module (except cleanup has been disbaled).
   (issue #242)
