@@ -11,9 +11,11 @@
   (issue #236)
 * BUGFIX: writing list of 'systems' to module configuration file fixed
   (issues #235, #243)
-* CHANGE: files in `$PMODULES_TMPDIR/<module>` are now removed before
+* Files in `$PMODULES_TMPDIR/<module>` are now removed before
   and after building a module (except cleanup has been disbaled).
   (issue #242)
+* Set prefix and directory/name of modulefile based on group not on
+  environment variables like `{COMPILER,MPI,HDF5}_VERSION` (issue #244)
 
 ### Toolchain
 * update to Tcl 8.6.14 (issue #239)

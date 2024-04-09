@@ -1224,90 +1224,69 @@ _build_module() {
 	#	PREFIX
 	#
 	set_full_module_name_and_prefix() {
-		do_simple_group(){
-			modulefile_dir="${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}/"
-			modulefile_dir+="${module_name}"
-			modulefile_name="${modulefile_dir}/${module_version}"
-			PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
+		die_no_compiler(){
+			std::die 1 \
+				 "%s: %s" \
+				 "${module_name}/${module_version}" \
+				 "module is in group '${GROUP}' but no compiler loaded!"
 		}
-		do_hierarchical_group(){
-			join_by() {
-				local IFS="$1"
-				shift
-				echo "$*"
-			}
-			# define hierarchies
-			if [[ -v COMPILER_VERSION ]]; then
-				Compiler_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-			else
-				unset Compiler_HIERARCHY
-			fi
-			if [[ -v COMPILER_VERSION ]] && \
-				   [[ -v HDF5_SERIAL_VERSION ]]; then
-				HDF5_serial_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-				HDF5_serial_HIERARCHY+=' hdf5_serial/${HDF5_SERIAL_VERSION}'
-			else
-				unset HDF5_serial_HIERARCHY
-			fi
-			if [[ -v COMPILER_VERSION ]] && \
-				   [[ -v MPI_VERSION ]]; then
-				MPI_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-				MPI_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
-			else
-				unset MPI_HIERARCHY
-			fi
-			if [[ -v COMPILER_VERSION ]] && \
-				   [[ -v MPI_VERSION ]] && \
-				   [[ HDF5_VERSION ]]; then
-				HDF5_HIERARCHY='${COMPILER}/${COMPILER_VERSION}'
-				HDF5_HIERARCHY+=' ${MPI}/${MPI_VERSION}'
-				HDF5_HIERARCHY+=' hdf5/${HDF5_VERSION}'
-			else
-				unset HDF5_HIERARCHY
-			fi
-
-			# evaluate
-			local names=()
-			local -n vname="${GROUP}"_HIERARCHY
-			if [[ -v vname ]]; then
-				names=( $(eval echo ${vname}) )
-			else
-				std::die 1 \
-					 "%s: %s" \
-					 "${module_name}/${module_version}" \
-					 "not all hierarchical dependencies loaded!"
-			fi
-
-			modulefile_dir=$(join_by '/' \
-						 "${ol_mod_root}" \
-						 "${GROUP}" \
-						 "${PMODULES_MODULEFILES_DIR}" \
-						 "${names[@]}" \
-						 "${module_name}")
-			if [[ -L "${modulefile_dir}" ]]; then
-				modulefile_dir=$(readlink -m "${modulefile_dir}")
-			fi
-			modulefile_name="${modulefile_dir}/${module_version}"
-
-			PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}"
-			local -i i=0
-			for ((i=${#names[@]}-1; i >= 0; i--)); do
-				PREFIX+="/${names[i]}"
-			done
+		die_no_mpi(){
+			std::die 1 \
+				 "%s: %s" \
+				 "${module_name}/${module_version}" \
+				 "module is in group '${GROUP}' but no MPI module loaded!"
+		}
+		die_no_hdf5(){
+			std::die 1 \
+				 "%s: %s" \
+				 "${module_name}/${module_version}" \
+				 "module is in group '${GROUP}' but no HDF5 module loaded!"
 		}
 
-		[[ -n ${GROUP} ]] || std::die 1 \
-					      "%s: %s" \
-					      "${module_name}/${module_version}" \
-					      "group not set."
-
-		local -i grp_depth
-		compute_group_depth grp_depth "${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}"
-		if (( grp_depth == 0 )); then
-			do_simple_group
-		else
-			do_hierarchical_group
+		modulefile_dir="${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}/"
+		PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}/"
+		case "${GROUP}" in
+			Compiler )
+				[[ -v COMPILER_VERSION ]] || die_no_compiler
+				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
+				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				;;
+			MPI )
+				[[ -v COMPILER_VERSION ]] || die_no_compiler
+				[[ -v MPI_VERSION ]] || die_no_mpi
+				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
+				modulefile_dir+="${MPI}/${MPI_VERSION}/"
+				PREFIX+="${MPI}/${MPI_VERSION}/"
+				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				;;
+			HDF5 )
+				[[ -v COMPILER_VERSION ]] || die_no_compiler
+				[[ -v MPI_VERSION ]] || die_no_mpi
+				[[ -v HDF5_VERSION ]] || die_no_hdf5
+				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
+				modulefile_dir+="${MPI}/${MPI_VERSION}/"
+				modulefile_dir+="${HDF5}/${HDF5_VERSION}/"
+				PREFIX+="${HDF5}/${HDF5_VERSION}/"
+				PREFIX+="${MPI}/${MPI_VERSION}/"
+				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				;;
+			HDF5_serial )
+				[[ -v COMPILER_VERSION ]] || die_no_compiler
+				[[ -v HDF5_SERIAL_VERSION ]] || die_no_hdf5
+				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
+				modulefile_dir+="${hdf5_serial}/${HDF5_SERIAL_VERSION}/"
+				PREFIX+="${hdf5_serial}/${HDF5_SERIAL_VERSION}/"
+				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				;;
+			* )
+				:
+				;;
+		esac
+		modulefile_dir+="${module_name}"
+		if [[ -L "${modulefile_dir}" ]]; then
+			modulefile_dir=$(readlink -m "${modulefile_dir}")
 		fi
+		modulefile_name="${modulefile_dir}/${module_version}"
 	} # set_full_module_name_and_prefix
 	
 	#......................................................................
