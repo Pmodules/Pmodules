@@ -1551,6 +1551,7 @@ _build_module() {
 	cleanup_build() {
 		[[ ${enable_cleanup_build} != 'yes' ]] && return 0
 		[[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
+		[[ -d "${BUILD_DIR}/../.." ]] || return 0
 		{
 			cd "/${BUILD_DIR}/.." || std::die 42 "Internal error"
 			[[ "$(${pwd})" == "/" ]] && \
@@ -1570,6 +1571,7 @@ _build_module() {
 
 	cleanup_src() {
 		[[ ${enable_cleanup_src} != 'yes' ]] && return 0
+		[[ -d "${BUILD_DIR}/../.." ]] || return 0
     		{
 			cd "/${SRC_DIR}/.." || std::die 42 "Internal error"
 			[[ $(pwd) == / ]] && \
