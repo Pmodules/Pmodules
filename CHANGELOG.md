@@ -13,7 +13,7 @@
   (issues #235, #243)
 * Files in `$PMODULES_TMPDIR/<module>` are now removed before
   and after building a module (except cleanup has been disbaled).
-  (issue #242)
+  (issues #242, #245)
 * Set prefix and directory/name of modulefile based on group not on
   environment variables like `{COMPILER,MPI,HDF5}_VERSION` (issue #244)
 
