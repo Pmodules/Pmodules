@@ -12,6 +12,9 @@
   suffix. (issue #248)
 
 ### build-system
+* Option '--clean-install' added. If this option is set, the 
+  module is removed before building, if the module already
+  exist. (issue #247)
 
 ## Version 1.1.18
 ### modulecmd

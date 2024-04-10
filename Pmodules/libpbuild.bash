@@ -1797,6 +1797,13 @@ _build_module() {
 		fi
 		install_release_file
 	else
+		if [[ "${opt_clean_install,,}" == 'yes' ]]; then
+			std::info \
+				"%s " \
+				"${module_name}/${module_version}:" \
+				"remove module, if already exists ..."
+			remove_module
+		fi
 		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
