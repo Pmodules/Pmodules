@@ -340,10 +340,9 @@ readonly -f pbuild::version_eq
 #       Default is all.
 #
 pbuild::supported_compilers() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
+	[[ ${opt_yaml} == 'yes' ]] && \
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
 	pbuild.supported_compilers "$@"
 }
 readonly -f pbuild::supported_compilers
@@ -363,10 +362,9 @@ readonly -f pbuild.supported_compilers
 #       Default is all.
 #
 pbuild::supported_systems() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
+	[[ ${opt_yaml} == 'yes' ]] && \
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
 	pbuild.supported_systems "$@"
 }
 readonly -f pbuild::supported_systems
@@ -375,6 +373,7 @@ declare SUPPORTED_SYSTEMS=()
 pbuild.supported_systems() {
 	SUPPORTED_SYSTEMS+=( "$@" )
 }
+readonly -f pbuild.supported_systems
 
 #..............................................................................
 #
@@ -424,10 +423,9 @@ pbuild.set_urls(){
 #	Maybe we should use a dictionary in the future.
 #
 pbuild::set_sha256sum() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
+	[[ ${opt_yaml} == 'yes' ]] && \
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
 	SOURCE_SHA256_SUMS+=("$1")
 }
 readonly -f pbuild::set_sha256sum
@@ -441,13 +439,16 @@ readonly -f pbuild::set_sha256sum
 #	$2	directory
 #
 pbuild::set_unpack_dir() {
-	SOURCE_UNPACK_DIRS[$1]=$2
+	SOURCE_UNPACK_DIRS[$1]="$2"
 }
 readonly -f pbuild::set_unpack_dir
 
 #..............................................................................
 #
 pbuild::add_patch() {
+	[[ ${opt_yaml} == 'yes' ]] && \
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
 	[[ -z "$1" ]] && \
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
@@ -460,6 +461,22 @@ pbuild::add_patch() {
 	fi
 }
 readonly -f pbuild::add_patch
+
+pbuild.add_patch_files(){
+	local -a args="$@"
+	local -- arg=''
+	for arg in "${args[@]}"; do
+		[[ -z "${arg}" ]] && continue
+ 		if [[ ${arg} == *:* ]]; then
+			PATCH_FILES+=( "${arg%%:*}" )
+			PATCH_STRIPS+=( "${arg##*:}" )
+		else
+			PATCH_FILES+=( "${arg}" )
+			PATCH_STRIPS+=( "${PATCH_STRIP_DEFAULT}" )
+		fi
+	done
+}
+readonly -f pbuild.add_patch_files
 
 #..............................................................................
 #
@@ -654,18 +671,24 @@ pbuild::prep() {
 #..............................................................................
 #
 pbuild::add_configure_args() {
+	[[ ${opt_yaml} == 'yes' ]] && \
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
 	CONFIGURE_ARGS+=( "$@" )
 }
 readonly -f pbuild::add_configure_args
 
+pbuild.add_configure_args(){
+	CONFIGURE_ARGS+=( "$@" )
+}
+readonly -f pbuild.add_configure_args
+
 #..............................................................................
 #
 pbuild::use_autotools() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
+	[[ ${opt_yaml} == 'yes' ]] && \
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
-
 	configure_with='autotools'
 }
 readonly -f pbuild::use_autotools
@@ -673,10 +696,9 @@ readonly -f pbuild::use_autotools
 #..............................................................................
 #
 pbuild::use_cmake() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
+	[[ ${opt_yaml} == 'yes' ]] && \
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
 	configure_with='cmake'
 }
 readonly -f pbuild::use_cmake
@@ -711,10 +733,9 @@ readonly -f pbuild::use_cc
 declare -- compile_in_sourcetree='no'
 
 pbuild::compile_in_sourcetree() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
+	[[ ${opt_yaml} == 'yes' ]] && \
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
 	compile_in_sourcetree='yes'
 }
 readonly -f pbuild::compile_in_sourcetree

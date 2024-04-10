@@ -625,11 +625,13 @@ declare -A Yaml_default_config=(
 	["build_requires"]=''		# !!seq of strings
 	["compile_in_sourcetree"]='no'  # !!str
 	["configure_with"]='auto'	# !!str
+	["configure_args"]=''           # !!seq of strings
 	["default_variant"]=''          # !!str
 	["docfiles"]=''			# !!seq of strings
 	["group"]='Tools'		# !!str
 	["group_deps"]=''		# !!map
 	["overlay"]='base'		# !!str
+	["patch_files"]=''		# !!seq
 	["relstage"]='unstable'		# !!str
 	["runtime_deps"]=''		# !!seq of strings
 	["script"]='build'		# !!str
@@ -690,7 +692,6 @@ build_modules_yaml_v1(){
 		local -- yaml_input="$1"
 		local -n val="$2"
 		local -- key="$3"
-		local -- expected_type="$4"
 
 		local -- type=''
 		type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
@@ -788,8 +789,8 @@ build_modules_yaml_v1(){
 					get_value "${yaml_input}" value "${key}" '!!seq'
 					cfg[${key,,}]="${value}"
 					;;
-				build_requires | docfiles | runtime_deps | systems | variant )
-					get_seq "${yaml_input}" value "${key}" '!!seq'
+				build_requires | configure_args | docfiles | patch_files | runtime_deps | systems | variant )
+					get_seq "${yaml_input}" value "${key}"
 					cfg[${key,,}]="${value}"
 					;;
 				* )
@@ -1103,6 +1104,18 @@ build_modules_yaml_v1(){
 		done
 	}
 
+	set_configure_args(){
+		local -a args=()
+		readarray -t args <<< "$1"
+		pbuild.add_configure_args "${args[@]}"
+	}
+
+	set_patch_files(){
+		local -a args=()
+		readarray -t args <<< "$1"
+		pbuild.add_patch_files "${args[@]}"
+	}
+
 	build_modules_variant(){
 		local -- module_name="$1"
 		local -- module_version="$2"
@@ -1156,7 +1169,9 @@ build_modules_yaml_v1(){
 		pbuild.add_to_group "${module_config['group']}"
 
 		set_urls "${module_config['urls']}"
-		
+		set_configure_args "${module_config['configure_args']}"
+		set_patch_files "${module_config['patch_files']}"
+
 		local -a runtime_deps=()
 		if [[ -n ${module_config['runtime_deps']} ]]; then
 			readarray -t runtime_deps <<<"${module_config['runtime_deps']}"
@@ -1230,6 +1245,7 @@ build_modules_yaml_v1(){
 	if [[ -v used_keys['shasums'] ]]; then
 		local yaml_input=$(${yq} '.shasums' <<<"${yaml_mod_config}" 2>/dev/null)
 		while read key value; do
+			[[ -z ${key} ]] && continue
 			SHASUMS[${key//:}]="${value}"
 		done <<<"${yaml_input}"
 	fi
