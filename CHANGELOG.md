@@ -2,6 +2,14 @@
 
 ## Version 1.1.19
 ### modulecmd
+* arguments to CMake and autotools can now be defined in the
+  YAML configuration file. (issue #249)
+* Required patches can now be defined in the YAML configuration
+  file (issue #249)
+* BUGFIX: parsing the version number and setting the variables
+  V_MAJOR, V_MINOR, V_PATCHLVL was broken in cases where the
+  version number consist of less then three numbers and plus a
+  suffix. (issue #248)
 
 ### build-system
 
