@@ -86,6 +86,9 @@ SELECT VARIANT TO BUILD:
 
 BUILD-STEPS OPTIONS:
 
+--clean-install
+	Remove module if already exist before building.
+
 --prep
 	Prepare sources: unpack sources and apply patches only.
 
@@ -184,6 +187,7 @@ declare --	opt_config_file=''
 declare --	opt_debug='no'
 declare --      opt_yaml='yes'
 declare --	opt_variant=''
+declare --	opt_clean_install='no'
 
 declare --	BUILD_SCRIPT=''
 declare --      yaml_config_file=''
@@ -298,6 +302,9 @@ parse_args() {
 			;;
 		--prep | --configure | --compile | --install | --all )
 			opt_build_target=${1:2}
+			;;
+		--clean-install )
+			opt_clean_install='yes'
 			;;
 		--update-modulefiles )
 			opt_update_modulefiles='yes'
