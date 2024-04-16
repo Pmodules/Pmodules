@@ -3,7 +3,7 @@
 ## Version 1.1.19
 ### modulecmd
 * arguments to CMake and autotools can now be defined in the
-  YAML configuration file. (issue #249)
+  YAML configuration file. (issue #249, #253)
 * Required patches can now be defined in the YAML configuration
   file (issue #249)
 * BUGFIX: parsing the version number and setting the variables
@@ -19,7 +19,7 @@
   exist. (issue #247)
 * The number of directory components to be removed while
   un-taring can now be configured in the YAML configuration
-  file. If not specified, 1 is used as default. (issue #251)
+  file. If not specified, 1 is used as default. (issue #252)
 
 ## Version 1.1.18
 ### modulecmd
