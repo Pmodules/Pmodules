@@ -17,9 +17,6 @@
 * Option '--clean-install' added. If this option is set, the 
   module is removed before building, if the module already
   exist. (issue #247)
-* The number of directory components to be removed while
-  un-taring can now be configured in the YAML configuration
-  file. If not specified, 1 is used as default. (issue #251)
 
 ## Version 1.1.18
 ### modulecmd

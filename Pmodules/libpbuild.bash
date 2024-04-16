@@ -18,7 +18,6 @@ declare -r  _DOCDIR='share/doc'
 declare -a SOURCE_URLS=()
 declare -a SOURCE_SHA256_SUMS=()
 declare -a SOURCE_NAMES=()
-declare -a SOURCE_STRIP_DIRS=() 
 declare -A SOURCE_UNPACK_DIRS=()
 declare -a CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
@@ -399,6 +398,11 @@ pbuild::set_download_url() {
 		std::info \
 			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
 	fi
+	pbuild.set_urls "$@"
+}
+readonly -f pbuild::set_download_url
+
+pbuild.set_urls(){
 	local -i _i=${#SOURCE_URLS[@]}
 	SOURCE_URLS[_i]=$1
 	if (( $# > 1 )); then
@@ -406,15 +410,6 @@ pbuild::set_download_url() {
 	else
 		SOURCE_NAMES[$_i]="${1##*/}"
 	fi
-	SOURCE_STRIP_DIRS[_i]='1'
-}
-readonly -f pbuild::set_download_url
-
-pbuild.set_urls(){
-	local -i _i=${#SOURCE_URLS[@]}
-	SOURCE_URLS[_i]="$1"
-	SOURCE_NAMES[$_i]="$2"
-	SOURCE_STRIP_DIRS[_i]="$3"
 }
 
 #..............................................................................
@@ -500,8 +495,7 @@ readonly -f pbuild::set_default_patch_strip
 pbuild::unpack(){
 	local -r file="$1"
 	local -r dir="${2:-${SRC_DIR}}"
-	local -r strip="${3:-1}"
-	${tar} --directory="${dir}" -xv --strip-components "${strip}" -f "${file}"
+	${tar} --directory="${dir}" -xv --strip-components 1 -f "${file}"
 }
 
 #..............................................................................
@@ -607,11 +601,10 @@ pbuild::prep() {
 
 	unpack() {
 		local -r file="$1"
-		local -r dir="$2"
-		local -r strip="$3"
+		local -r dir="${2:-${SRC_DIR}}"
 		{
 			mkdir -p "${dir}"
-			pbuild::unpack "${file}" "${dir}" "${strip}"
+			pbuild::unpack "${file}" "${dir}"
 		} || {
 			${rm} -f "${file}"
 			std::die 4 \
@@ -664,8 +657,7 @@ pbuild::prep() {
 		else
 			dir="${SRC_DIR}"
 		fi
-		local strip_dirs="${SOURCE_STRIP_DIRS[i]}"
-		unpack "${source_fname}" "${dir}" "${strip_dirs}"
+		unpack "${source_fname}" "${dir}"
 	done
 	patch_sources
 	# create build directory
