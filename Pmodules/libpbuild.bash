@@ -20,7 +20,7 @@ declare -a SOURCE_SHA256_SUMS=()
 declare -a SOURCE_NAMES=()
 declare -a SOURCE_STRIP_DIRS=() 
 declare -A SOURCE_UNPACK_DIRS=()
-declare -a CONFIGURE_ARGS=()
+declare -ax CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
 declare -a PATCH_STRIP_DEFAULT='1'
@@ -779,12 +779,17 @@ pbuild::configure() {
 			fi
 			;;
 	esac
+	local -a config_args=()
+	local -- arg=''
+	for arg in "${CONFIGURE_ARGS[@]}"; do
+		config_args+=( $(envsubst <<<"${arg}") )
+	done
 	if [[ -r "${SRC_DIR}/configure" ]] && \
 		   [[ "${configure_with}" == 'auto' ]] || \
 			   [[ "${configure_with}" == 'autotools' ]]; then
 		${SRC_DIR}/configure \
 			  --prefix="${PREFIX}" \
-			  "${CONFIGURE_ARGS[@]}" || \
+			  "${config_args[@]}" || \
 			std::die 3 \
 				 "%s " "${module_name}/${module_version}:" \
 				 "configure failed"
@@ -794,7 +799,7 @@ pbuild::configure() {
 		# note: in most/many cases a cmake module is used!
 		cmake \
 			-DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-			"${CONFIGURE_ARGS[@]}" \
+			"${config_args[@]}" \
 			"${SRC_DIR}" || \
 			std::die 3 \
 				 "%s " "${module_name}/${module_version}:" \
