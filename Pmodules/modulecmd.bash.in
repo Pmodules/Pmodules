@@ -32,7 +32,7 @@ declare -r os_release=$(std::get_os_release)
 path="${libexecdir}:/bin:/usr/bin"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'dirname' 'find' 'getopt' 'logger' 'mktemp' \
-	      'rm' 'sed' 'sort' 'yq'
+	      'rm' 'sed' 'sort' 'tput' 'yq'
 
 declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 declare -x  TCLLIBPATH
@@ -1266,10 +1266,12 @@ SWITCHES:
 subcommand_avail() {
 	# use this variable in the output functions
 	local -a mods=()
-	local dir=''
+	local -- dir=''
 
-	# get number of columns of terminal
-	cols=$(tput cols)
+	# get number of columns of terminal, set to a default if not running
+	# in a terminal.
+	local -i cols=80
+	[[ -t 1 -a -t 2 ]] && cols=$(tput cols)
 
 	#......................................................................
 	output_header() {
@@ -2115,7 +2117,8 @@ subcommand_list() {
 		done
 		colsize+=2
 
-		local -i cols=$(tput cols)
+		local -i cols=80
+		[[ -t 1 -a -t 2 ]] && cols=$(${tput} cols)
 		local -i column=0
 		printf "Currently Loaded Modules:\n" 1>&2
 		for s in "${strs[@]}"; do
@@ -2296,7 +2299,8 @@ subcommand_search() {
 	local modules=()
 	local groups=()
 	local with_modules='//'
-	local -ir cols=$(tput cols)	# get number of columns of terminal
+	local -i cols=80
+	[[ -t 1 -a -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
 	local src_prefix=()
 	local opt_print_header='yes'
@@ -2344,7 +2348,7 @@ subcommand_search() {
                 print_line_default() {
 			write_line() {
 				local str="$1"
-				if (( ${#str} >= cols )); then
+				if [[ -t 1 -1 -t 2 ]] && (( ${#str} >= cols )); then
 					str="${str:0:$((cols-1))}>"
 				fi
 				std::info "${str}"
