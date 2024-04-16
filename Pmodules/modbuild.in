@@ -653,6 +653,11 @@ declare -A Yaml_valid_vk_keys=(
 	['variants']=1			# !!map
 )
 	
+declare -A hierarchical_groups=()
+hierarchical_groups['compiler']='compiler'
+hierarchical_groups['mpi']='compiler mpi'
+hierarchical_groups['hdf5']='compiler mpi hdf5'
+hierarchical_groups['hdf5_serial']='compiler hdf5_serial'
 
 build_modules_yaml_v1(){
 	: "
@@ -870,6 +875,39 @@ build_modules_yaml_v1(){
 		echo "${yaml}"
 	}
 
+	chk_group_deps(){
+		: "
+		Check the group dependencies:
+		1. are all keys valid?
+		2. all required group deps defined?
+		3. more group deps defined as required?
+		"
+		:
+		local -- yaml="$1"		# yaml formatted string: value of group_deps
+		local -- group="$2"		# compiler|mpi|hdf5|hdf5_serial
+		local -- name="$3"		# module name
+		local -- version="$4"		# module version
+
+		# query all specified group dependencies
+		local -a keys=()
+		keys=( $(${yq} ".|keys|.[]" <<<"${yaml}" 2>/dev/null) )
+
+		local -- key=''
+		for key in "${keys[@]}"; do
+			# is this a name of a hierarchical group?
+			[[ -v hierarchical_groups[${key}] ]] || \
+				die_illegal_group_dep "${name}" "${version}" "${group}" "${key}"
+			# is this in the list of required group dependencies?
+			is_in_array "${key}" "${hierarchical_groups[${key}]}" || \
+				die_invalid_group_dep "${name}" "${version}" "${group}"
+		done
+		# are all required group dependencies defined?
+		for key in "${hierarchical_groups[${group,,}]}"; do
+			is_in_array "${key,,}" "${keys[@]}" || \
+				die_missing_group_dep "${name}" "${version}" "${group}"
+		done
+	}
+
 	get_group_deps(){
 		local -- yaml="$1"		# yaml formatted string with group config
 		local -- group="$2"		# compiler|mpi|hdf5|hdf5_serial
@@ -877,11 +915,11 @@ build_modules_yaml_v1(){
 
 		local -a modules=()
 		local keys=()
-		keys=( $(${yq} ".${group}|keys|.[]" <<<"${yaml}" 2>/dev/null) )
+		keys=( $(${yq} ".${group,,}|keys|.[]" <<<"${yaml}" 2>/dev/null) )
 		local key
 		for key in "${keys[@]}"; do
 			local versions=()
-			versions=( $( ${yq} -e ".${group}.${key}[]" <<<"${yaml}" 2>/dev/null) )
+			versions=( $( ${yq} -e ".${group,,}.${key}[]" <<<"${yaml}" 2>/dev/null) )
 			local version
 			for version in "${versions[@]}"; do
 				if [[ -v opt_with_dict[${key}/${version}] ]]; then
@@ -893,6 +931,23 @@ build_modules_yaml_v1(){
 		if (( ${#with_modules[@]} == 0 )); then
 			with_modules=( "${modules[@]}" )
 		fi
+	}
+
+	die_missing_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "is in group '$3', but the group dependency for this group is missing!" 
+	}
+	die_invalid_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "invalid group dependency '$3' for module in group '$4'!"
+	}
+
+	die_illegal_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "illegal group dependency '$4' for module in group '$3'!"
 	}
 
 	is_in_array(){
@@ -919,25 +974,23 @@ build_modules_yaml_v1(){
 	- compiler: ( compiler)
 	- mpi: ( compiler mpi )
 	- hdf5: ( compiler mpi hdf5 )
-	- hdf5_serial: ( compiler mpi hdf5_serial )
+	- hdf5_serial: ( compiler hdf5_serial )
 	"
-	die_opt_with_error(){
-		std::die 1 "In the hierarchical group '%s' you cannot use the option '--with' more than %s!"
-	}
 
 	build_modules_compiler(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
+
+		chk_group_deps  "${module_cfg['group_deps']}" 'Compiler' \
+				"${module_name}" "${module_version}"
+
 		local -a with_compiler=()
-		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
+		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
 		debug "${with_compiler[@]}"
 		
 		local compiler=''
 		for compiler in "${with_compiler[@]}"; do
-			local build_it='no'
-			(( ${#opt_with_modules[@]} > 1 )) && \
-				die_opt_with_error 'Compiler' 'once'
 			# build if opt_with_modules is empty or compiler is in this array
 			(( ${#opt_with_modules[@]} != 0 )) \
 				&& [[ "${compiler}" != "${opt_with_modules[0]}" ]] \
@@ -954,19 +1007,20 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
+
+		chk_group_deps  "${module_cfg['group_deps']}" 'HDF5_serial' \
+				"${module_name}" "${module_version}"
+
 		local -a with_compiler=()
+		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+
 		local -a with_hdf5=()
-		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
-		get_group_deps  "${module_cfg['group_deps']}" 'hdf5_serial' with_hdf5
-		debug "${with_compiler[@]}"
-		debug "${with_hdf5[@]}"
+		get_group_deps  "${module_cfg['group_deps']}" 'HDF5_serial' with_hdf5
+
 		local -- compiler
 		local -- hdf5
 		for compiler in "${with_compiler[@]}"; do
 			for hdf5 in "${with_hdf5[@]}"; do
-				(( ${#opt_with_modules[@]} > 2 )) && \
-					die_opt_with_error 'hdf5_serial' 'twice'
-
 				# build if opt_with_modules is empty or compiler is in this array
 				(( ${#opt_with_modules[@]} != 0 )) \
 					&& ! is_subset opt_with_modules "${compiler}" "${hdf5}" \
@@ -990,20 +1044,19 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		local -a with_compiler=()
-		local -a with_mpi=()
-		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
-		get_group_deps  "${module_cfg['group_deps']}" 'mpi' with_mpi
 
-		debug "${with_compiler[@]}"
-		debug "${with_mpi[@]}"
+		chk_group_deps  "${module_cfg['group_deps']}" 'MPI' "${module_name}" "${module_version}"
+
+		local -a with_compiler=()
+		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+
+		local -a with_mpi=()
+		get_group_deps  "${module_cfg['group_deps']}" 'MPI' with_mpi
 
 		local -- compiler
 		local -- mpi
 		for compiler in "${with_compiler[@]}"; do
 			for mpi in "${with_mpi[@]}"; do
-				(( ${#opt_with_modules[@]} > 2 )) && \
-					die_opt_with_error 'hdf5_serial' 'twice'
 				# build if opt_with_modules is empty or compiler is in this array
 				(( ${#opt_with_modules[@]} != 0 )) \
 					&& ! is_subset opt_with_modules "${compiler}" "${mpi}" \
@@ -1026,16 +1079,17 @@ build_modules_yaml_v1(){
 		local -- module_name="$1"
 		local -- module_version="$2"
 		local -n module_cfg="$3"
-		local -a with_compiler=()
-		local -a with_mpi=()
-		local -a with_hdf5=()
-		get_group_deps  "${module_cfg['group_deps']}" 'compiler' with_compiler
-		get_group_deps  "${module_cfg['group_deps']}" 'mpi' with_mpi
-		get_group_deps  "${module_cfg['group_deps']}" 'hdf5' with_hdf5
 
-		debug "${with_compiler[@]}"
-		debug "${with_mpi[@]}"
-		debug "${with_hdf5[@]}"
+		chk_group_deps  "${module_cfg['group_deps']}" 'HDF5' "${module_name}" "${module_version}"
+
+		local -a with_compiler=()
+		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+
+		local -a with_mpi=()
+		get_group_deps  "${module_cfg['group_deps']}" 'MPI' with_mpi
+
+		local -a with_hdf5=()
+		get_group_deps  "${module_cfg['group_deps']}" 'HDF5' with_hdf5
 
 		local -- compiler
 		local -- mpi
@@ -1046,8 +1100,7 @@ build_modules_yaml_v1(){
 					debug "build $module_name/$module_version with $compiler, $mpi and $hdf5"
 					debug "  runtime deps: ${runtime_deps[@]}"
 					debug "  build requires: ${build_requires[@]}"
-					(( ${#opt_with_modules[@]} > 3 )) && \
-						die_opt_with_error 'hdf5_serial' 'three times'
+
 					# build if opt_with_modules is empty or compiler is in this array
 					(( ${#opt_with_modules[@]} != 0 )) \
 						&& ! is_subset opt_with_modules \
