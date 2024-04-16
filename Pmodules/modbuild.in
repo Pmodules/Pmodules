@@ -1143,6 +1143,7 @@ build_modules_yaml_v1(){
 				std::die 3 "error parsing YAML configuration"
 			local url=''
 			local fname=''
+			local strip_dirs=''
 			while read key value; do
 				key=${key:0:-1}
 				case "${key}" in
@@ -1152,6 +1153,10 @@ build_modules_yaml_v1(){
 					name )
 						fname=$(envsubst <<<"${value}")
 						;;
+					strip_dirs )
+						strip_dirs="${value}"
+						# :FIXME: add check for unsigned int!
+						;;
 					* )
 						std::die 3 "Invalid key in list of URLs -- ${key}"
 						;;
@@ -1160,7 +1165,10 @@ build_modules_yaml_v1(){
 					std::die 3 "URL missing!"
 				fi
 			done <<<"${url_yaml}"
-			pbuild.set_urls "${url}" "${fname}"
+			[[ -z "${url}" ]] && std::die 3 "url missing in:\n${yaml}"
+			[[ -z "${fname}" ]] && fname="${url##*/}"
+			[[ -z "${strip_dirs}" ]] && strip_dirs=1
+			pbuild.set_urls "${url}" "${fname}" "${strip_dirs}"
 		done
 	}
 
