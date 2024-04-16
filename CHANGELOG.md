@@ -17,6 +17,8 @@
 * Option '--clean-install' added. If this option is set, the 
   module is removed before building, if the module already
   exist. (issue #247)
+* Check added whether all required group dependencies are
+  specified and also not more than required. (issue #251)
 * The number of directory components to be removed while
   un-taring can now be configured in the YAML configuration
   file. If not specified, 1 is used as default. (issue #252)
