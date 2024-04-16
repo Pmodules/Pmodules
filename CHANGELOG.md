@@ -10,6 +10,8 @@
   V_MAJOR, V_MINOR, V_PATCHLVL was broken in cases where the
   version number consist of less then three numbers and plus a
   suffix. (issue #248)
+* BUGFIX: don't abbreviate out of search if not running in a
+  terminal. (issue #250)
 
 ### build-system
 * Option '--clean-install' added. If this option is set, the 
