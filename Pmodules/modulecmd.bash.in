@@ -1271,7 +1271,7 @@ subcommand_avail() {
 	# get number of columns of terminal, set to a default if not running
 	# in a terminal.
 	local -i cols=80
-	[[ -t 1 -a -t 2 ]] && cols=$(tput cols)
+	[[ -t 1 && -t 2 ]] && cols=$(tput cols)
 
 	#......................................................................
 	output_header() {
@@ -2118,7 +2118,7 @@ subcommand_list() {
 		colsize+=2
 
 		local -i cols=80
-		[[ -t 1 -a -t 2 ]] && cols=$(${tput} cols)
+		[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)
 		local -i column=0
 		printf "Currently Loaded Modules:\n" 1>&2
 		for s in "${strs[@]}"; do
@@ -2300,7 +2300,7 @@ subcommand_search() {
 	local groups=()
 	local with_modules='//'
 	local -i cols=80
-	[[ -t 1 -a -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
+	[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
 	local src_prefix=()
 	local opt_print_header='yes'
@@ -2348,7 +2348,7 @@ subcommand_search() {
                 print_line_default() {
 			write_line() {
 				local str="$1"
-				if [[ -t 1 -1 -t 2 ]] && (( ${#str} >= cols )); then
+				if [[ -t 1 && -t 2 ]] && (( ${#str} >= cols )); then
 					str="${str:0:$((cols-1))}>"
 				fi
 				std::info "${str}"
