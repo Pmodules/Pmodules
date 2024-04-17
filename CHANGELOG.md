@@ -15,8 +15,8 @@
 * Option '--clean-install' added. If this option is set, the 
   module is removed before building, if the module already
   exist. (issue #247)
-* Required patches can now be defined in the YAML configuration
-  file (issue #249)
+* Arguments to CMake/autotools and required patches can now
+  be defined in the YAML configuration file (issues #249, #256)
 * Check added whether all required group dependencies are
   specified and also not more than required. (issue #251)
 * The number of directory components to be removed while

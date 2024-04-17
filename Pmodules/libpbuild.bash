@@ -782,7 +782,7 @@ pbuild::configure() {
 	local -a config_args=()
 	local -- arg=''
 	for arg in "${CONFIGURE_ARGS[@]}"; do
-		config_args+=( $(envsubst <<<"${arg}") )
+		config_args+=( "$(envsubst <<<"${arg}")" )
 	done
 	if [[ -r "${SRC_DIR}/configure" ]] && \
 		   [[ "${configure_with}" == 'auto' ]] || \
