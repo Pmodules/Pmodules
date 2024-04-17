@@ -1,5 +1,12 @@
 # Changelog of Pmodules
 
+## Version 1.1.20
+### modulecmd
+*
+
+### build-system
+*
+
 ## Version 1.1.19
 ### modulecmd
 * BUGFIX: parsing the version number and setting the variables
