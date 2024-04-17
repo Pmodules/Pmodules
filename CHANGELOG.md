@@ -2,26 +2,30 @@
 
 ## Version 1.1.19
 ### modulecmd
-* arguments to CMake and autotools can now be defined in the
-  YAML configuration file. (issue #249, #253)
 * BUGFIX: parsing the version number and setting the variables
   V_MAJOR, V_MINOR, V_PATCHLVL was broken in cases where the
   version number consist of less then three numbers and plus a
-  suffix. (issue #248)
-* BUGFIX: don't abbreviate out of search if not running in a
-  terminal. (issues #250,#255)
+  suffix.
+  (issue #248)
+* BUGFIX: never cut output of load hints. This could happen in
+  VScode/VScodium. Don't cut output of 'module search' if not
+  running in a terminal.
+  (issues #250,#255)
 
 ### build-system
 * Option '--clean-install' added. If this option is set, the 
   module is removed before building, if the module already
-  exist. (issue #247)
+  exist.
+  (issue #247)
 * Arguments to CMake/autotools and required patches can now
-  be defined in the YAML configuration file (issues #249, #256)
-* Check added whether all required group dependencies are
-  specified and also not more than required. (issue #251)
+  be defined in the YAML configuration file.
+  (issues #249, #253, #256)
+* Check of consinstency of group dependencies added.
+  (issue #251)
 * The number of directory components to be removed while
   un-taring can now be configured in the YAML configuration
-  file. If not specified, 1 is used as default. (issue #252)
+  file. If not specified, 1 is used as default.
+  (issue #252)
 * Arguments to CMake/autotools can now be append to the default
   arguments with the 'configure_args+' key in the YAML
   configuration file. Patch-files can be appended with the
@@ -43,7 +47,8 @@
   and after building a module (except cleanup has been disbaled).
   (issues #242, #245)
 * Set prefix and directory/name of modulefile based on group not on
-  environment variables like `{COMPILER,MPI,HDF5}_VERSION` (issue #244)
+  environment variables like `{COMPILER,MPI,HDF5}_VERSION`
+  (issue #244)
 
 ### Toolchain
 * update to Tcl 8.6.14 (issue #239)
