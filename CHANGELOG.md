@@ -4,19 +4,19 @@
 ### modulecmd
 * arguments to CMake and autotools can now be defined in the
   YAML configuration file. (issue #249, #253)
-* Required patches can now be defined in the YAML configuration
-  file (issue #249)
 * BUGFIX: parsing the version number and setting the variables
   V_MAJOR, V_MINOR, V_PATCHLVL was broken in cases where the
   version number consist of less then three numbers and plus a
   suffix. (issue #248)
 * BUGFIX: don't abbreviate out of search if not running in a
-  terminal. (issue #250)
+  terminal. (issues #250,#255)
 
 ### build-system
 * Option '--clean-install' added. If this option is set, the 
   module is removed before building, if the module already
   exist. (issue #247)
+* Required patches can now be defined in the YAML configuration
+  file (issue #249)
 * Check added whether all required group dependencies are
   specified and also not more than required. (issue #251)
 * The number of directory components to be removed while
