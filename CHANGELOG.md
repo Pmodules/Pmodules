@@ -22,6 +22,11 @@
 * The number of directory components to be removed while
   un-taring can now be configured in the YAML configuration
   file. If not specified, 1 is used as default. (issue #252)
+* Arguments to CMake/autotools can now be append to the default
+  arguments with the 'configure_args+' key in the YAML
+  configuration file. Patch-files can be appended with the
+  'patch_file+' key and doc-files with 'docfiles+'.
+  (issue #257)
 
 ## Version 1.1.18
 ### modulecmd
