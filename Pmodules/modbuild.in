@@ -633,12 +633,15 @@ declare -A Yaml_default_config=(
 	["compile_in_sourcetree"]='no'  # !!str
 	["configure_with"]='auto'	# !!str
 	["configure_args"]=''           # !!seq of strings
+	["configure_args+"]=''          # !!seq of strings
 	["default_variant"]=''          # !!str
 	["docfiles"]=''			# !!seq of strings
+	["docfiles+"]=''		# !!seq of strings
 	["group"]='Tools'		# !!str
 	["group_deps"]=''		# !!map
 	["overlay"]='base'		# !!str
 	["patch_files"]=''		# !!seq
+	["patch_files+"]=''		# !!seq
 	["relstage"]='unstable'		# !!str
 	["runtime_deps"]=''		# !!seq of strings
 	["script"]='build'		# !!str
@@ -805,6 +808,16 @@ build_modules_yaml_v1(){
 					get_seq "${yaml_input}" value "${key}"
 					cfg[${key,,}]="${value}"
 					;;
+				'configure_args+' | 'docfiles+' | 'patch_files+' )
+					get_seq "${yaml_input}" value "${key}"
+					key="${key:0:-1}"
+					if [[ -z "${cfg[${key,,}]}" ]]; then
+						cfg[${key,,}]="${value}"
+					else
+						cfg[${key,,}]+=$'\n'"${value}"
+					fi
+					;;
+
 				* )
 					std::die 3 "%s '%s' in %s" \
 						 "Oops unhandled key" \
