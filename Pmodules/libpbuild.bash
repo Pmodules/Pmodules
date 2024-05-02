@@ -25,6 +25,8 @@ declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
 declare -a PATCH_STRIP_DEFAULT='1'
 declare -- configure_with='auto'
+declare -- PREFIX=''
+declare -- is_subpkg='no'
 
 #.............................................................................
 #
@@ -66,7 +68,7 @@ readonly -f _get_num_cores
 # global variables which can be set/overwritten by command line args
 # and their corresponding functions
 #
-declare force_rebuild=''
+declare force_rebuild='no'
 pbuild.force_rebuild() {
 	force_rebuild="$1"
 }
@@ -101,6 +103,11 @@ pbuild.update_modulefiles() {
 	opt_update_modulefiles="$1"
 }
 readonly -f pbuild.update_modulefiles
+
+pbuild.set_prefix(){
+	PREFIX="$1"
+	is_subpkg='yes'
+}
 
 # number of parallel make jobs
 declare -i JOBS=0
@@ -1210,9 +1217,6 @@ _build_module() {
 		else
 			BUILD_DIR="${BUILD_ROOT}/build"
 		fi
-		
-		declare -g  PREFIX=''
-		
 	} # init_build_environment()
 
 	#......................................................................
@@ -1466,7 +1470,7 @@ _build_module() {
 			done
 			[[ -n "${_modulefile}" ]]
 		}
-
+		[[ "${is_subpkg}" == 'yes' ]] && return 0
 		local src=''
 		find_modulefile src
 		if (( $? != 0 )); then
@@ -1485,6 +1489,7 @@ _build_module() {
 	}
 
 	cleanup_modulefiles(){
+		[[ "${is_subpkg}" == 'yes' ]] && return 0
 		local ol=''
 		for ol in "${Overlays[@]}"; do
 			[[ "${ol}" == "${ol_name}" ]] && continue
@@ -1509,7 +1514,9 @@ _build_module() {
 	}
 
 	install_release_file() {
- 		local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
+		[[ "${is_subpkg}" == 'yes' ]] && return 0
+
+		local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
 		local -- status_legay_config_file='unchanged'
  		local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
 		local -- status_yaml_config_file='unchanged'
@@ -1523,6 +1530,7 @@ _build_module() {
 		else
 			status_legay_config_file='new'
 		fi
+		${mkdir} -p "${modulefile_dir}"
 		if [[ "${status_legay_config_file}" != 'unchanged' ]]; then
 			echo "${module_release}" > "${legacy_config_file}"
 		fi
@@ -1630,7 +1638,7 @@ _build_module() {
 			local target="$2"	# prep, configure, compile or install
 
 			if [[ -e "${BUILD_DIR}/.${target}" ]] && \
-				   [[ ${force_rebuild} != 'yes' ]]; then
+				   [[ ${force_rebuild} == 'no' ]]; then
 				return 0
 			fi
 			local targets=()
@@ -1786,8 +1794,7 @@ _build_module() {
 	# check whether this module is supported
 	check_supported_systems
 	check_supported_compilers
-	# setup module name and prefix
-	set_full_module_name_and_prefix
+	[[ -z "${PREFIX}" ]] && set_full_module_name_and_prefix
 
 	# ok, finally we can start ...
  	std::info \
@@ -1797,9 +1804,11 @@ _build_module() {
 
 	if [[ "${module_release}" == 'remove' ]]; then
 		remove_module
+		cleanup_modulefiles
 	elif [[ "${module_release}" == 'deprecated' ]]; then
 		deprecate_module
-	elif [[ -d ${PREFIX} ]] && [[ ${force_rebuild} != 'yes' ]]; then
+		cleanup_modulefiles
+	elif [[ -d "${PREFIX}" || "${is_subpkg}" == 'yes' ]] && [[ "${force_rebuild}" == 'no' ]]; then
  		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
@@ -1809,6 +1818,7 @@ _build_module() {
 			install_modulefile
 		fi
 		install_release_file
+		cleanup_modulefiles
 	else
 		if [[ "${opt_clean_install,,}" == 'yes' ]]; then
 			std::info \
@@ -1825,8 +1835,8 @@ _build_module() {
 		cleanup_src
 		compile_and_install
 		post_install
+		cleanup_modulefiles
 	fi
-	cleanup_modulefiles
 	std::info "* * * * *\n"
 }
 readonly -f _build_module
