@@ -974,46 +974,6 @@ _build_module() {
 
 	#......................................................................
 	#
-	# Initialise environment modules.
-	#
-	# Arguments:
-	#	none
-	#
-	init_module_environment(){
-		eval $( "${MODULECMD}" bash use unstable )
-		eval $( "${MODULECMD}" bash use deprecated )
-		eval $( "${MODULECMD}" bash purge )
-
-		# :FIXME: this is a hack!!!
-		# shouldn't this be set in the build-script?
-		if [[ -e "${PMODULES_HOME%%/Tools*}/Libraries" ]]; then
-			eval $( "${MODULECMD}" bash use Libraries )
-		fi
-		if [[ -e "${PMODULES_HOME%%/Tools*}/System" ]]; then
-			eval $( "${MODULECMD}" bash use System )
-		fi
-		unset	C_INCLUDE_PATH
-		unset	CPLUS_INCLUDE_PATH
-		unset	CPP_INCLUDE_PATH
-		unset	LIBRARY_PATH
-		unset	LD_LIBRARY_PATH
-		unset	DYLD_LIBRARY_PATH
-		
-		unset	CFLAGS
-		unset	CPPFLAGS
-		unset	CXXFLAGS
-		unset	LIBS
-		unset	LDFLAGS
-
-		unset	CC
-		unset	CXX
-		unset	FC
-		unset	F77
-		unset	F90
-	}
-
-	#......................................................................
-	#
 	# Load build- and run-time dependencies.
 	#
 	# Arguments:
