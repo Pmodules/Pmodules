@@ -48,7 +48,7 @@ else
 fi
 
 # for the time being, we still set PATH. Just in case we forgot a binary
-PATH='/usr/bin:/bin:/usr/sbin:/sbin'
+PATH="${PMODULES_HOME}/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 ##############################################################################
 source "${mydir}/../lib/libpbuild.bash"    || \
@@ -188,6 +188,7 @@ declare -A	opt_with_dict=()
 declare --	opt_config_file=''
 declare --	opt_debug='no'
 declare --      opt_yaml='yes'
+declare --	opt_check_mode='no'
 declare --	opt_variant=''
 declare --	opt_clean_install='no'
 declare --	opt_parent_prefix=''
@@ -284,6 +285,9 @@ parse_args() {
 			;;
 		--yaml )
 			opt_yaml='yes'
+			;;
+		--check-mode )
+			opt_check_mode='yes'
 			;;
 		--legacy )
 			opt_yaml='no'
@@ -1077,6 +1081,7 @@ build_modules_yaml_v1(){
 			(( ${#opt_with_modules[@]} != 0 )) \
 				&& [[ "${compiler}" != "${opt_with_modules[0]}" ]] \
 				&& continue
+			[[ "${opt_check_mode}" == 'yes' ]] && continue
 			pbuild.build_module_yaml \
 				"${module_name}" "${module_version}" \
 				"$3" \
@@ -1530,6 +1535,7 @@ debug(){
 #.............................................................................
 # main
 
+init_module_environment
 parse_args "$@"
 pbuild.jobs "${opt_jobs}"
 pbuild.force_rebuild "${opt_force_rebuild}"
