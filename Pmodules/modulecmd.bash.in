@@ -1864,7 +1864,7 @@ subcommand_unuse() {
                 if is_release_stage "${arg}"; then
                         # argument is release stage
 			std::remove_path UsedReleaseStages "${arg}"
-                        return
+                        return 0
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
 			unuse_overlay "${arg}"
@@ -1873,10 +1873,11 @@ subcommand_unuse() {
 		if [[ -d ${arg} ]]; then
 			local dir=$(std::get_abspath "${arg}")
 			std::remove_path MODULEPATH "${dir}"
+			return 0
 		fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
                         unuse_group "${arg}"
-                        return
+                        return 0
                 fi
 
 		std::die 3 "%s %s: %s -- %s" \
