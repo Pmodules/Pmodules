@@ -333,6 +333,16 @@ std::parse_yaml() {
 	              }
                 }'
 }
+
+std::is_member_of_array(){
+	local -- item="$1"
+	local -n array="$2"
+	local -- el=''
+	for el in "${array[@]}"; do
+		[[ "${item}" == "${el}" ]] && return 0
+	done
+	return 1
+}
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
