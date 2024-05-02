@@ -2934,11 +2934,16 @@ subcommand_save() {
 	local -- item=''
 	local -a items=()
 	local -a tmp=()
+	local -- grp=''
 
 	IFS=':' read -a tmp <<< "${UsedReleaseStages}"
 	items+=( "${tmp[@]}")
 	IFS=':' read -a tmp <<< "${UsedGroups}"
-	items+=( "${tmp[@]}")
+	for grp in "${tmp[@]}"; do
+		# skip hierarchical groups
+		(( ${GroupDepths[${tmp}]} > 0 )) && continue
+		items+=( "${grp}")
+	done
 	IFS=':' read -a tmp <<< "${UsedOverlays}"
 	items+=( "${tmp[@]}")
 	for item in "${items[@]}"; do
@@ -2987,20 +2992,16 @@ USAGE:
 search_collection(){
 	local -n _path="$1"
 	local -- _collection="$2"
-		
-	if [[ -r "${_collection}" ]]; then
-		_path=$(std::get_abspath "${_collection}")
-		return
+
+	if [[ -r "${UsrCollectionsDir}/collections" ]]; then
+		_path="${UsrCollectionsDir}/collections"
+		return 0
 	fi
-	local _dirs2search=( "${UsrCollectionsDir}" )
-	local _ol
+	local --  _ol
 	for _ol in "${UsedOverlays[@]}"; do
-		_dirs2search+=( "${OverlayInfo[${_ol}:inst_root]}/collections" )
-	done
-	for _dir in "${_dirs2search[@]}"; do
-		if [[ -r "${_dir}/${_collection}" ]]; then
-			_path="${_dir}/${_collection}"
-			return
+		if [[ -r "${OverlayInfo[${_ol}:inst_root]}/collections" ]]; then
+			_path="${OverlayInfo[${_ol}:inst_root]}/collections"
+			return 0
 		fi
 	done
 	die_collection_doesnt_exist "${_collection}"
@@ -3042,16 +3043,29 @@ subcommand_restore() {
 
 	local -a items=()
 	local -a tmp=()
+	local -- item=''
+	local -a grps=()
 
 	IFS=':' read -a tmp <<< "${UsedReleaseStages}"
 	items+=( "${tmp[@]}")
+
+	# remove all groups with the exception of the default groups
 	IFS=':' read -a tmp <<< "${UsedGroups}"
-	items+=( "${tmp[@]}")
+	IFS=':' read -a default_grps <<< "${DefaultGroups}"
+	for item in "${tmp[@]}"; do
+		(( ${GroupDepths["${item}"]} > 0 )) && continue
+		std::is_member_of_array "${item}" default_grps && continue
+		items+=( "${grp}" )
+	done
 	IFS=':' read -a tmp <<< "${UsedOverlays}"
-	items+=( "${tmp[@]}")
+	for item in "${tmp[@]}"; do
+		[[ "${item}" == 'base' ]] && continue
+		items+=( "${tmp[@]}")
+	done
 
 	local -- item=''
 	for item in "${items[@]}"; do
+		[[ -z "${item}" ]] && continue
 		subcommand_unuse "${item}"
 	done
 	save_env
@@ -3095,7 +3109,7 @@ subcommand_savelist() {
 		for _pattern in "$@"; do
 			while read _coll; do
 				_result+=( "${_coll}" )
-			done < <(find "${gc_dirs[@]}" -type f -ipath "*/${_pattern}" -printf "%P\n")
+			done < <(find "${gc_dirs[@]}" -type f -ipath "*/${_pattern}" -printf "%P\n" 2>/dev/null)
 		done
 	}
 
