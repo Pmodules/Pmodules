@@ -145,10 +145,12 @@ MISCELLANEOUS OPTIONS:
 --tmpdir
         Directory used for building a module.
 
---overlay
-        Install in this overlay. Defaults to '${PMODULES_HOME%%/Tools*}'.
 --legacy
-        Use legacy configuration files.
+        Use legacy configuration files. 
+
+--overlay
+        Install in this overlay. Defaults to the base overlay. This
+	option can only be used with legacy configuration file.
 
 DOCUMENTATION:
 	Full documentation is available at 
@@ -397,6 +399,9 @@ parse_args() {
 				 "%s -- %s" \
 				 "YAML config file doesn't exist or is not readable" \
 				 "${yaml_config_file}"
+		[[ "${opt_overlay}" == 'yes' ]] && \
+			std::die 2 \
+				 "opt '--overlay' can only be used together with legacy config files!"
 		std::info "Using YAML configuration file - ${yaml_config_file}"
 	fi
 }
