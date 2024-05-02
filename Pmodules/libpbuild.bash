@@ -1144,71 +1144,8 @@ _build_module() {
 	}
 
 	init_build_environment() {
-		#......................................................................
-		#
-		# parse the passed version string
-		#
-		# the following global variables will be set in this function:
-		#       V_MAJOR
-		#       V_MINOR
-		#       V_PATCHLVL
-		#       V_RELEASE
-		#       USE_FLAGS
-		#
-		parse_version() {
-			local v="$1"
-			V_MAJOR=''		# first number in version string
-			V_MINOR=''		# second number in version string (or empty)
-			V_PATCHLVL=''		# third number in version string (or empty)
-			V_RELEASE=''		# module release (or empty)
-			: ${USE_FLAGS:=''}	# architectures (or empty)
-
-			local tmp=''
-
-			if [[ "$v" =~ "_" ]]; then
-				tmp="${v#*_}"
-				USE_FLAGS+=":${tmp//_/:}:"
-				v="${v%%_*}"
-			fi
-			V_PKG="${v%%-*}"	# version without the release number
-			if [[ $v == *-* ]]; then
-				V_RELEASE="${v#*-}"	# release number
-			else
-				V_RELEASE=''
-			fi
-			case "${V_PKG}" in
-				*.*.* )
-					V_MAJOR="${V_PKG%%.*}"
-					tmp="${V_PKG#*.}"
-					V_MINOR="${tmp%%.*}"
-					V_PATCHLVL="${tmp#*.}"
-					;;
-				*.* )
-					V_MAJOR="${V_PKG%.*}"
-					V_MINOR="${V_PKG#*.}"
-					;;
-				* )
-					V_MAJOR="${V_PKG}"
-					;;
-			esac
-
-			VERSIONS=()
-			if [[ -n ${V_RELEASE} ]]; then
-				VERSIONS+=( ${V_PKG}-${V_RELEASE} )
-			fi
-			if [[ -n ${V_PATCHLVL} ]]; then
-				VERSIONS+=( ${V_MAJOR}.${V_MINOR}.${V_PATCHLVL} )
-			fi
-			if [[ -n ${V_MINOR} ]]; then
-				VERSIONS+=( ${V_MAJOR}.${V_MINOR} )
-			fi
-			VERSIONS+=( ${V_MAJOR} )
-		}
-
 		P="$1"
 		V="$2"
-
-		parse_version "${V}"
 
 		declare -g BUILD_ROOT="${PMODULES_TMPDIR}/${P}-${V}"
 		SRC_DIR="${BUILD_ROOT}/src"
