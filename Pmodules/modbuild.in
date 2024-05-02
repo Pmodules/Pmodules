@@ -193,6 +193,7 @@ declare --	BUILD_SCRIPT=''
 declare --      yaml_config_file=''
 declare -a      legacy_config_files=()
 declare --	module_name=''
+declare --	echo=':'
 
 parse_args() {
 	#
@@ -221,6 +222,7 @@ parse_args() {
 			;;
 		--debug )
 			opt_debug='yes'
+			echo='echo'
 			;;
 		-f | --force-rebuild )
                         opt_force_rebuild='yes'
@@ -1386,21 +1388,14 @@ build_modules() {
 	fi
 }
 
+debug(){
+	${echo} "DEBUG: " "$@"
+}
+
 #.............................................................................
 # main
 
 parse_args "$@"
-
-if [[ "${opt_debug,,}" == 'no' ]]; then
-	debug(){
-		:
-	}
-else
-	debug(){
-		echo "DEBUG: " "$@"
-	}
-fi
-
 pbuild.jobs "${opt_jobs}"
 pbuild.force_rebuild "${opt_force_rebuild}"
 pbuild.build_target "${opt_build_target}"
