@@ -2,10 +2,24 @@
 
 ## Version 1.1.20
 ### modulecmd
-*
+* Bugfix in sub-command 'unuse' with directory as argument.
+  Due to a missing return statement, the sub-command exited 
+  with an error.
+  (issue #262)
+* Bugfixes in the sub-commands to save/list/restore collections.
+  (issue #263)
+
 
 ### build-system
-*
+* Support for sub-packages added.
+  (issuesg #264, #266)
+* Code cleanup.
+  (issues #265, #269)
+* Option '--overlay' is only allowed with legacy configuration
+  files. Check added.
+  (issue #267)
+* Check mode for YAML configuration files added.
+  (issue #268)
 
 ## Version 1.1.19
 ### modulecmd
