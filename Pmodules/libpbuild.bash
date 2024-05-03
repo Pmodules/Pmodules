@@ -26,6 +26,8 @@ declare -a PATCH_STRIPS=()
 declare -a PATCH_STRIP_DEFAULT='1'
 declare -- configure_with='auto'
 declare -- PREFIX=''
+declare -- SRC_DIR=''
+declare -- BUILD_DIR=''
 declare -- is_subpkg='no'
 
 #.............................................................................
@@ -1103,19 +1105,6 @@ _build_module() {
 		done
 	}
 
-	init_build_environment() {
-		P="$1"
-		V="$2"
-
-		declare -g BUILD_ROOT="${PMODULES_TMPDIR}/${P}-${V}"
-		SRC_DIR="${BUILD_ROOT}/src"
-		if [[ "${compile_in_sourcetree,,}" == 'yes' ]]; then
-			BUILD_DIR="${SRC_DIR}"
-		else
-			BUILD_DIR="${BUILD_ROOT}/build"
-		fi
-	} # init_build_environment()
-
 	#......................................................................
 	check_supported_systems() {
 		if [[ "${opt_yaml,,}" == 'no' ]]; then
@@ -1219,7 +1208,8 @@ _build_module() {
 		esac
 		modulefile_dir+="${module_name}"
 		if [[ -L "${modulefile_dir}" ]]; then
-			modulefile_dir=$(readlink -m "${modulefile_dir}")
+			# :FIXME: why did I add this????
+			: # modulefile_dir=$(readlink -m "${modulefile_dir}")
 		fi
 		modulefile_name="${modulefile_dir}/${module_version}"
 	} # set_full_module_name_and_prefix
@@ -1661,7 +1651,13 @@ _build_module() {
 
 	init_module_environment
 	load_build_dependencies
-	init_build_environment "${module_name}" "${module_version}"
+	BUILD_ROOT="${PMODULES_TMPDIR}/${module_name}-${module_version}"
+	SRC_DIR="${BUILD_ROOT}/src"
+	if [[ "${compile_in_sourcetree,,}" == 'yes' ]]; then
+		BUILD_DIR="${SRC_DIR}"
+	else
+		BUILD_DIR="${BUILD_ROOT}/build"
+	fi
 
 	source "${BUILD_SCRIPT}"
 	
