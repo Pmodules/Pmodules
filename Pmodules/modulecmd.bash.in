@@ -32,7 +32,7 @@ declare -r os_release=$(std::get_os_release)
 path="${libexecdir}:/bin:/usr/bin"
 std::def_cmds "${path}" \
 	      'awk' 'base64' 'dirname' 'find' 'getopt' 'logger' 'mktemp' \
-	      'rm' 'sed' 'sort' 'tput' 'yq'
+	      'rm' 'rmdir' 'sed' 'sort' 'tput' 'yq'
 
 declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 declare -x  TCLLIBPATH
@@ -259,6 +259,12 @@ die_cannot_save_collection(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${subcommand}" \
 		 "cannot save_collection" "$1"
+}
+
+die_invalid_collection_name(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${subcommand}" \
+		 "invalid collection name" "$1"
 }
 
 die_collection_doesnt_exist(){
@@ -2691,6 +2697,11 @@ SUBCOMMANDS:
         + help                  [modulefile|subcommand]
         + whatis                [modulefile [modulefile ...]]
         + apropos|keyword       string
+        + save                  collection
+        + restore               collection
+        + savelist
+        + saverm                collection
+        + saveshow              collection
         + initadd               modulefile [modulefile ...]
         + initprepend           modulefile [modulefile ...]
         + initrm                modulefile [modulefile ...]
@@ -2897,11 +2908,15 @@ USAGE:
 declare -r UsrCollectionsDir="${HOME}/.Pmodules/collections"
 subcommand_save() {
         local -a args=()
+	local -- opt_system='no'
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
                                 print_help "${subcommand}"
                                 ;;
+			--system )
+				opt_system='yes'
+				;;
 			-- )
 				shift 1
 				args+=( "$@" )
@@ -2915,18 +2930,20 @@ subcommand_save() {
 	done
         (( ${#args[@]} > 1 )) && die_too_many_args
 
+	[[ ${args[0]:0:1} =~ [0-9a-zA-Z] ]] || \
+		die_invalid_collection_name "${args[0]}"
+
+	local -- basedir="${UsrCollectionsDir}"
+	if [[ "${opt_system}" == 'yes' ]]; then
+		basedir="${UsedOverlays[0]}/collections"
+	fi
 	local collection=''
 	if (( ${#args[@]} == 0 )); then
-		collection="${UsrCollectionsDir}/default"
+		collection="${basedir}/default"
 	else
-		if [[ "${args[0]:0:1}" == '/' ]]; then
-			collection="${args[0]}"
-		elif [[ "${args[0]:0:1}" == '.' ]]; then
-			collection="$(std::get_abspath "${args[0]}")"
-		else
-			collection="${UsrCollectionsDir}/${args[0]}"
-		fi
+		collection="${basedir}/${args[0]}"
 	fi
+
 	mkdir -p "${collection%/*}" || \
 		die_cannot create_directory "$_"
 
@@ -2947,6 +2964,7 @@ subcommand_save() {
 	IFS=':' read -a tmp <<< "${UsedOverlays}"
 	items+=( "${tmp[@]}")
 	for item in "${items[@]}"; do
+		[[ "${item}" == 'base' ]] && continue
 		s+="module use ${item};\n"
 	done
 
@@ -2993,13 +3011,13 @@ search_collection(){
 	local -n _path="$1"
 	local -- _collection="$2"
 
-	if [[ -r "${UsrCollectionsDir}/collections" ]]; then
-		_path="${UsrCollectionsDir}/collections"
+	if [[ -r "${UsrCollectionsDir}/${_collection}" ]]; then
+		_path="${UsrCollectionsDir}"
 		return 0
 	fi
 	local --  _ol
 	for _ol in "${UsedOverlays[@]}"; do
-		if [[ -r "${OverlayInfo[${_ol}:inst_root]}/collections" ]]; then
+		if [[ -r "${OverlayInfo[${_ol}:inst_root]}/collections/${_collection}" ]]; then
 			_path="${OverlayInfo[${_ol}:inst_root]}/collections"
 			return 0
 		fi
@@ -3027,17 +3045,20 @@ subcommand_restore() {
 	done
         (( ${#args[@]} > 1 )) && die_too_many_args
 
-	local collection=''
-	local collections=()
+	(( ${#args[@]} == 0 )) && args=( 'default' )
+	local -- path=''
+	local -- collection=''
+	local -a collections=()
 	for collection in "${args[@]}"; do
-		search_collection collection "${args[0]}"
-		collections+=( "${collection}" )
+		search_collection path "${collection}"
+		collections+=( "${path}/${collection}" )
 	done
 	
-	# reset/unload everything
+	# reset/unload everything (except Pmodules/<version>)
 	IFS=':' read -a modules <<< "${LOADEDMODULES}"
 	local -- m=''
 	for ((i=${#modules[@]}-1; i>=0; i--)); do
+		[[ ${modules[$i]} == Pmodules/* ]] && continue
 		subcommand_unload "${modules[$i]}"
 	done
 
@@ -3192,13 +3213,16 @@ subcommand_saverm() {
 	if (( ${#args[@]} == 0 )); then
 		args[0]='default'
 	fi
-	local collection
+	local -- path=''
+	local -- collection=''
 	for collection in "${args[@]}"; do
-		search_collection collection "${collection}"
-		test -e "${collection}" || \
+		search_collection path "${collection}"
+		test -e "${path}/${collection}" || \
 			die_collection_doesnt_exist "${collection}"
-		${rm} -f "${collection}" 2>/dev/null || \
+		${rm} -f "${path}/${collection}" 2>/dev/null || \
 			die_removing_collection_failed "${collection}"
+		# remove directories if empty
+		${rmdir} -p "${path}/${collection%%/*}" 2>/dev/null
 	done
 }
 
@@ -3236,13 +3260,14 @@ subcommand_saveshow() {
 	if (( ${#args[@]} == 0 )); then
 		args[0]='default'
 	fi
-	local collection
+	local -- collection=''
+	local -- path=''
 	for collection in "${args[@]}"; do
-		search_collection collection "${collection}"
-		test -e "${collection}" || \
+		search_collection path "${collection}"
+		test -e "${path}/${collection}" || \
 			die_collection_doesnt_exist "${collection}"
 		std::info "Collection '${collection}':"
-		cat "${collection}" 1>&2
+		cat "${path}/${collection}" 1>&2
 	done
 }
 
