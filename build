@@ -26,7 +26,6 @@ declare -r BOOTSTRAP_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
 source "${SRC_DIR}/libstd.bash"		|| { echo "Oops!" 1>&2; exit 42; }
-source "${SRC_DIR}/libpbuild.bash"	|| { echo "Oops!" 1>&2; exit 42; }
 
 declare -r  PMOD_DIR="Tools/Pmodules/${VERSION}"
 # config directory and file relative to install root
