@@ -28,10 +28,10 @@ declare -r MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	std::die 1 "Oops: modulecmd binary not available!"
 
 std::def_cmds "${mydir}/../libexec" \
-	      'yq'
+	      'sevenz' 'yq'
 
 std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
-	      'awk' 'base64' 'cat' 'cp' 'find' 'getopt' 'grep' \
+	      'awk' 'base64' 'cat' 'cp' 'envsubst' 'find' 'getopt' 'grep' \
 	      'install' 'logger' 'make' 'mkdir' 'mktemp' 'patch' 'pwd' \
 	      'rm' 'rmdir' 'sort' 'tar' 'tee' 'uname'
 
@@ -1213,46 +1213,84 @@ build_modules_yaml_v1(){
 			"${@:4}"
 	}
 
+	die_parsing(){
+		std::die 3 "error parsing YAML:\n----\n$1\n----"
+	}
+
+	die_invalid_value(){
+		std::die 3 "Invalid value for key '$3' in $2 -- '$4'\n----\n$1\n----"
+	}
+
+	die_invalid_key(){
+		std::die 3 "Invalid key '$3' in $2\n----\n$1\n----"
+	}
+
+	die_missing_key(){
+		std::die 3 "Key '$3' missing in $2\n----\n$1\n----"
+	}
+
+	local -A Unpackers=([tar]="tar" [7z]="7z")
 	set_urls() {
 		local -- yaml="$1"
 		local -i l=0
 		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
-			std::die 3 "error parsing YAML configuration"
+			die_parsing "{yaml}"
 		local -i i=0
 		local -- url_yaml=''
 		for ((i=0; i<l; i++)); do
 			url_yaml=$(${yq} -Ne e ".[$i]" <<<"${yaml}" 2>/dev/null) || \
-				std::die 3 "error parsing YAML configuration"
+				die_parsing "{yaml}"
 			local url=''
 			local fname=''
 			local strip_dirs=''
+			local unpacker=''
 			local key=''
 			local value=''
 			while read key value; do
 				key=${key:0:-1}
 				case "${key}" in
 					url )
-						url=$(envsubst <<<"${value}")
+						url=$(${envsubst} <<<"${value}")
 						;;
 					name )
-						fname=$(envsubst <<<"${value}")
+						fname=$(${envsubst} <<<"${value}")
 						;;
 					strip_dirs )
+						[[ ${value} =~ ^[0-9]+$ ]] || \
+							die_invalid_value \
+								"${url_yaml}" \
+								'list of URLS' \
+								'strip_dirs' \
+								"${value}"
 						strip_dirs="${value}"
-						# :FIXME: add check for unsigned int!
+						;;
+					unpacker )
+						[[ -v Unpackers[${value}] ]] || \
+							die_invalid_value \
+								"${url_yaml}" \
+								'list of URLs' \
+								'unpacker' \
+								"${value}"
+						unpacker="${value}"
+						;;
 						;;
 					* )
-						std::die 3 "Invalid key in list of URLs -- ${key}"
+						die_invalid_key \
+							"${url_yaml}" \
+							'list of URLs' \
+							"${key}"
 						;;
 				esac
-				if [[ -z ${url} ]]; then
-					std::die 3 "URL missing!"
-				fi
 			done <<<"${url_yaml}"
-			[[ -z "${url}" ]] && std::die 3 "url missing in:\n${yaml}"
+			[[ -z "${url}" ]] && \
+				die_missing_key \
+					"${url_yaml}" \
+					'list of URLs' \
+					'url'
 			[[ -z "${fname}" ]] && fname="${url##*/}"
 			[[ -z "${strip_dirs}" ]] && strip_dirs=1
-			pbuild.set_urls "${url}" "${fname}" "${strip_dirs}"
+			[[ -z "${unpacker}" ]] && unpacker='tar'
+			pbuild.set_urls "${url}" "${fname}" "${strip_dirs}" "${unpacker}"
 		done
 	}
 
@@ -1272,19 +1310,19 @@ build_modules_yaml_v1(){
 		local -- yaml="$1"
 		local -i l=0
 		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
-			std::die 3 "error parsing YAML configuration"
+			die_parsing "${yaml}"
 		local -i i=0
 		local -- fname=''
 		local -- pkgs_yaml=''
 		for ((i=0; i<l; i++)); do
 			pkgs_yaml=$(${yq} -Ne e ".[$i]" <<<"${yaml}" 2>/dev/null) || \
-				std::die 3 "error parsing YAML configuration"
+				die_parsing "${yaml}"
 			local -- pkg_name=''
 			local -- pkg_version=''
 			local -a pkg_build_args=()
 			local -a keys=()
 			keys=( $( ${yq} -e ".|keys().[]" <<<"${pkgs_yaml}" 2>/dev/null )) || \
-				std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+				die_parsing "${pkgs_yaml}"
 			local -- key=''
 			for key in "${keys[@]}"; do
 				case ${key,,} in
@@ -1300,9 +1338,10 @@ build_modules_yaml_v1(){
 						readarray -t pkg_build_args <<< "${value}"
 						;;
 					* )
-						std::die 3 "%s -- %s\n%s" \
-							 "Invalid key in configuration" \
-							 "${key}" "${yaml_input}"
+						die_invalid_key \
+							"${pkgs_yaml}" \
+							"in subpackage '$i'" \
+							"${key}"
 						;;
 				esac
 			done
@@ -1341,7 +1380,7 @@ build_modules_yaml_v1(){
 			std::info  " Systems to build on: ${systems[@]}"
 			return 1
 		}
-		
+
 		P="${module_name}"
 		parse_version "${module_version}"
 
