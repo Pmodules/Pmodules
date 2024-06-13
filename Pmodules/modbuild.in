@@ -7,8 +7,6 @@
 #
 #.............................................................................
 
-echo "$0 $@"
-
 declare VERSION='@PMODULES_VERSION@'
 
 # get absolute path of script
@@ -223,11 +221,11 @@ parse_args() {
 		-v | --verbose )
 			trap 'echo "$BASH_COMMAND"' DEBUG
                         opt_verbose='yes'
-			set -x
+			echo='echo'
 			;;
 		--debug )
 			opt_debug='yes'
-			echo='echo'
+			set -x
 			;;
 		-f | --force-rebuild )
                         opt_force_rebuild='yes'
@@ -1529,7 +1527,7 @@ build_modules() {
 }
 
 debug(){
-	${echo} "DEBUG: " "$@"
+	${echo} "INFO: " "$@" 1>&2
 }
 
 #.............................................................................
