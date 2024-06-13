@@ -19,6 +19,7 @@ declare -a SOURCE_URLS=()
 declare -a SOURCE_SHA256_SUMS=()
 declare -a SOURCE_NAMES=()
 declare -a SOURCE_STRIP_DIRS=() 
+declare -a SOURCE_UNPACKER=()
 declare -A SOURCE_UNPACK_DIRS=()
 declare -ax CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
@@ -424,6 +425,7 @@ pbuild.set_urls(){
 	SOURCE_URLS[_i]="$1"
 	SOURCE_NAMES[$_i]="$2"
 	SOURCE_STRIP_DIRS[_i]="$3"
+	SOURCE_UNPACKER[_i]="$4"
 }
 
 #..............................................................................
@@ -495,6 +497,9 @@ readonly -f pbuild.add_patch_files
 #..............................................................................
 #
 pbuild::set_default_patch_strip() {
+	[[ ${opt_yaml} == 'yes' ]] && \
+		std::info \
+			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
 	[[ -n "$1" ]] || \
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
@@ -510,7 +515,29 @@ pbuild::unpack(){
 	local -r file="$1"
 	local -r dir="${2:-${SRC_DIR}}"
 	local -r strip="${3:-1}"
-	${tar} --directory="${dir}" -xv --strip-components "${strip}" -f "${file}"
+	local -r unpacker="${4:-${tar}}"
+	case "${unpacker}" in
+		tar )
+			${tar} \
+				--directory="${dir}" \
+				-xv \
+				--strip-components "${strip}" \
+				-f "${file}"
+			;;
+		7z )
+			${sevenz} \
+				x \
+				-y \
+				-o"${dir}" \
+				"${file}"
+			;;
+		none )
+			:
+			;;
+		* )
+			std::die 1 "Unsupportet tool for unpacking -- '${unpacker}'"
+			;;
+	esac
 }
 
 #..............................................................................
@@ -618,9 +645,10 @@ pbuild::prep() {
 		local -r file="$1"
 		local -r dir="$2"
 		local -r strip="$3"
+		local -r unpacker="$4"
 		{
 			mkdir -p "${dir}"
-			pbuild::unpack "${file}" "${dir}" "${strip}"
+			pbuild::unpack "${file}" "${dir}" "${strip}" "${unpacker}"
 		} || {
 			${rm} -f "${file}"
 			std::die 4 \
@@ -674,7 +702,8 @@ pbuild::prep() {
 			dir="${SRC_DIR}"
 		fi
 		local strip_dirs="${SOURCE_STRIP_DIRS[i]}"
-		unpack "${source_fname}" "${dir}" "${strip_dirs}"
+		local unpacker="${SOURCE_UNPACKER[i]}"
+		unpack "${source_fname}" "${dir}" "${strip_dirs}" "${unpacker}"
 	done
 	patch_sources
 	# create build directory
