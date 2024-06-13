@@ -79,10 +79,11 @@ trap "pb_exit" EXIT
 mkdir -p "${DOWNLOADS_DIR}" || exit ${PB_ERR_SYSTEM}
 test -r "${SRC_FILE}" || curl -L --output "$_" "${DOWNLOAD_URL}" || exit ${PB_ERR_DOWNLOAD}
 
+strip_components="${strip_components:-1}"
 #---
 # unpack
 mkdir -p "${SRC_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
-tar --directory "${SRC_DIR}" --strip-components 1 -xv -f "${SRC_FILE}" || exit ${PB_ERR_UNTAR}
+tar --directory "${SRC_DIR}" --strip-components ${strip_components} -xv -f "${SRC_FILE}" || exit ${PB_ERR_UNTAR}
 
 #---
 # Local Variables:

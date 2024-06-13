@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# https://www.gnu.org/software/findutils/
+#
+P=7z
+V=${SEVENZ_VERSION:-24.05}
+FNAME="$P-$V.tar.xz"
+DOWNLOAD_URL="https://github.com/ip7z/7zip/releases/download/$V/7z${V//.}-src.tar.xz"
+
+strip_components=0
+#---
+source "$(dirname "$0")/librecipes.bash"
+
+#---
+# configure
+mkdir -p "${SRC_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+cd 'CPP/7zip/Bundles/Alone2'
+
+#---
+# compile & install
+make -j -f ../../cmpl_gcc.mak
+cp b/g/7zz "${PREFIX}/${UTILBIN_DIR}"
+
+#---
+# post-install
+
+#---
+# Local Variables:
+# mode: shell-script-mode
+# sh-basic-offset: 8
+# End:
