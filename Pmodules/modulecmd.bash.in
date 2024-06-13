@@ -3453,12 +3453,12 @@ while (( $# > 0 )); do
 			print_help 'version'
 			;;
 		--debug )
-			debug(){
-				echo "DEBUG: " "$@" 1>&2
-			}
+			set -x
 			;;
 		--verbose )
-			set -x
+			debug(){
+				echo "INFO: " "$@" 1>&2
+			}
 			;;
 		'' )
 			;;
