@@ -343,6 +343,26 @@ std::is_member_of_array(){
 	done
 	return 1
 }
+
+std::find_executables(){
+	${find} "$@" -type f -printf "%i %P\n" | \
+		${sort} -n -k1 -u              | \
+		${awk} '{print $2}'            | \
+		${file} -f -                   | \
+		${awk} '$2 ~ /ELF/ && $3 ~ /64-bit/ && $5 ~ /executable/  {print substr($1, 1, length($1)-1)}'
+}
+
+std::find_shared_objects(){
+	${find} "$@" -type f -printf "%i %P\n" | \
+		${sort} -n -k1 -u              | \
+		${awk} '{print $2}'            | \
+		${file} -f -                   | \
+		${awk} '$2 ~ /ELF/ && $3 ~ /64-bit/ && $5 ~ /shared/ && $6 ~ /object/  {print substr($1, 1, length($1)-1)}'
+}
+
+std::get_dir_depth(){
+	echo "$1" | ${grep} -o / | wc -l
+}
 # Local Variables:
 # mode: sh
 # sh-basic-offset: 8
