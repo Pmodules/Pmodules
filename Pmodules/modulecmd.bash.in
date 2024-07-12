@@ -35,7 +35,7 @@ std::def_cmds "${path}" \
 	      'rm' 'rmdir' 'sed' 'sort' 'tput' 'yq'
 
 declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
-declare -x  TCLLIBPATH
+declare -x  TCLLIBPATH=${TCLLIBPATH:-''}
 std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
 
 declare -r tcl_cmd="${libexecdir}/modulecmd.bin"
@@ -804,7 +804,7 @@ subcommand_load() {
 		else
 			modulecmd="${tcl_cmd}"
 		fi
-		local output=$("${modulecmd}" 'bash' ${opts} 'load' \
+		local output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
                                               "${current_modulefile}" 2> "${tmpfile}")
 
                 # we do not want to print the error message we got from
@@ -826,7 +826,7 @@ subcommand_load() {
                         echo "${output}"
                 else
 			# re-run with right shell
-                        "${modulecmd}" "${Shell}" ${opts} 'load' \
+                        "${modulecmd}" "${Shell}" "${opts[@]}" 'load' \
                                        "${current_modulefile}"
                 fi
 		eval "${output}"
@@ -2626,7 +2626,7 @@ subcommand_search() {
 		esac
 		shift
 	done
-	if [[ -z "${src_prefix}" ]]; then
+	if (( ${#src_prefix[@]} == 0 )); then
 		local ol=''
 		for ol in "${UsedOverlays[@]}"; do
 			src_prefix+=( "${OverlayInfo[${ol}:mod_root]}" )
