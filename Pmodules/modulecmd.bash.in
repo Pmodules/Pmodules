@@ -712,10 +712,9 @@ subcommand_load() {
 	(( ${#args[@]} == 0 )) && \
 		die_missing_arg
 
-	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
-
         local m=''
 	for m in "${args[@]}"; do
+		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 		if [[ "$m" =~ ":" ]]; then
 
 			# extendet module name is either
