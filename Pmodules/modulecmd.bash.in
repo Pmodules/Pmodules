@@ -1,18 +1,13 @@
 #!@BASH@ --noprofile
 #
 
-#
-# which information do we need for overlays?
-# - list of used overlays by name
-# - dict to map an overlay name to install_root
-# - dict to map an overlay name to modulefile_root
-# - dict to map an overlay name to the overlay type
-# - dict to map moduledirs to overlay name
-
 unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
 unset IFS	# use default IFS
 
 shopt -s nullglob
+#set -e		# exit on error
+set -u		# Treat unset variables as an error
+set -o pipefail
 
 # used in some output messages only
 declare -r CMD='module'
