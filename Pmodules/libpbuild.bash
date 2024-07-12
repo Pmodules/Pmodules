@@ -512,7 +512,7 @@ readonly -f pbuild::set_default_patch_strip
 #..............................................................................
 #
 pbuild::unpack(){
-	local -r file="$1"
+	local -r fname="$1"
 	local -r dir="${2:-${SRC_DIR}}"
 	local -r strip="${3:-1}"
 	local -r unpacker="${4:-${tar}}"
@@ -522,14 +522,14 @@ pbuild::unpack(){
 				--directory="${dir}" \
 				-xv \
 				--strip-components "${strip}" \
-				-f "${file}"
+				-f "${fname}"
 			;;
 		7z )
 			${sevenz} \
 				x \
 				-y \
 				-o"${dir}" \
-				"${file}"
+				"${fname}"
 			;;
 		none )
 			:
@@ -642,15 +642,15 @@ pbuild::prep() {
 	}
 
 	unpack() {
-		local -r file="$1"
+		local -r fname="$1"
 		local -r dir="$2"
 		local -r strip="$3"
 		local -r unpacker="$4"
 		{
 			mkdir -p "${dir}"
-			pbuild::unpack "${file}" "${dir}" "${strip}" "${unpacker}"
+			pbuild::unpack "${fname}" "${dir}" "${strip}" "${unpacker}"
 		} || {
-			${rm} -f "${file}"
+			${rm} -f "${fname}"
 			std::die 4 \
 				 "%s " \
 				 "${module_name}/${module_version}:" \
