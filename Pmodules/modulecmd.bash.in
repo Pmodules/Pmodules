@@ -2299,11 +2299,12 @@ SWITCHES:
 subcommand_search() {
 	local modules=()
 	local groups=()
+	local -A searched_moduledirs=()
 	local with_modules='//'
 	local -i cols=80
 	[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
-	local src_prefix=()
+	local -a src_prefix=()
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
 	local opt_print_csv='no'
@@ -2452,19 +2453,26 @@ subcommand_search() {
 	#   :FIXME:
 	#
 	search () {
-		local module="$1"
-		local group="$2"
-		# write results to a temporary file for later processing
+		local -r module="$1"
+		local -r group="$2"
+		shift 2
+		local -a modulepath=("$@")
 
-		# loop over all directories which can be added to
-		# MODULEPATH inside current group
-		local depth=${GroupDepths[${group}]}
-		local s=''
-		if (( depth > 0 )); then
-			s=$(printf '/*%.0s' $(seq 1 ${depth}))
+		if (( ${#modulepath[@]} == 0 )); then
+			# loop over all directories which can be added to
+			# MODULEPATH inside current group
+			local depth=${GroupDepths[${group}]}
+			local s=''
+			if (( depth > 0 )); then
+				s=$(printf '/*%.0s' $(seq 1 ${depth}))
+			fi
+			modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+			local -- dir=''
+			for dir in "${modulepath[@]}"; do
+				searched_moduledirs[${dir}]=1
+			done
 		fi
-		local modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
-		
+
 		# get and print all available modules in $mpath
 		# with respect to the requested release stage
 		# tmpfile: module/version relstage group dependencies...
@@ -2643,21 +2651,35 @@ subcommand_search() {
 		g_env_must_be_saved='yes'
 	fi
 
-	local module
 	if (( ${#groups[@]} == 0 )); then
 		groups=( "${!GroupDepths[@]}" )
-	fi	
+	fi
+	# search inside the Pmodules hierarchy
+	local module
 	for module in "${modules[@]}"; do
-		if [[ ${opt_glob} != 'yes' ]]; then
-			module+="*"
-		fi
+		[[ ${opt_glob} == 'no' ]] && module+="*"
 		local group
 		for group in "${groups[@]}"; do
 			search "${module}" "${group}"
 		done
-		print_result
-		echo -n > ${tmpfile}
 	done
+
+	# search outside the Pmodules hierarchy
+	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
+	local -a dirs=()
+	local -- dir=''
+	for dir in "${modulepath[@]}"; do
+		# skip already searched directories
+		[[ -v searched_moduledirs[${dir}] ]] && continue
+		dirs+=(${dir})
+	done
+	if (( ${#dirs[@]} > 0 )); then
+		for module in "${modules[@]}"; do
+			[[ ${opt_glob} == 'no' ]] && module+="*"
+			search "${module}" 'other' "${dirs[@]}"
+		done
+	fi
+	print_result
 }
 
 ##############################################################################
