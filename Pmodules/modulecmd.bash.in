@@ -2104,8 +2104,8 @@ subcommand_list() {
 
 	human_readable_output(){
 		# get list of loaded modules with stripped MODULEPATH
-		IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
-
+		IFS=':' read -r -a modules \
+		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
 		local strs=()
 		local -i n=1
 		local -i colsize=0
