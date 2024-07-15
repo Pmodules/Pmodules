@@ -28,7 +28,7 @@ declare -r MODULECMD="${PMODULES_HOME}/bin/modulecmd"
 	std::die 1 "Oops: modulecmd binary not available!"
 
 std::def_cmds "${mydir}/../libexec" \
-	      'sevenz' 'yq'
+	      'patchelf' 'sevenz' 'yq'
 
 std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
 	      'awk' 'base64' 'cat' 'cp' 'envsubst' 'find' 'getopt' 'grep' \
