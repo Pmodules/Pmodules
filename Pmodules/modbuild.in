@@ -725,6 +725,11 @@ declare -A Yaml_default_config=(
 declare -A Yaml_valid_vk_keys=(
 	['config']=1			# !!map
 	['variants']=1			# !!map
+declare -A Unpackers=(
+	['tar']='tar'
+	['7z']='7z'
+)
+
 )
 	
 declare -A hierarchical_groups=()
@@ -1230,7 +1235,6 @@ build_modules_yaml_v1(){
 		std::die 3 "Key '$3' missing in $2\n----\n$1\n----"
 	}
 
-	local -A Unpackers=([tar]="tar" [7z]="7z")
 	set_urls() {
 		local -- yaml="$1"
 		local -i l=0
@@ -1273,7 +1277,6 @@ build_modules_yaml_v1(){
 								'unpacker' \
 								"${value}"
 						unpacker="${value}"
-						;;
 						;;
 					* )
 						die_invalid_key \
