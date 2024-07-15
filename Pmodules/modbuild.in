@@ -699,38 +699,60 @@ declare -A Yaml_valid_keys_for_module=(
 )
 
 declare -A Yaml_default_config=(
-	["build_requires"]=''		# !!seq of strings
-	["compile_in_sourcetree"]='no'  # !!str
-	["configure_with"]='auto'	# !!str
-	["configure_args"]=''           # !!seq of strings
-	["configure_args+"]=''          # !!seq of strings
-	["default_variant"]=''          # !!str
-	["docfiles"]=''			# !!seq of strings
-	["docfiles+"]=''		# !!seq of strings
-	["group"]='Tools'		# !!str
-	["group_deps"]=''		# !!map
-	["overlay"]='base'		# !!str
-	["patch_files"]=''		# !!seq
-	["patch_files+"]=''		# !!seq
-	["relstage"]='unstable'		# !!str
-	["runtime_deps"]=''		# !!seq of strings
-	["script"]='build'		# !!str
-	["suffix"]=''			# !!str
-	["systems"]=''			# !!seq of strings
-	["sub_packages"]=''		# !!map
-	["urls"]=''			# !!map
-	["variant"]=''			# !!str
+	['build_requires']=''		# !!seq of strings
+	['compile_in_sourcetree']='no'  # !!str
+	['configure_with']='auto'	# !!str
+	['configure_args']=''           # !!seq of strings
+	['configure_args+']=''          # !!seq of strings
+	['default_variant']=''          # !!str
+	['docfiles']=''	                # !!seq of strings
+	['docfiles+']=''		# !!seq of strings
 	['download_dir']=''             # !!str
+	['group']='Tools'		# !!str
+	['kernels']=''			# !!seq of strings
+	['group_deps']=''		# !!map
+	['overlay']='base'		# !!str
+	['patch_files']=''		# !!seq
+	['patch_files+']=''		# !!seq
+	['relstage']='unstable'		# !!str
+	['runtime_deps']=''		# !!seq of strings
+	['script']='build'		# !!str
+	['suffix']=''			# !!str
+	['systems']=''			# !!seq of strings
+	['sub_packages']=''		# !!map
+	['target_cpus']=''		# !!seq of strings
+	['urls']=''			# !!map
+	['variant']=''			# !!str
 )
 
 declare -A Yaml_valid_vk_keys=(
-	['config']=1			# !!map
-	['variants']=1			# !!map
+	['config']='1'			# !!map
+	['variants']='1'		# !!map
+)
+
 declare -A Unpackers=(
 	['tar']='tar'
 	['7z']='7z'
 )
 
+declare -A KernelNames=(
+	['linux']='1'
+	['darwin']='1'
+	['any']='1'
+)
+
+declare -A TargetCPUs=(
+	['x86_64']='x86_64'
+	['arm64']='arm64'
+	['aarch64']='arm64'
+	['any']='1'
+)
+
+declare -A hierarchical_groups=(
+	['compiler']='compiler'
+	['mpi']='compiler mpi'
+	['hdf5']='compiler mpi hdf5'
+	['hdf5_serial']='compiler hdf5_serial'
 )
 
 build_modules_yaml_v1(){
@@ -874,8 +896,40 @@ build_modules_yaml_v1(){
 					get_value "${yaml_input}" value "${key}" '!!seq'
 					cfg[${key,,}]="${value}"
 					;;
-				build_requires | configure_args | docfiles | patch_files | runtime_deps | systems | variant )
+				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|target_cpus|variant )
 					get_seq "${yaml_input}" value "${key}"
+					cfg[${key,,}]="${value}"
+					;;
+				kernels )
+					get_seq "${yaml_input}" value "${key}"
+					set -o noglob
+					local -a items=( "${value,,}" )
+					set +o noglob
+					local -- item=''
+					for item in "${items[@]}"; do
+						[[ -v KernelNames[${item}] ]] || \
+							die_invalid_value \
+								"${yaml_input}" \
+								'config section' \
+								'kernel' \
+								"${item}"
+					done
+					cfg[${key,,}]="${value}"
+					;;
+				target_cpus )
+					get_seq "${yaml_input}" value "${key}"
+					set -o noglob
+					local -a items=( "${value,,}" )
+					set +o noglob
+					local -- item=''
+					for item in "${items[@]}"; do
+						[[ -v TargetCPUs[${item}] ]] || \
+							die_invalid_value \
+								"${yaml_input}" \
+								'config section'
+								'CPU' \
+								"${item}"
+					done
 					cfg[${key,,}]="${value}"
 					;;
 				'configure_args+' | 'docfiles+' | 'patch_files+' )
@@ -1375,9 +1429,45 @@ build_modules_yaml_v1(){
 				[[ "${HOSTNAME}" == ${system} ]] && return 0
 			done
 			std::info "Skipping variant '${module_version}', neither OS nor hostname match:"
-			std::info  " This system: ${opt_system}; hostname: ${HOSTNAME}"
-			std::info  " Systems to build on: ${systems[@]}"
+			std::info "  This system: ${opt_system}; hostname: ${HOSTNAME}"
+			std::info "  Systems to build on: ${systems[@]}"
 			return 1
+		}
+		die_invalid_kernel_name(){
+			std::die 3 "Invalid kernel name in configuration!"
+		}
+		check_kernel(){
+			[[ -z ${module_config['kernels']} ]] && return 0
+			set -o noglob
+			local -a kernels=( "${module_config['kernels'],,}" )
+			set +o noglob
+			local -- kernel=''
+			for kernel in "${kernels[@]}"; do
+				[[ ${kernel} == 'any' ]] && return 0
+				[[ ${kernel} == ${OS,,} ]] & return 0
+			done
+			std::info "Skipping variant '${module_version}':"
+			std::info "  The kernel of this systems is: ${OS}"
+			std::info "  But the variant is for the following kernels: ${module_config['kernels']}"
+			return 1
+		}
+
+		check_target_cpu(){
+			[[ -z ${module_config['target_cpus']} ]] && return 0
+			set -o noglob
+			local -a target_cpus=( "${module_config['target_cpus'],,}" )
+			set +o noglob
+			local -- system_cpu=$(uname -p)
+			local -- cpu=''
+			for cpu in "${target_cpus[@]}"; do
+				[[ ${cpu} == 'any' ]] && return 0
+				[[ ${cpu} == ${system_cpu} ]] && return 0
+			done
+			std::info "Skipping variant '${module_version}':"
+			std::info "  The CPU of this systems is: ${system_cpu}"
+			std::info "  But this variant is for the following CPUs: ${module_config['target_cpus']}"
+			return 1
+
 		}
 
 		P="${module_name}"
@@ -1391,8 +1481,10 @@ build_modules_yaml_v1(){
 			return 0
 		fi
 		
-		# build for this system?
+		# build for this system, kernel and target_cpu?
 		check_system || return 0
+		check_kernel || return 0
+		check_target_cpu || return 0
 
 		debug "build variant ${module_name}/${module_version}"
 
