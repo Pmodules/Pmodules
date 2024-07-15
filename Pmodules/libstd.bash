@@ -35,6 +35,10 @@ std::die() {
         exit $ec
 }
 
+std::def_cmd(){
+	which "$1" 2>/dev/null || std::die 255 "'$1' not found!"
+}
+
 std::def_cmds(){
 	local path="$1"
 	shift
