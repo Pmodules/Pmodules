@@ -26,7 +26,6 @@ declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
 declare -a PATCH_STRIP_DEFAULT='1'
 declare -- configure_with='auto'
-declare -- PREFIX=''
 declare -- SRC_DIR=''
 declare -- BUILD_DIR=''
 declare -- is_subpkg='no'

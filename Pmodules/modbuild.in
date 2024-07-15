@@ -685,6 +685,7 @@ declare -x V_MAJOR=''		# first number in version string
 declare -x V_MINOR=''		# second number in version string (or empty)
 declare -x V_PATCHLVL=''	# third number in version string (or empty)
 declare -x V_RELEASE=''		# module release (or empty)
+declare -x PREFIX=''
 
 declare -A SHASUMS=()
 declare -a MODULE_DOCFILES=()
