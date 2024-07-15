@@ -720,6 +720,7 @@ declare -A Yaml_default_config=(
 	["sub_packages"]=''		# !!map
 	["urls"]=''			# !!map
 	["variant"]=''			# !!str
+	['download_dir']=''             # !!str
 )
 
 declare -A Yaml_valid_vk_keys=(
@@ -844,7 +845,7 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
-				default_variant | group | overlay | script | suffix )
+				default_variant | download_dir | group | overlay | script | suffix )
 					get_value "${yaml_input}" value "${key}" '!!str'
 					cfg[${key,,}]="${value}"
 					;;
@@ -1412,6 +1413,9 @@ build_modules_yaml_v1(){
 		set_configure_args "${module_config['configure_args']}"
 		set_patch_files "${module_config['patch_files']}"
 
+		if [[ -n "${module_config['download_dir']}" ]]; then
+			PMODULES_DISTFILESDIR="${module_config['download_dir']}"
+		fi
 		local -a runtime_deps=()
 		if [[ -n ${module_config['runtime_deps']} ]]; then
 			readarray -t runtime_deps <<<"${module_config['runtime_deps']}"
