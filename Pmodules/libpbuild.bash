@@ -30,6 +30,8 @@ declare -- SRC_DIR=''
 declare -- BUILD_DIR=''
 declare -- is_subpkg='no'
 
+declare -i group_depth=0
+
 #.............................................................................
 #
 # Exit script on errror.
@@ -1202,6 +1204,7 @@ _build_module() {
 				[[ -v COMPILER_VERSION ]] || die_no_compiler
 				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
 				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				group_depth=2
 				;;
 			MPI )
 				[[ -v COMPILER_VERSION ]] || die_no_compiler
@@ -1210,6 +1213,7 @@ _build_module() {
 				modulefile_dir+="${MPI}/${MPI_VERSION}/"
 				PREFIX+="${MPI}/${MPI_VERSION}/"
 				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				group_depth=4
 				;;
 			HDF5 )
 				[[ -v COMPILER_VERSION ]] || die_no_compiler
@@ -1221,6 +1225,7 @@ _build_module() {
 				PREFIX+="${HDF5}/${HDF5_VERSION}/"
 				PREFIX+="${MPI}/${MPI_VERSION}/"
 				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				group_depth=6
 				;;
 			HDF5_serial )
 				[[ -v COMPILER_VERSION ]] || die_no_compiler
@@ -1229,6 +1234,7 @@ _build_module() {
 				modulefile_dir+="${hdf5_serial}/${HDF5_SERIAL_VERSION}/"
 				PREFIX+="${hdf5_serial}/${HDF5_SERIAL_VERSION}/"
 				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
+				group_depth=4
 				;;
 			* )
 				:
@@ -1307,6 +1313,25 @@ _build_module() {
 				echo "${dep}" >> "${fname}"
 			done
 		}
+		patch_elf_exe_and_libs(){
+			local -- libdir="${OverlayInfo[${ol_name}:inst_root]}/lib64"
+			[[ -d "${libdir}" ]] || return 0
+			local -a bin_objects=( $(std::find_executables '.' ) )
+			local -- fname=''
+			for fname in "${bin_objects[@]}"; do
+				local -i depth=$(std::get_dir_depth "${fname}")
+				(( depth+=group_depth+3 ))
+				local -- rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
+				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
+			done
+			local -a bin_objects=( $(std::find_shared_objects '.' ) )
+			for fname in "${bin_objects[@]}"; do
+				local -i depth=$(std::get_dir_depth "${fname}")
+				(( depth+=group_depth+3 ))
+				local -- rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
+				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
+			done
+		}
 
 		#..............................................................
 		# post-install: for Linux we need a special post-install to
@@ -1318,6 +1343,7 @@ _build_module() {
 				"running post-installation for ${OS} ..."
 			cd "${PREFIX}"
 			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
+			patch_elf_exe_and_libs
 			return 0
 		}
 
