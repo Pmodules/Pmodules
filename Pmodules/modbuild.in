@@ -731,12 +731,6 @@ declare -A Unpackers=(
 )
 
 )
-	
-declare -A hierarchical_groups=()
-hierarchical_groups['compiler']='compiler'
-hierarchical_groups['mpi']='compiler mpi'
-hierarchical_groups['hdf5']='compiler mpi hdf5'
-hierarchical_groups['hdf5_serial']='compiler hdf5_serial'
 
 build_modules_yaml_v1(){
 	: "
