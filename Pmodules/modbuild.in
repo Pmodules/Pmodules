@@ -31,9 +31,9 @@ std::def_cmds "${mydir}/../libexec" \
 	      'patchelf' 'sevenz' 'yq'
 
 std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
-	      'awk' 'base64' 'cat' 'cp' 'envsubst' 'find' 'getopt' 'grep' \
+	      'awk' 'base64' 'cat' 'cp' 'envsubst' 'file' 'find' 'getopt' 'grep' \
 	      'install' 'logger' 'make' 'mkdir' 'mktemp' 'patch' 'pwd' \
-	      'rm' 'rmdir' 'sort' 'tar' 'tee' 'uname'
+	      'rm' 'rmdir' 'seq' 'sort' 'tar' 'tee' 'uname'
 
 declare -r OS="$(${uname} -s)"
 if [[ ${OS} == 'Darwin' ]]; then
