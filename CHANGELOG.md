@@ -2,9 +2,32 @@
 
 ## Version 1.1.21
 ### modulecmd
+* update bash to 5.2.21 and Tcl to 8.6.14 (#274)
+* option '--debug' enables shell xtrace, option '--verbose'
+  informational messages (#275)
+* for modules not in the Pmodules hierarchy: display module
+  name only, not full qualified name of the modulefile. (#285)
+* perform module search in all directories in MODULEPATH
+  outside the Pmodules hierarchy. Till know a module search
+  was limited to the Pmodules hierarchy (#286).
+* bugfix: loading multiple modules with the same load command
+  is working again (#281)
+* more bugfixes (#282)
 
 ### build-system
-
+* The tool '7z' can know be used to unpack an archive. The tool
+  to be used to unpack an archive can be configured in the YAML
+  config file. (#273, #278, #289)
+* set RPATH in executables and shared libraries to 
+  ${PMODULES_ROOT}/lib. The set RPATH is relative using '$ORIGIN'.
+  (#279, #280, #290)
+* expand the environment variable $PREFIX while parsing the 
+  YAML configuration file (#287)
+* the download directory can now be configured in the YAML
+  configuration file (#293)
+* support for different target CPU and OS kernels added (#294)
+* more bugfixes (#277, #295)
+* cleanup (#292)
 
 ## Version 1.1.20
 ### modulecmd
