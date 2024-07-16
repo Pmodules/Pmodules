@@ -152,7 +152,7 @@ std::remove_path() {
 std::replace_path () {
 	local -r path="$1"
 	local -r removepat="$2"
-	local -r replacestr="$3"
+	local -r replacestr="${3:-''}"
 
 	local -r removestr=$(echo "${!path}" | tr ":" "\n" | grep -m 1 "^$removepat\$")
 	export $path="$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
