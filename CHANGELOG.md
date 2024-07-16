@@ -1,5 +1,10 @@
 # Changelog of Pmodules
 
+## Version 1.1.22
+### modulecmd
+
+### build-system
+
 ## Version 1.1.21
 ### modulecmd
 * update bash to 5.2.21 and Tcl to 8.6.14 (#274)
