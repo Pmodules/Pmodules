@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 
-declare -rx VERSION='1.1.21'
+declare -rx VERSION='1.1.22'
 declare -rx BASH5_VERSION='5.2.21'
 declare -rx TCL_VERSION='8.6.14'
 declare -rx TCLLIB_VERSION='1.21'
