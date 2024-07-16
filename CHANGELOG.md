@@ -7,7 +7,7 @@
   informational messages (#275)
 * for modules not in the Pmodules hierarchy: display module
   name only, not full qualified name of the modulefile. (#285)
-* perform module search in all directories in MODULEPATH
+* perform module search in all directories in `MODULEPATH
   outside the Pmodules hierarchy. Till know a module search
   was limited to the Pmodules hierarchy (#286).
 * bugfix: loading multiple modules with the same load command
@@ -16,13 +16,12 @@
 
 ### build-system
 * The tool '7z' can know be used to unpack an archive. The tool
-  to be used to unpack an archive can be configured in the YAML
-  config file. (#273, #278, #289)
-* set RPATH in executables and shared libraries to 
-  ${PMODULES_ROOT}/lib. The set RPATH is relative using '$ORIGIN'.
+  to unpack an archive can be configured in the YAML config file.
+  For now `tar` and `7z` are supported. (#273, #278, #289)
+* set `RPATH` in executables and shared libraries to 
+  `${PMODULES_ROOT}/lib`. The set RPATH is relative using `$ORIGIN`.
   (#279, #280, #290)
-* expand the environment variable $PREFIX while parsing the 
-  YAML configuration file (#287)
+* expand `${PREFIX}` while parsing the YAML configuration file (#287)
 * the download directory can now be configured in the YAML
   configuration file (#293)
 * support for different target CPU and OS kernels added (#294)
