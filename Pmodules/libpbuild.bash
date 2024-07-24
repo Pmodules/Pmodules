@@ -6,10 +6,8 @@ unset CDPATH
 
 #.............................................................................
 # define constants
-declare -r BNAME_VARIANTS='variants'
 declare -r FNAME_RDEPS='.dependencies'
 declare -r FNAME_IDEPS='.install_dependencies'
-declare -r FNAME_BDEPS='.build_dependencies'
 
 # relative path of documentation
 # abs. path is "${PREFIX}/${_docdir}/${module_name}"
@@ -24,13 +22,16 @@ declare -A SOURCE_UNPACK_DIRS=()
 declare -ax CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
-declare -a PATCH_STRIP_DEFAULT='1'
+declare -- PATCH_STRIP_DEFAULT='1'
 declare -- configure_with='auto'
 declare -- SRC_DIR=''
 declare -- BUILD_DIR=''
 declare -- is_subpkg='no'
 
 declare -i group_depth=0
+
+declare -- COMPILER=''
+declare -- MPI=''
 
 #.............................................................................
 #
@@ -54,7 +55,7 @@ trap "_error_handler" ERR
 # write number of cores to stdout
 #
 _get_num_cores() {
-	case "${OS}" in
+	case "${KernelName}" in
 	Linux )
 		${grep} -c ^processor /proc/cpuinfo
 		;;
@@ -62,7 +63,7 @@ _get_num_cores() {
 		${sysctl} -n hw.ncpu
 		;;
 	* )
-		std::die 1 "OS ${OS} is not supported\n"
+		std::die 1 "OS ${KernelName} is not supported\n"
 		;;
 	esac
 }
@@ -163,17 +164,15 @@ pbuild::add_to_group() {
 	if (( $# == 0 )); then
 		std::die 42 \
                          "%s " "${module_name}/${module_version}:" \
-                         "${FUNCNAME}: missing group argument."
+                         "${FUNCNAME[0]}: missing group argument."
 	fi
 	if (( $# > 1 )); then
 		std::die 42 \
                          "%s " "${module_name}/${module_version}:" \
-                         "${FUNCNAME}: only one argument is allowed."
+                         "${FUNCNAME[0]}: only one argument is allowed."
 	fi
-	if [[ ${opt_yaml} == 'yes' ]]; then
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	pbuild.add_to_group "$@"
 }
 readonly -f pbuild::add_to_group
@@ -201,18 +200,17 @@ readonly -f pbuild.add_to_group
 #   1 otherwise
 #
 pbuild::module_is_avail() {
-	local output=( $("${MODULECMD}" bash avail -a -m "$1" \
-                                        2>&1 1>/dev/null) )
-	local i
-	for (( i = 0; i < ${#output[@]}; i += 2 )); do
-		if [[ "${output[$i]}" == "$1" ]]; then
+	local -- name=''
+	local -- release=''
+	while read -r name release; do
+		if [[ "${name}" == "$1" ]]; then
 			if (( $# > 1 )); then
 				local -n _result="$2"
-				_result="${output[i+1]}"
+				_result="${release}"
 			fi
 			return 0
 		fi
-	done
+	done < <(${modulecmd} bash avail -a -m "$1" 2>&1 1>/dev/null)
 	return 1
 }
 readonly -f pbuild::module_is_avail
@@ -252,17 +250,19 @@ pbuild::version_compare () {
                 [[ $1 =~ ^[0-9]+$ ]]
         }
 
-        [[ $1 == $2 ]] && return 0
-        local IFS=.
-        local i ver1=($1) ver2=($2)
+        [[ "$1" == "$2" ]] && return 0
+	local ver1 ver2
+        IFS='.' read -r -a ver1 <<<"$1"
+        IFS='.' read -r -a ver2 <<<"$2"
 
         # fill empty fields in ver1 with zeros
+        local i
         for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
                 ver1[i]=0
         done
         for ((i=0; i<${#ver1[@]}; i++)); do
                 [[ -z ${ver2[i]} ]] && ver2[i]=0
-                if is_uint ${ver1[i]} && is_uint ${ver2[i]}; then
+                if is_uint "${ver1[i]}" && is_uint "${ver2[i]}"; then
                         ((10#${ver1[i]} > 10#${ver2[i]})) && return 1
                         ((10#${ver1[i]} < 10#${ver2[i]})) && return 2
                 else
@@ -352,9 +352,8 @@ readonly -f pbuild::version_eq
 #       Default is all.
 #
 pbuild::supported_compilers() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	pbuild.supported_compilers "$@"
 }
 readonly -f pbuild::supported_compilers
@@ -374,9 +373,8 @@ readonly -f pbuild.supported_compilers
 #       Default is all.
 #
 pbuild::supported_systems() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	pbuild.supported_systems "$@"
 }
 readonly -f pbuild::supported_systems
@@ -390,7 +388,7 @@ readonly -f pbuild.supported_systems
 #..............................................................................
 #
 pbuild::use_flag() {
-	[[ "${USE_FLAGS}" =~ ":${1}:" ]]
+	[[ "${USE_FLAGS}" == *:${1}:* ]]
 }
 readonly -f pbuild::use_flag
 
@@ -406,16 +404,14 @@ readonly -f pbuild::use_flag
 #	$1	download URL
 #	$2	optional file-name (of)
 pbuild::set_download_url() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	local -i _i=${#SOURCE_URLS[@]}
-	SOURCE_URLS[_i]=$1
+	SOURCE_URLS[_i]="$1"
 	if (( $# > 1 )); then
-		SOURCE_NAMES[$_i]=${2:-${1##*/}}
+		SOURCE_NAMES[_i]="${2:-${1##*/}}"
 	else
-		SOURCE_NAMES[$_i]="${1##*/}"
+		SOURCE_NAMES[_i]="${1##*/}"
 	fi
 	SOURCE_STRIP_DIRS[_i]='1'
 }
@@ -424,7 +420,7 @@ readonly -f pbuild::set_download_url
 pbuild.set_urls(){
 	local -i _i=${#SOURCE_URLS[@]}
 	SOURCE_URLS[_i]="$1"
-	SOURCE_NAMES[$_i]="$2"
+	SOURCE_NAMES[_i]="$2"
 	SOURCE_STRIP_DIRS[_i]="$3"
 	SOURCE_UNPACKER[_i]="$4"
 }
@@ -440,9 +436,8 @@ pbuild.set_urls(){
 #	Maybe we should use a dictionary in the future.
 #
 pbuild::set_sha256sum() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	SOURCE_SHA256_SUMS+=("$1")
 }
 readonly -f pbuild::set_sha256sum
@@ -463,13 +458,12 @@ readonly -f pbuild::set_unpack_dir
 #..............................................................................
 #
 pbuild::add_patch() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	[[ -z "$1" ]] && \
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
-			 "${FUNCNAME}: missing argument!"
+			 "${FUNCNAME[0]}: missing argument!"
 	PATCH_FILES+=( "$1" )
 	if (( $# >= 2 )); then
 		PATCH_STRIPS+=( "$2" )
@@ -480,9 +474,8 @@ pbuild::add_patch() {
 readonly -f pbuild::add_patch
 
 pbuild.add_patch_files(){
-	local -a args="$@"
 	local -- arg=''
-	for arg in "${args[@]}"; do
+	for arg in "$@"; do
 		[[ -z "${arg}" ]] && continue
  		if [[ ${arg} == *:* ]]; then
 			PATCH_FILES+=( "${arg%%:*}" )
@@ -498,13 +491,12 @@ readonly -f pbuild.add_patch_files
 #..............................................................................
 #
 pbuild::set_default_patch_strip() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	[[ -n "$1" ]] || \
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
-			 "${FUNCNAME}: missing argument!"
+			 "${FUNCNAME[0]}: missing argument!"
 
 	PATCH_STRIP_DEFAULT="$1"
 }
@@ -606,8 +598,7 @@ pbuild::prep() {
 		done
 		if [[ "${dir}" == 'not found' ]]; then
 			dir="${dirs[0]}"
-			download_with_curl "${dir}/${fname}" "${url}"
-			(( $? == 0 )) || \
+			download_with_curl "${dir}/${fname}" "${url}" || \
 				std::die 42 \
 					 "%s " \
 					 "${module_name}/${module_version}:" \
@@ -675,12 +666,6 @@ pbuild::prep() {
 					 "error patching sources!"
 		done
 	}
-	for fname in ${VERSIONS[@]/#/pbuild::set_download_url_}; do
-		if typeset -F ${fname} 2>/dev/null; then
-			$f
-			break
-		fi
-	done
 	(( ${#SOURCE_URLS[@]} == 0 )) && return 0
 	${mkdir} -p "${PMODULES_DISTFILESDIR}"
 	local i=0
@@ -718,9 +703,8 @@ pbuild::prep() {
 #..............................................................................
 #
 pbuild::add_configure_args() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	CONFIGURE_ARGS+=( "$@" )
 }
 readonly -f pbuild::add_configure_args
@@ -733,9 +717,8 @@ readonly -f pbuild.add_configure_args
 #..............................................................................
 #
 pbuild::use_autotools() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	configure_with='autotools'
 }
 readonly -f pbuild::use_autotools
@@ -743,9 +726,8 @@ readonly -f pbuild::use_autotools
 #..............................................................................
 #
 pbuild::use_cmake() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	configure_with='cmake'
 }
 readonly -f pbuild::use_cmake
@@ -766,7 +748,7 @@ pbuild::use_cc() {
 				  "%s " "${module_name}/${module_version}:" \
 				  "Error in setting CC:" \
 				  "'$1' is not an executable!"
-	CC="$1"
+	export CC="$1"
 }
 readonly -f pbuild::use_cc
 
@@ -780,9 +762,8 @@ readonly -f pbuild::use_cc
 declare -- compile_in_sourcetree='no'
 
 pbuild::compile_in_sourcetree() {
-	[[ ${opt_yaml} == 'yes' ]] && \
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	compile_in_sourcetree='yes'
 }
 readonly -f pbuild::compile_in_sourcetree
@@ -826,7 +807,7 @@ pbuild::configure() {
 	if [[ -r "${SRC_DIR}/configure" ]] && \
 		   [[ "${configure_with}" == 'auto' ]] || \
 			   [[ "${configure_with}" == 'autotools' ]]; then
-		${SRC_DIR}/configure \
+		"${SRC_DIR}/configure" \
 			  --prefix="${PREFIX}" \
 			  "${config_args[@]}" || \
 			std::die 3 \
@@ -890,10 +871,8 @@ pbuild::compile() {
 #   $@: documentation files relative to source
 #
 pbuild::install_docfiles() {
-	if [[ ${opt_yaml} == 'yes' ]]; then
-		std::info \
-			"Using ${FUNCNAME} is deprecated with YAML module configuration files."
-	fi
+	std::info \
+		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	MODULE_DOCFILES+=("$@")
 }
 readonly -f pbuild::install_docfiles
@@ -920,8 +899,9 @@ pbuild::install_shared_libs() {
 	local -r pattern="${3//\//\\/}" # escape slash
 
 	install_shared_libs_Linux() {
-		local libs=( $(ldd "${binary}" | \
-				       ${awk} "/ => \// && /${pattern}/ {print \$3}") )
+		local -a libs=()
+		mapfile -t libs < <(${ldd} "${binary}" | \
+				       ${awk} "/ => \// && /${pattern}/ {print \$3}")
 		if (( ${#libs[@]} > 0 )); then
 			${cp} -vL "${libs[@]}" "${dstdir}" || return $?
 		fi
@@ -930,8 +910,9 @@ pbuild::install_shared_libs() {
 
 	install_shared_libs_Darwin() {
 		# https://stackoverflow.com/questions/33991581/install-name-tool-to-update-a-executable-to-search-for-dylib-in-mac-os-x
-		local libs=( $(${otool} -L "${binary}" | \
-				       ${awk} "/${pattern}/ {print \$1}"))
+		local -a libs=()
+		mapfile -t libs < <(${otool} -L "${binary}" | \
+				       ${awk} "/${pattern}/ {print \$1}")
 		if (( ${#libs[@]} > 0 )); then
 			${cp} -vL "${libs[@]}" "${dstdir}" || return $?
 		fi
@@ -943,7 +924,7 @@ pbuild::install_shared_libs() {
 			 "%s " "${module_name}/${module_version}:" \
 			 "${binary}: does not exist or is not executable!"
 	${mkdir} -p "${dstdir}"
-	case "${OS}" in
+	case "${KernelName}" in
 		Linux )
 			install_shared_libs_Linux
 			;;
@@ -1028,8 +1009,9 @@ _build_module() {
 		build_dependency() {
 			find_build_script(){
 				local p=$1
-				local script=$(${find} "${BUILDBLOCK_DIR}/../.." \
-						    -path "*/$p/build")
+				local script=''
+				script=$(${find} "${BUILDBLOCK_DIR}/../.." \
+						 -path "*/$p/build")
 				std::get_abspath "${script}"
 			}
 
@@ -1044,7 +1026,7 @@ _build_module() {
 			std::info "%s " \
 				  "$m: module does not exist, trying to build it..."
 			local args=( '' )
-			set -- ${ARGS[@]}
+			set -- "${ARGS[@]}"
 			while (( $# > 0 )); do
 				case $1 in
 					-j )
@@ -1052,23 +1034,24 @@ _build_module() {
 						shift
 						;;
 					--jobs=[0-9]* )
-						args+=( $1 )
+						args+=( "$1" )
 						;;
 					-v | --verbose)
-						args+=( $1 )
+						args+=( "$1" )
 						;;
 					--with=*/* )
-						args+=( $1 )
+						args+=( "$1" )
 						;;
 				esac
 				shift
 			done
 
-			local buildscript=$(find_build_script "${m%/*}")
+			local buildscript=''
+			buildscript=$(find_build_script "${m%/*}")
 			[[ -x "${buildscript}" ]] || \
 				std::die 1 \
 					 "$m: build-block not found!"
-			if ! "${buildscript}" "${m#*/}" ${args[@]}; then
+			if ! "${buildscript}" "${m#*/}" "${args[@]}"; then
 				std::die 1 \
 					 "$m: oops: build failed..."
 			fi
@@ -1111,9 +1094,6 @@ _build_module() {
 				pbuild::module_is_avail "$m" release_of_dependency || \
 					std::die 6 "Oops"
 			fi
-			# should be set, just in case it is not...
-			: ${release_of_dependency:='unstable'}
-
 			# for a stable module all dependencies must be stable
 			if [[ "${module_release}" == 'stable' ]] \
 				   && [[ "${release_of_dependency}" != 'stable' ]]; then
@@ -1131,7 +1111,7 @@ _build_module() {
 			fi
 
 			std::info "Loading module: ${m}"
-			eval $( "${MODULECMD}" bash load "${m}" )
+			eval "$( "${modulecmd}" bash load "${m}" )"
 		done
 	}
 
@@ -1140,13 +1120,11 @@ _build_module() {
 		if [[ "${opt_yaml,,}" == 'no' ]]; then
 			(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
 			for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-				[[ ${sys,,} == ${system,,} ]] && return 0
+				[[ "${sys,,}" == "${system,,}" ]] && return 0
 			done
 			std::die 1 \
 				 "%s " "${module_name}/${module_version}:" \
 				 "Not available for ${system}."
-		else
-			: debug "Systems: $Systems"
 		fi
 	}
 
@@ -1154,7 +1132,7 @@ _build_module() {
 	check_supported_compilers() {
 		(( ${#SUPPORTED_COMPILERS[@]} == 0 )) && return 0
 		for compiler in "${SUPPORTED_COMPILERS[@]}"; do
-			[[ ${compiler,,} == ${COMPILER,,} ]] && return 0
+			[[ "${compiler,,}" == "${COMPILER,,}" ]] && return 0
 		done
 		std::die 1 \
 			 "%s " "${module_name}/${module_version}:" \
@@ -1197,8 +1175,8 @@ _build_module() {
 				 "module is in group '${GROUP}' but no HDF5 module loaded!"
 		}
 
-		modulefile_dir="${ol_mod_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}/"
-		PREFIX="${ol_inst_root}/${GROUP}/${module_name}/${module_version}/"
+		modulefile_dir="${ol_modulefiles_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}/"
+		PREFIX="${ol_install_root}/${GROUP}/${module_name}/${module_version}/"
 		case "${GROUP}" in
 			Compiler )
 				[[ -v COMPILER_VERSION ]] || die_no_compiler
@@ -1221,8 +1199,8 @@ _build_module() {
 				[[ -v HDF5_VERSION ]] || die_no_hdf5
 				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
 				modulefile_dir+="${MPI}/${MPI_VERSION}/"
-				modulefile_dir+="${HDF5}/${HDF5_VERSION}/"
-				PREFIX+="${HDF5}/${HDF5_VERSION}/"
+				modulefile_dir+="hdf5/${HDF5_VERSION}/"
+				PREFIX+="hdf5/${HDF5_VERSION}/"
 				PREFIX+="${MPI}/${MPI_VERSION}/"
 				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
 				group_depth=6
@@ -1231,8 +1209,8 @@ _build_module() {
 				[[ -v COMPILER_VERSION ]] || die_no_compiler
 				[[ -v HDF5_SERIAL_VERSION ]] || die_no_hdf5
 				modulefile_dir+="${COMPILER}/${COMPILER_VERSION}/"
-				modulefile_dir+="${hdf5_serial}/${HDF5_SERIAL_VERSION}/"
-				PREFIX+="${hdf5_serial}/${HDF5_SERIAL_VERSION}/"
+				modulefile_dir+="hdf5_serial/${HDF5_SERIAL_VERSION}/"
+				PREFIX+="hdf5_serial/${HDF5_SERIAL_VERSION}/"
 				PREFIX+="${COMPILER}/${COMPILER_VERSION}/"
 				group_depth=4
 				;;
@@ -1270,20 +1248,11 @@ _build_module() {
 				"${module_name}/${module_version}:" \
 				"Installing documentation to ${docdir}"
 			${install} -m 0755 -d "${docdir}"
-			${install} -m0644 	"${BUILD_SCRIPT}" "${docdir}"
-			"${MODULECMD}" bash list -t 2>&1 1>/dev/null | \
+			${install} -m 0644 "${BUILD_SCRIPT}" "${docdir}"
+			"${modulecmd}" bash list -t 2>&1 1>/dev/null | \
 				${grep} -v "Currently Loaded" > \
 				      "${docdir}/dependencies" || :
 
-			# loop over version specific functions. In these function
-			# more MODULE_DOCFILES can be defined.
-			# :FIXME: maybe we find a better solution.
-			for f in ${VERSIONS[@]/#/pbuild::install_docfiles_}; do
-				if typeset -F "$f" 2>/dev/null; then
-					$f
-					break
-				fi
-			done
 			(( ${#MODULE_DOCFILES[@]} == 0 )) && return 0
 			${install} -m0644 \
 				"${MODULE_DOCFILES[@]/#/${SRC_DIR}/}" \
@@ -1307,28 +1276,29 @@ _build_module() {
 				if [[ ! $dep == */* ]]; then
 					# no version given: derive the version
 					# from the currently loaded module
-					dep=$( "${MODULECMD}" bash list -t 2>&1 1>/dev/null \
+					dep=$( "${modulecmd}" bash list -t 2>&1 1>/dev/null \
 						       | grep "^${dep}/" )
 				fi
 				echo "${dep}" >> "${fname}"
 			done
 		}
 		patch_elf_exe_and_libs(){
-			local -- libdir="${OverlayInfo[${ol_name}:inst_root]}/lib64"
+			local -- libdir="${OverlayInfo[${ol_name}:install_root]}/lib64"
 			[[ -d "${libdir}" ]] || return 0
-			local -a bin_objects=( $(std::find_executables '.' ) )
+			local -a bin_objects=()
+			mapfile -t bin_objects < <(std::find_executables '.')
 			local -- fname=''
+			local -- rpath=''
+			local -i depth=0
 			for fname in "${bin_objects[@]}"; do
-				local -i depth=$(std::get_dir_depth "${fname}")
-				(( depth+=group_depth+3 ))
-				local -- rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
+				(( depth=$(std::get_dir_depth "${fname}") + group_depth + 3 ))
+				rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
 				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
 			done
-			local -a bin_objects=( $(std::find_shared_objects '.' ) )
+			mapfile -t bin_objects < <(std::find_shared_objects '.')
 			for fname in "${bin_objects[@]}"; do
-				local -i depth=$(std::get_dir_depth "${fname}")
-				(( depth+=group_depth+3 ))
-				local -- rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
+				(( depth=$(std::get_dir_depth "${fname}") + group_depth + 3 ))
+				rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
 				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
 			done
 		}
@@ -1340,7 +1310,7 @@ _build_module() {
 			std::info \
 				"%s " \
 				"${module_name}/${module_version}:" \
-				"running post-installation for ${OS} ..."
+				"running post-installation for ${KernelName} ..."
 			cd "${PREFIX}"
 			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
 			patch_elf_exe_and_libs
@@ -1350,7 +1320,7 @@ _build_module() {
 		#..............................................................
 		# post-install
 		cd "${BUILD_DIR}"
-		[[ "${OS}" == "Linux" ]] && post_install_linux
+		[[ "${KernelName}" == "Linux" ]] && post_install_linux
 		install_doc
 		if (( ${#runtime_dependencies[@]} > 0 )); then
 			write_runtime_dependencies \
@@ -1374,7 +1344,7 @@ _build_module() {
 	} # post_install
 
  	#......................................................................
-	# Install modulefile in ${ol_mod_root}/${GROUP}/modulefiles/...
+	# Install modulefile in ${ol_modulefiles_root}/${GROUP}/modulefiles/...
 	# The modulefiles in the build-block can be
 	# versioned like
 	#     modulefile-10.2.0
@@ -1413,8 +1383,7 @@ _build_module() {
 		}
 		[[ "${is_subpkg}" == 'yes' ]] && return 0
 		local src=''
-		find_modulefile src
-		if (( $? != 0 )); then
+		if ! find_modulefile src; then
 			std::info \
 				"%s " \
 				"${module_name}/${module_version}:" \
@@ -1434,8 +1403,8 @@ _build_module() {
 		local ol=''
 		for ol in "${Overlays[@]}"; do
 			[[ "${ol}" == "${ol_name}" ]] && continue
-			local mod_root="${OverlayInfo[${ol}:mod_root]}"
-			local dir="${modulefile_dir/${ol_mod_root}/${mod_root}}"
+			local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
+			local dir="${modulefile_dir/${ol_modulefiles_root}/${modulefiles_root}}"
 			local fname="${dir}/${module_version}"
 			if [[ -e "${fname}" ]]; then
 				std::info "%s "\
@@ -1459,12 +1428,9 @@ _build_module() {
 
 		local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
 		local -- status_legay_config_file='unchanged'
- 		local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
-		local -- status_yaml_config_file='unchanged'
-
+		local -- relstage_legacy=''
 		if [[ -r "${legacy_config_file}" ]]; then
-			local relstage_legacy
-			read relstage_legacy < "${legacy_config_file}"
+			read -r relstage_legacy < "${legacy_config_file}"
 			if [[ "${relstage_legacy}" != "${module_release}" ]]; then
 				status_legay_config_file='changed'
 			fi
@@ -1476,8 +1442,10 @@ _build_module() {
 			echo "${module_release}" > "${legacy_config_file}"
 		fi
 
+ 		local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
+		local -- status_yaml_config_file='unchanged'
 		if [[ -r "${yaml_config_file}" ]]; then
-			while read key value; do
+			while read -r key value; do
 				local -n ref="${key:0:-1}"
 				ref="${value}"
 			done < "${yaml_config_file}"
@@ -1583,26 +1551,26 @@ _build_module() {
 				return 0
 			fi
 			local targets=()
-			targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_${system}_} )
-			targets+=( pbuild::pre_${target}_${system} )
-			targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_${OS}_} )
-			targets+=( pbuild::pre_${target}_${OS} )
-			targets+=( ${VERSIONS[@]/#/pbuild::pre_${target}_} )
-			targets+=( pbuild::pre_${target} )
+			targets+=( "${VERSIONS[@]/#/pbuild::pre_${target}_${system}_}" )
+			targets+=( "pbuild::pre_${target}_${system}" )
+			targets+=( "${VERSIONS[@]/#/pbuild::pre_${target}_${KernelName}_}" )
+			targets+=( "pbuild::pre_${target}_${KernelName}" )
+			targets+=( "${VERSIONS[@]/#/pbuild::pre_${target}_}" )
+			targets+=( "pbuild::pre_${target}" )
 
-			targets+=( ${VERSIONS[@]/#/pbuild::${target}_${system}_} )
-			targets+=( pbuild::${target}_${system} )
-			targets+=( ${VERSIONS[@]/#/pbuild::${target}_${OS}_} )
-			targets+=( pbuild::${target}_${OS} )
-			targets+=( ${VERSIONS[@]/#/pbuild::${target}_} )
-			targets+=( pbuild::${target} )
+			targets+=( "${VERSIONS[@]/#/pbuild::${target}_${system}_}" )
+			targets+=( "pbuild::${target}_${system}" )
+			targets+=( "${VERSIONS[@]/#/pbuild::${target}_${KernelName}_}" )
+			targets+=( "pbuild::${target}_${KernelName}" )
+			targets+=( "${VERSIONS[@]/#/pbuild::${target}_}" )
+			targets+=( "pbuild::${target}" )
 
-			targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_${system}_} )
-			targets+=( pbuild::post_${target}_${system} )
-			targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_${OS}_} )
-			targets+=( pbuild::post_${target}_${OS} )
-			targets+=( ${VERSIONS[@]/#/pbuild::post_${target}_} )
-			targets+=( pbuild::post_${target} )
+			targets+=( "${VERSIONS[@]/#/pbuild::post_${target}_${system}_}" )
+			targets+=( "pbuild::post_${target}_${system}" )
+			targets+=( "${VERSIONS[@]/#/pbuild::post_${target}_${KernelName}_}" )
+			targets+=( "pbuild::post_${target}_${KernelName}" )
+			targets+=( "${VERSIONS[@]/#/pbuild::post_${target}_}" )
+			targets+=( "pbuild::post_${target}" )
 
 			for t in "${targets[@]}"; do
 				# We cd into the dir before calling the function -
@@ -1661,7 +1629,7 @@ _build_module() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"removing all files in '${PREFIX}' ..."
-			[[ "${dry_run}" == 'no' ]] && ${rm} -rf ${PREFIX}
+			[[ "${dry_run}" == 'no' ]] && ${rm} -rf "${PREFIX}"
 		fi
 		if [[ -e "${modulefile_name}" ]]; then
 			std::info \

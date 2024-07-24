@@ -27,7 +27,7 @@ std::debug() {
 std::die() {
         local -ri ec=$1
         shift
-        if [[ -n $@ ]]; then
+        if (( ${#@} > 0 )); then
                 local -r fmt=$1
                 shift
                 std::log 2 "$fmt" "$@"
@@ -39,16 +39,51 @@ std::def_cmd(){
 	which "$1" 2>/dev/null || std::die 255 "'$1' not found!"
 }
 
-std::def_cmds(){
-	local path="$1"
-	shift
-	for cmd in "$@"; do
-		eval declare -gr ${cmd}=$(PATH="${path}" /usr/bin/which $cmd 2>/dev/null)
-		if [[ -z "${!cmd}" ]]; then
-			std::die 255 "${cmd} not found"
-		fi
-	done
-}
+awk=$(std::def_cmd 'awk');		declare -r awk
+base64=$(std::def_cmd 'base64');	declare -r base64
+bash=$(std::def_cmd 'bash');		declare -r bash
+cat=$(std::def_cmd 'cat');		declare -r cat
+cp=$(std::def_cmd 'cp');		declare -r cp
+curl=$(std::def_cmd 'curl');		declare -r curl
+envsubst=$(std::def_cmd 'envsubst');	declare -r envsubst
+dirname=$(std::def_cmd 'dirname');	declare -r dirname
+file=$(std::def_cmd 'file');		declare -r file
+find=$(std::def_cmd 'find');		declare -r find
+getopt=$(std::def_cmd 'getopt');	declare -r getopt
+grep=$(std::def_cmd 'grep');		declare -r grep
+install=$(std::def_cmd 'install');	declare -r install
+logger=$(std::def_cmd 'logger');	declare -r logger
+make=$(std::def_cmd 'make');		declare -r make
+mkdir=$(std::def_cmd 'mkdir');		declare -r mkdir
+mktemp=$(std::def_cmd 'mktemp');	declare -r mktemp
+modulecmd=$(std::def_cmd 'modulecmd');	declare -- modulecmd
+patch=$(std::def_cmd 'patch');		declare -r patch
+pwd=$(std::def_cmd 'pwd');		declare -r pwd
+rm=$(std::def_cmd 'rm');		declare -r rm
+rmdir=$(std::def_cmd 'rmdir');		declare -r rmdir
+sed=$(std::def_cmd 'sed');		declare -r sed
+seq=$(std::def_cmd 'seq');		declare -r seq
+sevenz=$(std::def_cmd 'sevenz');	declare -r sevenz
+sort=$(std::def_cmd 'sort');		declare -r sort
+tar=$(std::def_cmd 'tar');		declare -r tar
+tee=$(std::def_cmd 'tee');		declare -r tee
+tput=$(std::def_cmd 'tput');		declare -r tput
+uname=$(std::def_cmd 'uname');		declare -r uname
+yq=$(std::def_cmd 'yq');		declare -r yq
+
+KernelName=$(${uname} -s);		declare -r KernelName
+if [[ ${KernelName} == 'Darwin' ]]; then
+	PATH+=':/opt/local/bin'
+	otool=$(std::def_cmd 'otool');	declare -r otool
+	shasum=$(std::def_cmd 'shasum');declare -r shasum
+	sysctl=$(std::def_cmd 'sysctl');declare -r sysctl
+	declare -r sha256sum="${shasum -a 256}"
+else
+	ldd=$(std::def_cmd 'ldd');	declare -r ldd
+	patchelf=$(std::def_cmd 'patchelf');	declare -r patchelf
+	sha256sum=$(std::def_cmd 'sha256sum');
+	declare -r sha256sum
+fi
 
 #
 # get answer to yes/no question
@@ -58,7 +93,7 @@ std::def_cmds(){
 std::get_YN_answer() {
 	local -r prompt="$1"
 	local ans
-	read -p "${prompt}" ans
+	read -r -p "${prompt}" ans
 	case ${ans} in
 		y|Y ) 
 			return 0;;
@@ -71,14 +106,16 @@ std::get_YN_answer() {
 # return normalized abolute pathname
 # $1: filename
 std::get_abspath() {
-	local -r fname=$1
+	local -r fname="$1"
+	local -- abspath=''
 	#[[ -r "${fname}" ]] || return 1
 	if [[ -d ${fname} ]]; then
-		echo $(cd "${fname}" && pwd)
+		abspath=$(cd "${fname}" && pwd -L)
 	else
 		local -r dname=$(dirname "${fname}")
-		echo $(cd "${dname}" && pwd)/$(basename "${fname}")
+		abspath=$(cd "${dname}" && pwd -L)/$(basename "${fname}")
 	fi
+	echo "${abspath}"
 }
 
 std::append_path () {
@@ -117,135 +154,20 @@ std::prepend_path () {
 }
 
 std::remove_path() {
-        local -nr P="$1"
+        local -nr path="$1"
 	shift 1
-        local -ar dirs="$@"
+        local -ar remove_dirs=("$@")
 	local new_path=''
-	local -r _P=( ${P//:/ } )
+	local -a _path=()
+	IFS=':' read -r -a _path <<<"${path}"
 	local dir=''
-	for dir in "${dirs[@]}"; do
+	for dir in "${remove_dirs[@]}"; do
 		# loop over all entries in path
-		for entry in "${_P[@]}"; do
+		for entry in "${_path[@]}"; do
 			[[ "${entry}" != "${dir}" ]] && new_path+=":${entry}"
 		done
 	done
-	P="${new_path:1}"		# remove leading ':'
-}
-
-#
-# Replace or remove a directory in a path variable.
-#
-# To remove a dir:
-#	std::replace_path PATH <pattern>
-#
-# To replace a dir:
-#	std::replace_path PATH <pattern> /replacement/path
-#
-# Args:
-#	$1 name of the shell variable to set (e.g. PATH)
-#	$2 a grep pattern identifying the element to be removed/replaced
-#	$3 the replacement string (use "" for removal)
-#
-# Based on solution published here:
-# https://stackoverflow.com/questions/273909/how-do-i-manipulate-path-elements-in-shell-scripts 
-#
-std::replace_path () {
-	local -r path="$1"
-	local -r removepat="$2"
-	local -r replacestr="${3:-''}"
-
-	local -r removestr=$(echo "${!path}" | tr ":" "\n" | grep -m 1 "^$removepat\$")
-	export $path="$(echo "${!path}" | tr ":" "\n" | sed "s:^${removestr}\$:${replacestr}:" |
-                   sed '/^\s*$/d' | tr "\n" ":" | sed -e 's|^:||' -e 's|:$||')"
-}
-
-#
-# Functions to split a path into its components.
-#
-# Args:
-#     $1  upvar
-#     $2  absolute or relative path (depends on the function)
-#     $3  opt upvar: number of components
-#
-# Notes:
-# std::split_path()
-#     if the path is absolute, the first element of the returned array is empty.
-#
-# std::split_abspath()
-#     the path must begin with a slash, otherwise std::die() is called with
-#     an internal error message.
-#
-# std::split_relpath()
-#     analog to std::split_abspath() with a relative path.
-#
-std::split_path() {
-	local -n parts="$1"
-	local -r path="$2"
-
-        IFS='/'
-        local std__split_path_result=( ${std__split_path_tmp} )
-	unset IFS
-	parts="${std__split_path_result[@]}"
-	if (( $# >= 3 )); then
-		# return number of parts
-		local -n num="$3"
-	        num="${#std__split_path_result[@]}"
-	fi
-}
-
-std::split_abspath() {
-	local -n parts="$1"
-	local -r path="$2"
-	if [[ "${path:0:1}" == '/' ]]; then
-		local -r std__split_path_tmp="${path:1}"
-	else
-		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
-	fi
-
-        IFS='/'
-        local std__split_path_result=( ${std__split_path_tmp} )
-	unset IFS
-	parts="${std__split_path_result[@]}"
-	if (( $# >= 3 )); then
-		# return number of parts
-		local -n num="$3"
-	        num="${#std__split_path_result[@]}"
-	fi
-}
-
-std::split_relpath() {
-	local -n parts="$1"
-	local -r path="$2"
-	if [[ "${path:0:1}" == '/' ]]; then
-		std::die 255 "Oops: Internal error in '${FUNCNAME[0]}' called by '${FUNCNAME[1]}' }"
-	else
-		local -r std__split_path_tmp="${path}"
-	fi
-
-        IFS='/'
-        local std__split_path_result=( ${std__split_path_tmp} )
-	unset IFS
-	parts="${std__split_path_result[@]}"
-	if (( $# >= 3 )); then
-		# return number of parts
-		local -n num="$3"
-	        num="${#std__split_path_result[@]}"
-	fi
-}
-
-std::read_versions() {
-	local -r fname="$1"
-	local varname=''
-	while read _name _version; do
-		[[ -z ${_name} ]] && continue
-		[[ -z ${_version} ]] && continue
-		[[ "${_name:0:1}" == '#' ]] && continue
-		var_name=$(echo ${_name} | tr [:lower:] [:upper:])_VERSION
-		# don't set version, if already set
-		if [[ -z ${!var_name} ]]; then
-			eval ${var_name}="${_version}"
-		fi
-	done < "${fname}"
+	path="${new_path:1}"		# remove leading ':'
 }
 
 std.get_os_release_linux() {
@@ -288,7 +210,8 @@ std::get_os_release() {
 }
 
 std::get_type() {
-	local -a signature=( $(typeset -p "$1") )
+	local -a signature=()
+	read -r -a signature <(typeset -p "$1")
 	case ${signature[1]} in
 		-Ai* )
 			echo 'int dict'
@@ -312,30 +235,6 @@ std::get_type() {
 			echo 'none'
 			return 1
 	esac
-}
-
-std::parse_yaml() {
-	#
-	# parse a YAML file
-	# See: https://gist.github.com/pkuczynski/8665367
-	#
-	local -r fname="$1"
-	local -r prefix="$2"
-	local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
-	sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
-            -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p" "${fname}" |
-		awk -F$fs '{
-		      indent = length($1)/2;	
-		      vname[indent] = $2;	
-		      for (i in vname) {
-                          if (i > indent) {delete vname[i]}
-                      }
-		      if (length($3) > 0) {
-		          vn="";
-                          for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
-		          printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
-	              }
-                }'
 }
 
 std::is_member_of_array(){

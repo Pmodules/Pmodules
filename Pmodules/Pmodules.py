@@ -2,7 +2,6 @@ import os, re, subprocess
 
 def module(*args):
         os.environ['PMODULES_MODULEFILES_DIR']='modulefiles'
-        os.environ['PMODULES_CONFIG_DIR']='config'
         pm_home=os.environ['PMODULES_HOME']
         os.environ['PMODULES_DIR']=pm_home
         modulecmd=os.path.join(pm_home, 'bin', 'modulecmd')
