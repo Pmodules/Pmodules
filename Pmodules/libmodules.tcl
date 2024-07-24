@@ -4,7 +4,6 @@
 # unload modules if parent removed
 #
 
-
 if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
 	proc debug {msg} {
 		set level [expr [info level] -2] 
@@ -92,7 +91,7 @@ proc module-addgroup { group } {
 			debug "group=$group"
 			debug "::variant=$::variant"
 			set dir [file join \
-				     $::OverlayInfo($overlay:mod_root) \
+				     $::OverlayInfo($overlay:modulefiles_root) \
 				     $group \
 				     $::MODULEFILES_DIR \
 				     {*}$::variant]
@@ -126,7 +125,7 @@ proc module-addgroup { group } {
 		debug "mode=remove: $env(MODULEPATH)"
                 foreach overlay $::UsedOverlays {
                         set dir [file join \
-				     $::OverlayInfo($overlay:mod_root) \
+				     $::OverlayInfo($overlay:modulefiles_root) \
                                      $group \
                                      $::MODULEFILES_DIR \
                                      {*}$::variant]
@@ -288,20 +287,20 @@ proc _find_overlay { modulefile_components } {
         debug "_find_overlay()"
         foreach ol $::UsedOverlays  {
                 debug "ol = $ol"
-		set ol_mod_root $::OverlayInfo(${ol}:mod_root)
-                if { [string range $ol_mod_root end end] == "/" } {
-                        set ol_mod_root [string range $ol_mod_root 0 end-1]
+		set ol_modulefiles_root $::OverlayInfo(${ol}:modulefiles_root)
+                if { [string range $ol_modulefiles_root end end] == "/" } {
+                        set ol_modulefiles_root [string range $ol_modulefiles_root 0 end-1]
                 }
-		debug "ol_mod_root = $ol_mod_root"
-                set ol_mod_root_splitted [file split $ol_mod_root]
+		debug "ol_modulefiles_root = $ol_modulefiles_root"
+                set ol_modulefiles_root_splitted [file split $ol_modulefiles_root]
                 set modulefile_root [file join \
 					 {*}[lrange \
 						 $modulefile_components \
-						 0 [expr [llength $ol_mod_root_splitted] - 1]]]
+						 0 [expr [llength $ol_modulefiles_root_splitted] - 1]]]
 		debug "modulefile_root = $modulefile_root"
-                if { [string compare $ol_mod_root $modulefile_root] == 0 } {
-			debug "ol_mod_root_splitted = $ol_mod_root_splitted"
-                        return $ol_mod_root_splitted
+                if { [string compare $ol_modulefiles_root $modulefile_root] == 0 } {
+			debug "ol_modulefiles_root_splitted = $ol_modulefiles_root_splitted"
+                        return $ol_modulefiles_root_splitted
                 }
         }
         debug "overlay not found"
@@ -333,28 +332,28 @@ proc _pmodules_init_global_vars { } {
 
 	set	modulefile_splitted	[file split $::ModulesCurrentModulefile]
 
-	set     ol_mod_root_splitted [_find_overlay ${modulefile_splitted}]
-	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_mod_root_splitted] end]
+	set     ol_modulefiles_root_splitted [_find_overlay ${modulefile_splitted}]
+	debug "init: ol_modulefiles_root_splitted=$ol_modulefiles_root_splitted"
+	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_modulefiles_root_splitted] end]
 	set	group		[lindex $rel_modulefile 0]
 	set	GROUP		"${group}"
 	set	name		[lindex $modulefile_splitted end-1]
 	set	version		[lindex $modulefile_splitted end]
-
 	set	suffixes	[lassign [split $version _] v]
 	lassign [split $v -]	V_PKG V_RELEASE
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 
 	set	variant 	[lrange $rel_modulefile 2 end]
-	set	mod_root	[file join {*}$ol_mod_root_splitted]
-	set	ol $::Dir2OverlayMap($mod_root)
+	set	modulefiles_root	[file join {*}$ol_modulefiles_root_splitted]
+	set	ol $::Dir2OverlayMap($modulefiles_root)
 
-	set	install_prefix	[file split $::OverlayInfo(${ol}:inst_root)]
+	set	install_prefix	[file split $::OverlayInfo(${ol}:install_root)]
 	set	prefix		"$install_prefix $group [lreverse_n $variant 2]"
 	set	PREFIX		[file join {*}$prefix]
 	set	P		"${name}"
 	set 	V		"${version}"
 
-        debug	"mod_root=$mod_root"
+        debug	"modulefiles_root=$modulefiles_root"
 	debug	"ol=$ol"
 	debug	"PREFIX=$PREFIX"
 	debug	"group of module $name: $group"

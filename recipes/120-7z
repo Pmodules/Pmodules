@@ -19,7 +19,7 @@ cd 'CPP/7zip/Bundles/Alone2'
 #---
 # compile & install
 make -j -f ../../cmpl_gcc.mak
-cp b/g/7zz "${PREFIX}/${UTILBIN_DIR}"
+cp b/g/7zz "${PREFIX}/${UTILBIN_DIR}/sevenz"
 
 #---
 # post-install

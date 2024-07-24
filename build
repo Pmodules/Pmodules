@@ -25,8 +25,6 @@ shopt -s nullglob
 declare -r BOOTSTRAP_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 declare -r SRC_DIR="${BOOTSTRAP_DIR}/Pmodules"
 
-source "${SRC_DIR}/libstd.bash"		|| { echo "Oops!" 1>&2; exit 42; }
-
 declare -r  PMOD_DIR="Tools/Pmodules/${VERSION}"
 # config directory and file relative to install root
 declare -rx CONFIG_DIR='config'
@@ -39,6 +37,61 @@ declare -rx UTILBIN_DIR='libexec'
 declare -rx DEFAULT_INSTALL_ROOT='/opt/psi'
 declare -rx DEFAULT_DISTFILES_DIR='var/distfiles'
 declare -rx DEFAULT_TMP_DIR='var/tmp/${USER}'
+
+std::log() {
+        local -ri fd=$1
+        local -r fmt="$2"
+        shift 2
+        printf -- "${fmt}" "$@" 1>&$fd
+        printf -- "\n" 1>&$fd
+}
+
+std::info() {
+        std::log 2 "$1" "${@:2}"
+}
+
+std::error() {
+        std::log 2 "$1" "${@:2}"
+}
+
+std::debug() {
+        [[ -v PMODULES_DEBUG ]] || return 0
+        std::log 2 "$@"
+}
+
+std::die() {
+        local -ri ec=$1
+        shift
+        if [[ -n $@ ]]; then
+                local -r fmt=$1
+                shift
+                std::log 2 "$fmt" "$@"
+        fi
+        exit $ec
+}
+std::parse_yaml() {
+	#
+	# parse a YAML file
+	# See: https://gist.github.com/pkuczynski/8665367
+	#
+	local -r fname="$1"
+	local -r prefix="$2"
+	local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+	sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
+            -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p" "${fname}" |
+		awk -F$fs '{
+		      indent = length($1)/2;	
+		      vname[indent] = $2;	
+		      for (i in vname) {
+                          if (i > indent) {delete vname[i]}
+                      }
+		      if (length($3) > 0) {
+		          vn="";
+                          for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+		          printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+	              }
+                }'
+}
 
 #-----------------------------------------------------------------------------
 #
@@ -476,13 +529,6 @@ build::install() {
         sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" \
             > "${PREFIX}/bin/modbuild"
 	chmod 0755 "${PREFIX}/bin/modbuild"
-
-	sed "${sed_cmd}" "${SRC_DIR}/modmanage.in" \
-            > "${PREFIX}/bin/modmanage"
-	chmod 0755 "${PREFIX}/bin/modmanage"
-	sed "${sed_cmd}" "${SRC_DIR}/modmanage.bash.in" \
-	    > "${PREFIX}/libexec/modmanage.bash"
-	chmod 0755 "${PREFIX}/libexec/modmanage.bash"
 
 	test -e "${INSTALL_ROOT}/${CONFIG_FILE}" || \
 		install -m 0644 "$_"			"${INSTALL_ROOT}/${CONFIG_DIR}"

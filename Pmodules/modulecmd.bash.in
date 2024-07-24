@@ -1,46 +1,45 @@
 #!@BASH@ --noprofile
 #
+# shellcheck -x  -e SC1008,SC2239,SC2317,SC2034,SC2128,SC2059,SC2178
+#
+declare -r VERSION='@PMODULES_VERSION@'
 
 unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
 unset IFS	# use default IFS
 
+#set   -o errexit
+set   -o pipefail
+set   -o nounset
+#shopt -s nocaseglob
+#shopt -s extglob
 shopt -s nullglob
-#set -e		# exit on error
-#set -u		# Treat unset variables as an error
-set -o pipefail
 
-# used in some output messages only
-declare -r CMD='module'
-declare    subcommand=''
+# get absolute path of script
+mydir=$(cd "$(/usr/bin/dirname "$0")" && pwd -L)
+prefix=$(/usr/bin/dirname "${mydir}");
 
-declare -r mydir="$(cd $(/usr/bin/dirname "$0") && pwd)"
-declare -- prefix="$(/usr/bin/dirname "${mydir}")"
-declare -r libdir="${prefix}/lib"
-declare -r libexecdir="${prefix}/libexec"
+path_orig="${PATH}"
+PATH="${prefix}/bin:${prefix}/libexec:/bin:/usr/bin:/sbin:/usr/sbin"
+source "${prefix}/lib/libstd.bash" || {
+        echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
+}
+source "${prefix}/lib/libpmodules.bash"  || \
+        std::die 3 "Oops: cannot source library -- '$_'"
 
-source "${libdir}/libstd.bash"
-source "${libdir}/libpmodules.bash"
-
-declare -r os_name=$(uname -s)
-declare -r os_release=$(std::get_os_release)
-
-path="${libexecdir}:/bin:/usr/bin"
-std::def_cmds "${path}" \
-	      'awk' 'base64' 'dirname' 'find' 'getopt' 'logger' 'mktemp' \
-	      'rm' 'rmdir' 'sed' 'sort' 'tput' 'yq'
-
-declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
+declare -rx TCL_LIBRARY="${prefix}/lib/tcl@TCL_VERSION@"
 declare -x  TCLLIBPATH=${TCLLIBPATH:-''}
-std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
+std::prepend_path TCLLIBPATH "${prefix}/lib/Pmodules"
+declare -r Tcl_cmd="${prefix}/libexec/modulecmd.bin"
+declare -r Lmod_cmd="${prefix}/libexec/lmod/lmod/libexec/lmod"
+declare -- modulecmd="${Tcl_cmd}"
 
-declare -r tcl_cmd="${libexecdir}/modulecmd.bin"
-declare -r lmod_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod"
-declare -- modulecmd="${tcl_cmd}"
+# we have to use the orignal path. Otherwise module load doesn't work.
+PATH="${path_orig}"
+unset path_orig
+unset mydir
+unset prefix
 
-declare -- verbosity_lvl=${PMODULES_VERBOSITY:-'verbose'}
-
-declare -- Shell=''
-
+##############################################################################
 # the following settings are used if the config file doesn't exist
 
 # set groups which should be available after initialization
@@ -52,46 +51,65 @@ declare -- ReleaseStages=':unstable:stable:deprecated:'
 # set releases which should be available after initialization
 declare -- DefaultReleaseStages='stable'
 
-declare -- SysCollectionsDir='/opt/psi/collections'
+declare -A OverlayExcludes=()
+declare -a UsedOverlays=()
 
-# not used here but in modbuild
-declare -- TmpDir="/opt/psi/var/tmp/${USER}"
-declare -- DistfilesDir="/opt/psi/var/distfiles"
+##############################################################################
+declare -- Verbosity_lvl='verbose'
+declare -- Shell=''
+TmpFile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
+	|| std::die 1 "Oops: unable to create tmp file!"
+declare -r TmpFile
 
-declare -A OverlayExcludes
+declare -A Subcommands=()
+declare -A Options=()
+declare -A Help=()
+
+# initialize help text of 'module --version'
+Help['version']="
+Pmodules @PMODULES_VERSION@
+using Tcl Environment Modules
+VERSION = @MODULES_VERSION@
+"
+
+#
+# display help text for command given in $1
+#
+print_help() {
+        echo -e "${Help[$1]}" 1>&2
+        std::die 1
+}
 
 export_env() {
-	case "${Shell}" in
-		sh | bash | zsh )
-			local -r fmt="export %s=\"%s\"; "
-			;;
-		csh | tcsh )
-			local -r fmt="setenv %s \"%s\"; "
-			;;
-		python )
-			local -r fmt="os.environ['%s'] = '%s'\n"
-			;;
-		* )
-			std::die 1 "Unsupported shell -- ${Shell}"
-			;;
-	esac
+	local -A export_functions=()
+	export_functions['sh']='export_env_sh'
+	export_functions['bash']='export_env_sh'
+	export_functions['zsh']='export_env_sh'
+	export_functions['csh']='export_env_csh'
+	export_functions['tcsh']='export_env_csh'
+	export_functions['python']='export_env_python'
 
-	while (( $# > 0 )); do
-		printf "${fmt}" "$1" "${!1}"
-		shift
-	done
-	# :FIXME: UsedGroups can be modified in libmodule.tcl using
-	# append-path/remove-path! But we keep the state in PMODULES_ENV
-	# so we don't have to export it.
-	# 
-	#case "${Shell}" in
-	#sh | bash | zsh )
-	#	echo "unset UsedGroups; "
-	#	;;
-	#csh | tcsh )
-	#	echo "unsetenv UsedGroups; "
-	#	;;
-	#esac
+	export_env_sh(){
+		while (( $# > 0 )); do
+			printf "export %s=\"%s\"; " "$1" "${!1}"
+			shift
+		done
+	}
+	export_env_csh(){
+		while (( $# > 0 )); do
+			printf "setenv %s \"%s\"; " "$1" "${!1}"
+			shift
+		done
+	}
+	export_env_python(){
+		while (( $# > 0 )); do
+			printf "os.environ['%s'] = '%s'\n" "$1" "${!1}"
+			shift
+		done
+	}
+	[[ -v export_functions[${Shell}] ]] || \
+		std::die 1 "Unsupported shell -- ${Shell}"
+	${export_functions[${Shell}]} "$@"
 }
 
 #
@@ -102,10 +120,13 @@ export_env() {
 #       none
 #
 
-declare g_env_must_be_saved='no'
+declare EnvMustBeSaved='no'
 
 save_env() {
 	encode_base64(){
+		local -- os_name=''
+		os_name=$(${uname} -s)
+
 		case "${os_name}" in
 			Linux )
 				"${base64}" --wrap=0 <<< "$1"
@@ -120,7 +141,7 @@ save_env() {
 		esac
 	}
 
-        [[ $1 == 'no' ]] && return 0
+        [[ "${EnvMustBeSaved}" == 'no' ]] && return 0
         local vars=( Version )
 	vars+=( UsedReleaseStages UsedGroups )
 	vars+=( DefaultGroups DefaultReleaseStages )
@@ -131,8 +152,10 @@ save_env() {
 	vars+=( OverlayExcludes )
         vars+=( OverlayInfo Dir2OverlayMap)
 
-	local s=$(typeset -p ${vars[@]})
-	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
+	local s=''
+	s=$(typeset -p "${vars[@]}")
+	declare -gx PMODULES_ENV=''
+	PMODULES_ENV=$( encode_base64 "$s" )
 	export_env 'PMODULES_ENV'
 }
 
@@ -140,137 +163,132 @@ save_env() {
 # function called on exit
 #
 _exit() {
-	save_env "${g_env_must_be_saved}"
-	if [[ -n "${tmpfile}" ]] && [[ -e "${tmpfile}" ]]; then
-		${rm} -f "${tmpfile}" || :
+	save_env
+	if [[ -n "${TmpFile}" ]] && [[ -e "${TmpFile}" ]]; then
+		${rm} -f "${TmpFile}" || :
 	fi
 }
 trap '_exit' EXIT
 
+declare -r CMD='module'
+declare    SubCommand=''
 die_missing_arg(){
 	std::die 3 "%s %s: %s\n" \
-                 "${CMD}" "${subcommand}" 'missing argument'
+                 "${CMD}" "${SubCommand}" 'missing argument'
 }
 
 die_too_many_args(){
 	std::die 3 "%s %s: %s\n" \
-                 "${CMD}" "${subcommand}" 'too many arguments'
+                 "${CMD}" "${SubCommand}" 'too many arguments'
 }
 
 die_no_args_allowed(){
 	std::die 3 "%s %s: %s\n" \
-                 "${CMD}" "${subcommand}" "no arguments allowed"
+                 "${CMD}" "${SubCommand}" "no arguments allowed"
 }
 
 die_wrong_number_of_args(){
 	std::die 1 "%s %s: %s\n" \
-                 "${CMD}" "${subcommand}" "wrong number of arguments"
+                 "${CMD}" "${SubCommand}" "wrong number of arguments"
 }
 
 die_illegal_opt(){
 	std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${subcommand}" "illegal option" "$1"
+                 "${CMD}" "${SubCommand}" "illegal option" "$1"
 }
 
 die_illegal_arg(){
 	std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${subcommand}" "invalid argument" "$1"
+                 "${CMD}" "${SubCommand}" "invalid argument" "$1"
 }
 
 die_illegal_group(){
         std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${subcommand}" "invalid group name" "$1"
+                 "${CMD}" "${SubCommand}" "invalid group name" "$1"
 }
 
 die_illegal_relstage(){
         std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${subcommand}" "invalid release stage" "$1"
+                 "${CMD}" "${SubCommand}" "invalid release stage" "$1"
 }
 
 die_cannot_remove_grp(){
         std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${subcommand}" "cannot remove group due to loaded modules" "$1"
+                 "${CMD}" "${SubCommand}" "cannot remove group due to loaded modules" "$1"
 }
 
 die_module_unavail(){
 	std::die 3 "%s %s: %s -- %b\n" \
-		 "${CMD}" "${subcommand}" "not available in the current MODULEPATH" "$1"
+		 "${CMD}" "${SubCommand}" "not available in the current MODULEPATH" "$1"
 }
 
 die_module_nexist(){
 	std::die 3 "%s %s: module does not exist -- %s" \
-                 "${CMD}" "${subcommand}" "$1"
+                 "${CMD}" "${SubCommand}" "$1"
 }
 
 die_invalid_value(){
 	std::die 1 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${subcommand}" "invalid string for $1" "$2"
+                 "${CMD}" "${SubCommand}" "invalid string for $1" "$2"
 }
 
 die_conflict(){
 	std::die 3 "%s %s: %s -- %b\n" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
                  "module conflicts with already loaded modules" "$1"
 }
 
 die_cmd_failed(){
-        local error_txt='failed'
 	std::die 3 "%s %s: %s" \
-                 "${CMD}" "${subcommand}" \
+                 "${CMD}" "${SubCommand}" \
                  "failed"
 }
 
 die_cannot_use_overlay(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "overlay cannot be added since some modules are already loaded!" "$1"
 }
 
 die_overlay_already_in_use(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "overlay already in use" "$1"
 }
 
 die_not_a_modulefile(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "not a modulefile" "$1"
-}
-
-die_invalid_collection_name(){
-	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
-		 "invalid collection name" "$1"
 }
 
 die_cannot_create_directory(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "cannot create directory" "$1"
 }
 
 die_cannot_save_collection(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "cannot save_collection" "$1"
 }
 
 die_invalid_collection_name(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "invalid collection name" "$1"
 }
 
 die_collection_doesnt_exist(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "collection doesn't exist or isn't readable" "$1"
 }
 
 die_removing_collection_failed(){
 	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${subcommand}" \
+		 "${CMD}" "${SubCommand}" \
 		 "cannot remove collection" "$1"
 }
 
@@ -296,16 +314,19 @@ get_module_config(){
 	 - the release stage of a module inside out hierarchy without a
 	   config file is always 'unstable'.
 
+	Arguments:
+	    $1 reference to dictionary to return the configuration
+	    $2 directory containing modulefile
+	    $3 module name (inkl. version and/or sub-dirs)
 	"
 	local -n ref_cfg="$1"
 	local -r dir="$2"
 	local -r modulefile="${dir}/$3"
-	debug "modulefile: $modulefile"
 
 	ref_cfg['relstage']='unstable'
 	ref_cfg['systems']=''
 	ref_cfg['blocklist']=''
-	if [[ ! -v Dir2OverlayMap[${dir%/${PMODULES_MODULEFILES_DIR}*}] ]]; then
+	if [[ ! -v Dir2OverlayMap[${dir%/"${PMODULES_MODULEFILES_DIR}"*}] ]]; then
 		# this module is not in an overlay
 		ref_cfg['relstage']='stable'
 		return
@@ -313,10 +334,11 @@ get_module_config(){
 	local -r config_file="${modulefile%/*}/.config-${modulefile##*/}"
 	local -r relstage_file="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ -r ${config_file} ]]; then
-		local -- yaml=$(${yq} -e '.' < "${config_file}")
-		debug "yaml: ${yaml}"
+		local -- yaml=''
+		yaml=$(${yq} -e '.' < "${config_file}")
+		debug "module config: ${yaml}"
 		local -- key=''
-		for key in ${!ref_cfg[@]}; do
+		for key in "${!ref_cfg[@]}"; do
 			case "${key,,}" in
 				systems | blocklist )
 					value=$( ${yq} -e ".${key}[]" \
@@ -350,17 +372,17 @@ is_available(){
 	"
 	local -n ref_cfg="$1"
 	local -- relstages="$2"
-	local -- system="$3"
-	local -- hostname="$4"
+	local -- os_release=''
+	os_release=$(std::get_os_release)
 
 	check_relstage(){
-		[[ ":${relstages}:" =~ ":${ref_cfg['relstage']}:" ]]
+		[[ ":${relstages}:" == *:${ref_cfg['relstage']}:* ]]
 	}
 	check_blocklist(){
 		[[ -z ${ref_cfg['blocklist']} ]] && return 0
 		local -- s=''
 		for s in ${ref_cfg['blocklist']}; do
-			if [[ "${system}" == $s ]] || [[ "${HOSTNAME}" == $s ]]; then
+			if [[ "${os_release}" =~ $s ]] || [[ "${HOSTNAME}" =~ $s ]]; then
 				return 0
 			fi
 		done
@@ -370,7 +392,7 @@ is_available(){
 		[[ -z ${ref_cfg['systems']} ]] && return 0
 		local -- s=''
 		for s in ${ref_cfg['systems']}; do
-			if [[ "${system}" == $s ]] || [[ "${HOSTNAME}" == $s ]]; then
+			if [[ "${os_release}" =~ $s ]] || [[ "${HOSTNAME}" =~ $s ]]; then
 				return 0
 			fi
 		done
@@ -404,13 +426,13 @@ find_overlay () {
         local -n fo_group="$2"
 	local path="${3//+(\/)/\/}"	# replace multpile '/' with one
 	path="${path/%\/}"		# remove trailing slash if exist
-	path="${path%/${PMODULES_MODULEFILES_DIR}*}"
+	path="${path%/"${PMODULES_MODULEFILES_DIR}"*}"
 
 	# return if not in an overlay
 	[[ -v Dir2OverlayMap[${path}] ]] || return 1
 
         fo_ol="${Dir2OverlayMap[${path}]}"
-        fo_group="${path#${OverlayInfo[${ol}:mod_root]}/}"
+        fo_group="${path#"${OverlayInfo[${ol}:modulefiles_root]}"/}"
 	return 0
 }
 
@@ -450,7 +472,7 @@ is_modulefile() {
 		return 0
 	fi
 	local -- shebang
-	read -n 11 shebang < "${fname}"
+	read -r -n 11 shebang < "${fname}"
 	if [[ "${shebang:0:8}" == '#%Module' ]] \
 		   || [[ "${shebang:0:9}" == '#%Pmodule' ]]; then
 		im_interp='tcl'
@@ -489,7 +511,7 @@ subcommand_generic0() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | -H | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-- )
 				shift 1
@@ -504,7 +526,7 @@ subcommand_generic0() {
 	done
         (( ${#args[@]} == 0 )) || \
 		die_no_args_allowed
-	"${modulecmd}" "${Shell}" "${subcommand}"
+	"${modulecmd}" "${Shell}" "${SubCommand}"
 }
 
 subcommand_generic1() {
@@ -512,7 +534,7 @@ subcommand_generic1() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | -H | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-- )
 				shift 1
@@ -529,7 +551,7 @@ subcommand_generic1() {
 		die_missing_arg
 	(( ${#args[@]} > 1 )) && \
 		die_too_many_args
-	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
 
 subcommand_generic1plus() {
@@ -537,7 +559,7 @@ subcommand_generic1plus() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | -H | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-- )
 				shift 1
@@ -552,7 +574,7 @@ subcommand_generic1plus() {
 	done
 	(( ${#args[@]} == 0 )) && \
 		die_missing_arg
-	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
 
 ##############################################################################
@@ -561,9 +583,9 @@ subcommand_generic1plus() {
 #
 # $1: module to load
 #
-Subcommands[add]='load'
-Subcommands[load]='load'
-Options[load]='-l help -o \?Hfsvw -l force -l silent -l verbose -l warn'
+Subcommands['add']='load'
+Subcommands['load']='load'
+Options['load']='-l help -o \?Hfsvw -l force -l silent -l verbose -l warn'
 Help[load]='
 USAGE:
         module add     modulefile...
@@ -591,19 +613,19 @@ subcommand_load() {
 		local -n output="$1"	# ref.var to store result
 		local relstage=''
 		output=''
-		while read -a line; do
-                        [[ -z ${line} ]] && continue
+		while read -r -a line; do
+                        (( ${#line[@]} == 0 )) && continue
 			relstage=${line[1]}
-			if [[ ! ":${UsedReleaseStages}:" =~ "${relstage}" ]]; then
+			if [[ ! ":${UsedReleaseStages}:" == *:${relstage}:* ]]; then
 				output+="module use ${relstage}; "
 			fi
 			local group=${line[2]}
-	        	if [[ ! ":${UsedGroups}:" =~ ":${group}:" ]] && \
+	        	if [[ ! ":${UsedGroups}:" == *:${group}:* ]] && \
 				   (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "
 			fi
 			local -i n=$(( ${GroupDepths[${group}]}/2 ))
-			output+="module load ${line[@]:4:$n} ${line[0]}\n"
+			output+="module load ${line[*]:4:$n} ${line[0]}\n"
 		done < <(set +x; subcommand_search  "${m}" -a --no-header 2>&1)
 		if [[ -n ${output} ]]; then
 			output="\n\nTry with one of the following command(s):\n${output}"
@@ -618,7 +640,8 @@ subcommand_load() {
 	#......................................................................
 	load_dependencies() {
 		local -r fname="$1"
-		while read dep; do
+		local -- dep=''
+		while read -r dep; do
 			[[ -z ${dep} ]] && continue
 			[[ ${dep:0:1} == \# ]] && continue
 			module_is_loaded "${dep}" && continue
@@ -650,8 +673,8 @@ subcommand_load() {
 			local -r group="$2/${PMODULES_MODULEFILES_DIR}"
 			local ol
 			for ol in "${UsedOverlays[@]}"; do
-				local inst_root="${OverlayInfo[${ol}:inst_root]}"
-				if [[ -d "${inst_root}/${group}" ]]; then
+				local install_root="${OverlayInfo[${ol}:install_root]}"
+				if [[ -d "${install_root}/${group}" ]]; then
 					_ol="${ol}"
 					return 0
 				fi
@@ -665,11 +688,11 @@ subcommand_load() {
 
 		local ol=''
 		find_overlay_with_group ol "${group}" || return 1
-		local moduledir="${OverlayInfo[${ol}:mod_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
+		local moduledir="${OverlayInfo[${ol}:modulefiles_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
 		local -i depth
 		compute_group_depth depth "${moduledir}" || return 1
 		GroupDepths[${group}]=${depth}
-		g_env_must_be_saved='yes'
+		EnvMustBeSaved='yes'
 	}
 
 	#......................................................................
@@ -679,19 +702,19 @@ subcommand_load() {
 	while (($# > 0)); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-f | --force )
 				opts+=(' -f')
 				;;
 			-s | --silent )
-				verbosity_lvl='silent'
+				Verbosity_lvl='silent'
 				;;
 			-v | --verbose )
-				verbosity_lvl='verbose'
+				Verbosity_lvl='verbose'
 				;;
 			-w | --warn )
-				verbosity_lvl='warn'
+				Verbosity_lvl='warn'
 				;;
 			-- )
 				shift 1
@@ -699,7 +722,7 @@ subcommand_load() {
 				break
 				;;
 			* )
-				args+=( $1 )
+				args+=( "$1" )
 				;;
 		esac
 		shift
@@ -710,7 +733,7 @@ subcommand_load() {
         local m=''
 	for m in "${args[@]}"; do
 		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
-		if [[ "$m" =~ ":" ]]; then
+		if [[ "$m" == *:* ]]; then
 
 			# extendet module name is either
 			# - group:name or
@@ -719,10 +742,8 @@ subcommand_load() {
 			# - relstage:group:name or
 			# - name:stage
 
-			
-			IFS=':'
-			local -a toks=($m)
-			unset IFS
+			local -a toks=()
+			IFS=':' read -r -a toks <<< "${m}"
 			local group=''
 			local relstage=''
 			if is_group "${toks[0]}"; then
@@ -756,15 +777,15 @@ subcommand_load() {
 					die_illegal_group "${group}"
 				group+="/${PMODULES_MODULEFILES_DIR}"
                                 for overlay in "${UsedOverlays[@]}"; do
-					local mod_root="${OverlayInfo[${overlay}:mod_root]}"
-				        modulepath=( "${mod_root}/${group}" "${modulepath[@]}" )
+					local modulefiles_root="${OverlayInfo[${overlay}:modulefiles_root]}"
+				        modulepath=( "${modulefiles_root}/${group}" "${modulepath[@]}" )
                                 done
 			fi
 			if [[ -n ${relstage} ]]; then
 			        is_release_stage "${relstage}" || \
                                         die_illegal_relstage "${relstage}"
 				std::append_path UsedReleaseStages "${relstage}"
-                                g_env_must_be_saved='yes'
+                                EnvMustBeSaved='yes'
 			fi
 		fi # handle extended module names
 		local moduledir=''
@@ -781,7 +802,7 @@ subcommand_load() {
 		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
 			die_conflict "${m}"
 		# continue if already loaded
-		[[ ":${LOADEDMODULES}:" =~ ":${m}:" ]] && continue
+		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
 		local interp=''
 		is_modulefile interp "${current_modulefile}" || \
@@ -795,12 +816,13 @@ subcommand_load() {
 
 		if [[ "${interp}" == 'lmod' ]]; then
 			current_modulefile="${current_modulefile/${moduledir}\/}"
-			modulecmd="${lmod_cmd}"
+			modulecmd="${Lmod_cmd}"
 		else
-			modulecmd="${tcl_cmd}"
+			modulecmd="${Tcl_cmd}"
 		fi
-		local output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
-                                              "${current_modulefile}" 2> "${tmpfile}")
+		local output=''
+		output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
+                                              "${current_modulefile}" 2> "${TmpFile}")
 
                 # we do not want to print the error message we got from
                 # modulecmd, they are a bit ugly
@@ -809,8 +831,9 @@ subcommand_load() {
                 # modulecmd, but not the output to stderr coded in a
                 # modulefile.
 
-		local error=$( < "${tmpfile}")
-		if [[ "${error}" =~ ":ERROR:" ]]; then
+		local error=''
+		error=$( < "${TmpFile}")
+		if [[ "${error}" == *:ERROR:* ]]; then
 			local s=${error%%$'\n'*}
                         [[ "$s" =~ ' conflicts ' ]] && \
 				die_conflict "${m}"
@@ -829,7 +852,7 @@ subcommand_load() {
                        	echo "${error}" 1>&2
 		fi
 		local msg=''
-		if [[ ${verbosity_lvl} != silent ]] && \
+		if [[ ${Verbosity_lvl} != silent ]] && \
 			   [[ ${relstage} != stable ]]; then
 			msg=$(printf "%s %s: %s -- %s" \
 				     "${CMD}" 'load' \
@@ -847,14 +870,14 @@ subcommand_load() {
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
         local dir
-	while read dir; do
+	while read -r dir; do
 		# if the first or last character of MODULEPATH is ':',
 		# we read an empty string.
 		[[ -z ${dir} ]] && continue
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
 	done <<< "${MODULEPATH//:/$'\n'}"
-        g_env_must_be_saved='yes'
+        EnvMustBeSaved='yes'
 	export_env 'LOADEDMODULES'
 }
 
@@ -862,9 +885,9 @@ subcommand_load() {
 #
 # unload
 #
-Subcommands[rm]='unload'
-Subcommands[unload]='unload'
-Options[unload]='-o \?H -l help'
+Subcommands['rm']='unload'
+Subcommands['unload']='unload'
+Options['unload']='-o \?H -l help'
 Help[unload]="
 USAGE:
         module rm      modulefile...
@@ -883,7 +906,7 @@ subcommand_unload() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -911,7 +934,7 @@ subcommand_unload() {
 	# the loop again, if it has been unset.
 	local saved_home="${PMODULES_HOME}"
 
-	IFS=: read -r -a _lmfiles_ <<< "${_LMFILES_}"
+	IFS=':' read -r -a _lmfiles_ <<< "${_LMFILES_}"
         local arg
 	local lmfile
 	for arg in "${args[@]}"; do
@@ -927,12 +950,13 @@ subcommand_unload() {
 		is_modulefile interp "${lmfile}" || die_not_a_modulefile "${lmfile}"
 		if [[ "${interp}" == 'lmod' ]]; then
 			current_modulefile="${current_modulefile/${moduledir}\/}"
-			modulecmd="${lmod_cmd}"
+			modulecmd="${Lmod_cmd}"
 		else
-			modulecmd="${tcl_cmd}"
+			modulecmd="${Tcl_cmd}"
 		fi
 
-	        local output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
+	        local output=''
+		output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
                 eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
 		case ${Shell} in
 			sh | bash | zsh )
@@ -947,17 +971,17 @@ subcommand_unload() {
 		PMODULES_HOME="${saved_home}"
 		export_env 'PMODULES_HOME'
 	fi
-	g_env_must_be_saved='yes'
+	EnvMustBeSaved='yes'
 } # subcommand_unload
 
 ##############################################################################
 #
 # swap <module> [<module>]
 #
-Subcommands[switch]='swap'
-Subcommands[swap]='swap'
-Options[swap]='-o \?H -l help'
-Help[swap]="
+Subcommands['switch']='swap'
+Subcommands['swap']='swap'
+Options['swap']='-o \?H -l help'
+Help['swap']="
 USAGE:
         module switch  [modulefile1] modulefile2
         module swap    [modulefile1] modulefile2
@@ -971,7 +995,7 @@ subcommand_swap() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -1004,10 +1028,10 @@ subcommand_swap() {
 #
 # show <module>
 #
-Subcommands[display]='show'
-Subcommands[show]='show'
-Options[show]='-o \?H -l help'
-Help[show]='
+Subcommands['display']='show'
+Subcommands['show']='show'
+Options['show']='-o \?H -l help'
+Help['show']='
 USAGE:
         module display modulefile...
         module show    modulefile...
@@ -1023,7 +1047,7 @@ subcommand_show() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -1041,7 +1065,7 @@ subcommand_show() {
 
         local arg
 	for arg in "${args[@]}"; do
-	        "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
+	        "${modulecmd}" "${Shell}" "${SubCommand}" "${arg}"
 	done
 }
 
@@ -1072,7 +1096,7 @@ get_available_modules() {
 	# loop over all entries in given module path
         for dir in "$@"; do
                 test -d "${dir}" || continue
-		cd "${dir}"
+		cd "${dir}" || std::die 3 "Oops: cannot change to directory '${dir}'"
 		# find overlay and group for this directory
 		local ol=''
 		local group=''
@@ -1086,7 +1110,7 @@ get_available_modules() {
 		# loop over all files (and sym-links) in this directory and
 		# its sub-directories
 		local mod=''	# module_name/module_version
-                while read mod; do
+                while read -r mod; do
 			local name="${mod%/*}"
 			[[ -v OverlayExcludes[${name}] ]] && continue
 			local add='no'
@@ -1117,7 +1141,7 @@ get_available_modules() {
 			[[ "${add}" == 'no' ]] && continue
 			local -A cfg=()
 			get_module_config cfg "${dir}" "${mod}"
-			is_available cfg "${used_relstages}" "${os_release}" "${HOSTNAME}" || continue
+			is_available cfg "${used_relstages}" || continue
 
 			gam_mods+=( "${mod}" "${cfg['relstage']}" "${dir}/${mod}" "${ol}" )
                         dict[${sdirs}/${mod}]=1
@@ -1158,21 +1182,20 @@ find_modulefile() {
                         # a version number has been specified. The first module
 			# found will be returned, independend from the release
 			# stage.
-                        modules=( $(${find} -L "${dir}" -type f -not -name ".*" \
+                        mapfile -t modules < <( ${find} -L "${dir}" -type f -not -name ".*" \
                                        -ipath "${dir}/${module}*" \
-                                          | cut -b${col}-) )
+                                          | cut -b${col}-)
                         for mod in "${modules[@]}"; do
-				if [[ ${mod} == ${module} ]]; then
+				if [[ ${mod} == "${module}" ]]; then
 					:
-				elif [[ ${mod} == ${module}.lua ]]; then
+				elif [[ ${mod} == "${module}.lua" ]]; then
 					mod="${module}.lua"
 				else
 					continue
 				fi
 				local -A cfg=()
 				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${ReleaseStages}" "${os_release}" \
-					     "${HOSTNAME}" || continue
+				is_available cfg "${ReleaseStages}" || continue
 
 				fm_modulefile="${dir}/${mod}"
 				fm_relstage="${cfg['relstage']}"
@@ -1186,10 +1209,10 @@ find_modulefile() {
 
 			# get list of reverse sorted version numbers
                         (( col += ${#module} + 1 ))
-                        modules=( $(${find} -L "${dir}" -type f -not -name ".*" \
+                        mapfile -t modules < <(${find} -L "${dir}" -type f -not -name ".*" \
                                          -ipath "${dir}/${module}/*"  \
                                             | cut -b${col}- \
-                                            | sort -rV ) )
+                                            | sort -rV )
 			# prepend module name
                         modules=( "${modules[@]/#/${module}/}" )
 
@@ -1203,8 +1226,7 @@ find_modulefile() {
 				fi
 				local -A cfg=()
 				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${ReleaseStages}" "${os_release}" \
-					     "${HOSTNAME}" || continue
+				is_available cfg "${ReleaseStages}" || continue
 				fm_modulefile="${dir}/${mod}"
 				fm_relstage="${cfg['relstage']}"
 				fm_dir="${dir}"
@@ -1228,10 +1250,10 @@ find_modulefile() {
 #
 # avail [-hlt] [<module-pattern>...]
 #
-Subcommands[avail]='avail'
-Options[avail]='-l help -o \?Hahlmtg: -l all -l all-release-stages -l group: '
-Options[avail]+='-l human -l long -l machine -l terse'
-Help[avail]="
+Subcommands['avail']='avail'
+Options['avail']='-l help -o \?Hahlmtg: -l all -l all-release-stages -l group: '
+Options['avail']+='-l human -l long -l machine -l terse'
+Help['avail']="
 USAGE:
         module avail [switches] string
 		List all available modulefiles in the current MODULEPATH. If
@@ -1275,11 +1297,12 @@ subcommand_avail() {
 
 	#......................................................................
 	output_header() {
-		local caption="$1"
-		let i=($cols-${#caption})/2-2
-		printf -- "%0.s-" $(seq 1 $i) 1>&2
+		local -r caption="$1"
+		local -i i=0
+		(( i=(cols-${#caption})/2-2 ))
+		printf -- "%0.s-" $(seq 1 "$i") 1>&2
 		printf -- " %s " "${caption}" 1>&2
-		printf -- "%0.s-" $(seq 1 $i) 1>&2
+		printf -- "%0.s-" $(seq 1 "$i") 1>&2
 		printf -- "\n" 1>&2
 	}
 
@@ -1338,7 +1361,7 @@ subcommand_avail() {
 		local mod=''
 		local -i max_length=1
 		for ((i=0; i<${#mods[@]}; i+=4)); do
-			if [[ ${verbosity_lvl} == 'verbose' ]]; then
+			if [[ ${Verbosity_lvl} == 'verbose' ]]; then
 			        local  relstage=${mods[i+1]}
 			        case ${relstage} in
 					stable )
@@ -1355,8 +1378,6 @@ subcommand_avail() {
 			(( n > max_length )) && (( max_length=n ))
 			available_modules+=("${mod}")
 		done
-		IFS=$'\n' available_modules=($(sort --version-sort <<<"${available_modules[*]}"))
-		unset IFS
 		local -i span=$(( max_length / 16 + 1 ))	# compute column size
 		local -i colsize=$(( span * 16 ))		# as multiple of 16
 		local -i column=$cols				# force a line-break
@@ -1367,11 +1388,10 @@ subcommand_avail() {
 				column=0
 			fi
 			if (( column+colsize < cols )); then
-			        fmt="%-${colsize}s"
+			        printf "%-${colsize}s" "${mod}" 1>&2
 			else
-				fmt="%-s"
+				printf "%-s" "${mod}" 1>&2
 			fi
-			printf "${fmt}" "${mod}" 1>&2
 			column+=colsize
 		done
 		printf -- "\n\n" 1>&2
@@ -1386,7 +1406,7 @@ subcommand_avail() {
 	while (($# > 0)); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-a | --all | --all-release-stages )
 				opt_use_relstages="${ReleaseStages}"
@@ -1426,17 +1446,15 @@ subcommand_avail() {
 	if (( ${#pattern[@]} == 0 )); then
 	        pattern+=( '' )
 	fi
-	IFS=':'
-	local -a modulepath=(${MODULEPATH})
-	unset IFS
-	local dir
-        local group=''
-	local groups=()
-        local ol=''
-	local name=''
+	local -- dir=''
+        local -- group=''
+	local -- groups=()
+        local -- ol=''
+	local -- name=''
+	local -a modulepath=()
+	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
         for dir in "${modulepath[@]}"; do
-                find_overlay ol group "${dir}"
-		if (( $? == 0 )); then
+                if find_overlay ol group "${dir}"; then
 			name="${group}"
 		else
 			name="${dir}"
@@ -1449,14 +1467,14 @@ subcommand_avail() {
 		# BASH doesn't support list as values of dictionaries. We use
 		# reference variables to work around this.
 		if [[ ! -v modulepath_${group} ]]; then
-			typeset -a modulepath_${group}
+			typeset -a "modulepath_${group}"
 		fi
-		typeset -n path=modulepath_${group}
+		typeset -n path="modulepath_${group}"
 		path+=("${dir}")
 		# Create ordered list of groups. In the next step we
 		# loop over this list.
 		for group in "${groups[@]}"; do
-			if [[ "${group}" == ${name} ]]; then
+			if [[ "${group}" == "${name}" ]]; then
 				# resume with next dir
 				continue 2
 			fi
@@ -1473,7 +1491,7 @@ subcommand_avail() {
 
 			local ref="${group//[\/ .-]/_}"
 			[[ -v modulepath_${ref} ]] || continue
-			typeset -n path=modulepath_${ref}
+			typeset -n path"=modulepath_${ref}"
 			get_available_modules \
 				mods \
 				"${string}*" \
@@ -1490,9 +1508,9 @@ subcommand_avail() {
 #
 # use [-a|--append|-p|--prepend] [directory|group|release_stage...]
 #
-Subcommands[use]='use'
-Options[use]='-l help -o \?Hap -l append -l prepend'
-Help[use]="
+Subcommands['use']='use'
+Options['use']='-l help -o \?Hap -l append -l prepend'
+Help['use']="
 USAGE:
         module use [-a|--append|-p|--prepend] [directory|group|release_stage|...]
 		Without arguments this sub-command displays information about
@@ -1517,9 +1535,8 @@ SWITCHES:
 "
 
 subcommand_use() {
-	IFS=':'
-	local -a modulepath=(${MODULEPATH})
-	unset IFS
+	local -a modulepath=()
+	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
         local add2path_func='std::append_path'
 
 	#......................................................................
@@ -1530,18 +1547,18 @@ subcommand_use() {
 	#......................................................................
 	print_info() {
 		print_ol_info(){
-			local only_used="$1"
+			local used="$1" # print used or unused overlays
 			local ol=''
 			for ol in "${Overlays[@]}"; do
-				[[ ${OverlayInfo[${ol}:used]} == ${only_used} ]] || continue
-				local inst_root="${OverlayInfo[${ol}:inst_root]}"
-				local mod_root="${OverlayInfo[${ol}:mod_root]}"
+				[[ ${OverlayInfo[${ol}:used]} == "${used}" ]] || continue
+				local install_root="${OverlayInfo[${ol}:install_root]}"
+				local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 				local txt="\t${ol}"
-				if [[ ${inst_root} == ${mod_root} ]]; then
-					txt+="\n\t\t${inst_root}"
+				if [[ ${install_root} == "${modulefiles_root}" ]]; then
+					txt+="\n\t\t${install_root}"
 				else
-					txt+="\n\t\t${inst_root} (install root)"
-					txt+="\n\t\t${mod_root} (modulefiles root)"
+					txt+="\n\t\t${install_root} (install root)"
+					txt+="\n\t\t${modulefiles_root} (modulefiles root)"
 				fi
 				case "${OverlayInfo[${ol}:type]}" in
 					"${ol_hiding}" )
@@ -1590,17 +1607,16 @@ subcommand_use() {
 
 		std::info ''
 		std::info "Additonal directories in MODULEPATH:"
-		let n=0
+		local -i i=0
+		local -i n=0
                 local group
 		for (( i=0; i<${#modulepath[@]}; i++)); do
 			if ! find_overlay ol group "${modulepath[i]}"; then
 			        std::info "\t${modulepath[i]}"
-			        let n+=1
+			        (( n+=1 ))
 			fi
 		done
-		if (( n == 0 )); then
-		        std::info "\tnone"
-		fi
+		(( n == 0 )) && std::info "\tnone"
 		std::info ""
 	} # print_info
 
@@ -1622,21 +1638,21 @@ subcommand_use() {
 				# other overlays in these groups
 				for group in ${UsedGroups//:/ }; do
 					# is this group in the to be added overlay?
-                                        local dir="${OverlayInfo[${ol_name}:mod_root]}/"
+                                        local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
                                         dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                         [[ -d "${dir}" ]] || continue  # no
 
 					dir="/${group}/${PMODULES_MODULEFILES_DIR}"
 					local -a dirs=()
 					for ol in "${UsedOverlays[@]}"; do
-						dirs+=( ${OverlayInfo[${ol}:mod_root]}${dir} )
+						dirs+=( "${OverlayInfo[${ol}:modulefiles_root]}${dir}" )
 					done
 					std::remove_path MODULEPATH "${dirs[@]}"
 				done
 			fi
 			scan_groups "${ol_name}"
                         for group in ${UsedGroups//:/ }; do
-                                local dir="${OverlayInfo[${ol_name}:mod_root]}/"
+                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
                                 dir+="${group}/${PMODULES_MODULEFILES_DIR}"
                                 if [[ -d "${dir}" ]]; then
                                         std::prepend_path MODULEPATH "${dir}"
@@ -1654,7 +1670,7 @@ subcommand_use() {
 			done
 
 			export_env UsedOverlays
-                        g_env_must_be_saved='yes'
+                        EnvMustBeSaved='yes'
 	                scan_groups "${UsedOverlays[@]}"
                 }
 
@@ -1667,7 +1683,7 @@ subcommand_use() {
 			std::append_path UsedGroups "$1"
                         local ol_name
                         for ol_name in "${UsedOverlays[@]}"; do
-                                local dir="${OverlayInfo[${ol_name}:mod_root]}/$1/${PMODULES_MODULEFILES_DIR}"
+                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/$1/${PMODULES_MODULEFILES_DIR}"
                                 [[ -d "${dir}" ]] || continue
 
                                 std::prepend_path MODULEPATH "${dir}"
@@ -1676,31 +1692,32 @@ subcommand_use() {
                 }
                 
 		#..............................................................
-		local arg=$1
-
+		local -- arg="$1"
+		local -i rc=0
 		if is_release_stage "${arg}"; then
                         # argument is release stage
-			std::append_path UsedReleaseStages "${arg}"
-                        return $?
+			std::append_path UsedReleaseStages "${arg}" || rc=$?
+                        return ${rc}
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
-			use_overlay "${arg}"
-			return $?
+			use_overlay "${arg}" || rc=$?
+			return ${rc}
 		fi
                 if [[ ! -v GroupDepths[${arg}] ]]; then
                         # this scan is required if a new group has been
                         # create inside an used overlay
 			scan_groups "${UsedOverlays[@]}"
-			g_env_must_be_saved='yes'
+			EnvMustBeSaved='yes'
                 fi
                 if [[ -n ${GroupDepths[${arg}]} ]]; then
-			use_group "${arg}"
-                        return $?
+			use_group "${arg}" || rc=$?
+                        return ${rc}
                 fi
 		if [[ -d ${arg} ]]; then
-			local dir=$(cd "${arg}" && pwd -L)
-			${add2path_func} MODULEPATH "${dir}"
-			return $?
+			local dir=''
+			dir=$(std::get_abspath "${arg}")
+			${add2path_func} MODULEPATH "${dir}" || rc=$?
+                        return ${rc}
 		fi
 		die_invalid_value "use flag, group, overlay or directory" \
                          "${arg}"
@@ -1711,7 +1728,7 @@ subcommand_use() {
 	while (( $# > 0)); do
 		case "$1" in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 		        -a | --append )
                                 add2path_func='std::append_path'
@@ -1738,7 +1755,7 @@ subcommand_use() {
         for arg in "${args[@]}"; do
 		use "${arg}"
         done
-        g_env_must_be_saved='yes'
+        EnvMustBeSaved='yes'
 	export_env 'MODULEPATH'
 }
 
@@ -1746,18 +1763,17 @@ subcommand_use() {
 #
 # unuse directory|group|release_stage|...
 #
-Subcommands[unuse]='unuse'
-Options[unuse]='-o \?H -l help'
-Help[unuse]='
+Subcommands['unuse']='unuse'
+Options['unuse']='-o \?H -l help'
+Help['unuse']='
 unuse directory|group|release...
 		Remove the given modulefiles directory, group, release stage,
                 flag from the search path.
 '
 
 subcommand_unuse() {
-	IFS=':'
-	local -a modulepath=(${MODULEPATH})
-	unset IFS
+	local -a modulepath=()
+	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
 
 	#......................................................................
         unuse() {
@@ -1768,26 +1784,26 @@ subcommand_unuse() {
 			if [[ -n "${LOADEDMODULES}" ]] && \
 				   [[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]]; then
 				std::die 3 "%s %s: %s %s" \
-					   "${CMD}" "${subcommand}" \
+					   "${CMD}" "${SubCommand}" \
 					   "overlay cannot be removed since" \
 					   "some modules are still loaded!"
 			fi
 
-                        [[ "${OverlayInfo[ol_name]:mod_root}" == "${PMODULES_HOME%%/Tools*}" ]] && \
+                        [[ "${OverlayInfo[ol_name]:modulefiles_root}" == "${PMODULES_HOME%%/Tools*}" ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${subcommand}" \
+                                         "${CMD}" "${SubCommand}" \
                                          "cannot remove base overlay" \
                                          "${ol_name}"
 			[[ ${OverlayInfo[${ol_name}:used]} !=  'yes' ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${subcommand}" \
+                                         "${CMD}" "${SubCommand}" \
                                          "not an used overlay" \
                                          "${ol_name}"
 			# make sure first index is '0' (it should, but you never know)
 			UsedOverlays=( "${UsedOverlays[@]}" )
 			[[ "${ol_name}" != "${UsedOverlays[0]}" ]] && \
 				std::die 3 "%s %s: %s %s -- %s" \
-					 "${CMD}" "${subcommand}" \
+					 "${CMD}" "${SubCommand}" \
 					 "overlay cannot be removed since" \
 					 "it not on top of the stack" \
 					 "${ol_name}"
@@ -1795,10 +1811,10 @@ subcommand_unuse() {
 			if [[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]]; then
 				# if this overlay hides groups, we have to re-add
 				# the modules made available by other overlays
-				local mod_root=${OverlayInfo[${ol_name}:mod_root]}
+				local modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
 				for group in ${UsedGroups//:/ }; do
 					# is this group in the to be removed overlay?
-                                        local dir="${mod_root}/${group}/${PMODULES_MODULEFILES_DIR}"
+                                        local dir="${modulefiles_root}/${group}/${PMODULES_MODULEFILES_DIR}"
                                         [[ -d "${dir}" ]] || continue  # no
 					
 					dir="/${group}/${PMODULES_MODULEFILES_DIR}"
@@ -1817,18 +1833,18 @@ subcommand_unuse() {
 			OverlayExcludes=()
 			local ol
 			local item
-			for ol in "${UsedOverlays}"; do
+			for ol in "${UsedOverlays[@]}"; do
 				IFS=':' read -r -a excludes <<< "${OverlayInfo[${ol}:excludes]}"
 				for item in "${excludes[@]}"; do
 					OverlayExcludes[${item}]=1
 				done
 			done
 
-                        g_env_must_be_saved='yes'
+                        EnvMustBeSaved='yes'
                         export_env UsedOverlays
                         local dir
                         for dir in "${modulepath[@]}"; do
-                                [[ "${dir}" =~ "${OverlayInfo[${ol_name}:mod_root]}" ]] && \
+                                [[ "${dir}" == "${OverlayInfo[${ol_name}:modulefiles_root]}" ]] && \
                                         std::remove_path MODULEPATH "${dir}"
                         done
                 }
@@ -1838,7 +1854,7 @@ subcommand_unuse() {
                         if (( ${GroupDepths[${arg}]} > 0 )); then
 				# argument is a hierarchical group in our root
 				std::die 3 "%s %s: %s -- %s" \
-					 "${CMD}" "${subcommand}" \
+					 "${CMD}" "${SubCommand}" \
 					 "illegal group" \
 					 "${arg}"
 			fi
@@ -1846,7 +1862,7 @@ subcommand_unuse() {
                         local var="PMODULES_LOADED_${arg^^}"
                         if [[ -n "${!var}" ]]; then
                                 std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${subcommand}" \
+                                         "${CMD}" "${SubCommand}" \
                                          "cannot remove group due to loaded modules" \
                                          "${arg}"
                         fi
@@ -1871,7 +1887,8 @@ subcommand_unuse() {
 			return 0
 		fi
 		if [[ -d ${arg} ]]; then
-			local dir=$(std::get_abspath "${arg}")
+			local dir=''
+			dir=$(std::get_abspath "${arg}")
 			std::remove_path MODULEPATH "${dir}"
 			return 0
 		fi
@@ -1881,7 +1898,7 @@ subcommand_unuse() {
                 fi
 
 		std::die 3 "%s %s: %s -- %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          "invalid keyword, group, overlay or directory" \
                          "${arg}"
         } # unuse()
@@ -1891,7 +1908,7 @@ subcommand_unuse() {
 	while (( $# > 0)); do
 		case "$1" in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 		        -- )
 				shift 1
@@ -1906,13 +1923,13 @@ subcommand_unuse() {
 	done
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          'missing argument'
 	fi
         for arg in "${args[@]}"; do
                 unuse "${args[@]}"
         done
-        g_env_must_be_saved='yes'
+        EnvMustBeSaved='yes'
         export_env 'MODULEPATH'
 }
 
@@ -1924,9 +1941,9 @@ subcommand_unuse() {
 # either compile Modules with --enable-beginenv or remove the
 # sub-command
 #
-Subcommands[update]='update'
-Options[update]='-o \?H -l help'
-Help[update]='
+Subcommands['update']='update'
+Options['update']='-o \?H -l help'
+Help['update']='
 USAGE:
         module update
                 Attempt  to  reload  all  loaded  modulefiles.
@@ -1940,7 +1957,7 @@ subcommand_update() {
 #
 # refresh
 #
-Subcommands[refresh]='refresh'
+Subcommands['refresh']='refresh'
 Options[refresh]='-o \?H -l help'
 Help[refresh]='
 USAGE:
@@ -1967,7 +1984,7 @@ init_modulepath() {
 	local ol
 	for ol in "${UsedOverlays[@]}"; do
 		for group in ${UsedGroups//:/ }; do
-			local dir="${OverlayInfo[${ol}:mod_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
+			local dir="${OverlayInfo[${ol}:modulefiles_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
 			if [[ -d "${dir}" ]]; then
 				std::prepend_path MODULEPATH "${dir}"
 			fi
@@ -1982,14 +1999,14 @@ pmodules_init() {
 		for group in ${DefaultGroups//:/ }; do
 			std::append_path UsedGroups "${group}"
 		done
-		g_env_must_be_saved='yes'
+		EnvMustBeSaved='yes'
 	}
 	init_used_releases() {
 		declare -g  UsedReleaseStages=''
 		for r in ${DefaultReleaseStages//:/ }; do
 			std::append_path UsedReleaseStages "${r}"
 		done
-		g_env_must_be_saved='yes'
+		EnvMustBeSaved='yes'
 	}
 	init_overlay_vars() {
 		declare -ag UsedOverlays=( 'base' )
@@ -1997,19 +2014,26 @@ pmodules_init() {
 	}
 
 	init_manpath() {
-		std::replace_path MANPATH "${PMODULES_HOME%/*}/.*"
+		: "
+		Initialize MANPATH. Use systen wide configuration file
+	      	if exist or set some defaults.
+		
+		"
+		std::remove_path MANPATH "${PMODULES_HOME%/*}/.*"
 
 		if [[ -r /etc/man.config ]]; then
 			declare _manconf='/etc/man.config'
 		elif [[ -r /etc/man.conf ]]; then
 			declare _manconf='/etc/man.conf'
 		fi
-		if [[ -n ${_manconf} ]]; then
-			while read name value rest; do
+		if [[ -v _manconf ]]; then
+			# initialize from system configuration file
+			while read -r name value rest; do
 				std::append_path MANPATH "${value}"
 			done < <(grep "^MANPATH\s" "${_manconf}")
 			unset _manconf
 		else
+			# set defaults
 			std::append_path  MANPATH "${PMODULES_HOME}/share/man"
 			std::append_path  MANPATH "/usr/share/man"
 		fi
@@ -2041,9 +2065,9 @@ pmodules_init() {
 #
 # purge
 #
-Subcommands[purge]='purge'
-Options[purge]='-o \?H -l help'
-Help[purge]='
+Subcommands['purge']='purge'
+Options['purge']='-o \?H -l help'
+Help['purge']='
 USAGE:
         module purge
 		Unload all loaded modulefiles.
@@ -2061,7 +2085,7 @@ subcommand_purge() {
 	while (( $# > 0)); do
 		case "$1" in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 		        -- )
 				shift 1
@@ -2092,9 +2116,9 @@ subcommand_purge() {
 #
 # list [-hlt]
 #
-Subcommands[list]='list'
-Options[list]='-l help -o \?Hhlt -l human -l long -l terse'
-Help[list]='
+Subcommands['list']='list'
+Options['list']='-l help -o \?Hhlt -l human -l long -l terse'
+Help['list']='
 USAGE:
         module list
 		List loaded modules.
@@ -2106,17 +2130,17 @@ subcommand_list() {
 		# get list of loaded modules with stripped MODULEPATH
 		IFS=':' read -r -a modules \
 		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
-		local strs=()
-		local -i n=1
+		local -- strs=()
+		local -i n=1		# enumeration of loaded modules
 		local -i colsize=0
+		local -- s=''
 		for module in "${modules[@]%.lua}"; do
-			local s=$(printf "%2d) %-s" $n "${module}")
+			s=$(printf "%2d) %-s" "$n" "${module}")
 			strs+=( "$s" )
-			local -i sizeof_s=${#s}
-			(( sizeof_s > colsize )) && colsize=sizeof_s
-			n+=1
+			(( ${#s} > colsize )) && (( colsize=${#s} ))
+			(( n+=1 ))
 		done
-		colsize+=2
+		(( colsize+=2 ))
 
 		local -i cols=80
 		[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)
@@ -2133,7 +2157,7 @@ subcommand_list() {
 			else
 				printf "%-s" "$s" 1>&2			# last column
 			fi
-			column+=colsize
+			(( column+=colsize ))
 		done
 		printf -- "\n\n" 1>&2
 	}
@@ -2161,7 +2185,7 @@ subcommand_list() {
 		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
 		printf "Currently Loaded Modules:\n" 1>&2
 		for module in "${modules[@]%.lua}"; do
-			printf "${module}\n" 1>&2
+			printf "%s\n" "${module}" 1>&2
 		done
 		printf -- "\n\n" 1>&2
 	}
@@ -2171,7 +2195,7 @@ subcommand_list() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-h | --human )
 				output_function='human_readable_output'
@@ -2198,7 +2222,7 @@ subcommand_list() {
 	done
         if (( ${#args[@]} > 0 )); then
 	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          "no arguments allowed"
         fi
 
@@ -2209,9 +2233,9 @@ subcommand_list() {
 #
 # clear
 #
-Subcommands[clear]='clear'
-Options[clear]='-o \?H -l help'
-Help[clear]='
+Subcommands['clear']='clear'
+Options['clear']='-o \?H -l help'
+Help['clear']='
 USAGE:
         module clear
 		Force the Modules package to believe that no modules are
@@ -2223,7 +2247,7 @@ subcommand_clear() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -2238,7 +2262,7 @@ subcommand_clear() {
 	done
         if (( ${#args[@]} > 0 )); then
 	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          "no arguments allowed"
         fi
 	pmodules_init
@@ -2248,16 +2272,16 @@ subcommand_clear() {
 #
 # search [switches] [STRING...]
 #
-Subcommands[search]='search'
-Subcommands[find]='search'
-Options[search]='-o a\?H -l help -l no-header -l print-modulefiles '
-Options[search]+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
-Options[search]+='-l verbose '
-Options[search]+='-l all-deps -l wrap '
-Options[search]+='-l glob '
-Options[search]+='-l newest '
-Options[search]+='-l group:'
-Help[search]='
+Subcommands['search']='search'
+Subcommands['find']='search'
+Options['search']='-o a\?H -l help -l no-header -l print-modulefiles '
+Options['search']+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
+Options['search']+='-l verbose '
+Options['search']+='-l all-deps -l wrap '
+Options['search']+='-l glob '
+Options['search']+='-l newest '
+Options['search']+='-l group:'
+Help['search']='
 USAGE:
         module find|search [switches] STRING...
 		Search installed modules. If an argument is given, search
@@ -2309,7 +2333,7 @@ subcommand_search() {
 	local opt_print_modulefiles='no'
 	local opt_print_csv='no'
         local opt_print_verbose='no'
-	local opt_use_releases=':'
+	local opt_use_relstages=':'
 	local opt_all_deps='no'
 	local opt_wrap='no'
 	local opt_glob='no'
@@ -2344,7 +2368,7 @@ subcommand_search() {
                 print_header_default() {
 		        std::info ''
 		        std::info "${fmt}" "Module" "Rel.stage" "Group" "Overlay" "Requires"
-		        std::info '-%.0s' $(seq 1 ${cols})
+		        std::info '-%.0s' $(seq 1 "${cols}")
 	        }
 
                 print_line_default() {
@@ -2355,13 +2379,14 @@ subcommand_search() {
 				fi
 				std::info "${str}"
 			}
+			local -a deps=( "${@:6}" )
+			(( ${#deps[@]} == 0 )) && deps[0]=''
+			local -- str=''
 			if [[ "${opt_wrap}" == 'no' ]]; then
-				local deps="${@:6}"
-				local str=$(printf "${fmt}"  "$1" "$2" "$3" "$5" "${deps[@]}")
+				str=$(printf "${fmt}"  "$1" "$2" "$3" "$5" "${deps[*]}")
 				write_line "${str}"
 			else
-				local deps=( "${@:6}" )
-				local str=$(printf "${fmt}"  "$1" "$2" "$3" "$5" "${deps[0]}")
+				str=$(printf "${fmt}"  "$1" "$2" "$3" "$5" "${deps[0]}")
 				for (( i = 1; i < ${#deps[@]}; i++ )); do
 					if (( ${#str} + ${#deps[i]} + 1 <= cols )); then
 						str+=" ${deps[i]}"
@@ -2385,7 +2410,7 @@ subcommand_search() {
 	        }
 
                 print_line_verbose() {
-			local deps="${@:6}"
+			local deps="${*:6}"
 			[[ -z ${deps} ]] && deps="(none)"
 			std::info "$1:"
 			std::info "  release stage: $2"
@@ -2437,9 +2462,10 @@ subcommand_search() {
 			_script='{} END{print}'
 		fi
                 ${func_print_header}
-                while read -a toks; do
+		local -a toks=()
+                while read -r -a toks; do
                         ${func_print_line} "${toks[@]}"
-                done < <("${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${tmpfile}" | \
+                done < <("${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${TmpFile}" | \
                                  ${awk} "${with_modules} ${_script}")
         }
 
@@ -2457,16 +2483,16 @@ subcommand_search() {
 		local -r group="$2"
 		shift 2
 		local -a modulepath=("$@")
-
+		local -i depth=0
 		if (( ${#modulepath[@]} == 0 )); then
 			# loop over all directories which can be added to
 			# MODULEPATH inside current group
-			local depth=${GroupDepths[${group}]}
+			depth=${GroupDepths[${group}]}
 			local s=''
 			if (( depth > 0 )); then
 				s=$(printf '/*%.0s' $(seq 1 ${depth}))
 			fi
-			modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
+			modulepath=( "${src_prefix[@]/%//${group}/modulefiles$s}" )
 			local -- dir=''
 			for dir in "${modulepath[@]}"; do
 				searched_moduledirs[${dir}]=1
@@ -2475,7 +2501,7 @@ subcommand_search() {
 
 		# get and print all available modules in $mpath
 		# with respect to the requested release stage
-		# tmpfile: module/version relstage group dependencies...
+		# TmpFile: module/version relstage group dependencies...
 		local mods
 		get_available_modules \
 			mods \
@@ -2499,7 +2525,7 @@ subcommand_search() {
 				get_module_prefix prefix "${modulefile}"
 				local dependencies_file="${prefix}/.dependencies"
 				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-					deps=($(< "${dependencies_file}"))
+					mapfile -t deps < "${dependencies_file}"
 				else
 					deps=()
 				fi
@@ -2507,24 +2533,25 @@ subcommand_search() {
 				# get dependencies encoded in directory name
 				local deps=()
 				local -i j
-				IFS='/'   # note: IFS is used to concat in the for loop!
-				local toks=( ${modulefile} )
+				local -a toks
+				IFS='/'
+				read -r -a toks <<< "${modulefile}"
 				for ((j = -depth-2; j < -2; j += 2)); do
 					deps+=( "${toks[*]: $j:2}" );
 				done
 				unset IFS
 			fi
 			
-			echo ${name} ${relstage} ${group} ${modulefile} \
-			     ${ol} \
-                             ${deps[@]} >> "${tmpfile}"
+			echo "${name}" "${relstage}" "${group}" "${modulefile}" \
+			     "${ol}" \
+                             "${deps[@]}" >> "${TmpFile}"
 		done
 	}
 
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			--all-deps )
 				opt_all_deps='yes'
@@ -2561,7 +2588,7 @@ subcommand_search() {
                                 else
                                         local arg=${1/--with=}
                                 fi
-				if [[ -z ${arg} ]] || [[ "${arg}" =~ "-*" ]]; then
+				if [[ -z ${arg} ]] || [[ "${arg}" == -* ]]; then
 				        std::die 1 "%s %s: %s -- %s" \
                                                  "${CMD}" 'search' \
                                                  "illegal value for --with option" \
@@ -2595,7 +2622,7 @@ subcommand_search() {
                                                  "illegal value for --src option" \
                                                  "${dir} is not a directory"
 				fi
-				src_prefix+=( $(std::get_abspath "${src_prefix}") )
+				src_prefix+=( "$(std::get_abspath "${src_prefix}")" )
 				;;
                         -v | --verbose )
                                 opt_print_verbose='yes'
@@ -2611,9 +2638,9 @@ subcommand_search() {
 				;;
 			--group | --group=* )
 				if [[ $1 == *=* ]]; then
-					groups+=( ${1/--*=} )
+					groups+=( "${1/--*=}" )
 				else
-					groups+=( $2 )
+					groups+=( "$2" )
 					shift
 				fi
 				;;
@@ -2632,7 +2659,7 @@ subcommand_search() {
 	if (( ${#src_prefix[@]} == 0 )); then
 		local ol=''
 		for ol in "${UsedOverlays[@]}"; do
-			src_prefix+=( "${OverlayInfo[${ol}:mod_root]}" )
+			src_prefix+=( "${OverlayInfo[${ol}:modulefiles_root]}" )
 		done
 	fi
 
@@ -2646,9 +2673,9 @@ subcommand_search() {
 
         # :FIXME: do we need this?
 	if (( ${#GroupDepths[@]} == 0 )) || \
-                   [[ ${src_prefix} != ${PMODULES_HOME%%/Tools*} ]]; then
+                   [[ ${src_prefix} != "${PMODULES_HOME%%/Tools*}" ]]; then
 		scan_groups "${src_prefix}"
-		g_env_must_be_saved='yes'
+		EnvMustBeSaved='yes'
 	fi
 
 	if (( ${#groups[@]} == 0 )); then
@@ -2671,7 +2698,7 @@ subcommand_search() {
 	for dir in "${modulepath[@]}"; do
 		# skip already searched directories
 		[[ -v searched_moduledirs[${dir}] ]] && continue
-		dirs+=(${dir})
+		dirs+=( "${dir}" )
 	done
 	if (( ${#dirs[@]} > 0 )); then
 		for module in "${modules[@]}"; do
@@ -2686,9 +2713,9 @@ subcommand_search() {
 #
 # help [module|sub-command]
 #
-Subcommands[help]='help'
-Options[help]='-o hHV\? -l version -l help'
-Help[help]='
+Subcommands['help']='help'
+Options['help']='-o hHV\? -l version -l help'
+Help['help']='
 USAGE:
         module [ switches ] [ subcommand ] [subcommand-args ]
 
@@ -2735,7 +2762,7 @@ subcommand_help() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | -h | -H | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-V | --version )
 				print_help 'version'
@@ -2761,7 +2788,7 @@ subcommand_help() {
                 else
 		        # :FIXME: print help of newest *available* module
 		        # (respecting UsedReleaseStages)
-                        "${modulecmd}" "${Shell}" "${subcommand}" "${arg}"
+                        "${modulecmd}" "${Shell}" "${SubCommand}" "${arg}"
 	        fi
         done
 }
@@ -2770,14 +2797,14 @@ subcommand_help() {
 #
 # whatis
 #
-Subcommands[whatis]='whatis'
-Options[whatis]='-o \?Ha -l help -l all'
-Help[whatis]='
+Subcommands['whatis']='whatis'
+Options['whatis']='-o \?Ha -l help -l all'
+Help['whatis']='
 USAGE:
         module whatis [modulefile...]
                 Display the information set up by the module-whatis commands
 		inside the specified modulefile(s). If no modulefile is
-		specified, all 'whatis' lines will be shown.
+		specified, all whatis lines will be shown.
 '
 
 subcommand_whatis() {
@@ -2786,7 +2813,7 @@ subcommand_whatis() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-a | --all )
 				options+=( '-a' )
@@ -2807,9 +2834,10 @@ subcommand_whatis() {
 	for group in "${!GroupDepths[@]}"; do
 		local mod_name=''
 		local file_name=''
-		while read mod_name file_name; do
+		while read -r mod_name file_name; do
 			[[ -n ${file_name} ]] || continue
-			local whatis=$("${modulecmd}" bash \
+			local whatis=''
+			whatis=$("${modulecmd}" bash \
 						      whatis \
 						      "${file_name}" \
 						      2>&1 1>/dev/null)
@@ -2827,13 +2855,13 @@ subcommand_whatis() {
 #
 # apropos
 #
-Subcommands[apropos]='apropos'
-Subcommands[keyword]='apropos'
-Options[apropos]='-o \?Ha -l help -l all'
-Help[apropos]='
+Subcommands['apropos']='apropos'
+Subcommands['keyword']='apropos'
+Options['apropos']='-o \?Ha -l help -l all'
+Help['apropos']='
 USAGE:
         module apropos string
-        module keyword string	Seeks through the 'whatis' informations of
+        module keyword string	Seeks through the whatis informations of
                 all modulefiles for the specified string.  All module-whatis
                 informations matching the string will be displayed.
 '
@@ -2844,7 +2872,7 @@ subcommand_apropos() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-a | --all )
 				options+=( '-a' )
@@ -2862,11 +2890,11 @@ subcommand_apropos() {
 	done
 	if (( ${#args[@]} == 0 )); then
 	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          "no search string specified"
 	elif (( ${#args[@]} > 1 )); then
 	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          "more then one search string specified"
 	fi
 	local arg="${args[0]}"
@@ -2874,9 +2902,10 @@ subcommand_apropos() {
 	for group in "${!GroupDepths[@]}"; do
 		local mod_name=''
 		local file_name=''
-		while read mod_name file_name; do
+		while read -r mod_name file_name; do
 			[[ -n ${file_name} ]] || continue
-			local whatis=$("${modulecmd}" bash \
+			local whatis=''
+			whatis=$("${modulecmd}" bash \
 						      whatis \
 						      "${file_name}" \
 						      2>&1 1>/dev/null)
@@ -2907,9 +2936,9 @@ subcommand_apropos() {
 #
 # save [collection]
 #
-Subcommands[save]='save'
-Options[save]='-o \?H -l help'
-Help[save]="
+Subcommands['save']='save'
+Options['save']='-o \?H -l help'
+Help['save']="
 USAGE:
         module save [collection]
 	       Record the currently set MODULEPATH directory list and the
@@ -2928,7 +2957,7 @@ subcommand_save() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			--system )
 				opt_system='yes'
@@ -2969,15 +2998,15 @@ subcommand_save() {
 	local -a tmp=()
 	local -- grp=''
 
-	IFS=':' read -a tmp <<< "${UsedReleaseStages}"
+	IFS=':' read -r -a tmp <<< "${UsedReleaseStages}"
 	items+=( "${tmp[@]}")
-	IFS=':' read -a tmp <<< "${UsedGroups}"
+	IFS=':' read -r -a tmp <<< "${UsedGroups}"
 	for grp in "${tmp[@]}"; do
 		# skip hierarchical groups
 		(( ${GroupDepths[${tmp}]} > 0 )) && continue
 		items+=( "${grp}")
 	done
-	IFS=':' read -a tmp <<< "${UsedOverlays}"
+	IFS=':' read -r -a tmp <<< "${UsedOverlays}"
 	items+=( "${tmp[@]}")
 	for item in "${items[@]}"; do
 		[[ "${item}" == 'base' ]] && continue
@@ -2986,7 +3015,7 @@ subcommand_save() {
 
 	# save additional module directories
 	local -a modulepath=()
-	IFS=':' read -a modulepath <<< "${MODULEPATH}"
+	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 	local dir=''
 	local ol=''
 	local grp=''
@@ -2997,7 +3026,7 @@ subcommand_save() {
 
 	# save loaded modules
 	local -a modules=()
-	IFS=':' read -a modules <<< "${LOADEDMODULES}"
+	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
 	local -- m=''
 	for m in "${modules[@]}"; do
 		[[ $m == Pmodules/* ]] && continue
@@ -3013,9 +3042,9 @@ subcommand_save() {
 #
 # restore [collection]
 #
-Subcommands[restore]='restore'
-Options[restore]='-o \?H -l help'
-Help[restore]="
+Subcommands['restore']='restore'
+Options['restore']='-o \?H -l help'
+Help['restore']="
 USAGE:
         module restore [collection]
 	       Restore the environment state as defined in collection.
@@ -3033,8 +3062,8 @@ search_collection(){
 	fi
 	local --  _ol
 	for _ol in "${UsedOverlays[@]}"; do
-		if [[ -r "${OverlayInfo[${_ol}:inst_root]}/collections/${_collection}" ]]; then
-			_path="${OverlayInfo[${_ol}:inst_root]}/collections"
+		if [[ -r "${OverlayInfo[${_ol}:install_root]}/collections/${_collection}" ]]; then
+			_path="${OverlayInfo[${_ol}:install_root]}/collections"
 			return 0
 		fi
 	done
@@ -3046,7 +3075,7 @@ subcommand_restore() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -3071,7 +3100,7 @@ subcommand_restore() {
 	done
 	
 	# reset/unload everything (except Pmodules/<version>)
-	IFS=':' read -a modules <<< "${LOADEDMODULES}"
+	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
 	local -- m=''
 	for ((i=${#modules[@]}-1; i>=0; i--)); do
 		[[ ${modules[$i]} == Pmodules/* ]] && continue
@@ -3081,20 +3110,20 @@ subcommand_restore() {
 	local -a items=()
 	local -a tmp=()
 	local -- item=''
-	local -a grps=()
+	local -a default_grps=()
 
-	IFS=':' read -a tmp <<< "${UsedReleaseStages}"
+	IFS=':' read -r -a tmp <<< "${UsedReleaseStages}"
 	items+=( "${tmp[@]}")
 
 	# remove all groups with the exception of the default groups
-	IFS=':' read -a tmp <<< "${UsedGroups}"
-	IFS=':' read -a default_grps <<< "${DefaultGroups}"
+	IFS=':' read -r -a tmp <<< "${UsedGroups}"
+	IFS=':' read -r -a default_grps <<< "${DefaultGroups}"
 	for item in "${tmp[@]}"; do
 		(( ${GroupDepths["${item}"]} > 0 )) && continue
 		std::is_member_of_array "${item}" default_grps && continue
 		items+=( "${grp}" )
 	done
-	IFS=':' read -a tmp <<< "${UsedOverlays}"
+	IFS=':' read -r -a tmp <<< "${UsedOverlays}"
 	for item in "${tmp[@]}"; do
 		[[ "${item}" == 'base' ]] && continue
 		items+=( "${tmp[@]}")
@@ -3110,19 +3139,19 @@ subcommand_restore() {
 
 	# load collection
 	for collection in "${collections[@]}"; do
-		cat "${collection}"
+		${cat} "${collection}"
 	done
 
-	g_env_must_be_saved='no'
+	EnvMustBeSaved='no'
 }
 
 ##############################################################################
 #
 # module savelist [pattern...]
 #
-Subcommands[savelist]='savelist'
-Options[savelist]='-o \?H -l help'
-Help[savelist]="
+Subcommands['savelist']='savelist'
+Options['savelist']='-o \?H -l help'
+Help['savelist']="
 USAGE:
         module savelist [pattern...]
 	       List collections that are currently saved under the user's
@@ -3144,7 +3173,7 @@ subcommand_savelist() {
 		local _pattern
 		local _coll
 		for _pattern in "$@"; do
-			while read _coll; do
+			while read -r _coll; do
 				_result+=( "${_coll}" )
 			done < <(find "${gc_dirs[@]}" -type f -ipath "*/${_pattern}" -printf "%P\n" 2>/dev/null)
 		done
@@ -3169,7 +3198,7 @@ subcommand_savelist() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -3190,7 +3219,7 @@ subcommand_savelist() {
 	_dirs=()
 	local _ol
 	for _ol in "${UsedOverlays[@]}"; do
-		_dirs+=( "${OverlayInfo[${_ol}:inst_root]}/collections" )
+		_dirs+=( "${OverlayInfo[${_ol}:install_root]}/collections" )
 	done
 	print_collections "\nSystem collections:" _dirs "${args[@]}"
 }
@@ -3199,9 +3228,9 @@ subcommand_savelist() {
 #
 # module saverm [collection...]
 #
-Subcommands[saverm]='saverm'
-Options[saverm]='-o \?H -l help'
-Help[saverm]="
+Subcommands['saverm']='saverm'
+Options['saverm']='-o \?H -l help'
+Help['saverm']="
 USAGE:
         module saverm [collection]
 	       Delete the collection file under the user's collection
@@ -3213,7 +3242,7 @@ subcommand_saverm() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -3246,9 +3275,9 @@ subcommand_saverm() {
 #
 # module saveshow [collection]
 #
-Subcommands[saveshow]='saveshow'
-Options[saveshow]='-o \?H -l help'
-Help[saveshow]="
+Subcommands['saveshow']='saveshow'
+Options['saveshow']='-o \?H -l help'
+Help['saveshow']="
 USAGE:
         module saveshow [collection...]
 	       Display the content of collection. If collection name is not
@@ -3260,7 +3289,7 @@ subcommand_saveshow() {
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
-                                print_help "${subcommand}"
+                                print_help "${SubCommand}"
                                 ;;
 			-- )
 				shift 1
@@ -3291,9 +3320,9 @@ subcommand_saveshow() {
 #
 # initadd module...
 #
-Subcommands[initadd]='initadd'
-Options[initadd]='-o \?H -l help'
-Help[initadd]="
+Subcommands['initadd']='initadd'
+Options['initadd']='-o \?H -l help'
+Help['initadd']="
 USAGE:
         module initadd	modulefile...
 		Add modulefile(s) to the shell's initialization file in the
@@ -3327,9 +3356,9 @@ subcommand_initadd() {
 #
 # initprepend module...
 #
-Subcommands[initprepend]='initprepend'
-Options[initprepend]='-o \?H -l help'
-Help[initprepend]="
+Subcommands['initprepend']='initprepend'
+Options['initprepend']='-o \?H -l help'
+Help['initprepend']="
 USAGE:
         module initprepend modulefile...
 		Does the same as initadd but prepends the given modules to
@@ -3344,9 +3373,9 @@ subcommand_initprepend() {
 #
 # initrm module...
 #
-Subcommands[initrm]='initrm'
-Options[initrm]='-o \?H -l help'
-Help[initrm]="
+Subcommands['initrm']='initrm'
+Options['initrm']='-o \?H -l help'
+Help['initrm']="
 USAGE:
         module initrm modulefile...
 		Remove modulefile(s) from the shell's initialization files.
@@ -3360,9 +3389,9 @@ subcommand_initrm() {
 #
 # initswitch module1 module2
 #
-Subcommands[initswitch]='initswitch'
-Options[initswitch]='-o \?H -l help'
-Help[initswitch]="
+Subcommands['initswitch']='initswitch'
+Options['initswitch']='-o \?H -l help'
+Help['initswitch']="
 USAGE:
         module initswitch modulefile1 modulefile2
 		Switch modulefile1 with modulefile2 in the shell's
@@ -3374,7 +3403,7 @@ subcommand_initswitch() {
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | --help )
-				print_help "${subcommand}"
+				print_help "${SubCommand}"
 				;;
 			-- )
 				shift 1
@@ -3389,19 +3418,19 @@ subcommand_initswitch() {
 	done
 	if (( ${#args[@]} != 2 )); then
 	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${subcommand}" \
+                         "${CMD}" "${SubCommand}" \
                          "two arguments required not less not more"
 	fi
-	"${modulecmd}" "${Shell}" "${subcommand}" "${args[@]}"
+	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
 
 ##############################################################################
 #
 # initlist
 #
-Subcommands[initlist]='initlist'
-Options[initlist]='-o \?H -l help'
-Help[initlist]="
+Subcommands['initlist']='initlist'
+Options['initlist']='-o \?H -l help'
+Help['initlist']="
 USAGE:
         module initlist
 		List all of the modulefiles loaded from the shell's
@@ -3416,9 +3445,9 @@ subcommand_initlist() {
 #
 # initclear
 #
-Subcommands[initclear]='initclear'
-Options[initclear]='-o \?H -l help'
-Help[initclear]="
+Subcommands['initclear']='initclear'
+Options['initclear']='-o \?H -l help'
+Help['initclear']="
 USAGE:
 	module initclear
 		Clear all of the modulefiles from the shell's
@@ -3482,7 +3511,7 @@ while (( $# > 0 )); do
 			opts+=( "$1" )
 			;;
 		* )
-			subcommand="$1"
+			SubCommand="$1"
 			shift
 			break
 			;;
@@ -3490,17 +3519,16 @@ while (( $# > 0 )); do
 	shift
 done
 
-if [[ -z "${subcommand}" ]]; then
+if [[ -z "${SubCommand}" ]]; then
 	std::die 1 "${CMD}: no sub-command specified."
 fi
 
-if [[ ! -v Subcommands[${subcommand}] ]]; then
-	std::die 1 "${CMD}: unknown sub-command -- ${subcommand}"
+if [[ ! -v Subcommands[${SubCommand}] ]]; then
+	std::die 1 "${CMD}: unknown sub-command -- ${SubCommand}"
 fi
 
 # restore variables from last call
-unset Version
-if [[ -n ${PMODULES_ENV} ]]; then
+if [[ -v PMODULES_ENV ]]; then
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
 # Version should now be defined again, if not:
@@ -3511,7 +3539,10 @@ fi
 # We (re-)initialise the Pmodules system, if
 # - PMODULES_ENV was not set/is empty
 # - A new Pmodules version has been loaded
-if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
+if [[ ! -v Version ]] || \
+	   [[ ${Version} != "${PMODULES_VERSION}" ]] || \
+	   [[ ! -v PMODULES_ENV ]] || \
+	   [[ -z ${PMODULES_ENV} ]]; then
 	declare _tmp_loaded_modules_="${LOADEDMODULES}"
 	declare _tmp_lmfiles_="${_LMFILES_}"
 
@@ -3525,27 +3556,15 @@ if [[ -z ${Version} ]] || [[ ${Version} != ${PMODULES_VERSION} ]]; then
 fi
 
 # we need to handle help text and options for sub-cmd aliases
-subcommand=${Subcommands[${subcommand}]}
-
-# We need a tmp-file in the following sub-commands. It will be removed
-# in the exit function if exists.
-case ${subcommand} in
-	load|purge|search|swap|whatis|apropos )
-		declare -r tmpfile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
-			|| std::die 1 "Oops: unable to create tmp file!"
-		;;
-	* )
-		declare -r tmpfile=''
-		;;
-esac
+SubCommand=${Subcommands[${SubCommand}]}
 
 # parse arguments of the sub-command and call it
-temp=$("${getopt}" --name="${CMD}" ${Options[${subcommand}]} -- "${opts[@]}" "$@" ) \
-	|| print_help "${subcommand}"
+temp=$("${getopt}" --name="${CMD}" ${Options[${SubCommand}]} -- "${opts[@]}" "$@" ) \
+	|| print_help "${SubCommand}"
 eval set -- "${temp}"
 unset temp
 
-subcommand_${Subcommands[$subcommand]} "$@"
+"subcommand_${SubCommand}" "$@"
 
 # Local Variables:
 # mode: sh

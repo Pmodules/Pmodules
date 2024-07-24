@@ -1,37 +1,17 @@
 #!/bin/bash
 
 declare    PMODULES_MODULEFILES_DIR='modulefiles'
-declare    PMODULES_CONFIG_DIR='config'
 declare    PMODULES_VERSION='@PMODULES_VERSION@'
 declare -A GroupDepths=()
-declare -A Subcommands=()
-declare -A Options=()
-declare -A Help=()
 
 declare -a Overlays=()
 declare -A OverlayInfo
-declare -a UsedOverlays
 declare -A Dir2OverlayMap
 
 declare -r ol_normal='n'
 declare -r ol_hiding='h'
 declare -r ol_replacing='r'
 
-
-# initialize help text of 'module --version'
-Help['version']="
-Pmodules @PMODULES_VERSION@
-using Tcl Environment Modules
-VERSION = @MODULES_VERSION@
-"
-
-#
-# display help text for command given in $1
-#
-print_help() {
-        echo -e "${Help[$1]}" 1>&2
-        std::die 1
-}
 
 #
 # compute depth of modulefile directory.
@@ -50,10 +30,10 @@ compute_group_depth () {
         local group=${group##*/}
 	result=$(${find} "${dir}" -depth \( -type f -o -type l \) \
                           -printf "%d" -quit 2>/dev/null)
-	(( result-=2 ))
+	(( result-=2 )) || :
 	# if a group doesn't contain a modulefile, depth is negativ
 	# :FIXME: better solution?
-	(( result < 0 )) && (( result = 0 ))
+	(( result < 0 )) && (( result = 0 )) || :
 }
 
 #
@@ -63,172 +43,235 @@ compute_group_depth () {
 #       $@: overlay names
 #
 scan_groups () {
-        local    ol
+        local ol
 	local depth
         for ol in "$@"; do
-		local mod_root="${OverlayInfo[${ol}:mod_root]}"
+		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 	        local dir
-	        for dir in ${mod_root}/*/${PMODULES_MODULEFILES_DIR}; do
+	        for dir in "${modulefiles_root}"/*/"${PMODULES_MODULEFILES_DIR}"; do
 			local group="${dir%/*}"
 			group="${group##*/}"
 			if [[ ! -v GroupDepths[${group}] ]]; then
 				compute_group_depth depth "${dir}"
 				GroupDepths[$group]=${depth}
 			fi
-			Dir2OverlayMap[${dir%/${PMODULES_MODULEFILES_DIR}*}]="${ol}"
+			Dir2OverlayMap[${dir%/"${PMODULES_MODULEFILES_DIR}"*}]="${ol}"
 	        done
         done
 }
 
-pm::read_config(){
-	local -a config_files=()
+declare -A DefaultPmodulesConfig=(
+	['defaultgroups']='Tools:Programming'
+	['default_groups']='Tools:Programming'
+	['defaultreleasestages']='stable'
+	['default_reltages']='stable'
+	['tmpdir']="/opt/psi/var/tmp/${USER}"
+	['tmp_dir']="/opt/psi/var/tmp/${USER}"
+	['distfilesdir']='/opt/psi/var/distfiles'
+	['distfiles_dir']='/opt/psi/var/distfiles'
+	['download_dir']='/opt/psi/var/distfiles'
+	['overlays']=''
+)
+
+declare -A OverlayConfigKeys=(
+	['install_root']='/opt/psi'
+	['modulefiles_root']=''
+	['excludes']=''
+	['type']='n'
+)
+
+pm::get_value(){
+	local -- yaml_input="$1"
+	local -n val="$2"
+	local -- key="$3"
+	local -- expected_type="$4"
 	
-	_get_config_files(){
-		#
-		# return array with overlay configuration files
-		#
-		# Args:
-		#	$1	[upvar] result
-		local -n fnames="$1"
+	local -- type=''
+	type=$( ${yq} -e ".${key} | type" 2>/dev/null <<<"${yaml_input}")
+	if [[ "${type}" != "${expected_type}" ]]; then
+		std::die 3 "%s" \
+			 "Value of '${key}' must be of type '${expected_type:2}', but is '${type:2}'!"
+	fi
+	val=$( ${yq} -e ".${key}" \
+		     2>/dev/null <<<"${yaml_input}" ) || val=''
+}
+pm::get_seq(){
+	local -- yaml_input="$1"
+	local -n val="$2"
+	local -- key="$3"
 
-		# user defined via environment variable
-		if [[ -v PMODULES_OVERLAYS_DEF ]]; then
-			test -r "${PMODULES_OVERLAYS_DEF}" || \
-				std::die 3 \
-					 "%s -- %s" \
-					 "overlay definition file is not readable" \
-					 "$_"
-			fnames+=("${PMODULES_OVERLAYS_DEF}")
-		fi
-
-		# user defined
-		if [[ -r "${HOME}/.Pmodules/Pmodules.yaml" ]]; then
-			fnames+=("${HOME}/.Pmodules/Pmodules.yaml")
-		fi
-
-		# system config file
-		test -r "${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml" || \
-			std::die 3 \
-				 "%s %s -- %s" \
-				 "base overlay definition file" \
-				 "does not exist or is not readable" \
-				 "$_"
-		
-		fnames+=("${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml")
-	}
-
-	_get_ol_names(){
-		#
-		# get the names of all overlays
-		#
-		local -n fnames="$1"
-		${yq} -Ne eval-all '. as $item ireduce ({}; . *+ $item) |.Overlays|keys()' \
-		      "${fnames[@]}" | awk '{print $2}'
-	}
-
-	_get_install_root(){
-		local -n fnames="$1"
-		local -- _ol="$2"
-		local -- _tmp
-		_tmp=$(${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.install_root" \
-			      "${fnames[@]}" 2>/dev/null) || return 1
-		echo "${_tmp}" | envsubst
-	}
-
-	_get_modulefiles_root(){
-		local -n fnames="$1"
-		local -- _ol="$2"
-		local -- _tmp
-		_tmp=$(${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.modulefiles_root" \
-			      "${fnames[@]}" 2>/dev/null) || return 1
-		echo "${_tmp}" | envsubst
-	}
-
-	_get_excludes(){
-		local -n fnames="$1"
-		local -- _ol="$2"
-		${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.excludes[]" \
-		      "${fnames[@]}" 2>/dev/null
-	}
-
-	_get_type(){
-		local -n fnames="$1"
-		local -- _ol="$2"
-		${yq} -Ne eval-all ". as \$item ireduce ({}; . *+ \$item) |.Overlays.${_ol}.type" \
-		      "${fnames[@]}" 2>/dev/null
-	}
-
-	_join_array() {
-		local IFS="$1"
-		shift
-		echo -n "$*"
-	}
-
-	_get_config_files config_files
-
-	eval $(std::parse_yaml "${config_files[-1]}" 'cfg_')
-	[[ -v cfg_DefaultGroups ]] && DefaultGroups="${cfg_DefaultGroups}"
-	[[ -v cfg_DefaultReleaseStages ]] && DefaultReleaseStages="${cfg_DefaultReleaseStages}"
-	[[ -v cfg_ReleaseStages ]] && ReleaseStages="${cfg_ReleaseStages}"
-	[[ -v cfg_SysCollectionsDir ]] && SysCollectionsDir="${cfg_SysCollectionsDir}"
-	unset ${!cfg_*}
-
-	#
-	# loop over all overlays and save config in OverlayInfo and Dir2OverlayMap
-	#
-	# - at least install_root must be specified
-	# - modulefiles_root default so install_root
-	# - the type defaults to ${ol_normal}
-	#
-	Overlays=( $(_get_ol_names config_files) )
-	local ol=''
-	local install_root=''
-	local modulefiles_root=''
-	local type=''
-	local excludes=()
-	for ol in "${Overlays[@]}"; do
-		# install_root
-		install_root=$(_get_install_root config_files "${ol}") || \
-			std::die 3 \
-				 "Install_root missing for overlay -- ${ol}"
-		install_root=$(envsubst <<< "${install_root}")
-		[[ -d ${install_root} ]] || \
-			std::die 3 \
-				 "Invalid installation root directory for overlay '${ol}' -- ${install_root}"
-		OverlayInfo[${ol}:inst_root]="${install_root}"
-
-		# modulefiles_root
-		modulefiles_root=$(_get_modulefiles_root config_files "${ol}") || \
-			modulefiles_root=${install_root}
-		[[ -d ${modulefiles_root} ]] || \
-			std::die 3 \
-				 "Invalid modulefiles root directory for overlay '${ol}' -- ${modulefiles_root}"
-		OverlayInfo[${ol}:mod_root]="${modulefiles_root}"
-		Dir2OverlayMap[${modulefiles_root}]="${ol}"
-
-		# type
-		type=$(_get_type config_files "${ol}") || \
-			type=${ol_normal}
-		case ${type} in
-			${ol_normal} | ${ol_replacing} | ${ol_hiding} )
-				:
-				;;
-			* )
-				std::die 3 "Invalid type for overlay '${ol}' -- ${type}"
-				;;
-		esac
-		OverlayInfo[${ol}:type]="${type}"
-
-		# excludes
-		excludes=$(_get_excludes config_files "${ol}") || \
-			excludes=()
-		OverlayInfo[${ol}:excludes]=$(_join_array ':' "${excludes[@]}")
-
-		# mark as unused
-		OverlayInfo[${ol}:used]='no'
-	done
+	local -- type=''
+	type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
+	if [[ "${type:2}" == 'null' ]]; then
+		val=''
+		return 0
+	fi
+	if [[ "${type}" != '!!seq' ]]; then
+		std::die 3 "%s" \
+			 "Value of '${key}' must be of type 'seq', but is of type '${type:2}'!"
+	fi
+	val=$( ${yq} -e ".${key}[]" \
+		     2>/dev/null <<<"${yaml_input}" ) || val=''
 }
 
+
+pm::read_config(){
+	: "
+	Read Pmodules configuration files '${PMODULES_HOME}/config/Pmodules.yaml'
+	and '${HOME}/.Pmodules/Pmodules.yaml'.
+
+	Args:
+		none
+	"
+	get_config_of_overlay(){
+		: "
+		Get configuration of an overlay.
+
+		Args:
+			$1 YAML config
+			$2 name of overlay
+		"
+		local -r yaml_input="$1"
+		local -r ol_name="$2"
+		local -- key=''
+		local -a keys=()
+		local -- value=''
+		# init overlay with defaults
+		for key in "${!OverlayConfigKeys[@]}"; do
+			OverlayInfo[${ol_name}:${key}]="${OverlayConfigKeys[${key}]}"
+		done
+		# get keys in YAML input
+		readarray -t keys < <( ${yq} -e ".|keys|.[]" <<<"${yaml_input}" 2>/dev/null ) || \
+			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+		for key in "${keys[@]}"; do
+			[[ -v OverlayConfigKeys[${key,,}] ]] || \
+				std::die 3 "%s -- %s\n%s" \
+					 "Invalid key in configuration" \
+					 "${key}" "${yaml_input}"
+			case ${key,,} in
+				install_root )
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					OverlayInfo[${ol_name}:install_root]=$(${envsubst} <<< "${value}")
+					[[ -d ${OverlayInfo[${ol_name}:install_root]} ]] || \
+						std::die 3 \
+							 "Invalid installation root directory for overlay '${ol_name}' -- ${value}"
+					;;
+				modulefiles_root )
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					OverlayInfo[${ol_name}:modulefiles_root]=$(${envsubst} <<< "${value}")
+					[[ -d ${OverlayInfo[${ol_name}:modulefiles_root]} ]] || \
+						std::die 3 \
+							 "Invalid modulefiles root directory for overlay '${ol_name}' -- ${value}"
+					;;
+				type )
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					case ${value} in
+						"${ol_normal}" | "${ol_replacing}" | "${ol_hiding}" )
+							:
+							;;
+						* )
+							std::die 3 "Invalid type for overlay '${ol_name}' -- ${type}"
+							;;
+					esac
+					OverlayInfo[${ol_name}:type]="${value}"
+					;;
+				excludes )
+					pm::get_seq "${yaml_input}" value "${key}" '!!seq'
+					local -a tmp_array=()
+					read -r -a tmp_array <<<"${value}"
+					local excludes=''
+					printf -v excludes "%s:" "${tmp_array[@]}"
+					OverlayInfo[${ol_name}:excludes]="${excludes%:}"
+					;;
+			esac
+		done
+		if [[ -z "${OverlayInfo[${ol_name}:modulefiles_root]}" ]]; then
+			OverlayInfo[${ol_name}:modulefiles_root]=${OverlayInfo[${ol_name}:install_root]}
+		fi
+		local modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
+		Dir2OverlayMap[${modulefiles_root}]="${ol_name}"
+	}
+
+	get_config_of_overlays(){
+		: "
+		Get configuration of overlays in YAML input.
+
+		Args:
+			$1 YAML input
+		"
+		local -r yaml_input="$1"
+		local -- ol_name=''
+		readarray -t Overlays < <( ${yq} -e '.|keys|.[]' <<<"${yaml_input}" )
+		for ol_name in "${Overlays[@]}"; do
+			local yaml_tmp
+			pm::get_value "${yaml_input}" yaml_tmp "${ol_name}" '!!map'
+			get_config_of_overlay "${yaml_tmp}" "${ol_name}"
+		done
+	}
+
+	get_config(){
+		: "
+		Get Pmodules configuration.
+
+		Args:
+			$1 Pmodules configuration file
+		"
+		local -r config_file="$1"
+		local -- yaml_input=''
+		yaml_input=$( ${yq} -Ne e "." "${config_file}" 2>/dev/null ) || \
+			std::die 3 "Cannot read configuration file '${config_file}'!"
+
+		local -a keys=()
+		readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null ) || \
+			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+		
+		for key in "${keys[@]}"; do
+			[[ -v DefaultPmodulesConfig[${key,,}] ]] || \
+				std::die 3 "%s -- %s\n%s" \
+					 "Invalid key in configuration" \
+					 "${key}" "${yaml_input}"
+			case ${key,,} in
+				defaultgroups | default_groups )
+					pm::get_value "${yaml_input}" DefaultGroups "${key}" '!!str'
+					;;
+				defaultreleasestages | default_reltages )
+					pm::get_value "${yaml_input}" DefaultReleaseStages "${key}" '!!str'
+					;;
+				tmpdir | tmp_dir )
+					pm::get_value "${yaml_input}" TmpDir "${key}" '!!str'
+					;;
+				distfilesdir | download_dir )
+					pm::get_value "${yaml_input}" DistfilesDir "${key}" '!!str'
+					;;
+				overlays )
+					local tmp_str=''
+					pm::get_value "${yaml_input}" tmp_str "${key}" '!!map'
+					get_config_of_overlays "${tmp_str}"
+					;;
+			esac
+		done
+	}
+
+	# system config file
+	local -r sys_config_file="${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml"
+	test -r "${sys_config_file}" || \
+		std::die 3 \
+			 "%s %s -- %s" \
+			 "base overlay definition file" \
+			 "does not exist or is not readable" \
+			 "$_"
+	DefaultGroups="${DefaultPmodulesConfig['default_groups']}"
+	DefaultReleaseStages="${DefaultPmodulesConfig['default_reltages']}"
+	TmpDir="${DefaultPmodulesConfig['tmp_dir']}"
+	DistfilesDir="${DefaultPmodulesConfig['download_dir']}"
+
+	get_config "${sys_config_file}"
+
+	local -r usr_config_file="${HOME}/.Pmodules/Pmodules.yaml"
+	if [[ -r "${usr_config_file}" ]]; then
+		get_config "${usr_config_file}"
+	fi
+}
 
 # Local Variables:
 # mode: sh

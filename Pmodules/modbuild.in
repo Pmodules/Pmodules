@@ -7,58 +7,32 @@
 #
 #.............................................................................
 
-declare VERSION='@PMODULES_VERSION@'
+declare -r VERSION='@PMODULES_VERSION@'
+
+unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
+unset IFS	# use default IFS
+
+#set -e		# exit on error
+set   -o pipefail
+set   -o nounset
+shopt -s nocaseglob
+shopt -s extglob
+shopt -s nullglob
 
 # get absolute path of script
-declare	    mydir=$(dirname "$0")
-declare -r  mydir=$(cd ${mydir} && pwd -P)
+mydir=$(cd "$(/usr/bin/dirname "$0")" && pwd -P)
+prefix=$(/usr/bin/dirname "${mydir}")
 
-source "${mydir}/../lib/libstd.bash" || {
+PATH="${prefix}/bin:${prefix}/libexec:/bin:/usr/bin:/sbin:/usr/sbin"
+source "${prefix}/lib/libstd.bash" || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
-
-##############################################################################
-#
-# check availability of used commands and set environment variables
-#   cmd=$(which cmd)
-# in the following we use these environment variable to call binaries.
-#
-declare -r MODULECMD="${PMODULES_HOME}/bin/modulecmd"
-[[ -x ${MODULECMD} ]] || \
-	std::die 1 "Oops: modulecmd binary not available!"
-
-std::def_cmds "${mydir}/../libexec" \
-	      'patchelf' 'sevenz' 'yq'
-
-std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
-	      'awk' 'base64' 'cat' 'cp' 'envsubst' 'file' 'find' 'getopt' 'grep' \
-	      'install' 'logger' 'make' 'mkdir' 'mktemp' 'patch' 'pwd' \
-	      'rm' 'rmdir' 'seq' 'sort' 'tar' 'tee' 'uname'
-
-declare -r OS="$(${uname} -s)"
-if [[ ${OS} == 'Darwin' ]]; then
-	std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin' \
-		      'curl' 'otool' 'shasum' 'sysctl'
-	declare -r sha256sum="${shasum -a 256}"
-else
-	std::def_cmds '/usr/bin:/bin:/usr/sbin:/sbin' \
-		      'ldd' 'curl' 'sha256sum'
-fi
-
-# for the time being, we still set PATH. Just in case we forgot a binary
-PATH="${PMODULES_HOME}/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-
-##############################################################################
-source "${mydir}/../lib/libpbuild.bash"    || \
+source "${prefix}/lib/libpmodules.bash"  || \
         std::die 3 "Oops: cannot source library -- '$_'"
-source "${mydir}/../lib/libpmodules.bash"  || \
+source "${prefix}/lib/libpbuild.bash"    || \
         std::die 3 "Oops: cannot source library -- '$_'"
-
-##############################################################################
-set   -o	nounset
-shopt -s	nocaseglob
-shopt -s	extglob
-shopt -s	nullglob
+unset mydir
+unset prefix
 
 ##############################################################################
 #
@@ -143,13 +117,6 @@ MISCELLANEOUS OPTIONS:
 --tmpdir
         Directory used for building a module.
 
---legacy
-        Use legacy configuration files. 
-
---overlay
-        Install in this overlay. Defaults to the base overlay. This
-	option can only be used with legacy configuration file.
-
 DOCUMENTATION:
 	Full documentation is available at 
 	http://pmodules.gitpages.psi.ch
@@ -166,7 +133,7 @@ DOCUMENTATION:
 # last default
 
 # save arguments, required for building dependencies
-declare -r	ARGS="$@"
+declare -ra	ARGS=( "$@" )
 
 # versions to be build, '.*' or none means all
 declare         versions_to_build=''
@@ -178,14 +145,12 @@ declare         opt_force_rebuild='no'
 declare -i      opt_jobs=0
 declare         opt_update_modulefiles='no'
 declare         opt_system=''
-declare		opt_overlay=''
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
-declare -a      opt_with_modules=()	# :FIXME: legacy build should also use the dict
+declare -a      opt_with_modules=()
 declare -A	opt_with_dict=()
 declare --	opt_config_file=''
 declare --	opt_debug='no'
-declare --      opt_yaml='yes'
 declare --	opt_check_mode='no'
 declare --	opt_variant=''
 declare --	opt_clean_install='no'
@@ -193,7 +158,6 @@ declare --	opt_parent_prefix=''
 
 declare --	BUILD_SCRIPT=''
 declare --      yaml_config_file=''
-declare -a      legacy_config_files=()
 declare --	module_name=''
 declare --	module_type='module'
 declare --	echo=':'
@@ -272,22 +236,8 @@ parse_args() {
 				shift
 			fi
 			;;
-		--overlay | --overlay=* )
-			if [[ $1 == *=* ]]; then
-				opt_overlay="${1#--*=}"
-			else
-				opt_overlay="$2"
-				shift
-			fi
-			;;
-		--yaml )
-			opt_yaml='yes'
-			;;
 		--check-mode )
 			opt_check_mode='yes'
-			;;
-		--legacy )
-			opt_yaml='no'
 			;;
 		--use-flags | --use-flags=* )
 			if [[ $1 == *=* ]]; then
@@ -334,9 +284,9 @@ parse_args() {
 			;;
 		--parent-prefix | --parent-prefix=* )
 			if [[ $1 == *=* ]]; then
-				opt_parent_prefix=( "${1#--*=}" )
+				opt_parent_prefix="${1#--*=}"
 			else
-				opt_parent_prefix=( "$2" )
+				opt_parent_prefix="$2"
 				shift
 			fi
 			module_type='sub_package'
@@ -375,152 +325,13 @@ parse_args() {
 	opt_system="${opt_system:-$(std::get_os_release)}"
 
 	# set config file
-	if [[ ${opt_yaml,,} == 'no' ]]; then
-		# look for legacy config files
-		if [[ -n ${opt_config_file} ]]; then
-			legacy_config_files=( "${opt_config_file}" )
-		else
-			shopt -q nullglob || :
-			local -i nullglob_set=$?
-				
-			legacy_config_files=( "${BUILDBLOCK_DIR}"/*/variants.${opt_system} )
-			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants."$(uname -s)" )
-			legacy_config_files+=( "${BUILDBLOCK_DIR}"/*/variants )
-			(( nullglob_set == 1 )) && shopt -u nullglob
-		fi
-		(( ${#legacy_config_files[@]} == 0 )) && \
-			std::die 1 "No legacy configuration file found!"
-		std::info "Using legacy variants files."
-		opt_overlay="${opt_overlay:-'base'}"
-	else
-		yaml_config_file="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
-		[[ -r "${yaml_config_file}" ]] || \
-			std::die 2 \
-				 "%s -- %s" \
-				 "YAML config file doesn't exist or is not readable" \
-				 "${yaml_config_file}"
-		[[ "${opt_overlay}" == 'yes' ]] && \
-			std::die 2 \
-				 "opt '--overlay' can only be used together with legacy config files!"
-		std::info "Using YAML configuration file - ${yaml_config_file}"
-	fi
-}
-
-#
-# bash brace expansion of given args. Input args like:
-#
-#   "text" "gcc/{9.3.0,10.3.0}" "openmpi/{4.0.5,4.1.0}"
-#
-# will be expanded to the following four lines:
-#
-#   "text gcc/9.3.0 openmpi/4.0.5"
-#   "text gcc/9.3.0 openmpi/4.1.0"
-#   "text gcc/10.3.0 openmpi/4.0.5"
-#   "text gcc/10.3.0 openmpi/4.1.0"
-#
-bash_expand(){
-	local text="$1"
-	shift
-	local to_expand=( "${@}" )
-	if (( ${#to_expand[@]} == 0 )); then
-		echo ${text}
-	else
-		local list
-		eval list=( ${to_expand[0]} )
-		local s
-		for s in ${list[*]}; do
-			bash_expand "${text} ${s}" "${to_expand[@]:1}"
-		done;
-	fi;
-}
-
-build_modules_legacy() {
-	local -a files=( "${legacy_config_files[@]}" )
-	local -A mod_overlays=()
-	
-	expand_variants_file(){
-		local -r input="$1"
-		local -a toks=()
-		while read -a toks; do
-			# skip empty and comment lines
-			(( ${#toks[@]} == 0 )) && continue
-			[[ ${toks[0]:0:1} == '#' ]] && continue
-			local -a deps=( ${toks[*]:2} )
-			bash_expand "${toks[0]} ${toks[1]}" "${deps[@]}"
-		done < "${input}"
-	}
-
-        local name="$1"
-        local version="$2"
-        local exact_match='no'
-        if [[ "${version:0:1}" == "=" ]]; then
-                exact_match='yes'
-                version="${version:1}"
-        fi
-        shift 2
-        local with_modules=( $* )
-
-        # if we have to build a dependency, we might have less dependencies
-        # on it. Or in other words: the list of "with modules" might be
-        # overdetermined. In the loop below we check, which dependencies
-        # specified with '--with' are required.
-        local m
-	local pattern="/^${name}\/${version}[[:blank:]]/"
-	for m in "${with_modules[@]}"; do
-                if [[ -n $(${awk} "/${m%/*}[\/ ]/" "${files[@]}") ]]; then
-		        pattern+=" && /${m//\//\\/}/"
-                fi
-	done
-
-        local variants=()
-        for f in "${files[@]}"; do
-                local line=''
-                while read line; do
-                        variants+=( "${line}" )
-                done < <(expand_variants_file "${f}" | ${awk} "${pattern}")
-        done
-        if (( ${#variants[@]} == 0 )); then
-		std::info "%s " \
-			 "${name}/${version}:" \
-			 "no suitable variant found!"
-                std::die 10 "Aborting..."
-        elif (( ${#variants[@]} > 1 )) && [[ ${exact_match} == 'yes' ]]; then
-		std::info "%s " \
-			 "Multiple variants found:"
-                for variant in "${variants[@]}"; do
-                        std::info "${variant}"
-                done
-                std::die 10 "Aborting..."
-        fi
-	[[ -v OverlayInfo[${opt_overlay}:inst_root] ]] || \
-		std::die 2 "%s" \
-			 "Overlay doesn't exist - ${opt_overlay}"
-	local ol_name="${opt_overlay}"
-	declare ol_inst_root="${OverlayInfo[${opt_overlay}:inst_root]}"
-	declare ol_mod_root="${OverlayInfo[${opt_overlay}:mod_root]}"
-        local -i i=0
-        local -i num_variants=${#variants[@]}
-        for ((i = 0; i < num_variants; i++)); do
-                local tokens=( ${variants[i]} )
-                local name="${tokens[0]%/*}"
-                version="${tokens[0]#*/}"
-                release="${tokens[1]}"
-		case ${release} in
-			unstable|stable|deprecated|remove|removed)
-				:
-				;;
-			* )
-				std::info "%s " \
-					  "${name}/${version}:" \
-					  "invalid release stage '${release}'!"
-				std::die 10 "Aborting..."
-				;;
-		esac
-                with_modules=( "${tokens[@]:2}" )
-                pbuild.build_module_legacy \
-                        "${name}" "${version}" \
-                        "${release}" "${with_modules[@]}"
-        done
+	yaml_config_file="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
+	[[ -r "${yaml_config_file}" ]] || \
+		std::die 2 \
+			 "%s -- %s" \
+			 "YAML config file doesn't exist or is not readable" \
+			 "${yaml_config_file}"
+	std::info "Using YAML configuration file - ${yaml_config_file}"
 }
 
 get_yaml_file_fmt(){
@@ -560,23 +371,23 @@ read_yaml_config_file() {
 	echo "${yaml}"
 }
 
-build_modules_yaml(){
+build_modules(){
 	local -- name="$1"
         local -- version="$2"
 	shift 2
-        local -a with_modules=( $* )
+        local -a with_modules=( "$*" )
 
 
 	if [[ "${opt_check_mode}" == 'yes' ]]; then
-		local -- yamllint
 		if ! which yamllint > /dev/null 2>&1; then
-			eval $( "${MODULECMD}" bash load yamllint/1.28.0 )
+			eval $( "${modulecmd}" bash load yamllint/1.28.0 )
 		fi
 		which yamllint > /dev/null 2>&1 || \
 			std::die 3 "yamllint not found"
 		yamllint "${yaml_config_file}"
 	fi
-	local -- file_fmt=$(get_yaml_file_fmt "${yaml_config_file}")
+	local -- file_fmt=''
+	file_fmt=$(get_yaml_file_fmt "${yaml_config_file}")
 	
 	local -- yaml_mod_config=''
 	yaml_mod_config=$(read_yaml_config_file "${yaml_config_file}" "${name}")
@@ -601,17 +412,17 @@ build_modules_yaml(){
 #	none
 #
 init_module_environment(){
-	eval $( "${MODULECMD}" bash use unstable )
-	eval $( "${MODULECMD}" bash use deprecated )
-	eval $( "${MODULECMD}" bash purge )
+	eval $( "${modulecmd}" bash use unstable )
+	eval $( "${modulecmd}" bash use deprecated )
+	eval $( "${modulecmd}" bash purge )
 
 	# :FIXME: this is a hack!!!
 	# shouldn't this be set in the build-script?
 	if [[ -e "${PMODULES_HOME%%/Tools*}/Libraries" ]]; then
-		eval $( "${MODULECMD}" bash use Libraries )
+		eval $( "${modulecmd}" bash use Libraries )
 	fi
 	if [[ -e "${PMODULES_HOME%%/Tools*}/System" ]]; then
-		eval $( "${MODULECMD}" bash use System )
+		eval $( "${modulecmd}" bash use System )
 	fi
 	unset	C_INCLUDE_PATH
 	unset	CPLUS_INCLUDE_PATH
@@ -636,7 +447,7 @@ init_module_environment(){
 parse_version() {
 	local v="$1"
 	V="$1"
-	: ${USE_FLAGS:=''}		# architectures (or empty)
+	USE_FLAGS=${USE_FLAGS:-''}
 
 	local tmp=''
 
@@ -667,16 +478,17 @@ parse_version() {
 
 	VERSIONS=()
 	if [[ -n ${V_RELEASE} ]]; then
-		VERSIONS+=( ${V_PKG}-${V_RELEASE} )
+		VERSIONS+=( "${V_PKG}-${V_RELEASE}" )
 	fi
 	if [[ -n ${V_PATCHLVL} ]]; then
-		VERSIONS+=( ${V_MAJOR}.${V_MINOR}.${V_PATCHLVL} )
+		VERSIONS+=( "${V_MAJOR}.${V_MINOR}.${V_PATCHLVL}" )
 	fi
 	if [[ -n ${V_MINOR} ]]; then
-		VERSIONS+=( ${V_MAJOR}.${V_MINOR} )
+		VERSIONS+=( "${V_MAJOR}.${V_MINOR}" )
 	fi
-	VERSIONS+=( ${V_MAJOR} )
+	VERSIONS+=( "${V_MAJOR}" )
 }
+
 # these variables must be export for envsubst(1)
 declare -x P=''
 declare -x V=''
@@ -763,7 +575,7 @@ build_modules_yaml_v1(){
 	local -- name="$2"
         local -- version="$3"
 	shift 3
-        local -a with_modules=( $* )
+        local -a with_modules=( "$@" )
 
 	check_yaml_keys(){
 		local -n valid_yaml_keys="$1"
@@ -771,44 +583,13 @@ build_modules_yaml_v1(){
 		used_yaml_keys=()
 		local -- key=''
 		local -a keys=()
-		keys=( $(${yq} '.|keys().[]' 2>/dev/null) )
-		debug "top-level keys: ${keys[@]}"
+		readarray -t keys < <( ${yq} '.|keys().[]' 2>/dev/null)
+		debug "top-level keys: ${keys[*]}"
 		for key in "${keys[@]}"; do
 			[[ -v valid_yaml_keys[${key}] ]] || \
 				std::die 3 "Invalid key in YAML configuration file -- ${key}"
 			used_yaml_keys[${key}]=1
 		done
-	}
-
-	get_value(){
-		local -- yaml_input="$1"
-		local -n val="$2"
-		local -- key="$3"
-		local -- expected_type="$4"
-		
-		local -- type=''
-		type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
-		if [[ "${type}" != "${expected_type}" ]]; then
-			std::die 3 "%s" \
-				 "Value of '${key}' must be of type '${expected_type:2}', but is '${type:2}'!"
-		fi
-		val=$( ${yq} -e ".${key}" \
-			     2>/dev/null <<<"${yaml_input}" ) || val=''
-	}
-
-	get_seq(){
-		local -- yaml_input="$1"
-		local -n val="$2"
-		local -- key="$3"
-
-		local -- type=''
-		type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
-		if [[ "${type}" != '!!seq' ]]; then
-			std::die 3 "%s" \
-				 "Value of '${key}' must be of type 'seq', but is of type '${type:2}'!"
-		fi
-		val=$( ${yq} -e ".${key}[]" \
-			     2>/dev/null <<<"${yaml_input}" ) || val=''
 	}
 
 	get_config(){
@@ -827,9 +608,9 @@ build_modules_yaml_v1(){
 		fi
 
 		local -a keys=()
-		keys=( $( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null )) || \
+		readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null ) || \
 			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
-		debug "config keys: ${keys[@]}"
+		debug "config keys: ${keys[*]}"
 		for key in "${keys[@]}"; do
 			[[ -v dfl[${key,,}] ]] || \
 				std::die 3 "%s -- %s\n%s" \
@@ -837,7 +618,7 @@ build_modules_yaml_v1(){
 					 "${key}" "${yaml_input}"
 			case ${key} in
 				compile_in_sourcetree )
-					get_value "${yaml_input}" value "${key}" '!!bool'
+					pm::get_value "${yaml_input}" value "${key}" '!!bool'
 					case ${value,,} in
 						true )
 							cfg[${key,,}]='yes'
@@ -848,13 +629,13 @@ build_modules_yaml_v1(){
 						* )
 							std::die 3 "%s '%s' -- %s" \
 								 "Invalid value for" \
-								 '${key}' \
+								 "${key}" \
 								 "${value}"
 							;;
 					esac
 					;;
 				configure_with )
-					get_value "${yaml_input}" value "${key}" '!!str'
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
 					case ${value,,} in
 						auto | cmake | autotools )
 							cfg[${key,,}]="${value,,}"
@@ -868,15 +649,15 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				default_variant | download_dir | group | overlay | script | suffix )
-					get_value "${yaml_input}" value "${key}" '!!str'
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
 					cfg[${key,,}]="${value}"
 					;;
 				group_deps )
-					get_value "${yaml_input}" value "${key}" '!!map'
+					pm::get_value "${yaml_input}" value "${key}" '!!map'
 					cfg[${key,,}]="${value}"
 					;;
 				relstage )
-					get_value "${yaml_input}" value "${key}" '!!str'
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
 					case ${value,,} in
 						unstable | stable | deprecated )
 							cfg[${key,,}]="${value,,}"
@@ -893,15 +674,15 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				urls | sub_packages )
-					get_value "${yaml_input}" value "${key}" '!!seq'
+					pm::get_value "${yaml_input}" value "${key}" '!!seq'
 					cfg[${key,,}]="${value}"
 					;;
-				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|target_cpus|variant )
-					get_seq "${yaml_input}" value "${key}"
+				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|variant )
+					pm::get_seq "${yaml_input}" value "${key}"
 					cfg[${key,,}]="${value}"
 					;;
 				kernels )
-					get_seq "${yaml_input}" value "${key}"
+					pm::get_seq "${yaml_input}" value "${key}"
 					set -o noglob
 					local -a items=( "${value,,}" )
 					set +o noglob
@@ -917,7 +698,7 @@ build_modules_yaml_v1(){
 					cfg[${key,,}]="${value}"
 					;;
 				target_cpus )
-					get_seq "${yaml_input}" value "${key}"
+					pm::get_seq "${yaml_input}" value "${key}"
 					set -o noglob
 					local -a items=( "${value,,}" )
 					set +o noglob
@@ -933,7 +714,7 @@ build_modules_yaml_v1(){
 					cfg[${key,,}]="${value}"
 					;;
 				'configure_args+' | 'docfiles+' | 'patch_files+' )
-					get_seq "${yaml_input}" value "${key}"
+					pm::get_seq "${yaml_input}" value "${key}"
 					key="${key:0:-1}"
 					if [[ -z "${cfg[${key,,}]}" ]]; then
 						cfg[${key,,}]="${value}"
@@ -946,7 +727,7 @@ build_modules_yaml_v1(){
 					std::die 3 "%s '%s' in %s" \
 						 "Oops unhandled key" \
 						 "${key}" \
-						 "${FUNCNAME}"
+						 "${FUNCNAME[0]}"
 			esac
 		done
 	}
@@ -959,7 +740,7 @@ build_modules_yaml_v1(){
 		local version="$2"
 
 		local -a keys=()
-		keys=( $( ${yq} -e '.versions|keys().[]' 2>/dev/null) ) || \
+		readarray -t keys < <( ${yq} -e '.versions|keys().[]' 2>/dev/null ) || \
 			std::die 3 "No version keys in configuration file!"
 
 		refvar=()
@@ -969,7 +750,7 @@ build_modules_yaml_v1(){
 			for k in ${key//;/ }; do
 				# brace expansion of key
 				local list=()
-				eval list=( $k )
+				list=( $(${bash} -c "echo $k") )
 				if [[ ${list[@]} =~ ${version} ]]; then
 					refvar+=("${key}")
 					break
@@ -1000,7 +781,8 @@ build_modules_yaml_v1(){
 	}
 
 	get_num_variants(){
-		local -i n=$(${yq}  '.|length' 2>/dev/null)
+		local -i n=0
+		n=$(${yq}  '.|length' 2>/dev/null)
 		echo "$n"
 	}
 
@@ -1027,7 +809,7 @@ build_modules_yaml_v1(){
 
 		# query all specified group dependencies
 		local -a keys=()
-		keys=( $(${yq} ".|keys|.[]" <<<"${yaml}" 2>/dev/null) )
+		readarray -t keys < <( ${yq} ".|keys|.[]" <<<"${yaml}" 2>/dev/null )
 
 		local -- key=''
 		for key in "${keys[@]}"; do
@@ -1039,7 +821,7 @@ build_modules_yaml_v1(){
 				die_invalid_group_dep "${name}" "${version}" "${group}"
 		done
 		# are all required group dependencies defined?
-		for key in "${hierarchical_groups[${group,,}]}"; do
+		for key in ${hierarchical_groups[${group,,}]}; do
 			is_in_array "${key,,}" "${keys[@]}" || \
 				die_missing_group_dep "${name}" "${version}" "${group}"
 		done
@@ -1052,11 +834,11 @@ build_modules_yaml_v1(){
 
 		local -a modules=()
 		local keys=()
-		keys=( $(${yq} ".${group,,}|keys|.[]" <<<"${yaml}" 2>/dev/null) )
+		readarray -t keys < <( ${yq} ".${group,,}|keys|.[]" <<<"${yaml}" 2>/dev/null )
 		local key
 		for key in "${keys[@]}"; do
 			local versions=()
-			versions=( $( ${yq} -e ".${group,,}.${key}[]" <<<"${yaml}" 2>/dev/null) )
+			readarray -t versions < <( ${yq} -e ".${group,,}.${key}[]" <<<"${yaml}" 2>/dev/null )
 			local version
 			for version in "${versions[@]}"; do
 				if [[ -v opt_with_dict[${key}/${version}] ]]; then
@@ -1165,8 +947,8 @@ build_modules_yaml_v1(){
 					&& continue
 
 				debug "build $module_name/$module_version with $compiler and $hdf5"
-				debug "  runtime deps: ${runtime_deps[@]}"
-				debug "  build requires: ${build_requires[@]}"
+				debug "  runtime deps: ${runtime_deps[*]}"
+				debug "  build requires: ${build_requires[*]}"
 				pbuild.build_module_yaml \
 					"${module_name}" "${module_version}" \
 					"$3" \
@@ -1201,8 +983,8 @@ build_modules_yaml_v1(){
 					&& continue
 
 				debug "build $module_name/$module_version with $compiler and $mpi"
-				debug "  runtime deps: ${runtime_deps[@]}"
-				debug "  build requires: ${build_requires[@]}"
+				debug "  runtime deps: ${runtime_deps[*]}"
+				debug "  build requires: ${build_requires[*]}"
 				pbuild.build_module_yaml \
 					"${module_name}" "${module_version}" \
 					"$3" \
@@ -1236,8 +1018,8 @@ build_modules_yaml_v1(){
 			for mpi in "${with_mpi[@]}"; do
 				for hdf5 in "${with_hdf5[@]}"; do
 					debug "build $module_name/$module_version with $compiler, $mpi and $hdf5"
-					debug "  runtime deps: ${runtime_deps[@]}"
-					debug "  build requires: ${build_requires[@]}"
+					debug "  runtime deps: ${runtime_deps[*]}"
+					debug "  build requires: ${build_requires[*]}"
 
 					# build if opt_with_modules is empty or compiler is in this array
 					(( ${#opt_with_modules[@]} != 0 )) \
@@ -1300,7 +1082,7 @@ build_modules_yaml_v1(){
 			local unpacker=''
 			local key=''
 			local value=''
-			while read key value; do
+			while read -r key value; do
 				key=${key:0:-1}
 				case "${key}" in
 					url )
@@ -1359,6 +1141,12 @@ build_modules_yaml_v1(){
 		pbuild.add_patch_files "${args[@]}"
 	}
 
+	die_sub_package_name_missing(){
+		std::die 3 "Name of sub-package not specified in \n===\n$1\n===\n"
+	}
+	die_sub_package_version_missing(){
+		std::die 3 "Version of sub-package not specified in \n===\n$1\n===\n"
+	}
 	build_sub_packages(){
 		local -- yaml="$1"
 		local -i l=0
@@ -1374,20 +1162,20 @@ build_modules_yaml_v1(){
 			local -- pkg_version=''
 			local -a pkg_build_args=()
 			local -a keys=()
-			keys=( $( ${yq} -e ".|keys().[]" <<<"${pkgs_yaml}" 2>/dev/null )) || \
+			readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${pkgs_yaml}" 2>/dev/null ) || \
 				die_parsing "${pkgs_yaml}"
 			local -- key=''
 			for key in "${keys[@]}"; do
 				case ${key,,} in
 					'name' )
-						get_value "${pkgs_yaml}" pkg_name "${key}" '!!str'
+						pm::get_value "${pkgs_yaml}" pkg_name "${key}" '!!str'
 						;;
 					'version' )
-						get_value "${pkgs_yaml}" pkg_version "${key}" '!!str'
+						pm::get_value "${pkgs_yaml}" pkg_version "${key}" '!!str'
 						;;
 					'build_args' )
 						local -- value=''
-						get_seq "${pkgs_yaml}" value "${key}"
+						pm::get_seq "${pkgs_yaml}" value "${key}"
 						readarray -t pkg_build_args <<< "${value}"
 						;;
 					* )
@@ -1398,6 +1186,11 @@ build_modules_yaml_v1(){
 						;;
 				esac
 			done
+			[[ -n "${pkg_name}" ]] || \
+				die_sub_package_name_missing "${pkgs_yaml}"
+			[[ -n "${pkg_version}" ]] || \
+				die_sub_package_version_missing "${pkgs_yaml}"
+
 			[[ "${opt_verbose}" == 'yes' ]] && \
 				pkg_build_args+=( '--verbose' )
 			[[ "${opt_debug}" == 'yes' ]] && \
@@ -1444,10 +1237,10 @@ build_modules_yaml_v1(){
 			local -- kernel=''
 			for kernel in "${kernels[@]}"; do
 				[[ ${kernel} == 'any' ]] && return 0
-				[[ ${kernel} == ${OS,,} ]] & return 0
+				[[ ${kernel} == ${KernelName,,} ]] & return 0
 			done
 			std::info "Skipping variant '${module_version}':"
-			std::info "  The kernel of this systems is: ${OS}"
+			std::info "  The kernel of this systems is: ${KernelName}"
 			std::info "  But the variant is for the following kernels: ${module_config['kernels']}"
 			return 1
 		}
@@ -1489,11 +1282,11 @@ build_modules_yaml_v1(){
 		debug "build variant ${module_name}/${module_version}"
 
 		local ol_name="${module_config['overlay']}"
-		[[ -v OverlayInfo[${ol_name}:inst_root] ]] || \
+		[[ -v OverlayInfo[${ol_name}:install_root] ]] || \
 			std::die 2 "%s" \
 				 "Overlay doesn't exist - ${ol_name}"
-		declare ol_inst_root="${OverlayInfo[${ol_name}:inst_root]}"
-		declare ol_mod_root="${OverlayInfo[${ol_name}:mod_root]}"
+		declare ol_install_root="${OverlayInfo[${ol_name}:install_root]}"
+		declare ol_modulefiles_root="${OverlayInfo[${ol_name}:modulefiles_root]}"
 
 		module_version+="${module_config['suffix']}"
 
@@ -1554,7 +1347,7 @@ build_modules_yaml_v1(){
 			# do curly brackets expansion {}
 			local l
 			local list=()
-			eval list=( $k )
+			list=( $(${bash} -c "echo $k" ) )
 			for l in "${list[@]}"; do
 				if [[ $l =~ ${version} ]]; then
 					ev_result+=("${l}")
@@ -1580,15 +1373,16 @@ build_modules_yaml_v1(){
 	get_config "${yaml_input}" default_config Yaml_default_config
 
 	if [[ -v used_keys['shasums'] ]]; then
-		local yaml_input=$(${yq} '.shasums' <<<"${yaml_mod_config}" 2>/dev/null)
-		while read key value; do
+		local yaml_input=''
+		yaml_input=$(${yq} '.shasums' <<<"${yaml_mod_config}" 2>/dev/null)
+		while read -r key value; do
 			[[ -z ${key} ]] && continue
 			SHASUMS[${key//:}]="${value}"
 		done <<<"${yaml_input}"
 	fi
 	if [[ -v used_keys['type'] ]]; then
 		local -- value=''
-		get_value "${yaml_mod_config}" value 'type' '!!str'
+		pm::get_value "${yaml_mod_config}" value 'type' '!!str'
 		case "${value,,}" in
 			'module' )
 				[[ "${module_type}" == 'sub_package' ]] && \
@@ -1605,7 +1399,8 @@ build_modules_yaml_v1(){
 	fi
 	get_matching_version_keys version_keys "${version}" <<<"${yaml_mod_config}"
 	for version_key in "${version_keys[@]}"; do
-		local yaml_vk_config=$(get_yaml_vk_config "${version_key}" <<<"${yaml_mod_config}")
+		local yaml_vk_config=''
+		yaml_vk_config=$(get_yaml_vk_config "${version_key}" <<<"${yaml_mod_config}")
 
 		# check keys: allowed are 'config' and 'variants'
 		used_keys=()
@@ -1621,8 +1416,10 @@ build_modules_yaml_v1(){
 		# reminder: if YAML input is empty, next line copies defaults to 'vk_config'
 		get_config "${yaml_input}" vk_config default_config
 
-		local -- yaml_variants=$(get_variants <<<"${yaml_vk_config}")
-		local -i num_variants=$(get_num_variants <<<"${yaml_variants}")
+		local -- yaml_variants=''
+		yaml_variants=$(get_variants <<<"${yaml_vk_config}")
+		local -i num_variants=0
+		num_variants=$(get_num_variants <<<"${yaml_variants}")
 		local versions=()
 		expand_version_key versions "${version_key}" "${version}"
 		local v=''
@@ -1647,15 +1444,7 @@ build_modules_yaml_v1(){
 			fi
 		done
 	done
-} # build_modules_yaml()
-
-build_modules() {
-	if [[ "${opt_yaml}" == 'yes' ]]; then
-		build_modules_yaml "$@"
-	else
-		build_modules_legacy "$@"
-	fi
-}
+} # build_modules()
 
 debug(){
 	${echo} "INFO: " "$@" 1>&2
@@ -1686,8 +1475,8 @@ pm::read_config
 #         or
 #         ${overlay}/var/distfiles
 #         ?
-: ${PMODULES_DISTFILESDIR:="${PMODULES_HOME%%/Tools*}/var/distfiles"}
-: ${PMODULES_TMPDIR:=/var/tmp/${USER}}
+PMODULES_DISTFILESDIR=${PMODULES_DISTFILESDIR:-"${PMODULES_HOME%%/Tools*}/var/distfiles"}
+PMODULES_TMPDIR="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
 export PMODULES_DISTFILESDIR PMODULES_TMPDIR
 
 declare -r BUILD_SCRIPT
