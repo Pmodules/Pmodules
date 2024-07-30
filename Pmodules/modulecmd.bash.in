@@ -474,14 +474,14 @@ is_modulefile() {
 	[[ -r ${fname} ]] || return 2
 	
 	if [[ "${fname##*.}" == 'lua' ]]; then
-		im_interp='lmod'
+		im_interp="${Lmod_cmd}"
 		return 0
 	fi
 	local -- shebang
 	read -r -n 11 shebang < "${fname}"
 	if [[ "${shebang:0:8}" == '#%Module' ]] \
 		   || [[ "${shebang:0:9}" == '#%Pmodule' ]]; then
-		im_interp='tcl'
+		im_interp="${Tcl_cmd}"
 		return 0
 	fi
 	return 1
@@ -805,27 +805,27 @@ subcommand_load() {
 				die_module_unavail "${m}${hints}"
 			fi
 		fi
+
+		local interp=''
+		is_modulefile modulecmd "${current_modulefile}" || \
+			die_not_a_modulefile "${m}"
+
+		if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
+			current_modulefile="${current_modulefile/${moduledir}\/}"
+		fi
+
 		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
 			die_conflict "${m}"
 		# continue if already loaded
 		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
-		local interp=''
-		is_modulefile interp "${current_modulefile}" || \
-			die_not_a_modulefile "${m}"
+		# show info file if exist, load dependencies and the module itself
 		local prefix=''
 		get_module_prefix prefix "${current_modulefile}"
                 if [[ -n ${prefix} ]]; then
                         test -r "${prefix}/.info" && cat "$_" 1>&2
 			test -r "${prefix}/.dependencies" && load_dependencies "$_"
                 fi
-
-		if [[ "${interp}" == 'lmod' ]]; then
-			current_modulefile="${current_modulefile/${moduledir}\/}"
-			modulecmd="${Lmod_cmd}"
-		else
-			modulecmd="${Tcl_cmd}"
-		fi
 		local output=''
 		output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
                                               "${current_modulefile}" 2> "${TmpFile}")
@@ -853,6 +853,7 @@ subcommand_load() {
                         "${modulecmd}" "${Shell}" "${opts[@]}" 'load' \
                                        "${current_modulefile}"
                 fi
+		output=$( ${sed} -e 's/source [^;]*;//g' <<<"${output}" )
 		eval "${output}"
 		if [[ -n "${error}" ]]; then
                        	echo "${error}" 1>&2
@@ -953,13 +954,7 @@ subcommand_unload() {
 			continue
 		fi
 		local interp
-		is_modulefile interp "${lmfile}" || die_not_a_modulefile "${lmfile}"
-		if [[ "${interp}" == 'lmod' ]]; then
-			current_modulefile="${current_modulefile/${moduledir}\/}"
-			modulecmd="${Lmod_cmd}"
-		else
-			modulecmd="${Tcl_cmd}"
-		fi
+		is_modulefile modulecmd "${lmfile}" || die_not_a_modulefile "${lmfile}"
 
 	        local output=''
 		output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
@@ -1071,7 +1066,9 @@ subcommand_show() {
 
         local arg
 	for arg in "${args[@]}"; do
-	        "${modulecmd}" "${Shell}" "${SubCommand}" "${arg}"
+		local -- modulefile=''
+		find_modulefile_and_interpreter modulefile modulecmd "${arg}"
+		"${modulecmd}" 'bash' 'show' "${modulefile}"
 	done
 }
 
@@ -1251,6 +1248,26 @@ find_modulefile() {
 	fi
         return 1
 } # find_modulefile()
+
+find_modulefile_and_interpreter(){
+	local -n ref_modulefile="$1"
+	local -n ref_interp="$2"
+	local -r module="$3"
+
+	local -a modulepath=()
+	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
+	local -- relstage=''
+	local -- moduledir=''
+        find_modulefile ref_modulefile relstage moduledir "${module}" "${modulepath[@]}"
+        if [[ -z ${modulefile} ]]; then
+		die_module_unavail "${module}"
+	fi
+
+	is_modulefile modulecmd "${ref_modulefile}" || die_not_a_modulefile "${module}"
+	if [[ "${ref_interp}" == "${Lmod_cmd}" ]]; then
+		ref_modulefile="${ref_modulefile/${moduledir}\/}"
+	fi
+}
 
 ##############################################################################
 #
@@ -2775,7 +2792,6 @@ DOCUMENTATION:
 	Full documentation is available at 
 	http://pmodules.gitpages.psi.ch
 '
-
 subcommand_help() {
 	local -a args=()
 	while (( $# > 0 )); do
@@ -2829,6 +2845,7 @@ USAGE:
 subcommand_whatis() {
 	local options=()
 	local args=()
+
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | --help )
@@ -2855,6 +2872,12 @@ subcommand_whatis() {
 		local file_name=''
 		while read -r mod_name file_name; do
 			[[ -n ${file_name} ]] || continue
+			if [[ "${file_name##*.}" == 'lua' ]]; then
+				modulecmd="${Lmod_cmd}"
+				file_name="${mod_name}"
+			else
+				modulecmd="${Tcl_cmd}"
+			fi
 			local whatis=''
 			whatis=$("${modulecmd}" bash \
 						      whatis \
@@ -2923,6 +2946,12 @@ subcommand_apropos() {
 		local file_name=''
 		while read -r mod_name file_name; do
 			[[ -n ${file_name} ]] || continue
+			if [[ "${file_name##*.}" == 'lua' ]]; then
+				modulecmd="${Lmod_cmd}"
+				file_name="${mod_name}"
+			else
+				modulecmd="${Tcl_cmd}"
+			fi
 			local whatis=''
 			whatis=$("${modulecmd}" bash \
 						      whatis \
