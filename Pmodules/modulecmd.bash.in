@@ -2327,13 +2327,14 @@ SWITCHES:
 '
 
 subcommand_search() {
-	local modules=()
-	local groups=()
-	local -A searched_moduledirs=()
-	local with_modules='//'
+	local -a modules=()
+	local -a groups=()
+	local -- group=''
+	local -- with_modules='//'
 	local -i cols=80
 	[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
+	local -- search_range='all'
 	local -a src_prefix=()
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
@@ -2490,20 +2491,6 @@ subcommand_search() {
 		shift 2
 		local -a modulepath=("$@")
 		local -i depth=0
-		if (( ${#modulepath[@]} == 0 )); then
-			# loop over all directories which can be added to
-			# MODULEPATH inside current group
-			depth=${GroupDepths[${group}]}
-			local s=''
-			if (( depth > 0 )); then
-				s=$(printf '/*%.0s' $(seq 1 ${depth}))
-			fi
-			modulepath=( "${src_prefix[@]/%//${group}/modulefiles$s}" )
-			local -- dir=''
-			for dir in "${modulepath[@]}"; do
-				searched_moduledirs[${dir}]=1
-			done
-		fi
 
 		# get and print all available modules in $mpath
 		# with respect to the requested release stage
@@ -2520,6 +2507,7 @@ subcommand_search() {
 			local relstage=${mods[i+1]}
 			local modulefile=${mods[i+2]}
 			local ol=${mods[i+3]}
+			local -a deps=()
 			
 			if (( ${#name} > max_len_modulename)); then
 				max_len_modulename=${#name}
@@ -2532,22 +2520,19 @@ subcommand_search() {
 				local dependencies_file="${prefix}/.dependencies"
 				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
 					mapfile -t deps < "${dependencies_file}"
-				else
-					deps=()
 				fi
-			else
+			elif [[ "${group}" != 'other' ]]; then
 				# get dependencies encoded in directory name
-				local deps=()
 				local -i j
 				local -a toks
 				IFS='/'
 				read -r -a toks <<< "${modulefile}"
+				local -i depth=${GroupDepths[${group}]}
 				for ((j = -depth-2; j < -2; j += 2)); do
 					deps+=( "${toks[*]: $j:2}" );
 				done
 				unset IFS
 			fi
-			
 			echo "${name}" "${relstage}" "${group}" "${modulefile}" \
 			     "${ol}" \
                              "${deps[@]}" >> "${TmpFile}"
@@ -2644,11 +2629,22 @@ subcommand_search() {
 				;;
 			--group | --group=* )
 				if [[ $1 == *=* ]]; then
-					groups+=( "${1/--*=}" )
+					group="${1/--*=}"
 				else
-					groups+=( "$2" )
+					group="$2"
 					shift
 				fi
+				if [[ -v GroupDepths[${group}] ]]; then
+					search_range='inside'
+				elif [[ "${group}" == 'other' ]]; then
+					search_range='outside'
+				else
+					std::die 1 "%s %s: %s -- %s" \
+						 "${CMD}" 'search' \
+						 "illegal value for --group option" \
+						 "${group} is not a valid group!"
+				fi
+				groups+=( "${group}" )
 				;;
 					
 			-- )
@@ -2684,35 +2680,52 @@ subcommand_search() {
 		EnvMustBeSaved='yes'
 	fi
 
-	if (( ${#groups[@]} == 0 )); then
-		groups=( "${!GroupDepths[@]}" )
-	fi
-	# search inside the Pmodules hierarchy
-	local module
-	for module in "${modules[@]}"; do
-		[[ ${opt_glob} == 'no' ]] && module+="*"
-		local group
-		for group in "${groups[@]}"; do
-			search "${module}" "${group}"
+	local -- module=''
+	if [[ "${search_range}" == 'all' || "${search_range}" == 'inside' ]]; then
+		# search inside the Pmodules hierarchy
+		# search in all groups if search is not limited
+		if (( ${#groups[@]} == 0 )); then
+			groups=( "${!GroupDepths[@]}" )
+		fi
+		for module in "${modules[@]}"; do
+			[[ ${opt_glob} == 'no' ]] && module+="*"
+			for group in "${groups[@]}"; do
+				# loop over all directories which can be added to
+				# MODULEPATH inside current group
+				local -i depth=${GroupDepths[${group}]}
+				local s=''
+				if (( depth > 0 )); then
+					s=$(printf '/*%.0s' $(seq 1 ${depth}))
+				fi
+				modulepath=( "${src_prefix[@]/%//${group}/modulefiles$s}" )
+				search "${module}" "${group}" "${modulepath[@]}"
+			done
 		done
-	done
+	fi
 
-	# search outside the Pmodules hierarchy
-	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
-	local -a dirs=()
-	local -- dir=''
-	for dir in "${modulepath[@]}"; do
-		# skip already searched directories
-		[[ -v searched_moduledirs[${dir}] ]] && continue
-		dirs+=( "${dir}" )
-	done
-	if (( ${#dirs[@]} > 0 )); then
+	if [[ "${search_range}" == 'all' || "${search_range}" == 'outside' ]]; then
+		# search outside the Pmodules hierarchy
+		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
+		local -a dirs=()
+		local -- dir=''
+		for dir in "${modulepath[@]}"; do
+			# skip all directories in Pmodules hierarchy
+			local -- ol_name=''
+			local -- install_root=''
+			for ol_name in "${Overlays[@]}"; do
+				install_root="${OverlayInfo[${ol_name}:install_root]}"
+				[[ "${dir}" == "${install_root}"/* ]] && continue 2
+			done
+			# add moduledir outside Pmodules hierarchy
+			dirs+=( "${dir}" )
+		done
 		for module in "${modules[@]}"; do
 			[[ ${opt_glob} == 'no' ]] && module+="*"
 			search "${module}" 'other' "${dirs[@]}"
 		done
 	fi
 	print_result
+	echo -n '' > ${TmpFile}
 }
 
 ##############################################################################
