@@ -72,6 +72,12 @@ using Tcl Environment Modules
 VERSION = @MODULES_VERSION@
 "
 
+# these variables must exist
+if [[ ! -v LOADEDMODULES ]] || [[ ! -v _LMFILES_ ]]; then
+	LOADEDMODULES=''
+	_LMFILES_=''
+fi
+
 #
 # display help text for command given in $1
 #
@@ -684,7 +690,7 @@ subcommand_load() {
 
 		local -r group="$1"
 		# arg isn't emtpy and group already in cache
-		[[ -n ${group} ]] && [[ -n ${GroupDepths[${group}]} ]] && return 0
+		[[ -n ${group} ]] && [[ -v GroupDepths[${group}] ]] && return 0
 
 		local ol=''
 		find_overlay_with_group ol "${group}" || return 1
@@ -1237,8 +1243,8 @@ find_modulefile() {
 	# Nothing found in MODULEPATH!
 	# The module to be loaded must be either given as relative or absolut
 	# path.
-	if [[ -r "${m}" ]]; then
-		fm_modulefile="$(std::get_abspath "${m}")"
+	if [[ -r "${module}" ]]; then
+		fm_modulefile="$(std::get_abspath "${module}")"
 		fm_relstage='stable'
 		fm_dir="$(${dirname} "${fm_modulefile}")"
 		return 0
@@ -1709,7 +1715,7 @@ subcommand_use() {
 			scan_groups "${UsedOverlays[@]}"
 			EnvMustBeSaved='yes'
                 fi
-                if [[ -n ${GroupDepths[${arg}]} ]]; then
+                if [[ -v GroupDepths[${arg}] ]]; then
 			use_group "${arg}" || rc=$?
                         return ${rc}
                 fi
@@ -1892,7 +1898,7 @@ subcommand_unuse() {
 			std::remove_path MODULEPATH "${dir}"
 			return 0
 		fi
-                if [[ -n ${GroupDepths[${arg}]} ]]; then
+                if [[ -v GroupDepths[${arg}] ]]; then
                         unuse_group "${arg}"
                         return 0
                 fi
@@ -2783,12 +2789,12 @@ subcommand_help() {
         fi
         local arg
         for arg in "${args[@]}"; do
-        	if [[ -n "${Help[${arg}]}" ]] ; then
+        	if [[ -v Help[${arg}] ]] ; then
                 	print_help "${arg}"
                 else
-		        # :FIXME: print help of newest *available* module
-		        # (respecting UsedReleaseStages)
-                        "${modulecmd}" "${Shell}" "${SubCommand}" "${arg}"
+			local -- modulefile=''
+			find_modulefile_and_interpreter modulefile modulecmd "${arg}"
+			"${modulecmd}" 'bash' 'help' "${modulefile}"
 	        fi
         done
 }
