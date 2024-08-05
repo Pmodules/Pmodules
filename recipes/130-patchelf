@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# https://github.com/NixOS/patchelf
+#
+P=patchelf
+V=${PATCHELF_VERSION:-0.12}
+FNAME="$P-$V.tar.xz"
+DOWNLOAD_URL="https://github.com/NixOS/$P/archive/$V.tar.gz"
+
+#---
+# build on Linux only
+[[ $(uname -s) == 'Linux' ]] || exit 0
+
+#---
+source "$(dirname "$0")/librecipes.bash"
+
+cd "${SRC_DIR}"
+./bootstrap.sh
+
+#---
+# configure
+mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
+loadablesdir="${PREFIX}/${UTILBIN_DIR}/builtins" \
+"${SRC_DIR}/configure" \
+	--prefix="${PREFIX}" \
+	--bindir="${PREFIX}/${UTILBIN_DIR}" \
+        || exit ${PB_ERR_CONFIGURE}
+
+#---
+# compile & install
+make -j ${NJOBS} || exit ${PB_ERR_MAKE}
+make install || exit ${PB_ERR_INSTALL}
+
+#---
+# post-install
+#rm -vf "${PREFIX}/share/man/man1/find.1"
+
+#---
+# Local Variables:
+# mode: shell-script-mode
+# sh-basic-offset: 8
+# End:
