@@ -37,7 +37,8 @@ declare -x PMODULES_DIR="${PMODULES_HOME}"
 #
 module() {
 	unset BASH_ENV
-	eval $("${PMODULES_HOME}/bin/modulecmd" bash "$@")
+	local output="$("${PMODULES_HOME}/bin/modulecmd" bash "$@")"
+	eval "${output}"
 }
 export -f module
 
