@@ -1291,12 +1291,18 @@ _build_module() {
 			local -- rpath=''
 			local -i depth=0
 			for fname in "${bin_objects[@]}"; do
+				# don't override existing RPATH
+				rpath=$(patchelf --print-rpath "${fname}")
+				[[ -z "${rpath}" ]] || continue
 				(( depth=$(std::get_dir_depth "${fname}") + group_depth + 3 ))
 				rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
 				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
 			done
 			mapfile -t bin_objects < <(std::find_shared_objects '.')
 			for fname in "${bin_objects[@]}"; do
+				# don't override existing RPATH
+				rpath=$(patchelf --print-rpath "${fname}")
+				[[ -z "${rpath}" ]] || continue
 				(( depth=$(std::get_dir_depth "${fname}") + group_depth + 3 ))
 				rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
 				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
