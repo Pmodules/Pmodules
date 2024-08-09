@@ -301,7 +301,7 @@ parse_args() {
 			;;
 		* )
 			local -- arg="$1"
-			if [[ -r ${arg} ]]; then
+			if [[ -f "${arg}" && -x "${arg}" ]]; then
 				BUILD_SCRIPT="$(std::get_abspath "${arg}")"
 				BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 			elif [[ "${arg}" == */* ]]; then
