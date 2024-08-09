@@ -546,6 +546,7 @@ declare -A Yaml_valid_vk_keys=(
 declare -A Unpackers=(
 	['tar']='tar'
 	['7z']='7z'
+	['none']='none'
 )
 
 declare -A KernelNames=(
