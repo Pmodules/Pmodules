@@ -261,6 +261,7 @@ parse_args() {
 			opt_build_target=${1:2}
 			;;
 		--clean-install )
+			opt_force_rebuild='yes'
 			opt_clean_install='yes'
 			;;
 		--update-modulefiles )
