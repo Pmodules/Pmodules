@@ -117,7 +117,7 @@ pm::get_seq(){
 
 pm::read_config(){
 	: "
-	Read Pmodules configuration files '${PMODULES_HOME}/config/Pmodules.yaml'
+	Read Pmodules configuration files '${PMODULES_ROOT}/config/Pmodules.yaml'
 	and '${HOME}/.Pmodules/Pmodules.yaml'.
 
 	Args:
@@ -136,6 +136,8 @@ pm::read_config(){
 		local -- key=''
 		local -a keys=()
 		local -- value=''
+
+		Overlays+=( "${ol_name}" )
 		# init overlay with defaults
 		for key in "${!OverlayConfigKeys[@]}"; do
 			OverlayInfo[${ol_name}:${key}]="${OverlayConfigKeys[${key}]}"
@@ -178,13 +180,15 @@ pm::read_config(){
 				excludes )
 					pm::get_seq "${yaml_input}" value "${key}" '!!seq'
 					local -a tmp_array=()
-					read -r -a tmp_array <<<"${value}"
+					readarray -t tmp_array <<<${value}
 					local excludes=''
 					printf -v excludes "%s:" "${tmp_array[@]}"
-					OverlayInfo[${ol_name}:excludes]="${excludes%:}"
+					OverlayInfo[${ol_name}:excludes]=$(${envsubst} <<<"${excludes%:}" )
+					;;
 					;;
 			esac
 		done
+		OverlayInfo[${ol_name}:used]='no'
 		if [[ -z "${OverlayInfo[${ol_name}:modulefiles_root]}" ]]; then
 			OverlayInfo[${ol_name}:modulefiles_root]=${OverlayInfo[${ol_name}:install_root]}
 		fi
@@ -200,12 +204,14 @@ pm::read_config(){
 			$1 YAML input
 		"
 		local -r yaml_input="$1"
-		local -- ol_name=''
-		readarray -t Overlays < <( ${yq} -e '.|keys|.[]' <<<"${yaml_input}" )
-		for ol_name in "${Overlays[@]}"; do
+		local -- overlay=''
+		local -a overlays=()
+		readarray -t overlays < <( ${yq} -e '.|keys|.[]' <<<"${yaml_input}" )
+
+		for overlay in "${overlays[@]}"; do
 			local yaml_tmp
-			pm::get_value "${yaml_input}" yaml_tmp "${ol_name}" '!!map'
-			get_config_of_overlay "${yaml_tmp}" "${ol_name}"
+			pm::get_value "${yaml_input}" yaml_tmp "${overlay}" '!!map'
+			get_config_of_overlay "${yaml_tmp}" "${overlay}"
 		done
 	}
 
@@ -224,7 +230,6 @@ pm::read_config(){
 		local -a keys=()
 		readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null ) || \
 			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
-		
 		for key in "${keys[@]}"; do
 			[[ -v DefaultPmodulesConfig[${key,,}] ]] || \
 				std::die 3 "%s -- %s\n%s" \
