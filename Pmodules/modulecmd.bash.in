@@ -2690,13 +2690,6 @@ subcommand_search() {
 		modules+=( '' )
 	fi
 
-        # :FIXME: do we need this?
-	if (( ${#GroupDepths[@]} == 0 )) || \
-                   [[ ${src_prefix} != "${PMODULES_HOME%%/Tools*}" ]]; then
-		scan_groups "${src_prefix}"
-		EnvMustBeSaved='yes'
-	fi
-
 	local -- module=''
 	if [[ "${search_range}" == 'all' || "${search_range}" == 'inside' ]]; then
 		# search inside the Pmodules hierarchy
@@ -2714,7 +2707,7 @@ subcommand_search() {
 				if (( depth > 0 )); then
 					s=$(printf '/*%.0s' $(seq 1 ${depth}))
 				fi
-				modulepath=( "${src_prefix[@]/%//${group}/modulefiles$s}" )
+				modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
 				search "${module}" "${group}" "${modulepath[@]}"
 			done
 		done
