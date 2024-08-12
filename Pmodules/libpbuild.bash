@@ -1219,10 +1219,6 @@ _build_module() {
 				;;
 		esac
 		modulefile_dir+="${module_name}"
-		if [[ -L "${modulefile_dir}" ]]; then
-			# :FIXME: why did I add this????
-			: # modulefile_dir=$(readlink -m "${modulefile_dir}")
-		fi
 		modulefile_name="${modulefile_dir}/${module_version}"
 	} # set_full_module_name_and_prefix
 	
