@@ -191,6 +191,9 @@ std.get_os_release_linux() {
 		ubuntu )
 			echo "Ubuntu${VERSION_ID%.*}"
 			;;
+		suse )
+			echo "sles${VERSION_ID%.*}"
+			;;
 		* )
 			echo "Unknown"
 			exit 1
