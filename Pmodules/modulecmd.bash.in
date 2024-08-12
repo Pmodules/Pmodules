@@ -3507,6 +3507,7 @@ subcommand_initclear() {
 # parse arguments
 #
 
+(( $# > 0 )) || print_help 'help'
 # first argument must be a shell!
 case "$1" in
 	sh | bash | zsh )
