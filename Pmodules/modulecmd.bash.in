@@ -2297,6 +2297,7 @@ subcommand_clear() {
 #
 Subcommands['search']='search'
 Subcommands['find']='search'
+Subcommands['spider']='search'
 Options['search']='-o a\?H -l help -l no-header -l print-modulefiles '
 Options['search']+='-l release-stage: -l with: -l all-release-stages -l src: -l print-csv '
 Options['search']+='-l verbose '
@@ -2306,7 +2307,7 @@ Options['search']+='-l newest '
 Options['search']+='-l group:'
 Help['search']='
 USAGE:
-        module find|search [switches] STRING...
+        module find|search|spider [switches] STRING...
 		Search installed modules. If an argument is given, search
 		for modules whose name match the argument.
 
