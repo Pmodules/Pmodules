@@ -877,12 +877,17 @@ subcommand_load() {
 	done
 	# fix LOADEDMODULES
 	LOADEDMODULES="${_LMFILES_}"
-        local dir
+        local -- dir=''
 	while read -r dir; do
 		# if the first or last character of MODULEPATH is ':',
-		# we read an empty string.
+		# we get an empty string.
 		[[ -z ${dir} ]] && continue
+		# skip relative directories in MODULEPATH
+		[[ "${dir:0:1}" == '/' ]] || continue
+		# dir must end with a slash, otherwise we have entries
+		# in LOADEDMODULES beginning with a slash
 		[[ "${dir: -1}" == "/" ]] || dir+="/"
+		# remove dir from all entries in LOADEDMODULES
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
 	done <<< "${MODULEPATH//:/$'\n'}"
         EnvMustBeSaved='yes'
