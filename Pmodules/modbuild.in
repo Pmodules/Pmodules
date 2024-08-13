@@ -136,7 +136,7 @@ DOCUMENTATION:
 declare -ra	ARGS=( "$@" )
 
 # versions to be build, '.*' or none means all
-declare         versions_to_build=''
+declare -a      versions_to_build=()
 declare         opt_build_target='all'
 declare         opt_dry_run='no'
 declare         opt_enable_cleanup_build='yes'
@@ -306,9 +306,9 @@ parse_args() {
 				BUILDBLOCK_DIR=$(dirname "${BUILD_SCRIPT}")
 			elif [[ "${arg}" == */* ]]; then
 				module_name="${arg%/*}"
-				versions_to_build+=" ${arg#*/}"
+				versions_to_build+=( "${arg#*/}" )
 			else
-				versions_to_build+=" $1"
+				versions_to_build+=( "$1" )
 			fi
 			;;
 		esac
@@ -320,8 +320,8 @@ parse_args() {
 			 "Build script argument missing?"
 
 	# if no version is specified on the cmd-line, build all versions
-	#(( ${#versions_to_build[@]} > 0)) || versions_to_build+=( '.*' )
-	[[ -z ${versions_to_build} ]] && versions_to_build='.*'
+	(( ${#versions_to_build[@]} > 0)) || versions_to_build+=( '.*' )
+
 	# set system if not set on the cmd-line
 	opt_system="${opt_system:-$(std::get_os_release)}"
 
@@ -1490,7 +1490,8 @@ if [[ -z ${module_name} ]]; then
 	module_name=${fname[${#fname[@]}-2]}
 fi
 
-for version in ${versions_to_build}; do
+declare version=''
+for version in "${versions_to_build[@]}"; do
         build_modules "${module_name}" "${version}" "${opt_with_modules[@]}"
 done
 
