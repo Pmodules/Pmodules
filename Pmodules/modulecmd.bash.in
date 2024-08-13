@@ -959,12 +959,15 @@ subcommand_unload() {
 		if [[ "${lmfile}" == '_zzzz_' ]]; then
 			continue
 		fi
+		# yes, module has been loaded
 		local interp
-		is_modulefile modulecmd "${lmfile}" || die_not_a_modulefile "${lmfile}"
+		is_modulefile modulecmd "${lmfile}" || die_not_a_modulefile "${arg}"
 
 	        local output=''
 		output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
-                eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
+		if [[ -n "${output}" ]]; then
+			eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
+		fi
 		case ${Shell} in
 			sh | bash | zsh )
 				echo "${output}"
