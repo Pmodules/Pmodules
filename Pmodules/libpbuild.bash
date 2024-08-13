@@ -1711,7 +1711,7 @@ _build_module() {
 	# check whether this module is supported
 	check_supported_systems
 	check_supported_compilers
-	[[ -z "${PREFIX}" ]] && set_full_module_name_and_prefix
+	[[ "${is_subpkg}" != 'yes' ]] && set_full_module_name_and_prefix
 
 	# ok, finally we can start ...
  	std::info \
