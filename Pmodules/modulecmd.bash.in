@@ -470,8 +470,8 @@ is_modulefile() {
 	local -n im_interp="$1"
 	local -r fname="$2"
 
-	# does file exist and is readable?
-	[[ -r ${fname} ]] || return 2
+	# is this a regular, readable file?
+	[[ -f "${fname}" && -r "${fname}"]] || return 2
 	
 	if [[ "${fname##*.}" == 'lua' ]]; then
 		im_interp="${Lmod_cmd}"
