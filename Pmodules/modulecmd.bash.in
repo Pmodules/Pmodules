@@ -1109,7 +1109,7 @@ get_available_modules() {
                 local -a dir_entries=(*)
 		(( ${#dir_entries[@]} > 0 )) || continue
 
-		local sdirs="${dir##*/modulesfiles}"
+		local sdirs="${dir##*/modulefiles}"
 		# loop over all files (and sym-links) in this directory and
 		# its sub-directories
 		local mod=''	# module_name/module_version
@@ -1117,7 +1117,7 @@ get_available_modules() {
 			local name="${mod%/*}"
 			[[ -v OverlayExcludes[${name}] ]] && continue
 			local add='no'
-			if [[ -n "${ol}" ]]; then
+			if [[ -n "${ol}" && "${ol}" != 'none' ]]; then
 				# module is in an overlay
 				#
 				# add to list of available modules, if
@@ -1139,6 +1139,7 @@ get_available_modules() {
 					add='yes'
 				fi
 			else
+				ol='none'
 				add='yes'	# module is NOT in an overlay
 			fi
 			[[ "${add}" == 'no' ]] && continue
