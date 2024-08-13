@@ -626,6 +626,7 @@ subcommand_load() {
 				output+="module use ${relstage}; "
 			fi
 			local group=${line[2]}
+			[[ "${group}" != 'none' ]] || continue
 	        	if [[ ! ":${UsedGroups}:" == *:${group}:* ]] && \
 				   (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "

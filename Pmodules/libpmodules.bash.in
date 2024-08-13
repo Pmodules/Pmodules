@@ -2,7 +2,7 @@
 
 declare    PMODULES_MODULEFILES_DIR='modulefiles'
 declare    PMODULES_VERSION='@PMODULES_VERSION@'
-declare -A GroupDepths=()
+declare -A GroupDepths=(['none']=0)
 
 declare -a Overlays=()
 declare -A OverlayInfo
@@ -58,6 +58,7 @@ scan_groups () {
 			Dir2OverlayMap[${dir%/"${PMODULES_MODULEFILES_DIR}"*}]="${ol}"
 	        done
         done
+	GroupDepths['none']=0
 }
 
 declare -A DefaultPmodulesConfig=(
