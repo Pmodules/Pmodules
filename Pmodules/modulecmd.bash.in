@@ -796,7 +796,13 @@ subcommand_load() {
 			fi
 		fi # handle extended module names
 		local moduledir=''
-                find_modulefile current_modulefile relstage moduledir "${m}" "${modulepath[@]}"
+                find_modulefile \
+			current_modulefile \
+			relstage \
+			moduledir \
+			modulecmd \
+			"${m}" \
+			"${modulepath[@]}"
                 if [[ -z ${current_modulefile} ]]; then
 			local hints=''
 			get_load_hints hints
@@ -805,14 +811,6 @@ subcommand_load() {
 			else
 				die_module_unavail "${m}${hints}"
 			fi
-		fi
-
-		local interp=''
-		is_modulefile modulecmd "${current_modulefile}" || \
-			die_not_a_modulefile "${m}"
-
-		if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
-			current_modulefile="${current_modulefile/${moduledir}\/}"
 		fi
 
 		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
@@ -1076,7 +1074,14 @@ subcommand_show() {
         local arg
 	for arg in "${args[@]}"; do
 		local -- modulefile=''
-		find_modulefile_and_interpreter modulefile modulecmd "${arg}"
+		local -- relstage=''
+		local -- moduledir=''
+		find_modulefile \
+			modulefile \
+			relstage \
+			moduledir \
+			modulecmd \
+			"${arg}"
 		"${modulecmd}" 'bash' 'show' "${modulefile}"
 	done
 }
@@ -1177,105 +1182,93 @@ get_available_modules() {
 #       0  if a modulefile has been found
 #       != else
 #       
-find_modulefile() {
-	local -n fm_modulefile="$1"	# ref. variable to return module file
-	local -n fm_relstage="$2"	# ref. variable to return release stage
-	local -n fm_dir="$3"		# ref. variable to return dir in modulepath
-	local -r module="$4"		# module to load
-	local -a dirs=("${@:5}")	# module search path (MODULEPATH as bash arra)
 
-	# loop over all dirs in MODULEPATH
-	# if a modulefile is found return from function
-	local dir
-        for dir in "${dirs[@]}"; do
-                test -d "${dir}" || continue
-                local -i col=$((${#dir} + 2 ))
-                local -a modules
-                if [[ ${module} == */* ]]; then
-                        # a version number has been specified. The first module
+find_modulefile(){
+	local -n ref_modulefile="$1"
+	local -n ref_relstage="$2"
+	local -n ref_moduledir="$3"
+	local -n ref_interp="$4"
+	local -r modulename="$5"
+	local -a modulepath=()
+
+	_find_modulefile() {
+		local -- dir=''
+		for dir in "${modulepath[@]}"; do
+			test -d "${dir}" || continue
+			local -i col=$((${#dir} + 2 ))
+			local -- mod=''
+
+			mapfile -t found_modules \
+				< <(find -L "${dir}" \
+					 -type f \
+					 -not -name '.*' \
+					 \( -ipath "${dir}/${modulename}" \
+					 -or -ipath "${dir}/${modulename}.lua" \
+					 -or -ipath "${dir}/${modulename}/*" \) \
+					 -printf "%P\n" \
+					 | sort -rV \
+				   )
+
+			# a version number has been specified. The first module
 			# found will be returned, independend from the release
 			# stage.
-                        mapfile -t modules < <( ${find} -L "${dir}" -type f -not -name ".*" \
-                                       -ipath "${dir}/${module}*" \
-                                          | cut -b${col}-)
-                        for mod in "${modules[@]}"; do
-				if [[ ${mod} == "${module}" ]]; then
-					:
-				elif [[ ${mod} == "${module}.lua" ]]; then
-					mod="${module}.lua"
+			for mod in "${found_modules[@]}"; do
+				if [[ ${modulename} == */* ]]; then
+					if [[ ${mod} != "${modulename}" && \
+						      ${mod} != "${modulename}.lua" ]]; then
+						continue
+					fi
 				else
-					continue
+					if [[ "${mod}" != ${modulename} && \
+						      "${mod}" != "${modulename}.lua" && \
+						      "${mod}/" != "${modulename}"/* ]]; then
+						continue
+					fi
+				fi
+				if [[ -L "${dir}/${mod}" ]]; then
+					# handle symbolic link
+					# - resolve link to absolut path
+					# - the absolut path must be in ${dir}
+					# - if not: continue
+					# - else set module name to relativ path by removing ${dir}
+					local lname=''
+					lname=$( std::get_abspath "${dir}/${mod}" )
+					[[ "${lname}" == "${dir}/*" ]] || continue
+					mod="${lname/${dir}\/}"
 				fi
 				local -A cfg=()
 				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${ReleaseStages}" || continue
+				is_available cfg "${UsedReleaseStages}" || continue
 
-				fm_modulefile="${dir}/${mod}"
-				fm_relstage="${cfg['relstage']}"
-				fm_dir="${dir}"
-                                return 0
-                        done
-                else
-                        # no version has been specified. This makes it more
-                        # difficult. We have to load the newest version taking
-                        # the used release stages into account.
-
-			# get list of reverse sorted version numbers
-                        (( col += ${#module} + 1 ))
-                        mapfile -t modules < <(${find} -L "${dir}" -type f -not -name ".*" \
-                                         -ipath "${dir}/${module}/*"  \
-                                            | cut -b${col}- \
-                                            | sort -rV )
-			# prepend module name
-                        modules=( "${modules[@]/#/${module}/}" )
-
-			# now modules contains a reverse sorted list of
-			# available modules in the form name/version
-                        for mod in "${modules[@]}"; do
-				if [[ ${mod} == ${module}/* ]]; then
-					:
-				else
-					continue
-				fi
-				local -A cfg=()
-				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${ReleaseStages}" || continue
-				fm_modulefile="${dir}/${mod}"
-				fm_relstage="${cfg['relstage']}"
-				fm_dir="${dir}"
+				ref_modulefile="${dir}/${mod}"
+				ref_relstage="${cfg['relstage']}"
+				ref_moduledir="${dir}"
 				return 0
-                        done
-                fi
-        done
-	# Nothing found in MODULEPATH!
-	# The module to be loaded must be either given as relative or absolut
-	# path.
-	if [[ -r "${module}" ]]; then
-		fm_modulefile="$(std::get_abspath "${module}")"
-		fm_relstage='stable'
-		fm_dir="$(${dirname} "${fm_modulefile}")"
-		return 0
+			done
+		done
+		# Nothing found in MODULEPATH!
+		# The module to be loaded must be either given as relative or absolut
+		# path.
+		if [[ -r "${modulename}" ]]; then
+			ref_modulefile="$(std::get_abspath "${modulename}")"
+			ref_relstage='stable'
+			ref_moduledir="$(${dirname} "${ref_modulefile}")"
+			return 0
+		fi
+		return 1
+	} # _find_modulefile()
+
+	if (( $# >= 6 )); then
+		modulepath=("${@:6}")
+	else
+		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 	fi
-        return 1
-} # find_modulefile()
+        _find_modulefile || die_module_unavail "${modulename}"
 
-find_modulefile_and_interpreter(){
-	local -n ref_modulefile="$1"
-	local -n ref_interp="$2"
-	local -r module="$3"
-
-	local -a modulepath=()
-	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
-	local -- relstage=''
-	local -- moduledir=''
-        find_modulefile ref_modulefile relstage moduledir "${module}" "${modulepath[@]}"
-        if [[ -z ${modulefile} ]]; then
-		die_module_unavail "${module}"
-	fi
-
-	is_modulefile modulecmd "${ref_modulefile}" || die_not_a_modulefile "${module}"
+	is_modulefile modulecmd "${ref_modulefile}" || die_not_a_modulefile "${modulename}"
 	if [[ "${ref_interp}" == "${Lmod_cmd}" ]]; then
-		ref_modulefile="${ref_modulefile/${moduledir}\/}"
+		# Lmod doesn't support full qualified path names!
+		ref_modulefile="${ref_modulefile/${ref_moduledir}\/}"
 	fi
 }
 
@@ -1905,7 +1898,7 @@ subcommand_unuse() {
                                 local dir="${overlay}/${arg}/${PMODULES_MODULEFILES_DIR}"
 			        std::remove_path MODULEPATH "${dir}"
                         done
-                }
+		}
 
 		#..............................................................
                 local arg=$1
@@ -2826,7 +2819,14 @@ subcommand_help() {
                 	print_help "${arg}"
                 else
 			local -- modulefile=''
-			find_modulefile_and_interpreter modulefile modulecmd "${arg}"
+			local -- relstage=''
+			local -- moduledir=''
+			find_modulefile \
+				modulefile \
+				relstage \
+				moduledir \
+				modulecmd \
+				"${arg}"
 			"${modulecmd}" 'bash' 'help' "${modulefile}"
 	        fi
         done
