@@ -471,7 +471,7 @@ is_modulefile() {
 	local -r fname="$2"
 
 	# is this a regular, readable file?
-	[[ -f "${fname}" && -r "${fname}"]] || return 2
+	[[ -f "${fname}" && -r "${fname}" ]] || return 2
 	
 	if [[ "${fname##*.}" == 'lua' ]]; then
 		im_interp="${Lmod_cmd}"
@@ -958,7 +958,6 @@ subcommand_unload() {
 			continue
 		fi
 		# yes, module has been loaded
-		local interp
 		is_modulefile modulecmd "${lmfile}" || die_not_a_modulefile "${arg}"
 
 	        local output=''
@@ -1704,8 +1703,6 @@ subcommand_use() {
 				OverlayExcludes[${item}]=1
 			done
 
-			export_env UsedOverlays
-                        EnvMustBeSaved='yes'
 	                scan_groups "${UsedOverlays[@]}"
                 }
 
@@ -1742,7 +1739,6 @@ subcommand_use() {
                         # this scan is required if a new group has been
                         # create inside an used overlay
 			scan_groups "${UsedOverlays[@]}"
-			EnvMustBeSaved='yes'
                 fi
                 if [[ -v GroupDepths[${arg}] ]]; then
 			use_group "${arg}" || rc=$?
@@ -1824,12 +1820,12 @@ subcommand_unuse() {
 					   "some modules are still loaded!"
 			fi
 
-                        [[ "${OverlayInfo[ol_name]:modulefiles_root}" == "${PMODULES_HOME%%/Tools*}" ]] && \
+                        [[ "${OverlayInfo[${ol_name}:modulefiles_root]}" == "${PMODULES_HOME%%/Tools*}" ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${SubCommand}" \
                                          "cannot remove base overlay" \
                                          "${ol_name}"
-			[[ ${OverlayInfo[${ol_name}:used]} !=  'yes' ]] && \
+			[[ "${OverlayInfo[${ol_name}:used]}" !=  'yes' ]] && \
                                 std::die 3 "%s %s: %s -- %s" \
                                          "${CMD}" "${SubCommand}" \
                                          "not an used overlay" \
