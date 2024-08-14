@@ -266,6 +266,8 @@ pm::read_config(){
 		done
 	}
 
+	Overlays=()
+
 	# system config file
 	local -r sys_config_file="${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml"
 	test -r "${sys_config_file}" || \
