@@ -53,6 +53,7 @@ declare -- DefaultReleaseStages='stable'
 
 declare -A OverlayExcludes=()
 declare -a UsedOverlays=()
+declare -- PmFiles=''
 
 ##############################################################################
 declare -- Verbosity_lvl='verbose'
@@ -157,7 +158,7 @@ save_env() {
         vars+=( UsedOverlays )
 	vars+=( OverlayExcludes )
         vars+=( OverlayInfo Dir2OverlayMap)
-
+	vars+=( PmFiles )
 	local s=''
 	s=$(typeset -p "${vars[@]}")
 	declare -gx PMODULES_ENV=''
@@ -584,6 +585,56 @@ subcommand_generic1plus() {
 }
 
 ##############################################################################
+set_lmfiles(){
+	: '
+	Set/fix the environment variable _LMFILES_ and LOADEDMODULES.
+
+	Why do we have to do this?
+	- Lmod removes files from _LMFILE_ which have been loaded
+	  by the Tcl modulecmd. Even worse Lmod might unset _LMFILE_.
+	  If the modulecmd was Lmod, the Tcl module files have to
+	  be added again to _LMFILE_.
+	- After fixing _LMFILE_ we rebuild LOADEDMODULES from
+	  _LMFILE_.
+	'
+	if [[ ! -v _LMFILES_ ]]; then
+		declare -x _LMFILES_=''
+		declare -x LOADEDMODULES=''
+	fi
+	local -- dir=''
+	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
+		local -a dirs=()
+		IFS=':' read -r -a dirs <<<"${PmFiles}"
+		for dir in "${dirs[@]}"; do
+			std::append_path _LMFILES_ "${dir}"
+		done
+	fi
+
+	# rebuild LOADEDMODULES by setting it to _LMFILES_ and then removing
+	# all directories given in MODULEPATH from LOADEDMODULES.
+	LOADEDMODULES="${_LMFILES_}"
+	while read -r dir; do
+		# If the first or last character of MODULEPATH is ':',
+		# we get an empty string. This shouldn't happen, but
+		# with this test we are on the save side.
+		[[ -z ${dir} ]] && continue
+
+		# Skip relative directories in MODULEPATH.
+		# Relative directories in MODULEPATH doesn't make make much
+		# sense. Or? For now we just ignore them.
+		[[ "${dir:0:1}" == '/' ]] || continue
+
+		# The directory string we want to remove must end with a
+		# slash, otherwise we have entries in LOADEDMODULES
+		# beginning with a slash.
+		[[ "${dir: -1}" == "/" ]] || dir+="/"
+
+		# Remove this directory from all entries in LOADEDMODULES
+		LOADEDMODULES="${LOADEDMODULES//${dir}}"
+	done <<< "${MODULEPATH//:/$'\n'}"
+}
+
+##############################################################################
 #
 # load [-fsvw] <module>
 #
@@ -857,6 +908,9 @@ subcommand_load() {
 		if [[ -n "${error}" ]]; then
                        	echo "${error}" 1>&2
 		fi
+		if [[ "${modulecmd}" == "${Tcl_cmd}" ]]; then
+			std::append_path PmFiles "${current_modulefile}"
+		fi
 		local msg=''
 		if [[ ${Verbosity_lvl} != silent ]] && \
 			   [[ ${relstage} != stable ]]; then
@@ -873,23 +927,9 @@ subcommand_load() {
 			     "user=${USER}")
 		${logger} -t Pmodules "${msg}"
 	done
-	# fix LOADEDMODULES
-	LOADEDMODULES="${_LMFILES_}"
-        local -- dir=''
-	while read -r dir; do
-		# if the first or last character of MODULEPATH is ':',
-		# we get an empty string.
-		[[ -z ${dir} ]] && continue
-		# skip relative directories in MODULEPATH
-		[[ "${dir:0:1}" == '/' ]] || continue
-		# dir must end with a slash, otherwise we have entries
-		# in LOADEDMODULES beginning with a slash
-		[[ "${dir: -1}" == "/" ]] || dir+="/"
-		# remove dir from all entries in LOADEDMODULES
-		LOADEDMODULES="${LOADEDMODULES//${dir}}"
-	done <<< "${MODULEPATH//:/$'\n'}"
+	set_lmfiles
         EnvMustBeSaved='yes'
-	export_env 'LOADEDMODULES'
+	export_env 'LOADEDMODULES' '_LMFILES_'
 }
 
 ##############################################################################
@@ -945,10 +985,15 @@ subcommand_unload() {
 	# the loop again, if it has been unset.
 	local saved_home="${PMODULES_HOME}"
 
+	# nothing to do, if _LMFILES_ is not set. This can happen
+	# if only Lua modules are loaded.
+	[[ -v _LMFILES_ ]] || return 0
+
 	IFS=':' read -r -a _lmfiles_ <<< "${_LMFILES_}"
         local arg
 	local lmfile
 	for arg in "${args[@]}"; do
+		# is the module loaded?
 		for lmfile in "${_lmfiles_[@]}" '_zzzz_'; do
 			if [[ $lmfile =~ ${arg} ]]; then
 				break
@@ -973,11 +1018,16 @@ subcommand_unload() {
 				"${modulecmd}" "${Shell}" 'unload' "${arg}"
                 		;;
 		esac
+		if [[ "${modulecmd}" == "${Tcl_cmd}" ]]; then
+			std::remove_path PmFiles "${lmfile}"
+		fi
 	done
 	if [[ -z ${PMODULES_HOME} ]]; then
 		PMODULES_HOME="${saved_home}"
 		export_env 'PMODULES_HOME'
 	fi
+	set_lmfiles
+	export_env 'LOADEDMODULES' '_LMFILES_'
 	EnvMustBeSaved='yes'
 } # subcommand_unload
 
