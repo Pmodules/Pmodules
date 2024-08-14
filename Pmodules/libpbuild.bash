@@ -703,8 +703,6 @@ pbuild::prep() {
 #..............................................................................
 #
 pbuild::add_configure_args() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	CONFIGURE_ARGS+=( "$@" )
 }
 readonly -f pbuild::add_configure_args
