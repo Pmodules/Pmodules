@@ -1685,6 +1685,15 @@ subcommand_use() {
                                 fi
                         done
 
+			if [[ -v OverlayInfo[${ol_name}:modulepath] && \
+				      -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
+				local -a modulepath=()
+				IFS=':' read -r -a modulepath <<<"${OverlayInfo[${ol_name}:modulepath]}"
+				local -- dir=''
+				for dir in "${modulepath[@]}"; do
+					std::prepend_path MODULEPATH "${dir}"
+				done
+			fi
                         UsedOverlays=( "${ol_name}" "${UsedOverlays[@]}" )
 			OverlayInfo[${ol_name}:used]='yes'
 
@@ -1866,13 +1875,25 @@ subcommand_unuse() {
 				done
 			done
 
-                        EnvMustBeSaved='yes'
-                        export_env UsedOverlays
+			# remove additional directories added overlay
+			if [[ -v OverlayInfo[${ol_name}:modulepath] && \
+				      -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
+				local -a modulepath=()
+				IFS=':' read -r -a modulepath <<<"${OverlayInfo[${ol_name}:modulepath]}"
+				local -- dir=''
+				for dir in "${modulepath[@]}"; do
+					std::remove_path MODULEPATH "${dir}"
+				done
+			fi
+
+			# remove root of overlay
                         local dir
                         for dir in "${modulepath[@]}"; do
                                 [[ "${dir}" == "${OverlayInfo[${ol_name}:modulefiles_root]}" ]] && \
                                         std::remove_path MODULEPATH "${dir}"
                         done
+                        export_env UsedOverlays
+                        EnvMustBeSaved='yes'
                 }
 
 		#..............................................................
