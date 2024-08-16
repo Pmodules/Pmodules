@@ -1245,6 +1245,23 @@ find_modulefile(){
 	local -r modulename="$5"
 	local -a modulepath=()
 
+	_match(){
+		local -- found_modulefile="$1"
+
+		if [[ ${found_modulefile} == "${modulename}" ]]; then
+			return 0
+		fi
+		if [[ ${found_modulefile} == "${modulename}.lua" ]]; then
+			return 0
+		fi
+		if [[ ${modulename} != */* ]]; then
+			if [[ "${found_modulefile}" == "${modulename}"/* ]]; then
+				return 0
+			fi
+		fi
+		return 1
+
+	}
 	_find_modulefile() {
 		local -- dir=''
 		for dir in "${modulepath[@]}"; do
@@ -1263,36 +1280,30 @@ find_modulefile(){
 					 | sort -rV \
 				   )
 
-			# a version number has been specified. The first module
-			# found will be returned, independend from the release
-			# stage.
 			for mod in "${found_modules[@]}"; do
-				if [[ ${modulename} == */* ]]; then
-					if [[ ${mod} != "${modulename}" && \
-						      ${mod} != "${modulename}.lua" ]]; then
-						continue
-					fi
-				else
-					if [[ "${mod}" != ${modulename} && \
-						      "${mod}" != "${modulename}.lua" && \
-						      "${mod}/" != "${modulename}"/* ]]; then
-						continue
-					fi
-				fi
+				_match "${mod}" || continue
 				if [[ -L "${dir}/${mod}" ]]; then
 					# handle symbolic link
 					# - resolve link to absolut path
 					# - the absolut path must be in ${dir}
 					# - if not: continue
-					# - else set module name to relativ path by removing ${dir}
+					# - else set module name to relativ path
+					#   by removing ${dir}
 					local lname=''
 					lname=$( std::get_abspath "${dir}/${mod}" )
 					[[ "${lname}" == "${dir}/*" ]] || continue
 					mod="${lname/${dir}\/}"
 				fi
 				local -A cfg=()
+				local -- relstages="${UsedReleaseStages}"
 				get_module_config cfg "${dir}" "${mod}"
-				is_available cfg "${UsedReleaseStages}" || continue
+				# if the full name is given, we don't care about
+				# release stages.
+				if [[ "${mod}" == "${modulename}" || \
+					      "${mod}" == "${modulename}.lua" ]]; then
+					relstages="${ReleaseStages}"
+				fi
+				is_available cfg "${relstages}" || continue
 
 				ref_modulefile="${dir}/${mod}"
 				ref_relstage="${cfg['relstage']}"
