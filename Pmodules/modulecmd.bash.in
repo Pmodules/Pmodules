@@ -985,9 +985,10 @@ subcommand_unload() {
 	# the loop again, if it has been unset.
 	local saved_home="${PMODULES_HOME}"
 
-	# nothing to do, if _LMFILES_ is not set. This can happen
-	# if only Lua modules are loaded.
-	[[ -v _LMFILES_ ]] || return 0
+	if [[ ! -v _LMFILES_ ]]; then
+		declare -x _LMFILES_=''
+		declare -x LOADEDMODULES=''
+	fi
 
 	IFS=':' read -r -a _lmfiles_ <<< "${_LMFILES_}"
         local arg
@@ -1025,6 +1026,10 @@ subcommand_unload() {
 	if [[ -z ${PMODULES_HOME} ]]; then
 		PMODULES_HOME="${saved_home}"
 		export_env 'PMODULES_HOME'
+	fi
+	if [[ ! -v _LMFILES_ ]]; then
+		declare -x _LMFILES_=''
+		declare -x LOADEDMODULES=''
 	fi
 	set_lmfiles
 	export_env 'LOADEDMODULES' '_LMFILES_'
@@ -3673,6 +3678,12 @@ if [[ ! -v Version ]] || \
         export_env \
                 LOADEDMODULES \
                 _LMFILES_
+fi
+
+# re-define these variables. Lmod muught have unset them!
+if [[ ! -v _LMFILES_ ]]; then
+	declare -x _LMFILES_=''
+	declare -x LOADEDMODULES=''
 fi
 
 # we need to handle help text and options for sub-cmd aliases
