@@ -1,5 +1,12 @@
 # Changelog of Pmodules
 
+## Version 1.1.23
+### modulecmd
+
+### build-system
+
+### both
+
 ## Version 1.1.22
 
 ### modulecmd
