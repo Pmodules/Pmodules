@@ -156,6 +156,7 @@ pm::read_config(){
 				install_root )
 					pm::get_value "${yaml_input}" value "${key}" '!!str'
 					OverlayInfo[${ol_name}:install_root]=$(${envsubst} <<< "${value}")
+					mkdir -p "${OverlayInfo[${ol_name}:install_root]}" 2>/dev/null
 					[[ -d ${OverlayInfo[${ol_name}:install_root]} ]] || \
 						std::die 3 \
 							 "Invalid installation root directory for overlay '${ol_name}' -- ${value}"
@@ -163,6 +164,7 @@ pm::read_config(){
 				modulefiles_root )
 					pm::get_value "${yaml_input}" value "${key}" '!!str'
 					OverlayInfo[${ol_name}:modulefiles_root]=$(${envsubst} <<< "${value}")
+					mkdir -p "${OverlayInfo[${ol_name}:modulefiles_root]}" 2>/dev/null
 					[[ -d ${OverlayInfo[${ol_name}:modulefiles_root]} ]] || \
 						std::die 3 \
 							 "Invalid modulefiles root directory for overlay '${ol_name}' -- ${value}"
