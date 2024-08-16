@@ -1,9 +1,33 @@
 # Changelog of Pmodules
 
 ## Version 1.1.22
+
 ### modulecmd
+* Create overlay directories if the do not already exist. 
+  Print error message if the directories cannot be created (#326)
+* An overlay can now add additional directories to `MODULEPATH` (#321)
+* Review/optimze code to find modulefiles (#318, #319, #328)
+* Ignore relative directories in `MODULEPATH` (#316)
+* Add alias `spider` to `search` sub-command (#313)
+* Print help text if `modulecmd` is called without argument (#312)
+* fixes/improvements in module search command. Handling of
+  directories outside Pmodules hierarchy fixed. (#301, #311)
+* Improved support for Lmod (#302, #325, #327)
+* code review, cleanup and bugfixes (#299, #300, #314, #315, #317)
 
 ### build-system
+* `pbuild::add_configure_args()` isn't deprecated any more. Sometimes
+  it is useful in the build-script (#322).
+* `none` added as unpacker (#307).
+* Don't override existing RPATH. This is an important fix for packages
+  like conda (#304).
+* Force rebuild if build script is called with `--clean-install`
+  (#305).
+* code review, cleanup and bugfixes (#299, #300, #303, #306, #310, #320, #323, #324)
+
+### both
+* sles15 added to list of recognized Linux distributions (#309)
+* bugfixes (#308)
 
 ## Version 1.1.21
 ### modulecmd
