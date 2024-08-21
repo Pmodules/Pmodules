@@ -1399,10 +1399,16 @@ _build_module() {
 	}
 
 	cleanup_modulefiles(){
+		#
+		# FIXME: Can it happen, that we remove module-/config-files which
+		#        we shouldn't remove?
+		#        For now we exclude removing from the overlay 'base' only.
+		#
 		[[ "${is_subpkg}" == 'yes' ]] && return 0
 		local ol=''
 		for ol in "${Overlays[@]}"; do
 			[[ "${ol}" == "${ol_name}" ]] && continue
+			[[ "${ol}" == 'base' ]] && continue
 			local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 			local dir="${modulefile_dir/${ol_modulefiles_root}/${modulefiles_root}}"
 			local fname="${dir}/${module_version}"
