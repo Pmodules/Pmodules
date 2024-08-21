@@ -54,6 +54,8 @@ declare -- DefaultReleaseStages='stable'
 declare -A OverlayExcludes=()
 declare -a UsedOverlays=()
 declare -- PmFiles=''
+declare -- ModulePathAppend=''
+declare -- ModulePathPrepend=''
 
 ##############################################################################
 declare -- Verbosity_lvl='verbose'
@@ -159,6 +161,8 @@ save_env() {
 	vars+=( OverlayExcludes )
         vars+=( OverlayInfo Dir2OverlayMap)
 	vars+=( PmFiles )
+	vars+=( 'ModulePathAppend' )
+	vars+=( 'ModulePathPrepend' )
 	local s=''
 	s=$(typeset -p "${vars[@]}")
 	declare -gx PMODULES_ENV=''
@@ -1032,6 +1036,18 @@ subcommand_unload() {
 		declare -x LOADEDMODULES=''
 	fi
 	set_lmfiles
+
+	# maybe Lmod removed some directories from MODULEPATH?
+	local -- dir=''
+	local -a dirs=()
+	IFS=':' read -r -a dirs <<<"${ModulePathAppend}"
+	for dir in "${dirs[@]}"; do
+		std::append_path MODULEPATH "${dir}"
+	done
+	IFS=':' read -r -a dirs <<<"${ModulePathPrepend}"
+	for dir in "${dirs[@]}"; do
+		std::prepend_path MODULEPATH "${dir}"
+	done
 	export_env 'LOADEDMODULES' '_LMFILES_'
 	EnvMustBeSaved='yes'
 } # subcommand_unload
@@ -1813,7 +1829,13 @@ subcommand_use() {
 		if [[ -d ${arg} ]]; then
 			local dir=''
 			dir=$(std::get_abspath "${arg}")
-			${add2path_func} MODULEPATH "${dir}" || rc=$?
+			if [[ "${opt_append}" == 'yes' ]]; then
+				std::append_path MODULEPATH "${dir}" || rc=$?
+				std::append_path ModulePathAppend "${dir}" || rc=$?
+			else
+				std::prepend_path MODULEPATH "${dir}" || rc=$?
+				std::prepend_path ModulePathPrepend "${dir}" || rc=$?
+			fi
                         return ${rc}
 		fi
 		die_invalid_value "use flag, group, overlay or directory" \
@@ -1822,16 +1844,17 @@ subcommand_use() {
 
 	#......................................................................
 	local -a args=()
+	opt_append='yes'
 	while (( $# > 0)); do
 		case "$1" in
                         -\? | -H | --help )
                                 print_help "${SubCommand}"
                                 ;;
 		        -a | --append )
-                                add2path_func='std::append_path'
+                                opt_append='yes'
 			        ;;
 		        -p | --prepend )
-                                add2path_func='std::prepend_path'
+				opt_append='no'
 			        ;;
 		        -- )
 				shift 1
@@ -1945,6 +1968,8 @@ subcommand_unuse() {
 				local -- dir=''
 				for dir in "${modulepath[@]}"; do
 					std::remove_path MODULEPATH "${dir}"
+					std::remove_path ModulePathAppend "${dir}"
+					std::remove_path ModulePathPrepend "${dir}"
 				done
 			fi
 
@@ -1999,6 +2024,8 @@ subcommand_unuse() {
 			local dir=''
 			dir=$(std::get_abspath "${arg}")
 			std::remove_path MODULEPATH "${dir}"
+			std::remove_path ModulePathAppend "${dir}"
+			std::remove_path ModulePathPrepend "${dir}"
 			return 0
 		fi
                 if [[ -v GroupDepths[${arg}] ]]; then
