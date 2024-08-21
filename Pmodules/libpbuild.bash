@@ -203,7 +203,7 @@ pbuild::module_is_avail() {
 	local -- name=''
 	local -- release=''
 	while read -r name release; do
-		if [[ "${name}" == "$1" ]]; then
+		if [[ "${name}" == "$1" || "${name}" == "${1}.lua" ]]; then
 			if (( $# > 1 )); then
 				local -n _result="$2"
 				_result="${release}"
