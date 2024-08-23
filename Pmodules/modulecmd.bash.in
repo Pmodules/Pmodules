@@ -873,13 +873,17 @@ subcommand_load() {
 		# continue if already loaded
 		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
-		# show info file if exist, load dependencies and the module itself
+		# show info file if exist
 		local prefix=''
 		get_module_prefix prefix "${current_modulefile}"
-                if [[ -n ${prefix} ]]; then
-                        test -r "${prefix}/.info" && cat "$_" 1>&2
-			test -r "${prefix}/.dependencies" && load_dependencies "$_"
-                fi
+		[[ -n ${prefix} && -r "${prefix}/.info" ]] && cat "${prefix}/.info" 1>&2
+
+		# load dependencies
+		local -- deps_file="${current_modulefile%/*}/.deps-${current_modulefile##*/}"
+		if [[ ! -r "${deps_file}" && -n "${prefix}" ]]; then
+			deps_file="${prefix}/.dependencies"
+		fi
+		test -r "${deps_file}" && load_dependencies "$_"
 		local output=''
 		output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
                                               "${current_modulefile}" 2> "${TmpFile}")
