@@ -1962,7 +1962,7 @@ subcommand_unuse() {
 				done
 			done
 
-			# remove additional directories added overlay
+			# remove additional directories added by overlay
 			if [[ -v OverlayInfo[${ol_name}:modulepath] && \
 				      -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
 				local -a modulepath=()
@@ -1980,6 +1980,7 @@ subcommand_unuse() {
                         for dir in "${modulepath[@]}"; do
                                 [[ "${dir}" == "${OverlayInfo[${ol_name}:modulefiles_root]}" ]] && \
                                         std::remove_path MODULEPATH "${dir}"
+
                         done
                         export_env UsedOverlays
                         EnvMustBeSaved='yes'
@@ -2007,7 +2008,8 @@ subcommand_unuse() {
                         std::remove_path UsedGroups "${arg}"
                         local overlay
                         for overlay in "${UsedOverlays[@]}"; do
-                                local dir="${overlay}/${arg}/${PMODULES_MODULEFILES_DIR}"
+				local dir="${OverlayInfo[${overlay}:modulefiles_root]}"
+				dir+="/${arg}/${PMODULES_MODULEFILES_DIR}"
 			        std::remove_path MODULEPATH "${dir}"
                         done
 		}
