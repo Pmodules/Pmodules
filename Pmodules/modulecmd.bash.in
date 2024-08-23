@@ -1795,11 +1795,13 @@ subcommand_use() {
 				die_illegal_group "${arg}"
 
 			std::append_path UsedGroups "$1"
-                        local ol_name
-                        for ol_name in "${UsedOverlays[@]}"; do
+                        local -- ol_name
+			local -i i=0
+			local -i n="${#UsedOverlays[@]}"
+                        for ((i=n-1; i>=0; i--)); do
+				ol_name="${UsedOverlays[i]}"
                                 local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/$1/${PMODULES_MODULEFILES_DIR}"
                                 [[ -d "${dir}" ]] || continue
-
                                 std::prepend_path MODULEPATH "${dir}"
 				[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && break
                         done
