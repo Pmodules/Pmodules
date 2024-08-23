@@ -1011,7 +1011,7 @@ subcommand_unload() {
 		is_modulefile modulecmd "${lmfile}" || die_not_a_modulefile "${arg}"
 
 	        local output=''
-		output=$("${modulecmd}" "${Shell}" 'unload' "${arg}")
+		output=$("${modulecmd}" 'bash' 'unload' "${arg}")
 		if [[ -n "${output}" ]]; then
 			eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
 		fi
