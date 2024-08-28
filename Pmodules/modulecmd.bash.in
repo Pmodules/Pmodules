@@ -794,6 +794,10 @@ subcommand_load() {
 		die_missing_arg
 
         local m=''
+	if [[ ! -v LOADEDMODULES ]]; then
+		LOADEDMODULES=''
+		_LMFILES_=''
+	fi
 	for m in "${args[@]}"; do
 		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 		if [[ "$m" == *:* ]]; then
@@ -1037,7 +1041,7 @@ subcommand_unload() {
 			std::remove_path PmFiles "${lmfile}"
 		fi
 	done
-	if [[ -z ${PMODULES_HOME} ]]; then
+	if [[ ! -v PMODULES_HOME || -z ${PMODULES_HOME} ]]; then
 		PMODULES_HOME="${saved_home}"
 		export_env 'PMODULES_HOME'
 	fi
