@@ -1684,6 +1684,7 @@ _build_module() {
 		"building ..."
 
 	init_module_environment
+	load_overlays
 	load_build_dependencies
 	BUILD_ROOT="${PMODULES_TMPDIR}/${module_name}-${module_version}"
 	SRC_DIR="${BUILD_ROOT}/src"
