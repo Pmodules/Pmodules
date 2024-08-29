@@ -1235,8 +1235,8 @@ build_modules_yaml_v1(){
 
 			local -- system
 			for system in "${systems[@]}"; do
-				[[ "${opt_system}" == ${system} ]] && return 0
-				[[ "${HOSTNAME}" == ${system} ]] && return 0
+				[[ "${opt_system}" =~ ${system} ]] && return 0
+				[[ "${HOSTNAME}" =~ ${system} ]] && return 0
 			done
 			std::info "Skipping variant '${module_version}', neither OS nor hostname match:"
 			std::info "  This system: ${opt_system}; hostname: ${HOSTNAME}"
