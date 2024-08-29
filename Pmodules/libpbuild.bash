@@ -1260,28 +1260,6 @@ _build_module() {
 			return 0
 		}
 
-		#..............................................................
-		# post-install: write file with required modules
-		write_runtime_dependencies() {
-			local -r fname="$1"
-			shift
-			std::info \
-				"%s " \
-				"${module_name}/${module_version}:" \
-				"writing run-time dependencies to ${fname} ..."
-			local dep
-			echo -n "" > "${fname}"
-			for dep in "$@"; do
-				[[ -z $dep ]] && continue
-				if [[ ! $dep == */* ]]; then
-					# no version given: derive the version
-					# from the currently loaded module
-					dep=$( "${modulecmd}" bash list -t 2>&1 1>/dev/null \
-						       | grep "^${dep}/" )
-				fi
-				echo "${dep}" >> "${fname}"
-			done
-		}
 		patch_elf_exe_and_libs(){
 			local -- libdir="${OverlayInfo[${ol_name}:install_root]}/lib64"
 			[[ -d "${libdir}" ]] || return 0
@@ -1328,18 +1306,6 @@ _build_module() {
 		cd "${BUILD_DIR}"
 		[[ "${KernelName}" == "Linux" ]] && post_install_linux
 		install_doc
-		if (( ${#runtime_dependencies[@]} > 0 )); then
-			write_runtime_dependencies \
-				"${PREFIX}/${FNAME_RDEPS}" \
-				"${runtime_dependencies[@]}"
-		fi
-		if (( ${#install_dependencies[@]} > 0 )); then
-			write_runtime_dependencies \
-				"${PREFIX}/${FNAME_IDEPS}" \
-				"${install_dependencies[@]}"
-		fi
-		install_modulefile
-		install_release_file
 		cleanup_build
 		cleanup_src
 		std::info \
@@ -1349,59 +1315,186 @@ _build_module() {
 		return 0
 	} # post_install
 
- 	#......................................................................
-	# Install modulefile in ${ol_modulefiles_root}/${GROUP}/modulefiles/...
-	# The modulefiles in the build-block can be
-	# versioned like
-	#     modulefile-10.2.0
-	#     modulefile-10.2
-	#     modulefile-10
-	#     modulefile
-	# the most specific modulefile will be selected. Example:
-	# For a version 10.2.1 the file moduelfile-10.2 would be
-	# selected.
-	#
-	# Arguments
-	#     none
-	#
-	# Used gloabal variables:
-	#     VERSIONS
-	#     BUILDBLOCK_DIR
-	#     modulefile_name
-	#
-	install_modulefile() {
-		#..............................................................
-		# Select the modulefile to install.
 		#
-		# Arguments:
-		#     $1  upvar to return the filename
+	# write modulefile, configuration and dependencies
+	#
+	install_module_config(){
+
+ 		#......................................................................
+		# Install modulefile in ${ol_modulefiles_root}/${GROUP}/modulefiles/...
+		# The modulefiles in the build-block can be
+		# versioned like
+		#     modulefile-10.2.0
+		#     modulefile-10.2
+		#     modulefile-10
+		#     modulefile
 		#
-		find_modulefile() {
-			local -n _modulefile="$1"
-			local fname=''
-			for fname in "${VERSIONS[@]/#/modulefile-}" 'modulefile'; do
-				if [[ -r "${BUILDBLOCK_DIR}/${fname}" ]]; then
-					_modulefile="${BUILDBLOCK_DIR}/${fname}"
-					break;
-				fi
-			done
-			[[ -n "${_modulefile}" ]]
-		}
-		[[ "${is_subpkg}" == 'yes' ]] && return 0
-		local src=''
-		if ! find_modulefile src; then
+		# Arguments
+		#     none
+		#
+		# Used gloabal variables:
+		#     VERSIONS
+		#     BUILDBLOCK_DIR
+		#     modulefile_name
+		#
+		install_modulefile() {
+			#..............................................................
+			# Select the modulefile to install.
+			#
+			# Arguments:
+			#     $1  upvar to return the filename
+			#
+			find_modulefile() {
+				local -n _modulefile="$1"
+				local fname=''
+				for fname in "${VERSIONS[@]/#/modulefile-}" 'modulefile'; do
+					if [[ -r "${BUILDBLOCK_DIR}/${fname}" ]]; then
+						_modulefile="${BUILDBLOCK_DIR}/${fname}"
+						break;
+					fi
+				done
+				[[ -n "${_modulefile}" ]]
+			}
+			[[ "${is_subpkg}" == 'yes' ]] && return 0
+			local src=''
+			if ! find_modulefile src; then
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"skipping modulefile installation ..."
+				return
+			fi
 			std::info \
 				"%s " \
 				"${module_name}/${module_version}:" \
-				"skipping modulefile installation ..."
-			return
+				"adding modulefile to overlay '${ol_name}' ..."
+			${mkdir} -p "${modulefile_dir}"
+			${install} -m 0644 "${src}" "${modulefile_name}"
+		}
+
+		#..............................................................
+		# post-install: write file with required modules
+		install_runtime_dependencies() {
+			_write_file(){
+				local -r fname="$1"
+				shift
+				std::info \
+					"%s " \
+					"${module_name}/${module_version}:" \
+					"writing run-time dependencies to ${fname} ..."
+				local dep
+				echo -n "" > "${fname}"
+				for dep in "$@"; do
+					[[ -z $dep ]] && continue
+					if [[ ! $dep == */* ]]; then
+						# no version given: derive the version
+						# from the currently loaded module
+						dep=$( "${modulecmd}" bash list -t 2>&1 1>/dev/null \
+							       | grep "^${dep}/" )
+					fi
+					echo "${dep}" >> "${fname}"
+				done
+			}
+			if (( ${#runtime_dependencies[@]} > 0 )); then
+				if [[ "${ol_name}" == 'base' ]]; then
+					_write_file \
+						"${PREFIX}/${FNAME_RDEPS}" \
+						"${runtime_dependencies[@]}"
+				fi
+				_write_file \
+					"${modulefile_dir}/.deps-${module_version}" \
+					"${runtime_dependencies[@]}"
+			fi
+			if (( ${#install_dependencies[@]} > 0 )); then
+				_write_file \
+					"${PREFIX}/${FNAME_IDEPS}" \
+					"${install_dependencies[@]}"
+			fi
+
+		}
+
+		install_config_file() {
+			[[ "${is_subpkg}" == 'yes' ]] && return 0
+
+			local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
+			local -- status_legay_config_file='unchanged'
+			local -- relstage_legacy=''
+			if [[ -r "${legacy_config_file}" ]]; then
+				read -r relstage_legacy < "${legacy_config_file}"
+				if [[ "${relstage_legacy}" != "${module_release}" ]]; then
+					status_legay_config_file='changed'
+				fi
+			else
+				status_legay_config_file='new'
+			fi
+			${mkdir} -p "${modulefile_dir}"
+			if [[ "${status_legay_config_file}" != 'unchanged' ]]; then
+				echo "${module_release}" > "${legacy_config_file}"
+			fi
+
+ 			local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
+			local -- status_yaml_config_file='unchanged'
+			if [[ -r "${yaml_config_file}" ]]; then
+				while read -r key value; do
+					local -n ref="${key:0:-1}"
+					ref="${value}"
+				done < "${yaml_config_file}"
+				if [[ "${relstage}" != "${module_release}" ]]; then
+					status_yaml_config_file='changed'
+				fi
+			else
+				status_yaml_config_file='new'
+			fi
+			if [[ "${status_yaml_config_file}" != 'unchanged' ]]; then
+				echo "relstage: ${module_release}" > "${yaml_config_file}"
+				if (( ${#Systems[@]} > 0 )); then
+					echo -n "systems: [${Systems[0]}" >> "${yaml_config_file}"
+					for system in "${Systems[@]:1}"; do
+						echo -n ", ${system}" >> "${yaml_config_file}"
+					done
+					echo "]" >> "${yaml_config_file}"
+				fi
+			fi
+
+			case ${status_yaml_config_file},${status_legay_config_file} in
+				unchanged,unchanged | new,unchanged)
+					:
+					;;
+				unchanged,changed )
+					std::info \
+						"%s " \
+						"${module_name}/${module_version}:" \
+						"changing release stage from" \
+						"'${relstage_legacy}' to '${module_release}' in legacy config file ..."
+					;;
+				unchanged,new )
+					std::info \
+						"%s " \
+						"${module_name}/${module_version}:" \
+						"setting release stage to '${module_release}' in legacy config file ..."
+					;;
+				changed,unchanged | changed,changed | changed,new | new,changed )
+					std::info \
+						"%s " \
+						"${module_name}/${module_version}:" \
+						"changing release stage from" \
+						"'${relstage_legacy}' to '${module_release}' ..."
+					;;
+				new,new )
+					std::info \
+						"%s " \
+						"${module_name}/${module_version}:" \
+						"setting release stage to '${module_release}' ..."
+					;;
+			esac
+		}
+
+		if [[ "${opt_update_modulefiles}" == "yes" ]] || \
+			   [[ ! -e "${modulefile_name}" ]]; then
+			install_modulefile
 		fi
-		std::info \
-			"%s " \
-			"${module_name}/${module_version}:" \
-			"adding modulefile to overlay '${ol_name}' ..."
-		${mkdir} -p "${modulefile_dir}"
-		${install} -m 0644 "${src}" "${modulefile_name}"
+		install_runtime_dependencies
+		install_config_file
 	}
 
 	cleanup_modulefiles(){
@@ -1433,82 +1526,6 @@ _build_module() {
 				${rm} -f "${fname}"
 			fi
 		done
-	}
-
-	install_release_file() {
-		[[ "${is_subpkg}" == 'yes' ]] && return 0
-
-		local -r legacy_config_file="${modulefile_dir}/.release-${module_version}"
-		local -- status_legay_config_file='unchanged'
-		local -- relstage_legacy=''
-		if [[ -r "${legacy_config_file}" ]]; then
-			read -r relstage_legacy < "${legacy_config_file}"
-			if [[ "${relstage_legacy}" != "${module_release}" ]]; then
-				status_legay_config_file='changed'
-			fi
-		else
-			status_legay_config_file='new'
-		fi
-		${mkdir} -p "${modulefile_dir}"
-		if [[ "${status_legay_config_file}" != 'unchanged' ]]; then
-			echo "${module_release}" > "${legacy_config_file}"
-		fi
-
- 		local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
-		local -- status_yaml_config_file='unchanged'
-		if [[ -r "${yaml_config_file}" ]]; then
-			while read -r key value; do
-				local -n ref="${key:0:-1}"
-				ref="${value}"
-			done < "${yaml_config_file}"
-			if [[ "${relstage}" != "${module_release}" ]]; then
-				status_yaml_config_file='changed'
-			fi
-		else
-			status_yaml_config_file='new'
-		fi
-		if [[ "${status_yaml_config_file}" != 'unchanged' ]]; then
-			echo "relstage: ${module_release}" > "${yaml_config_file}"
-			if (( ${#Systems[@]} > 0 )); then
-				echo -n "systems: [${Systems[0]}" >> "${yaml_config_file}"
-				for system in "${Systems[@]:1}"; do
-					echo -n ", ${system}" >> "${yaml_config_file}"
-				done
-				echo "]" >> "${yaml_config_file}"
-			fi
-		fi
-
-		case ${status_yaml_config_file},${status_legay_config_file} in
-			unchanged,unchanged | new,unchanged)
-				:
-				;;
-			unchanged,changed )
-				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					"changing release stage from" \
-					"'${relstage_legacy}' to '${module_release}' in legacy config file ..."
-				;;
-			unchanged,new )
-				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					"setting release stage to '${module_release}' in legacy config file ..."
-				;;
-			changed,unchanged | changed,changed | changed,new | new,changed )
-				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					"changing release stage from" \
-					"'${relstage_legacy}' to '${module_release}' ..."
-				;;
-			new,new )
-				std::info \
-					"%s " \
-					"${module_name}/${module_version}:" \
-					"setting release stage to '${module_release}' ..."
-				;;
-		esac
 	}
 
 	cleanup_build() {
@@ -1674,7 +1691,7 @@ _build_module() {
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"is deprecated, skiping!"
-		install_release_file
+		install_module_config
 	}
 
 	std::info \
@@ -1732,21 +1749,14 @@ _build_module() {
 
 	if [[ "${module_release}" == 'remove' ]]; then
 		remove_module
-		cleanup_modulefiles
 	elif [[ "${module_release}" == 'deprecated' ]]; then
 		deprecate_module
-		cleanup_modulefiles
 	elif [[ -d "${PREFIX}" || "${is_subpkg}" == 'yes' ]] && [[ "${force_rebuild}" == 'no' ]]; then
  		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"already exists, not rebuilding ..."
-		if [[ "${opt_update_modulefiles}" == "yes" ]] || \
-			   [[ ! -e "${modulefile_name}" ]]; then
-			install_modulefile
-		fi
-		install_release_file
-		cleanup_modulefiles
+		install_module_config
 	else
 		if [[ "${opt_clean_install,,}" == 'yes' ]]; then
 			std::info \
@@ -1763,8 +1773,9 @@ _build_module() {
 		cleanup_src
 		compile_and_install
 		post_install
-		cleanup_modulefiles
+		install_module_config
 	fi
+	cleanup_modulefiles
 	std::info "* * * * *\n"
 }
 readonly -f _build_module
