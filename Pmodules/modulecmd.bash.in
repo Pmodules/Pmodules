@@ -792,6 +792,10 @@ subcommand_load() {
 	done
 	(( ${#args[@]} == 0 )) && \
 		die_missing_arg
+        if [[ ! -v LOADEDMODULES ]]; then
+		LOADEDMODULES=''
+		_LMFILES_=''
+        fi
 
         local m=''
 	for m in "${args[@]}"; do
@@ -1037,7 +1041,7 @@ subcommand_unload() {
 			std::remove_path PmFiles "${lmfile}"
 		fi
 	done
-	if [[ -z ${PMODULES_HOME} ]]; then
+	if [[ ! -v PMODULES_HOME || -z ${PMODULES_HOME} ]]; then
 		PMODULES_HOME="${saved_home}"
 		export_env 'PMODULES_HOME'
 	fi
