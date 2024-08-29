@@ -503,7 +503,6 @@ declare -x PREFIX=''
 declare -A SHASUMS=()
 declare -a MODULE_DOCFILES=()
 
-
 declare -A Yaml_valid_keys_for_module=(
 	['defaults']=1
 	['shasums']=1
@@ -579,6 +578,29 @@ build_modules_yaml_v1(){
         local -- version="$3"
 	shift 3
         local -a with_modules=( "$@" )
+
+	die_missing_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "is in group '$3', but the group dependency for this group is missing!" 
+	}
+	die_invalid_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "invalid group dependency '$3' for module in group '$4'!"
+	}
+
+	die_illegal_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "illegal group dependency '$4' for module in group '$3'!"
+	}
+
+	die_invalid_variants_block(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "invalid type of variants block: must be '!!seq' but is '$3'!"
+	}
 
 	check_yaml_keys(){
 		local -n valid_yaml_keys="$1"
@@ -779,7 +801,16 @@ build_modules_yaml_v1(){
 
 	get_variants(){
 		local yaml
-		yaml=$(${yq} '.variants' 2>/dev/null)
+		if yaml=$(${yq} -e '.variants' 2>/dev/null); then
+			local -- type_of_key=''
+			type_of_key=$( ${yq} -e ".variants | type" 2>/dev/null <<<"${yaml}")
+			if [[ "${type_of_key}" != 'seq' ]]; then
+				die_invalid_variants_block "${name}" "${version}" \
+							   "${type_of_key}"
+			fi
+		else
+			yaml=''
+		fi
 		echo "${yaml}"
 	}
 
@@ -853,23 +884,6 @@ build_modules_yaml_v1(){
 		if (( ${#with_modules[@]} == 0 )); then
 			with_modules=( "${modules[@]}" )
 		fi
-	}
-
-	die_missing_group_dep(){
-		std::die 3 "%s/%s: %s" \
-			 "${1}" "${2}" \
-			 "is in group '$3', but the group dependency for this group is missing!" 
-	}
-	die_invalid_group_dep(){
-		std::die 3 "%s/%s: %s" \
-			 "${1}" "${2}" \
-			 "invalid group dependency '$3' for module in group '$4'!"
-	}
-
-	die_illegal_group_dep(){
-		std::die 3 "%s/%s: %s" \
-			 "${1}" "${2}" \
-			 "illegal group dependency '$4' for module in group '$3'!"
 	}
 
 	is_in_array(){
