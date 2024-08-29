@@ -946,12 +946,14 @@ readonly -f pbuild.build_module_legacy
 
 declare -n Config
 declare -a Systems
+declare -a UseOverlays
 pbuild.build_module_yaml(){
 	local -- module_name="$1"
 	local -- module_version="$2"
 	Config="$3"
 	local -- module_relstage="${Config['relstage']}"
 	readarray -t Systems <<< "${Config['systems']}"
+	readarray -t UseOverlays <<< "${Config['use_overlays']}"
 	shift 3
 	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }
@@ -981,6 +983,10 @@ _build_module() {
 	#
 	is_loaded() {
 		[[ :${LOADEDMODULES}: =~ :$1: ]]
+	}
+
+	load_overlays(){
+		eval "$( "${modulecmd}" bash use "${Config['use_overlays']}" )"
 	}
 
 	#......................................................................
