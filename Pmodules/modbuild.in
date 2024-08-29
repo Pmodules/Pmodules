@@ -77,7 +77,7 @@ BUILD-STEPS OPTIONS:
 --all
 	Run throu all steps including cleanup.
 
--update-modulefiles
+--update-modulefiles
 	Only install the modulefile and set the release.
 
 MISCELLANEOUS OPTIONS:
