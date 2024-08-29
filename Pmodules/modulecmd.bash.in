@@ -792,6 +792,10 @@ subcommand_load() {
 	done
 	(( ${#args[@]} == 0 )) && \
 		die_missing_arg
+        if [[ ! -v LOADEDMODULES ]]; then
+		LOADEDMODULES=''
+		_LMFILES_=''
+        fi
 
         local m=''
 	if [[ ! -v LOADEDMODULES ]]; then
