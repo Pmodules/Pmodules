@@ -535,6 +535,7 @@ declare -A Yaml_default_config=(
 	['sub_packages']=''		# !!map
 	['target_cpus']=''		# !!seq of strings
 	['urls']=''			# !!map
+	['use_overlays']=''		# !!seq
 	['variant']=''			# !!str
 )
 
@@ -679,7 +680,7 @@ build_modules_yaml_v1(){
 					pm::get_value "${yaml_input}" value "${key}" '!!seq'
 					cfg[${key,,}]="${value}"
 					;;
-				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|variant )
+				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|use_overlays|variant )
 					pm::get_seq "${yaml_input}" value "${key}"
 					cfg[${key,,}]="${value}"
 					;;
