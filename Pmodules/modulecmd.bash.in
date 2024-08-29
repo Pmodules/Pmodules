@@ -798,10 +798,6 @@ subcommand_load() {
         fi
 
         local m=''
-	if [[ ! -v LOADEDMODULES ]]; then
-		LOADEDMODULES=''
-		_LMFILES_=''
-	fi
 	for m in "${args[@]}"; do
 		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 		if [[ "$m" == *:* ]]; then
