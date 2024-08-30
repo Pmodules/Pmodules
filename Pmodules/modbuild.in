@@ -1474,13 +1474,13 @@ build_modules_yaml_v1(){
 			used_keys
 
 		# read (default) config of version if set
-		local -A vk_config=()
 		local -- yaml_version_config=''
 		if [[ -v used_keys['config'] ]]; then
-			yaml_version_config=$(${yq} '.config' <<<"${yaml_vk_config}" 2>/dev/null)
+			yaml_version_config=$(${yq} '.config' <<<"${yaml_version_block}" 2>/dev/null)
 			debug "vk input: ${yaml_version_config}"
 		fi
 		# reminder: if YAML input is empty, next line copies defaults to 'vk_config'
+		local -A vk_config=()
 		yml::get_config \
 			yaml_version_config \
 			vk_config \
