@@ -327,7 +327,7 @@ parse_args() {
 
 	# set config file
 	yaml_config_file="${opt_config_file:-${BUILDBLOCK_DIR}/files/config.yaml}"
-	[[ -r "${yaml_config_file}" ]] || \
+	[[ -f "${yaml_config_file}" && -r "${yaml_config_file}" ]] || \
 		std::die 2 \
 			 "%s -- %s" \
 			 "YAML config file doesn't exist or is not readable" \
@@ -340,22 +340,24 @@ get_yaml_file_fmt(){
 	Get format version of configuration file. Print the version number
 	to stdout if it is valid.
 	"
-	${yq} -e '.' "$1" &>/dev/null || \
+	local -n result="$1"
+	local -r fname="$2"
+
+	${yq} -e '.' "${fname}" &>/dev/null || \
 		std::die 3 "%s -- %s" \
 			 "Error in YAML config file, please check with linter" \
-			 "$1"
+			 "${fname}"
 	local -- fmt=''
-	fmt=$(${yq} -e ".format" "$1") || \
-		std::die 3 "Error reading config file format -- $1"
-	case "${fmt}" in
+	result=$(${yq} -e ".format" "${fname}") || \
+		std::die 3 "Error reading config file format -- ${fname}"
+	case "${result}" in
 		1 )
 			:
 			;;
 		* )
-			std::die 3 "Unknown YAML Pmodules config file format -- $1"
+			std::die 3 "Unknown YAML Pmodules config file format -- ${fname}"
 			;;
 	esac
-	echo "${fmt}"
 }
 
 read_yaml_config_file() {
@@ -364,12 +366,11 @@ read_yaml_config_file() {
 	for the module '$2'. If yes, the YAML block with the configuration
 	is printed to stdout.
 	"
-	local -- file_name="$1"
-	local -- module_name="$2"
-	local -- yaml=''
-	yaml=$( ${yq} -Ne e ".${module_name}" "${file_name}" 2>/dev/null ) || \
+	local -n result="$1"
+	local -- file_name="$2"
+	local -- module_name="$3"
+	result=$( ${yq} -Ne e ".${module_name}" "${file_name}" 2>/dev/null ) || \
 		std::die 3 "Configuration for '${module_name}' missing -- ${file_name}"
-	echo "${yaml}"
 }
 
 build_modules(){
@@ -388,14 +389,19 @@ build_modules(){
 		yamllint "${yaml_config_file}"
 	fi
 	local -- file_fmt=''
-	file_fmt=$(get_yaml_file_fmt "${yaml_config_file}")
+	get_yaml_file_fmt \
+		file_fmt \
+		"${yaml_config_file}"
 	
-	local -- yaml_mod_config=''
-	yaml_mod_config=$(read_yaml_config_file "${yaml_config_file}" "${name}")
+	local -- module_config=''
+	read_yaml_config_file \
+		yaml_module_config \
+		"${yaml_config_file}" \
+		"${name}"
 	case "${file_fmt}" in
 		1 )
 			build_modules_yaml_v1 \
-				"${yaml_mod_config}" \
+				"${yaml_module_config}" \
 				"${name}" "${version}" \
 				"${with_modules[@]}"
 			;;
@@ -573,7 +579,7 @@ build_modules_yaml_v1(){
 	: "
 	
 	"
-	local -- yaml_mod_config="$1"
+	local -- yaml_module_config="$1"
 	local -- name="$2"
         local -- version="$3"
 	shift 3
@@ -602,13 +608,14 @@ build_modules_yaml_v1(){
 			 "invalid type of variants block: must be '!!seq' but is '$3'!"
 	}
 
-	check_yaml_keys(){
-		local -n valid_yaml_keys="$1"
-		local -n used_yaml_keys="$2"
+	yml::check_keys(){
+		local -n yaml_input="$1"
+		local -n valid_yaml_keys="$2"
+		local -n used_yaml_keys="$3"
 		used_yaml_keys=()
 		local -- key=''
 		local -a keys=()
-		readarray -t keys < <( ${yq} '.|keys().[]' 2>/dev/null)
+		readarray -t keys < <( ${yq} -e '.|keys|.[]' 2>/dev/null <<<"${yaml_input}")
 		debug "top-level keys: ${keys[*]}"
 		for key in "${keys[@]}"; do
 			[[ -v valid_yaml_keys[${key}] ]] || \
@@ -617,8 +624,8 @@ build_modules_yaml_v1(){
 		done
 	}
 
-	get_config(){
-		local -- yaml_input="$1"
+	yml::get_config(){
+		local -n yaml_input="$1"
 		local -n cfg="$2"	# ref. to return configuration
 		local -n dfl="$3"       # ref. to defaults
 		local -- key=''
@@ -757,18 +764,19 @@ build_modules_yaml_v1(){
 		done
 	}
 
-	get_matching_version_keys(){
-		: "
-		return list of version keys in refvar $1 matching version specified in $2.
-	      	"
-		local -n refvar="$1"
-		local version="$2"
+	yml::get_matching_version_keys(){
+		#
+		# return list of versions matching a specific version.
+	      	#
+		local -n yaml_input="$1"	# [in]  YAML input
+		local -n result="$2"		# [out] list of versions
+		local -- version="$3"		# [in]  version to match
 
 		local -a keys=()
-		readarray -t keys < <( ${yq} -e '.versions|keys().[]' 2>/dev/null ) || \
+		readarray -t keys < <( ${yq} -e '.versions|keys().[]' 2>/dev/null <<<"${yaml_input}" ) || \
 			std::die 3 "No version keys in configuration file!"
 
-		refvar=()
+		result=()
 		for key in "${keys[@]}"; do
 			l=()
 			# loop over semicolon separated list of keys
@@ -777,73 +785,72 @@ build_modules_yaml_v1(){
 				local list=()
 				list=( $(${bash} -c "echo $k") )
 				if [[ ${list[@]} =~ ${version} ]]; then
-					refvar+=("${key}")
+					result+=("${key}")
 					break
 				fi
 			done
 		done
-		(( ${#refvar[@]} == 0 )) && \
+		(( ${#result[@]} == 0 )) && \
 			std::die 3 "No configuration for version -- ${version}"
 		return 0
 	}
 
-	get_yaml_vk_config(){
-		: "
-		Get configuration for version key $1.
-
-		Please note: this can be the empty string.
-		"
-		local -- key="$1"
-		result=$( ${yq} ".versions.\"${key}\"" 2>/dev/null ) || \
+	yml::get_version_block(){
+		#
+		# Get configuration for specific version.
+		#
+		# Please note: this can be an empty string.
+		#
+		local -n yaml_input="$1"	# [in]  YAML input
+		local -n result="$2"		# [out] result in YAML format
+		local -- version="$3"		# [in]  return config for this version
+		result=$( ${yq} -e ".versions.\"${version}\"" 2>/dev/null <<<"${yaml_input}" ) || \
 			result=""
-		echo "${result}"
 	}
 
-	get_variants(){
-		local yaml
-		if yaml=$(${yq} -e '.variants' 2>/dev/null); then
-			local -- type_of_key=''
-			type_of_key=$( ${yq} -e ".variants | type" 2>/dev/null <<<"${yaml}")
-			if [[ "${type_of_key}" != 'seq' ]]; then
-				die_invalid_variants_block "${name}" "${version}" \
-							   "${type_of_key}"
-			fi
-		else
-			yaml=''
+	yml::get_variants(){
+		#
+		# get variants of a specific version
+		#
+		local -n yaml_input="$1"	# [in]  YAML input with the variants
+		local -n result="$2"		# [out] variants in YAML format
+		local -n n="$3"			# [out] number of variants
+
+		local -- type_of_key=''
+		type_of_key=$( ${yq} -e ".variants | type" 2>/dev/null <<<"${yaml_input}")
+		if [[ "${type_of_key}" != '!!seq' ]]; then
+			die_invalid_variants_block "${name}" "${version}" \
+						   "${type_of_key}"
 		fi
-		echo "${yaml}"
+		result=$(${yq} -e '.variants' 2>/dev/null <<<"${yaml_input}") || \
+			result=''
+		n=$(${yq} '.|length' 2>/dev/null <<<"${result}")
 	}
 
-	get_num_variants(){
-		local -i n=0
-		n=$(${yq}  '.|length' 2>/dev/null)
-		echo "$n"
+	yml::get_nth_variant(){
+		local -n yaml_input="$1"	# [in]  YAML input
+		local -n result="$2"		# [out] nth variant in YAML format
+		local -i n="$3"			# [in]  index of variant to return
+		result=$(${yq}  -e ".[$n]" 2>/dev/null <<<"${yaml_input}") || result=''
 	}
 
-	get_variant(){
-		local n="$1"
-		local yaml
-		yaml=$(${yq}  -e ".[$n]" 2>/dev/null)
-		[[ "${yaml}" == 'null' ]] && _result=''
-		echo "${yaml}"
-	}
-
-	chk_group_deps(){
-		: "
-		Check the group dependencies:
-		1. are all keys valid?
-		2. all required group deps defined?
-		3. more group deps defined as required?
-		"
-		:
-		local -- yaml="$1"		# yaml formatted string: value of group_deps
-		local -- group="$2"		# compiler|mpi|hdf5|hdf5_serial
-		local -- name="$3"		# module name
-		local -- version="$4"		# module version
+	yml::chk_group_deps(){
+		#
+		# Check the group dependencies:
+		# 1. are all keys valid?
+		# 2. all required group deps defined?
+		# 3. more group deps defined as required?
+		#
+		# Die if check fails.
+		#
+		local -- yaml_input="$1"	# [in]  value of key group_deps
+		local -- group="$2"		# [in]  compiler|mpi|hdf5|hdf5_serial
+		local -- name="$3"		# [in]  module name
+		local -- version="$4"		# [in]  module version
 
 		# query all specified group dependencies
 		local -a keys=()
-		readarray -t keys < <( ${yq} ".|keys|.[]" <<<"${yaml}" 2>/dev/null )
+		readarray -t keys < <( ${yq} ".|keys|.[]" <<<"${yaml_input}" 2>/dev/null )
 
 		local -- key=''
 		for key in "${keys[@]}"; do
@@ -861,18 +868,18 @@ build_modules_yaml_v1(){
 		done
 	}
 
-	get_group_deps(){
-		local -- yaml="$1"		# yaml formatted string with group config
-		local -- group="$2"		# compiler|mpi|hdf5|hdf5_serial
-		local -n with_modules="$3"	# refvar to return a list of modules
+	yml::get_group_deps(){
+		local -- yaml_input="$1"	# [in]  value of key group_deps
+		local -- group="$2"		# [in]  compiler|mpi|hdf5|hdf5_serial
+		local -n with_modules="$3"	# [out] list of required modules
 
 		local -a modules=()
 		local keys=()
-		readarray -t keys < <( ${yq} ".${group,,}|keys|.[]" <<<"${yaml}" 2>/dev/null )
+		readarray -t keys < <( ${yq} ".${group,,}|keys|.[]" <<<"${yaml_input}" 2>/dev/null )
 		local key
 		for key in "${keys[@]}"; do
 			local versions=()
-			readarray -t versions < <( ${yq} -e ".${group,,}.${key}[]" <<<"${yaml}" 2>/dev/null )
+			readarray -t versions < <( ${yq} -e ".${group,,}.${key}[]" <<<"${yaml_input}" 2>/dev/null )
 			local version
 			for version in "${versions[@]}"; do
 				if [[ -v opt_with_dict[${key}/${version}] ]]; then
@@ -902,27 +909,34 @@ build_modules_yaml_v1(){
 		return 0
 	}
 
-	: "
-	To compile a module with a certain compiler||mpi||hdf5 dependency
-	the '--with' option can be used. Depending on the hierarchical
-	group the modules specified with the option '--with' must be a
-	subset of
-	- compiler: ( compiler)
-	- mpi: ( compiler mpi )
-	- hdf5: ( compiler mpi hdf5 )
-	- hdf5_serial: ( compiler hdf5_serial )
-	"
+	#
+	# To compile a module with a certain compiler||mpi||hdf5 dependency
+	# the '--with' option can be used. Depending on the hierarchical
+	# group the modules specified with the option '--with' must be a
+	# subset of
+	# - compiler: ( compiler)
+	# - mpi: ( compiler mpi )
+	# - hdf5: ( compiler mpi hdf5 )
+	# - hdf5_serial: ( compiler hdf5_serial )
+	#
 
 	build_modules_compiler(){
-		local -- module_name="$1"
-		local -- module_version="$2"
-		local -n module_cfg="$3"
+		#
+		# build a module in hierarchical group 'Compiler'
+		#
+		local -- module_name="$1"	# [in]  module name
+		local -- module_version="$2"	# [in]  module version
+		local -n module_cfg="$3"	# [in]  ref to module config
 
-		chk_group_deps  "${module_cfg['group_deps']}" 'Compiler' \
-				"${module_name}" "${module_version}"
+		yml::chk_group_deps \
+			"${module_cfg['group_deps']}" \
+			'Compiler' \
+			"${module_name}" "${module_version}"
 
 		local -a with_compiler=()
-		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+		yml::get_group_deps \
+			"${module_cfg['group_deps']}" \
+			'Compiler' with_compiler
 		debug "${with_compiler[@]}"
 		
 		local compiler=''
@@ -941,18 +955,23 @@ build_modules_yaml_v1(){
 	}
 
 	build_modules_hdf5_serial(){
-		local -- module_name="$1"
-		local -- module_version="$2"
-		local -n module_cfg="$3"
+		#
+		# build a module in hierarchical group 'HDF5_serial'
+		#
+		local -- module_name="$1"	# [in]  module name
+		local -- module_version="$2"	# [in]  module version
+		local -n module_cfg="$3"	# [in]  ref to module config
 
-		chk_group_deps  "${module_cfg['group_deps']}" 'HDF5_serial' \
-				"${module_name}" "${module_version}"
+		yml::chk_group_deps \
+			"${module_cfg['group_deps']}" \
+			'HDF5_serial' \
+			"${module_name}" "${module_version}"
 
 		local -a with_compiler=()
-		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
 
 		local -a with_hdf5=()
-		get_group_deps  "${module_cfg['group_deps']}" 'HDF5_serial' with_hdf5
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'HDF5_serial' with_hdf5
 
 		local -- compiler
 		local -- hdf5
@@ -978,17 +997,23 @@ build_modules_yaml_v1(){
 
 
 	build_modules_mpi(){
-		local -- module_name="$1"
-		local -- module_version="$2"
-		local -n module_cfg="$3"
+		#
+		# build a module in hierarchical group 'MPI'
+		#
+		local -- module_name="$1"	# [in]  module name
+		local -- module_version="$2"	# [in]  module version
+		local -n module_cfg="$3"	# [in]  ref to module config
 
-		chk_group_deps  "${module_cfg['group_deps']}" 'MPI' "${module_name}" "${module_version}"
+		yml::chk_group_deps \
+			"${module_cfg['group_deps']}" \
+			'MPI' \
+			"${module_name}" "${module_version}"
 
 		local -a with_compiler=()
-		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
 
 		local -a with_mpi=()
-		get_group_deps  "${module_cfg['group_deps']}" 'MPI' with_mpi
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'MPI' with_mpi
 
 		local -- compiler
 		local -- mpi
@@ -1013,20 +1038,26 @@ build_modules_yaml_v1(){
 	}
 
 	build_modules_hdf5(){
-		local -- module_name="$1"
-		local -- module_version="$2"
-		local -n module_cfg="$3"
+		#
+		# build a module in hierarchical group 'HDF5'
+		#
+		local -- module_name="$1"	# [in]  module name
+		local -- module_version="$2"	# [in]  module version
+		local -n module_cfg="$3"	# [in]  ref to module config
 
-		chk_group_deps  "${module_cfg['group_deps']}" 'HDF5' "${module_name}" "${module_version}"
+		yml::chk_group_deps \
+			"${module_cfg['group_deps']}" \
+			'HDF5' \
+			"${module_name}" "${module_version}"
 
 		local -a with_compiler=()
-		get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'Compiler' with_compiler
 
 		local -a with_mpi=()
-		get_group_deps  "${module_cfg['group_deps']}" 'MPI' with_mpi
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'MPI' with_mpi
 
 		local -a with_hdf5=()
-		get_group_deps  "${module_cfg['group_deps']}" 'HDF5' with_hdf5
+		yml::get_group_deps  "${module_cfg['group_deps']}" 'HDF5' with_hdf5
 
 		local -- compiler
 		local -- mpi
@@ -1058,9 +1089,13 @@ build_modules_yaml_v1(){
 	}
 
 	build_modules_other(){
-		local -- module_name="$1"
-		local -- module_version="$2"
-		local -n module_cfg="$3"
+		#
+		# build a module in a non-hierarchical group
+		#
+		local -- module_name="$1"	# [in]  module name
+		local -- module_version="$2"	# [in]  module version
+		local -n module_cfg="$3"	# [in]  ref to module config
+
 		pbuild.build_module_yaml \
                         "${module_name}" "${module_version}" \
                         "$3" \
@@ -1374,32 +1409,38 @@ build_modules_yaml_v1(){
 	}
 
 	local -A used_keys=()
-	local -- yaml_input=''
 	local -A default_config=()
 	local -- version_key=''
 	local -a version_keys=()
 	local -A shasums=()
 
-	check_yaml_keys Yaml_valid_keys_for_module used_keys <<<"${yaml_mod_config}"
+	yml::check_keys \
+		yaml_module_config \
+		Yaml_valid_keys_for_module \
+		used_keys
 	[[ -v used_keys['versions'] ]] || \
 		std::die 3 "No version(s) specified in YAML configuration file."
 
+	local -- yaml_default_config=''
 	if [[ -v used_keys['defaults'] ]]; then
-		yaml_input=$(${yq} '.defaults' <<<"${yaml_mod_config}" 2>/dev/null)
+		yaml_default_config=$(${yq} '.defaults' <<<"${yaml_module_config}" 2>/dev/null)
 	fi
-	get_config "${yaml_input}" default_config Yaml_default_config
+	yml::get_config \
+		yaml_default_config \
+		default_config \
+		Yaml_default_config
 
 	if [[ -v used_keys['shasums'] ]]; then
-		local yaml_input=''
-		yaml_input=$(${yq} '.shasums' <<<"${yaml_mod_config}" 2>/dev/null)
+		local yaml_shasums=''
+		yaml_shasums=$(${yq} '.shasums' <<<"${yaml_module_config}" 2>/dev/null)
 		while read -r key value; do
 			[[ -z ${key} ]] && continue
 			SHASUMS[${key//:}]="${value}"
-		done <<<"${yaml_input}"
+		done <<<"${yaml_shasums}"
 	fi
 	if [[ -v used_keys['type'] ]]; then
 		local -- value=''
-		pm::get_value "${yaml_mod_config}" value 'type' '!!str'
+		pm::get_value "${yaml_module_config}" value 'type' '!!str'
 		case "${value,,}" in
 			'module' )
 				[[ "${module_type}" == 'sub_package' ]] && \
@@ -1414,29 +1455,44 @@ build_modules_yaml_v1(){
 				;;
 		esac
 	fi
-	get_matching_version_keys version_keys "${version}" <<<"${yaml_mod_config}"
+	yml::get_matching_version_keys \
+		yaml_module_config \
+		version_keys \
+		"${version}"
 	for version_key in "${version_keys[@]}"; do
-		local yaml_vk_config=''
-		yaml_vk_config=$(get_yaml_vk_config "${version_key}" <<<"${yaml_mod_config}")
+		local -- yaml_version_block=''
+		yml::get_version_block \
+			yaml_module_config \
+			yaml_version_block \
+			"${version_key}" 
 
 		# check keys: allowed are 'config' and 'variants'
 		used_keys=()
-		check_yaml_keys Yaml_valid_vk_keys used_keys <<<"${yaml_vk_config}"
+		yml::check_keys \
+			yaml_version_block \
+			Yaml_valid_vk_keys \
+			used_keys
 
-		# read config if set
+		# read (default) config of version if set
 		local -A vk_config=()
-		yaml_input=''
+		local -- yaml_version_config=''
 		if [[ -v used_keys['config'] ]]; then
-			yaml_input=$(${yq} '.config' <<<"${yaml_vk_config}" 2>/dev/null)
-			debug "vk input: ${yaml_input}"
+			yaml_version_config=$(${yq} '.config' <<<"${yaml_vk_config}" 2>/dev/null)
+			debug "vk input: ${yaml_version_config}"
 		fi
 		# reminder: if YAML input is empty, next line copies defaults to 'vk_config'
-		get_config "${yaml_input}" vk_config default_config
+		yml::get_config \
+			yaml_version_config \
+			vk_config \
+			default_config
 
 		local -- yaml_variants=''
-		yaml_variants=$(get_variants <<<"${yaml_vk_config}")
 		local -i num_variants=0
-		num_variants=$(get_num_variants <<<"${yaml_variants}")
+		yml::get_variants \
+			yaml_version_block \
+			yaml_variants \
+			num_variants
+
 		local versions=()
 		expand_version_key versions "${version_key}" "${version}"
 		local v=''
@@ -1448,12 +1504,18 @@ build_modules_yaml_v1(){
 					vk_config
 			else
 				local -i n=0
-				local -- yaml_variant=''
+				local -- yaml_variant_config=''
 				for ((n=0; n<num_variants; n++)); do
-					yaml_variant=$(get_variant "${n}" <<<"${yaml_variants}")
+					yml::get_nth_variant \
+						yaml_variants \
+						yaml_variant_config \
+						"${n}"
 					
 					local -A mod_config=()
-					get_config "${yaml_variant}" mod_config vk_config
+					yml::get_config \
+						yaml_variant_config \
+						mod_config \
+						vk_config
 					build_modules_variant \
 						"${name}" "${v}" \
 						mod_config
