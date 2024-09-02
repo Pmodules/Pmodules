@@ -818,6 +818,11 @@ build_modules_yaml_v1(){
 
 		local -- type_of_key=''
 		type_of_key=$( ${yq} -e ".variants | type" 2>/dev/null <<<"${yaml_input}")
+		if [[ "${type_of_key}" == '!!null' ]]; then
+			result=''
+			n=0
+			return 0
+                fi
 		if [[ "${type_of_key}" != '!!seq' ]]; then
 			die_invalid_variants_block "${name}" "${version}" \
 						   "${type_of_key}"
