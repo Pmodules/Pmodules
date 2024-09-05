@@ -892,6 +892,8 @@ subcommand_load() {
 		fi
 		test -r "${deps_file}" && load_dependencies "$_"
 
+		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
+
 		# load module
 		modulecmd="${interp[${current_modulefile}]}"
 		local output=''
