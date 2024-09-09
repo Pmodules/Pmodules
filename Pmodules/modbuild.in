@@ -220,6 +220,10 @@ parse_args() {
 				shift
 			fi
 			;;
+		--exit-on-error )
+			# this is for testing!
+			set -e
+			;;
 		--tmpdir | --tmpdir=* )
 			if [[ $1 == *=* ]]; then
 				PMODULES_TMPDIR="${1#--*=}"
@@ -335,7 +339,7 @@ parse_args() {
 	std::info "Using YAML configuration file - ${yaml_config_file}"
 }
 
-get_yaml_file_fmt(){
+yml::get_file_fmt(){
 	: "
 	Get format version of configuration file. Print the version number
 	to stdout if it is valid.
@@ -360,15 +364,14 @@ get_yaml_file_fmt(){
 	esac
 }
 
-read_yaml_config_file() {
-	: "
-  	Test whether the configuration file '$1' provides configurations
-	for the module '$2'. If yes, the YAML block with the configuration
-	is printed to stdout.
-	"
-	local -n result="$1"
-	local -- file_name="$2"
-	local -- module_name="$3"
+yml::read_config_file() {
+	#
+  	# Test whether the configuration file '$1' provides configurations
+	# for the module '$2'.
+	#
+	local -n result="$1"		# [out] return configuration for module
+	local -- file_name="$2"		# [in]  name of configuration file
+	local -- module_name="$3"	# [in]  module name (without version)
 	result=$( ${yq} -Ne e ".${module_name}" "${file_name}" 2>/dev/null ) || \
 		std::die 3 "Configuration for '${module_name}' missing -- ${file_name}"
 }
@@ -389,12 +392,12 @@ build_modules(){
 		yamllint "${yaml_config_file}"
 	fi
 	local -- file_fmt=''
-	get_yaml_file_fmt \
+	yml::get_file_fmt \
 		file_fmt \
 		"${yaml_config_file}"
 	
-	local -- module_config=''
-	read_yaml_config_file \
+	local -- yaml_module_config=''
+	yml::read_config_file \
 		yaml_module_config \
 		"${yaml_config_file}" \
 		"${name}"
@@ -585,15 +588,19 @@ build_modules_yaml_v1(){
 	shift 3
         local -a with_modules=( "$@" )
 
+
+	die_parsing(){
+		std::die 3 "error parsing YAML:\n----\n$1\n----"
+	}
+
 	die_missing_group_dep(){
 		std::die 3 "%s/%s: %s" \
 			 "${1}" "${2}" \
 			 "is in group '$3', but the group dependency for this group is missing!" 
 	}
-	die_invalid_group_dep(){
-		std::die 3 "%s/%s: %s" \
-			 "${1}" "${2}" \
-			 "invalid group dependency '$3' for module in group '$4'!"
+
+	die_missing_key(){
+		std::die 3 "Key '$3' missing in $2\n----\n$1\n----"
 	}
 
 	die_illegal_group_dep(){
@@ -602,10 +609,32 @@ build_modules_yaml_v1(){
 			 "illegal group dependency '$4' for module in group '$3'!"
 	}
 
+	die_invalid_group_dep(){
+		std::die 3 "%s/%s: %s" \
+			 "${1}" "${2}" \
+			 "invalid group dependency '$3' for module in group '$4'!"
+	}
+
 	die_invalid_variants_block(){
 		std::die 3 "%s/%s: %s" \
 			 "${1}" "${2}" \
 			 "invalid type of variants block: must be '!!seq' but is '$3'!"
+	}
+
+	die_invalid_value(){
+		std::die 3 "Invalid value for key '$3' in $2 -- '$4'\n----\n$1\n----"
+	}
+
+	die_invalid_key(){
+		std::die 3 "Invalid key '$3' in $2\n----\n$1\n----"
+	}
+
+	die_error_reading_keys(){
+		std::die 3 "Error while reading keys from:\n----\n$1\n----"
+	}
+
+	die_invalid_kernel_name(){
+		std::die 3 "Invalid kernel name in configuration!"
 	}
 
 	yml::check_keys(){
@@ -619,7 +648,10 @@ build_modules_yaml_v1(){
 		debug "top-level keys: ${keys[*]}"
 		for key in "${keys[@]}"; do
 			[[ -v valid_yaml_keys[${key}] ]] || \
-				std::die 3 "Invalid key in YAML configuration file -- ${key}"
+				die_invalid_key \
+					"${yaml_input}" \
+					'configuration file' \
+					"${key}"
 			used_yaml_keys[${key}]=1
 		done
 	}
@@ -641,13 +673,14 @@ build_modules_yaml_v1(){
 
 		local -a keys=()
 		readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null ) || \
-			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+			die_error_reading_keys "${yaml_input}"
 		debug "config keys: ${keys[*]}"
 		for key in "${keys[@]}"; do
 			[[ -v dfl[${key,,}] ]] || \
-				std::die 3 "%s -- %s\n%s" \
-					 "Invalid key in configuration" \
-					 "${key}" "${yaml_input}"
+				die_invalid_key \
+					"${yaml_input}" \
+					'configuration' \
+					"${key}"
 			case ${key} in
 				compile_in_sourcetree )
 					pm::get_value "${yaml_input}" value "${key}" '!!bool'
@@ -659,10 +692,11 @@ build_modules_yaml_v1(){
 							cfg[${key,,}]='no'
 							;;
 						* )
-							std::die 3 "%s '%s' -- %s" \
-								 "Invalid value for" \
-								 "${key}" \
-								 "${value}"
+							die_invalid_value \
+								"${yaml_input}" \
+								'config section' \
+								"${key}" \
+								"${value}"
 							;;
 					esac
 					;;
@@ -673,10 +707,11 @@ build_modules_yaml_v1(){
 							cfg[${key,,}]="${value,,}"
 							;;
 						* )
-							std::die 3 "%s '%s' -- %s" \
-								 "Invalid value for" \
-								 'configure_with' \
-								 "${value}"
+							die_invalid_value \
+								"${yaml_input}" \
+								'config section' \
+								"${key}" \
+								"${value}"
 							;;
 					esac
 					;;
@@ -698,10 +733,11 @@ build_modules_yaml_v1(){
 							cfg[${key,,}]='remove'
 							;;
 						* )
-							std::die 3 "%s '%s' -- %s" \
-								 "Invalid value for" \
-								 'relstage' \
-								 "${value}"
+							die_invalid_value \
+								"${yaml_input}" \
+								'config section' \
+								"${key}" \
+								"${value}"
 							;;
 					esac
 					;;
@@ -1107,22 +1143,6 @@ build_modules_yaml_v1(){
 			"${@:4}"
 	}
 
-	die_parsing(){
-		std::die 3 "error parsing YAML:\n----\n$1\n----"
-	}
-
-	die_invalid_value(){
-		std::die 3 "Invalid value for key '$3' in $2 -- '$4'\n----\n$1\n----"
-	}
-
-	die_invalid_key(){
-		std::die 3 "Invalid key '$3' in $2\n----\n$1\n----"
-	}
-
-	die_missing_key(){
-		std::die 3 "Key '$3' missing in $2\n----\n$1\n----"
-	}
-
 	set_urls() {
 		local -- yaml="$1"
 		local -i l=0
@@ -1209,6 +1229,9 @@ build_modules_yaml_v1(){
 		local -i l=0
 		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
 			die_parsing "${yaml}"
+		if (( l == 0 )); then
+			debug "No sub-packages to built"
+		fi
 		local -i i=0
 		local -- fname=''
 		local -- pkgs_yaml=''
@@ -1259,18 +1282,20 @@ build_modules_yaml_v1(){
 				"${pkg_name}/${pkg_version}" \
 				"${pkg_build_args[@]}"
 		done
+		debug "Building sub-packages done"
 	}
 
-	build_modules_variant(){
-		local -- module_name="$1"
-		local -- module_version="$2"
-		local -n module_config="$3"
+
+	is_variant_to_be_built(){
+		local -- name="$1"
+		local -- version="$2"
+		local -n config="$3"
 
 		check_system(){
-			[[ -z ${module_config['systems']} ]] && return 0
+			[[ -z ${config['systems']} ]] && return 0
 
 			set -o noglob
-			local -a systems=( ${module_config['systems']} )
+			local -a systems=( ${config['systems']} )
 			set +o noglob
 
 			local -- system
@@ -1278,34 +1303,32 @@ build_modules_yaml_v1(){
 				[[ "${opt_system}" =~ ${system} ]] && return 0
 				[[ "${HOSTNAME}" =~ ${system} ]] && return 0
 			done
-			std::info "Skipping variant '${module_version}', neither OS nor hostname match:"
+			std::info "Skipping variant '${version}', neither OS nor hostname match:"
 			std::info "  This system: ${opt_system}; hostname: ${HOSTNAME}"
 			std::info "  Systems to build on: ${systems[@]}"
 			return 1
 		}
-		die_invalid_kernel_name(){
-			std::die 3 "Invalid kernel name in configuration!"
-		}
+
 		check_kernel(){
-			[[ -z ${module_config['kernels']} ]] && return 0
+			[[ -z ${config['kernels']} ]] && return 0
 			set -o noglob
-			local -a kernels=( "${module_config['kernels'],,}" )
+			local -a kernels=( "${config['kernels'],,}" )
 			set +o noglob
 			local -- kernel=''
 			for kernel in "${kernels[@]}"; do
 				[[ ${kernel} == 'any' ]] && return 0
 				[[ ${kernel} == ${KernelName,,} ]] & return 0
 			done
-			std::info "Skipping variant '${module_version}':"
+			std::info "Skipping variant '${version}':"
 			std::info "  The kernel of this systems is: ${KernelName}"
-			std::info "  But the variant is for the following kernels: ${module_config['kernels']}"
+			std::info "  But the variant is for the following kernels: ${config['kernels']}"
 			return 1
 		}
 
 		check_target_cpu(){
-			[[ -z ${module_config['target_cpus']} ]] && return 0
+			[[ -z ${config['target_cpus']} ]] && return 0
 			set -o noglob
-			local -a target_cpus=( "${module_config['target_cpus'],,}" )
+			local -a target_cpus=( "${config['target_cpus'],,}" )
 			set +o noglob
 			local -- system_cpu=$(uname -p)
 			local -- cpu=''
@@ -1313,28 +1336,29 @@ build_modules_yaml_v1(){
 				[[ ${cpu} == 'any' ]] && return 0
 				[[ ${cpu} == ${system_cpu} ]] && return 0
 			done
-			std::info "Skipping variant '${module_version}':"
+			std::info "Skipping variant '${version}':"
 			std::info "  The CPU of this systems is: ${system_cpu}"
-			std::info "  But this variant is for the following CPUs: ${module_config['target_cpus']}"
+			std::info "  But this variant is for the following CPUs: ${config['target_cpus']}"
 			return 1
 
 		}
 
-		P="${module_name}"
-		parse_version "${module_version}"
-
-		local build_variant="${opt_variant:-${module_config['default_variant']}}"
-
 		# build this variant?
-		if [[ ":${module_config['variant']}:" != *:${build_variant}:* ]]; then
-			debug "don't build this variant: ${module_config['variant']} !=  *:${build_variant}:*"
+		local build_variant="${opt_variant:-${config['default_variant']}}"
+		if [[ ":${config['variant']}:" != *:${build_variant}:* ]]; then
+			debug "don't build this variant: ${config['variant']} !=  *:${build_variant}:*"
 			return 0
 		fi
-		
-		# build for this system, kernel and target_cpu?
-		check_system || return 0
-		check_kernel || return 0
-		check_target_cpu || return 0
+		check_system     module_config || return 1
+		check_kernel     module_config || return 1
+		check_target_cpu module_config || return 1
+		return 0
+	}
+
+	build_modules_variant(){
+		local -- module_name="$1"
+		local -- module_version="$2"
+		local -n module_config="$3"
 
 		debug "build variant ${module_name}/${module_version}"
 
@@ -1500,10 +1524,17 @@ build_modules_yaml_v1(){
 
 		local versions=()
 		expand_version_key versions "${version_key}" "${version}"
-		local v=''
-		for v in "${versions[@]}"; do
-			debug "version: $v"
+		local version=''
+		for version in "${versions[@]}"; do
+			debug "version: $version"
+			P="${name}"
+			parse_version "${version}"
+
 			if (( num_variants == 0 )); then
+				is_variant_to_be_built \
+					"${module_name}" \
+					"${module_version}" \
+					vk_config || continue
 				build_modules_variant \
 					"${name}" "${v}" \
 					vk_config
@@ -1521,9 +1552,16 @@ build_modules_yaml_v1(){
 						yaml_variant_config \
 						mod_config \
 						vk_config
+					is_variant_to_be_built \
+						"${name}" "${version}" \
+						mod_config || continue
 					build_modules_variant \
-						"${name}" "${v}" \
+						"${name}" "${version}" \
 						mod_config
+					if [[ "${mod_config['build_variants']}" == 'first_match' ]]; then
+						break
+					fi
+					#debug "n=$n; num_variants=$num_variants"
 				done
 			fi
 		done
@@ -1539,6 +1577,19 @@ debug(){
 
 init_module_environment
 parse_args "$@"
+
+#
+# :FIXME: add comments what and why we are doing this.
+#
+declare -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
+${rm} -f "${logfile}"
+if [[ "${opt_verbose}" == 'yes' ]]; then
+	exec  > >(${tee} -a "${logfile}")
+else
+	exec > >(${cat} >> "${logfile}")
+fi
+exec 2> >(${tee} -a "${logfile}" >&2)
+
 pbuild.jobs "${opt_jobs}"
 pbuild.force_rebuild "${opt_force_rebuild}"
 pbuild.build_target "${opt_build_target}"
@@ -1547,7 +1598,6 @@ pbuild.enable_cleanup_build "${opt_enable_cleanup_build}"
 pbuild.enable_cleanup_src "${opt_enable_cleanup_src}"
 pbuild.update_modulefiles "${opt_update_modulefiles}"
 pbuild.system "${opt_system}"
-pbuild.verbose "${opt_verbose}"
 
 #
 # read configuration for modbuild
