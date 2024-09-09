@@ -14,7 +14,6 @@ declare -r FNAME_IDEPS='.install_dependencies'
 declare -r  _DOCDIR='share/doc'
 
 declare -a SOURCE_URLS=()
-declare -a SOURCE_SHA256_SUMS=()
 declare -a SOURCE_NAMES=()
 declare -a SOURCE_STRIP_DIRS=() 
 declare -a SOURCE_UNPACKER=()
@@ -154,19 +153,9 @@ readonly -f pbuild.system
 #	$1: group
 #
 pbuild::add_to_group() {
-	if (( $# == 0 )); then
-		std::die 42 \
-                         "%s " "${module_name}/${module_version}:" \
-                         "${FUNCNAME[0]}: missing group argument."
-	fi
-	if (( $# > 1 )); then
-		std::die 42 \
-                         "%s " "${module_name}/${module_version}:" \
-                         "${FUNCNAME[0]}: only one argument is allowed."
-	fi
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	pbuild.add_to_group "$@"
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "The group must be configured in the YAML configuration file!"
 }
 readonly -f pbuild::add_to_group
 
@@ -338,48 +327,6 @@ readonly -f pbuild::version_eq
 
 #..............................................................................
 #
-# Check whether the loaded compiler is supported.
-#
-# Arguments:
-#   $@: supported compiler (like GCC, Intel, PGI).
-#       Default is all.
-#
-pbuild::supported_compilers() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	pbuild.supported_compilers "$@"
-}
-readonly -f pbuild::supported_compilers
-
-declare SUPPORTED_COMPILERS=()
-pbuild.supported_compilers(){
-	SUPPORTED_COMPILERS+=( "$@" )
-}
-readonly -f pbuild.supported_compilers
-
-#..............................................................................
-#
-# Check whether the script is running on a supported OS.
-#
-# Arguments:
-#   $@: supported opertating systems (something like RHEL6, macOS10.14, ...).
-#       Default is all.
-#
-pbuild::supported_systems() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	pbuild.supported_systems "$@"
-}
-readonly -f pbuild::supported_systems
-
-declare SUPPORTED_SYSTEMS=()
-pbuild.supported_systems() {
-	SUPPORTED_SYSTEMS+=( "$@" )
-}
-readonly -f pbuild.supported_systems
-
-#..............................................................................
-#
 pbuild::use_flag() {
 	[[ "${USE_FLAGS}" == *:${1}:* ]]
 }
@@ -397,16 +344,9 @@ readonly -f pbuild::use_flag
 #	$1	download URL
 #	$2	optional file-name (of)
 pbuild::set_download_url() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	local -i _i=${#SOURCE_URLS[@]}
-	SOURCE_URLS[_i]="$1"
-	if (( $# > 1 )); then
-		SOURCE_NAMES[_i]="${2:-${1##*/}}"
-	else
-		SOURCE_NAMES[_i]="${1##*/}"
-	fi
-	SOURCE_STRIP_DIRS[_i]='1'
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "The URL must be configured in the YAML configuration file!"
 }
 readonly -f pbuild::set_download_url
 
@@ -429,9 +369,9 @@ pbuild.set_urls(){
 #	Maybe we should use a dictionary in the future.
 #
 pbuild::set_sha256sum() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	SOURCE_SHA256_SUMS+=("$1")
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "The SHA256 hash must be configured in the YAML configuration file!"
 }
 readonly -f pbuild::set_sha256sum
 
@@ -450,22 +390,6 @@ readonly -f pbuild::set_unpack_dir
 
 #..............................................................................
 #
-pbuild::add_patch() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	[[ -z "$1" ]] && \
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "${FUNCNAME[0]}: missing argument!"
-	PATCH_FILES+=( "$1" )
-	if (( $# >= 2 )); then
-		PATCH_STRIPS+=( "$2" )
-	else
-		PATCH_STRIPS+=( "${PATCH_STRIP_DEFAULT}" )
-	fi
-}
-readonly -f pbuild::add_patch
-
 pbuild.add_patch_files(){
 	local -- arg=''
 	for arg in "$@"; do
@@ -484,14 +408,9 @@ readonly -f pbuild.add_patch_files
 #..............................................................................
 #
 pbuild::set_default_patch_strip() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	[[ -n "$1" ]] || \
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "${FUNCNAME[0]}: missing argument!"
-
-	PATCH_STRIP_DEFAULT="$1"
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "The patch strip must be configured in the YAML configuration file!"
 }
 readonly -f pbuild::set_default_patch_strip
 
@@ -604,22 +523,8 @@ pbuild::prep() {
 				 "${module_name}/${module_version}:" \
 				 "source file '${_result}' is not readable!"
 
-		local -- sha256_sum=''
-		if [[ "${opt_yaml}" == 'yes' ]]; then
-			if [[ -v SHASUMS[${fname}] ]]; then
-				sha256_sum="${SHASUMS[${fname}]}"
-			fi
-		else
-			local hash=''
-			for hash in "${SOURCE_SHA256_SUMS[@]}"; do
-				if [[ ${hash} =~ $fname: ]]; then
-					sha256_sum="${hash#*:}"
-					break
-				fi
-			done
-		fi
-		if [[ -n "${sha256_sum}" ]]; then
-			check_hash_sum "${dir}/${fname}" "${sha256_sum}"
+		if [[ -v SHASUMS[${fname}] ]]; then
+			check_hash_sum "${dir}/${fname}" "${SHASUMS[${fname}]}"
 			std::info "${module_name}/${module_version}: SHA256 hash sum is OK ..." 
 		else
 			std::info "${module_name}/${module_version}: SHA256 hash sum missing NOK ..." 
@@ -708,40 +613,24 @@ readonly -f pbuild.add_configure_args
 #..............................................................................
 #
 pbuild::use_autotools() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	configure_with='autotools'
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "Use the 'configure_with' key in the YAML configuration file!"
 }
 readonly -f pbuild::use_autotools
 
 #..............................................................................
 #
 pbuild::use_cmake() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	configure_with='cmake'
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "Use the 'configure_with' key in the YAML configuration file!"
 }
 readonly -f pbuild::use_cmake
 
 pbuild.configure_with(){
 	configure_with="$1"
 }
-
-#..............................................................................
-#
-# Use this C-compiler
-#
-# Arguments:
-#	$1	C-compiler to use.
-#
-pbuild::use_cc() {
-	[[ -x "$1" ]] || std::die 3 \
-				  "%s " "${module_name}/${module_version}:" \
-				  "Error in setting CC:" \
-				  "'$1' is not an executable!"
-	export CC="$1"
-}
-readonly -f pbuild::use_cc
 
 #..............................................................................
 #
@@ -753,9 +642,9 @@ readonly -f pbuild::use_cc
 declare -- compile_in_sourcetree='no'
 
 pbuild::compile_in_sourcetree() {
-	std::info \
-		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
-	compile_in_sourcetree='yes'
+	std::die 42 "%s " \
+                 "${FUNCNAME[0]}: This function has been removed in Pmodules/1.1.22." \
+		 "Use the 'compile_in_sourcetree' key in the YAML configuration file!"
 }
 readonly -f pbuild::compile_in_sourcetree
 pbuild.compile_in_sourcetree(){
@@ -798,6 +687,7 @@ pbuild::configure() {
 	if [[ -r "${SRC_DIR}/configure" ]] && \
 		   [[ "${configure_with}" == 'auto' ]] || \
 			   [[ "${configure_with}" == 'autotools' ]]; then
+		std::info "%s " "${SRC_DIR}/configure --prefix=${PREFIX} ${config_args[@]}"
 		"${SRC_DIR}/configure" \
 			  --prefix="${PREFIX}" \
 			  "${config_args[@]}" || \
@@ -930,23 +820,16 @@ pbuild::install_shared_libs() {
 # The following two functions are the entry points called by modbuild!
 #
 
-declare opt_yaml='yes'
-pbuild.build_module_legacy(){
-	opt_yaml='no'
-	_build_module "$@"
-}
-readonly -f pbuild.build_module_legacy
-
-declare -n Config
+declare -n ModuleConfig
 declare -a Systems
 declare -a UseOverlays
 pbuild.build_module_yaml(){
 	local -- module_name="$1"
 	local -- module_version="$2"
-	Config="$3"
-	local -- module_relstage="${Config['relstage']}"
-	readarray -t Systems <<< "${Config['systems']}"
-	readarray -t UseOverlays <<< "${Config['use_overlays']}"
+	ModuleConfig="$3"
+	local -- module_relstage="${ModuleConfig['relstage']}"
+	readarray -t Systems <<< "${ModuleConfig['systems']}"
+	readarray -t UseOverlays <<< "${ModuleConfig['use_overlays']}"
 	shift 3
 	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }
@@ -979,7 +862,7 @@ _build_module() {
 	}
 
 	load_overlays(){
-		eval "$( "${modulecmd}" bash use ${Config['use_overlays']} )"
+		eval "$( "${modulecmd}" bash use ${ModuleConfig['use_overlays']} )"
 	}
 
 	#......................................................................
@@ -1110,30 +993,6 @@ _build_module() {
 			std::info "Loading module: ${m}"
 			eval "$( "${modulecmd}" bash load "${m}" )"
 		done
-	}
-
-	#......................................................................
-	check_supported_systems() {
-		if [[ "${opt_yaml,,}" == 'no' ]]; then
-			(( ${#SUPPORTED_SYSTEMS[@]} == 0 )) && return 0
-			for sys in "${SUPPORTED_SYSTEMS[@]}"; do
-				[[ "${sys,,}" == "${system,,}" ]] && return 0
-			done
-			std::die 1 \
-				 "%s " "${module_name}/${module_version}:" \
-				 "Not available for ${system}."
-		fi
-	}
-
-	#......................................................................
-	check_supported_compilers() {
-		(( ${#SUPPORTED_COMPILERS[@]} == 0 )) && return 0
-		for compiler in "${SUPPORTED_COMPILERS[@]}"; do
-			[[ "${compiler,,}" == "${COMPILER,,}" ]] && return 0
-		done
-		std::die 1 \
-			 "%s " "${module_name}/${module_version}:" \
-			 "Not available for ${COMPILER}."
 	}
 
 	#......................................................................
@@ -1711,27 +1570,12 @@ _build_module() {
 	local    modulefile_dir=''
 	local    modulefile_name=''
 
-	#
-	# :FIXME: add comments what and why we are doing this.
-	#
-	local -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
-	${rm} -f "${logfile}"
-	if [[ "${verbose}" == 'yes' ]]; then
-		exec  > >(${tee} -a "${logfile}")
-	else
-		exec > >(${cat} >> "${logfile}")
-	fi
-	exec 2> >(${tee} -a "${logfile}" >&2)
-
 	# the group must have been defined - otherwise we cannot continue
 	[[ -n ${GROUP} ]] || \
 		std::die 5 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "Module group not set! Aborting ..."
 
-	# check whether this module is supported
-	check_supported_systems
-	check_supported_compilers
 	[[ "${is_subpkg}" != 'yes' ]] && set_full_module_name_and_prefix
 
 	# ok, finally we can start ...
