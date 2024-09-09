@@ -132,13 +132,6 @@ pbuild.system() {
 }
 readonly -f pbuild.system
 
-declare verbose=''
-pbuild.verbose() {
-        verbose="$1"
-}
-readonly -f pbuild.verbose
-
-
 #******************************************************************************
 #
 # function in the "namespace" (with prefix) 'pbuild::' can be used in
