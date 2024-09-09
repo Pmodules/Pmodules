@@ -1431,29 +1431,9 @@ _build_module() {
 				   [[ ${force_rebuild} == 'no' ]]; then
 				return 0
 			fi
-			local targets=()
-			targets+=( "${VERSIONS[@]/#/pbuild::pre_${target}_${system}_}" )
-			targets+=( "pbuild::pre_${target}_${system}" )
-			targets+=( "${VERSIONS[@]/#/pbuild::pre_${target}_${KernelName}_}" )
-			targets+=( "pbuild::pre_${target}_${KernelName}" )
-			targets+=( "${VERSIONS[@]/#/pbuild::pre_${target}_}" )
-			targets+=( "pbuild::pre_${target}" )
-
-			targets+=( "${VERSIONS[@]/#/pbuild::${target}_${system}_}" )
-			targets+=( "pbuild::${target}_${system}" )
-			targets+=( "${VERSIONS[@]/#/pbuild::${target}_${KernelName}_}" )
-			targets+=( "pbuild::${target}_${KernelName}" )
-			targets+=( "${VERSIONS[@]/#/pbuild::${target}_}" )
-			targets+=( "pbuild::${target}" )
-
-			targets+=( "${VERSIONS[@]/#/pbuild::post_${target}_${system}_}" )
-			targets+=( "pbuild::post_${target}_${system}" )
-			targets+=( "${VERSIONS[@]/#/pbuild::post_${target}_${KernelName}_}" )
-			targets+=( "pbuild::post_${target}_${KernelName}" )
-			targets+=( "${VERSIONS[@]/#/pbuild::post_${target}_}" )
-			targets+=( "pbuild::post_${target}" )
-
-			for t in "${targets[@]}"; do
+			debug "build functions for target ${target}: ${ModuleConfig[target_funcs:${target}]}"
+			local -- t=''
+			for t in ${ModuleConfig[target_funcs:${target}]}; do
 				# We cd into the dir before calling the function -
 				# just to be sure we are in the right directory.
 				#

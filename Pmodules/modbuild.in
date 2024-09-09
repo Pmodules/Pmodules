@@ -521,6 +521,8 @@ declare -A Yaml_valid_keys_for_module=(
 
 declare -A Yaml_default_config=(
 	['build_requires']=''		# !!seq of strings
+	['build_functions']=''		# !!seq of strings
+	['build_variants']=''		# !!seq of strings
 	['compile_in_sourcetree']='no'  # !!str
 	['configure_with']='auto'	# !!str
 	['configure_args']=''           # !!seq of strings
@@ -663,6 +665,35 @@ build_modules_yaml_v1(){
 		local -- key=''
 		local -- value=''
 
+		get_build_functions(){
+			local -n yaml_in="$1"
+			local -a keys=()
+			for key in 'prep' 'configure' 'compile' 'install'; do
+				cfg[target_funcs:${key}]="pbuild::pre_${key} pbuild::${key} pbuild::post_${key}"
+			done
+			readarray -t keys < <( ${yq} -e ".|keys().[]" \
+						     <<<"${yaml_in}" \
+						     2>/dev/null ) || \
+				die_error_reading_keys "${yaml_input}"
+			local -- key=''
+			local -- _val=''
+			for key in "${keys[@]}"; do
+				case ${key} in
+					prep | configure | compile | install)
+						pm::get_seq "${yaml_in}" _val "${key}"
+						debug "${key} functions: ${_val}"
+						cfg[target_funcs:${key}]="${_val}"
+						;;
+					* )
+						die_invalid_key \
+							"${yaml_input}" \
+							'build functions' \
+							"${key}"
+						;;
+				esac
+			done
+		}
+
 		for key in "${!dfl[@]}"; do
 			cfg[${key}]="${dfl[${key}]}"
 		done
@@ -682,6 +713,25 @@ build_modules_yaml_v1(){
 					'configuration' \
 					"${key}"
 			case ${key} in
+				build_functions )
+					pm::get_value "${yaml_input}" value "${key}" '!!map'
+					get_build_functions value
+					;;
+				build_variants )
+					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					case ${value,,} in
+						all ) : ;;
+						first_match ) : ;;
+						* )
+							die_invalid_value \
+								"${yaml_input}" \
+								'config section' \
+								"${key}" \
+								"${value}"
+							;;
+					esac
+					cfg[${key,,}]="${value}"
+					;;
 				compile_in_sourcetree )
 					pm::get_value "${yaml_input}" value "${key}" '!!bool'
 					case ${value,,} in
