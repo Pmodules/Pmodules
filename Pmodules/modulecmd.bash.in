@@ -51,7 +51,7 @@ declare -- ReleaseStages=':unstable:stable:deprecated:'
 # set releases which should be available after initialization
 declare -- DefaultReleaseStages='stable'
 
-declare -A OverlayExcludes=()
+declare -- OverlayExcludes=''
 declare -a UsedOverlays=()
 declare -- PmFiles=''
 declare -- ModulePathAppend=''
@@ -1214,8 +1214,8 @@ get_available_modules() {
 		# its sub-directories
 		local mod=''	# module_name/module_version
                 while read -r mod; do
+			[[ "${mod}" =~ ${OverlayExcludes} ]] && continue
 			local name="${mod%/*}"
-			[[ -v OverlayExcludes[${name}] ]] && continue
 			local add='no'
 			if [[ -n "${ol}" && "${ol}" != 'none' ]]; then
 				# module is in an overlay
@@ -1794,13 +1794,15 @@ subcommand_use() {
                         UsedOverlays=( "${ol_name}" "${UsedOverlays[@]}" )
 			OverlayInfo[${ol_name}:used]='yes'
 
-			local excludes=()
-			local item
+			local -a excludes=()
 			IFS=':' read -r -a excludes <<< "${OverlayInfo[${ol_name}:excludes]}"
+			local -- item=''
 			for item in "${excludes[@]}"; do
-				OverlayExcludes[${item}]=1
+				OverlayExcludes+="${item}|"
 			done
-
+			if [[ -n "${OverlayExcludes}" ]]; then
+				OverlayExcludes="${OverlayExcludes:0: -1}"
+			fi
 	                scan_groups "${UsedOverlays[@]}"
                 }
 
@@ -1967,17 +1969,19 @@ subcommand_unuse() {
 			# Note:
 			# A module might be excluded in multiple overlays. So, we cannot
 			# just remove the excludes from the overlay to unuse.
-			local excludes=()
-			OverlayExcludes=()
-			local ol
-			local item
+			OverlayExcludes=''
+			local -- ol=''
+			local -a excludes=()
+			local -- item=''
 			for ol in "${UsedOverlays[@]}"; do
 				IFS=':' read -r -a excludes <<< "${OverlayInfo[${ol}:excludes]}"
 				for item in "${excludes[@]}"; do
-					OverlayExcludes[${item}]=1
+					OverlayExcludes+="${item}|"
 				done
 			done
-
+			if [[ -n "${OverlayExcludes}" ]]; then
+				OverlayExcludes="${OverlayExcludes:0: -1}"
+			fi
 			# remove additional directories added by overlay
 			if [[ -v OverlayInfo[${ol_name}:modulepath] && \
 				      -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
@@ -2169,6 +2173,7 @@ pmodules_init() {
 	init_overlay_vars() {
 		declare -ag UsedOverlays=( 'base' )
 		OverlayInfo['base:used']='yes'
+		declare -g OverlayExcludes=''
 	}
 
 	init_manpath() {
