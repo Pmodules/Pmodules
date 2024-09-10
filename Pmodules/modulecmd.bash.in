@@ -64,6 +64,9 @@ TmpFile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
 	|| std::die 1 "Oops: unable to create tmp file!"
 declare -r TmpFile
 
+HostName=$(${hostname} -f)
+declare -r HostName
+
 declare -A Subcommands=()
 declare -A Options=()
 declare -A Help=()
@@ -393,7 +396,7 @@ is_available(){
 		[[ -z ${ref_cfg['blocklist']} ]] && return 0
 		local -- s=''
 		for s in ${ref_cfg['blocklist']}; do
-			if [[ "${os_release}" =~ $s ]] || [[ "${HOSTNAME}" =~ $s ]]; then
+			if [[ "${os_release}" =~ $s ]] || [[ "${HostName}" =~ $s ]]; then
 				return 0
 			fi
 		done
@@ -403,7 +406,7 @@ is_available(){
 		[[ -z ${ref_cfg['systems']} ]] && return 0
 		local -- s=''
 		for s in ${ref_cfg['systems']}; do
-			if [[ "${os_release}" =~ $s ]] || [[ "${HOSTNAME}" =~ $s ]]; then
+			if [[ "${os_release}" =~ $s ]] || [[ "${HostName}" =~ $s ]]; then
 				return 0
 			fi
 		done
