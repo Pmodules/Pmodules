@@ -51,6 +51,7 @@ file=$(std::def_cmd 'file');		declare -r file
 find=$(std::def_cmd 'find');		declare -r find
 getopt=$(std::def_cmd 'getopt');	declare -r getopt
 grep=$(std::def_cmd 'grep');		declare -r grep
+hostname=$(std::def_cmd 'hostname');	declare -r hostname
 install=$(std::def_cmd 'install');	declare -r install
 logger=$(std::def_cmd 'logger');	declare -r logger
 make=$(std::def_cmd 'make');		declare -r make
