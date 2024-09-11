@@ -328,7 +328,7 @@ readonly -f pbuild::version_eq
 #..............................................................................
 #
 pbuild::use_flag() {
-	[[ "${USE_FLAGS}" == *:${1}:* ]]
+	[[ "${ModuleConfig['use_flags']}" =~ " ${1} " ]]
 }
 readonly -f pbuild::use_flag
 
