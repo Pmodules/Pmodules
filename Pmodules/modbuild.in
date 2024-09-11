@@ -540,6 +540,10 @@ declare -A Yaml_default_config=(
 	['use_flags']=''		# !!seq
 	['use_overlays']=''		# !!seq
 	['variant']=''			# !!str
+	['target_funcs:prep']='pbuild::pre_prep pbuild::prep pbuild::post_prep'
+	['target_funcs:configure']='pbuild::pre_configure pbuild::configure pbuild::post_configure'
+	['target_funcs:compile']='pbuild::pre_compile pbuild::compile pbuild::post_compile'
+	['target_funcs:install']='pbuild::pre_install pbuild::install pbuild::post_install'
 )
 
 declare -A Yaml_valid_vk_keys=(
@@ -661,9 +665,6 @@ build_modules_yaml_v1(){
 		get_build_functions(){
 			local -n yaml_in="$1"
 			local -a keys=()
-			for key in 'prep' 'configure' 'compile' 'install'; do
-				cfg[target_funcs:${key}]="pbuild::pre_${key} pbuild::${key} pbuild::post_${key}"
-			done
 			readarray -t keys < <( ${yq} -e ".|keys().[]" \
 						     <<<"${yaml_in}" \
 						     2>/dev/null ) || \
