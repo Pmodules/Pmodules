@@ -243,14 +243,6 @@ parse_args() {
 		--check-mode )
 			opt_check_mode='yes'
 			;;
-		--use-flags | --use-flags=* )
-			if [[ $1 == *=* ]]; then
-				USE_FLAGS=":${1#--*=}:"
-			else
-				USE_FLAGS=":$2:"
-				shift
-			fi
-			;;
 		--with | --with=*/* )
 			if [[ $1 == *=* ]]; then
 				opt_with_modules+=( "${1#--*=}" )
@@ -457,13 +449,13 @@ init_module_environment(){
 parse_version() {
 	local v="$1"
 	V="$1"
-	USE_FLAGS=${USE_FLAGS:-''}
 
 	local tmp=''
+	SUFFIX=''
 
 	if [[ "$v" =~ "_" ]]; then
 		tmp="${v#*_}"
-		USE_FLAGS+=":${tmp//_/:}:"
+		SUFFIX+=":${tmp//_/:}:"
 		v="${v%%_*}"
 	fi
 	V_PKG="${v%%-*}"		# version without the release number
@@ -545,6 +537,7 @@ declare -A Yaml_default_config=(
 	['sub_packages']=''		# !!map
 	['target_cpus']=''		# !!seq of strings
 	['urls']=''			# !!map
+	['use_flags']=''		# !!seq
 	['use_overlays']=''		# !!seq
 	['variant']=''			# !!str
 )
@@ -772,6 +765,12 @@ build_modules_yaml_v1(){
 				group_deps )
 					pm::get_value "${yaml_input}" value "${key}" '!!map'
 					cfg[${key,,}]="${value}"
+					;;
+				use_flags )
+					pm::get_seq "${yaml_input}" value "${key}"
+					local -a tmp=()
+					readarray -t tmp <<<"${value}"
+					cfg[${key,,}]=" ${tmp[*]} "
 					;;
 				relstage )
 					pm::get_value "${yaml_input}" value "${key}" '!!str'
