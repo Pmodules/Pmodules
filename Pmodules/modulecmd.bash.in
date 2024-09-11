@@ -1217,7 +1217,7 @@ get_available_modules() {
 		# its sub-directories
 		local mod=''	# module_name/module_version
                 while read -r mod; do
-			[[ "${mod}" =~ ${OverlayExcludes} ]] && continue
+			[[ -n ${OverlayExcludes} && "${mod}" =~ ${OverlayExcludes} ]] && continue
 			local name="${mod%/*}"
 			local add='no'
 			if [[ -n "${ol}" && "${ol}" != 'none' ]]; then
