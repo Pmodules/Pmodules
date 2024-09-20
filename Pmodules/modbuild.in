@@ -1590,11 +1590,11 @@ build_modules_yaml_v1(){
 
 			if (( num_variants == 0 )); then
 				is_variant_to_be_built \
-					"${module_name}" \
-					"${module_version}" \
+					"${name}" \
+					"${version}" \
 					vk_config || continue
 				build_modules_variant \
-					"${name}" "${v}" \
+					"${name}" "${version}" \
 					vk_config
 			else
 				local -i n=0
