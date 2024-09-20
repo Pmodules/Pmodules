@@ -866,15 +866,6 @@ subcommand_load() {
 			modulecmd \
 			"${m}" \
 			"${modulepath[@]}"
-                if [[ -z ${current_modulefile} ]]; then
-			local hints=''
-			get_load_hints hints
-			if [[ -z "${hints}" ]]; then
-				die_module_nexist "${m}"
-			else
-				die_module_unavail "${m}${hints}"
-			fi
-		fi
 
 		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
 			die_conflict "${m}"
@@ -1298,12 +1289,13 @@ find_modulefile(){
 
 	}
 	_find_modulefile() {
+		ref_modulefile=''
 		local -- dir=''
 		for dir in "${modulepath[@]}"; do
 			test -d "${dir}" || continue
 			local -i col=$((${#dir} + 2 ))
 			local -- mod=''
-
+			local -a found_modules=()
 			mapfile -t found_modules \
 				< <(find -L "${dir}" \
 					 -type f \
@@ -1363,7 +1355,15 @@ find_modulefile(){
 	else
 		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 	fi
-        _find_modulefile || die_module_unavail "${modulename}"
+        if ! _find_modulefile; then
+		local hints=''
+		get_load_hints hints
+		if [[ -z "${hints}" ]]; then
+			die_module_nexist "${modulename}"
+		else
+			die_module_unavail "${modulename}${hints}"
+		fi
+	fi
 
 	is_modulefile modulecmd "${ref_modulefile}" || die_not_a_modulefile "${modulename}"
 	if [[ "${ref_interp}" == "${Lmod_cmd}" ]]; then
