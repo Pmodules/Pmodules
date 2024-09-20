@@ -862,6 +862,7 @@ _build_module() {
 	}
 
 	load_overlays(){
+		[[ -n ${ModuleConfig['use_overlays']} ]] || return 0
 		eval "$( "${modulecmd}" bash use ${ModuleConfig['use_overlays']} )"
 	}
 
