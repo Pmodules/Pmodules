@@ -516,25 +516,25 @@ declare -A Yaml_default_config=(
 	['build_functions']=''		# !!seq of strings
 	['build_variants']=''		# !!seq of strings
 	['compile_in_sourcetree']='no'  # !!str
-	['configure_with']='auto'	# !!str
 	['configure_args']=''           # !!seq of strings
 	['configure_args+']=''          # !!seq of strings
+	['configure_with']='auto'	# !!str
 	['default_variant']=''          # !!str
 	['docfiles']=''	                # !!seq of strings
 	['docfiles+']=''		# !!seq of strings
 	['download_dir']=''             # !!str
 	['group']='Tools'		# !!str
-	['kernels']=''			# !!seq of strings
 	['group_deps']=''		# !!map
+	['kernels']=''			# !!seq of strings
 	['overlay']='base'		# !!str
 	['patch_files']=''		# !!seq
 	['patch_files+']=''		# !!seq
 	['relstage']='unstable'		# !!str
 	['runtime_deps']=''		# !!seq of strings
 	['script']='build'		# !!str
+	['sub_packages']=''		# !!map
 	['suffix']=''			# !!str
 	['systems']=''			# !!seq of strings
-	['sub_packages']=''		# !!map
 	['target_cpus']=''		# !!seq of strings
 	['urls']=''			# !!map
 	['use_flags']=''		# !!seq
@@ -634,6 +634,14 @@ build_modules_yaml_v1(){
 
 	die_invalid_kernel_name(){
 		std::die 3 "Invalid kernel name in configuration!"
+	}
+
+	die_wrong_module_type(){
+		std::die 3 "Module type is '$1' but was called as '$2'!"
+	}
+
+	die_invalid_module_type(){
+		std::die 3 "Invalid module type -- '$1'!"
 	}
 
 	yml::check_keys(){
@@ -1292,16 +1300,19 @@ build_modules_yaml_v1(){
 			local -- pkg_version=''
 			local -a pkg_build_args=()
 			local -a keys=()
-			readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${pkgs_yaml}" 2>/dev/null ) || \
+			readarray -t keys < <( ${yq} -e ".|keys().[]" \
+						     <<<"${pkgs_yaml}" 2>/dev/null ) || \
 				die_parsing "${pkgs_yaml}"
 			local -- key=''
 			for key in "${keys[@]}"; do
 				case ${key,,} in
 					'name' )
-						pm::get_value "${pkgs_yaml}" pkg_name "${key}" '!!str'
+						pm::get_value "${pkgs_yaml}" \
+							      pkg_name "${key}" '!!str'
 						;;
 					'version' )
-						pm::get_value "${pkgs_yaml}" pkg_version "${key}" '!!str'
+						pm::get_value "${pkgs_yaml}" \
+							      pkg_version "${key}" '!!str'
 						;;
 					'build_args' )
 						local -- value=''
@@ -1353,9 +1364,8 @@ build_modules_yaml_v1(){
 				[[ "${opt_system}" =~ ${system} ]] && return 0
 				[[ "${HOSTNAME}" =~ ${system} ]] && return 0
 			done
-			std::info "Skipping variant '${version}', neither OS nor hostname match:"
-			std::info "  This system: ${opt_system}; hostname: ${HOSTNAME}"
-			std::info "  Systems to build on: ${systems[@]}"
+			std::info "%s " "Skipping variant '${version}'" \
+				  "for the system(s): ${systems[@]}"
 			return 1
 		}
 
@@ -1369,9 +1379,8 @@ build_modules_yaml_v1(){
 				[[ ${kernel} == 'any' ]] && return 0
 				[[ ${kernel} == ${KernelName,,} ]] & return 0
 			done
-			std::info "Skipping variant '${version}':"
-			std::info "  The kernel of this systems is: ${KernelName}"
-			std::info "  But the variant is for the following kernels: ${config['kernels']}"
+			std::info "%s " "Skipping variant '${version}'" \
+				  "for the kernel(s): ${config['kernels']}"
 			return 1
 		}
 
@@ -1386,9 +1395,8 @@ build_modules_yaml_v1(){
 				[[ ${cpu} == 'any' ]] && return 0
 				[[ ${cpu} == ${system_cpu} ]] && return 0
 			done
-			std::info "Skipping variant '${version}':"
-			std::info "  The CPU of this systems is: ${system_cpu}"
-			std::info "  But this variant is for the following CPUs: ${config['target_cpus']}"
+			std::info "%s" "Skipping variant '${version}' " \
+				  "for the CPU(s) ${config['target_cpus']}"
 			return 1
 
 		}
@@ -1523,14 +1531,14 @@ build_modules_yaml_v1(){
 		case "${value,,}" in
 			'module' )
 				[[ "${module_type}" == 'sub_package' ]] && \
-					std::die 3 "Module type is 'module' but was called as 'sub_package'!"
+					die_wrong_module_type 'module' 'sub_package'
 				;;
 			'sub_package' )
 				[[ "${module_type}" == 'module' ]] && \
-					std::die 3 "Module type is 'sub_package' but was called as 'module'!"
+					die_wrong_module_type 'sub_package' 'module'
 				;;
 			* )
-				std::die 3 "Invalid module type -- '${value}'!"
+				die_invalid_module_type "${value}"
 				;;
 		esac
 	fi
