@@ -15,7 +15,7 @@ LUA_PREFIX="${PREFIX}/libexec/lua"
 PATH="${LUA_PREFIX}/bin:$PATH" 
 "${SRC_DIR}"/configure \
         --prefix="${LUA_PREFIX}" \
-
+        --with-lua="${LUA_PREFIX}"
 
 #---
 # compile & install
