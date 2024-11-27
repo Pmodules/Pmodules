@@ -15,8 +15,8 @@ set   -o nounset
 shopt -s nullglob
 
 # get absolute path of script
-mydir=$(cd "$(/usr/bin/dirname "$0")" && pwd -L)
-prefix=$(/usr/bin/dirname "${mydir}");
+mydir=$(cd "$(/usr/bin/dirname -- "${BASH_SOURCE[0]}")" && pwd -L)
+prefix=$(/usr/bin/dirname -- "${mydir}");
 
 path_orig="${PATH}"
 PATH="${prefix}/bin:${prefix}/libexec:/bin:/usr/bin:/sbin:/usr/sbin"
