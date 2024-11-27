@@ -857,11 +857,11 @@ _build_module() {
 	# Arguments:
 	#	$1	module name
 	#
-	is_loaded() {
+	bm::is_loaded() {
 		[[ :${LOADEDMODULES}: =~ :$1: ]]
 	}
 
-	load_overlays(){
+	bm::load_overlays(){
 		[[ -n ${ModuleConfig['use_overlays']} ]] || return 0
 		eval "$( "${modulecmd}" bash use ${ModuleConfig['use_overlays']} )"
 	}
@@ -877,7 +877,7 @@ _build_module() {
 	#	module_release		set if defined in a variants file
 	#	runtime_dependencies    runtime dependencies from variants added
 	#
-	load_build_dependencies() {
+	bm::load_build_dependencies() {
 
  		#..............................................................
 		#
@@ -959,7 +959,7 @@ _build_module() {
 			else
 				runtime_dependencies+=( "$m" )
 			fi
-			is_loaded "$m" && continue
+			bm::is_loaded "$m" && continue
 
 			# 'module avail' might output multiple matches if module
 			# name and version are not fully specified or in case
@@ -994,7 +994,7 @@ _build_module() {
 			std::info "Loading module: ${m}"
 			eval "$( "${modulecmd}" bash load "${m}" )"
 		done
-	}
+	} # bm::load_build_dependencies
 
 	#......................................................................
 	#
@@ -1012,7 +1012,7 @@ _build_module() {
 	#	modulefile_name
 	#	PREFIX
 	#
-	set_full_module_name_and_prefix() {
+	bm::set_full_module_name_and_prefix() {
 		die_no_compiler(){
 			std::die 1 \
 				 "%s: %s" \
@@ -1077,14 +1077,14 @@ _build_module() {
 		esac
 		modulefile_dir+="${module_name}"
 		modulefile_name="${modulefile_dir}/${module_version}"
-	} # set_full_module_name_and_prefix
+	} # bm::set_full_module_name_and_prefix
 	
 	#......................................................................
 	# post-install.
 	#
 	# Arguments:
 	#	none
-	post_install() {
+	bm::post_install() {
 		#..............................................................
 		# post-install:
 		# - build-script
@@ -1159,19 +1159,17 @@ _build_module() {
 		cd "${BUILD_DIR}"
 		[[ "${KernelName}" == "Linux" ]] && post_install_linux
 		install_doc
-		cleanup_build
-		cleanup_src
 		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"Done ..."
 		return 0
-	} # post_install
+	} # bm::post_install
 
 		#
 	# write modulefile, configuration and dependencies
 	#
-	install_module_config(){
+	bm::install_module_config(){
 
  		#......................................................................
 		# Install modulefile in ${ol_modulefiles_root}/${GROUP}/modulefiles/...
@@ -1350,7 +1348,7 @@ _build_module() {
 		install_config_file
 	}
 
-	cleanup_modulefiles(){
+	bm::cleanup_modulefiles(){
 		#
 		# FIXME: Can it happen, that we remove module-/config-files which
 		#        we shouldn't remove?
@@ -1381,7 +1379,7 @@ _build_module() {
 		done
 	}
 
-	cleanup_build() {
+	bm::cleanup_build() {
 		[[ ${enable_cleanup_build} != 'yes' ]] && return 0
 		[[ "${BUILD_DIR}" == "${SRC_DIR}" ]] && return 0
 		[[ -d "${BUILD_DIR}/../.." ]] || return 0
@@ -1402,7 +1400,7 @@ _build_module() {
 		return 0
 	}
 
-	cleanup_src() {
+	bm::cleanup_src() {
 		[[ ${enable_cleanup_src} != 'yes' ]] && return 0
 		[[ -d "${BUILD_DIR}/../.." ]] || return 0
     		{
@@ -1423,7 +1421,7 @@ _build_module() {
 
 	#......................................................................
 	# build module ${module_name}/${module_version}
-	compile_and_install() {
+	bm::compile_and_install() {
 		build_target() {
 			local dir="$1"		# src or build directory, depends on target
 			local target="$2"	# prep, configure, compile or install
@@ -1484,9 +1482,9 @@ _build_module() {
 			"${module_name}/${module_version}:" \
 			"installing ..."
 		build_target "${BUILD_DIR}" install
-	} # compile_and_install()
+	} # bm::compile_and_install()
 
-	remove_module() {
+	bm::remove_module() {
 		if [[ -d "${PREFIX}" ]]; then
 			std::info \
 				"%s " \
@@ -1520,12 +1518,12 @@ _build_module() {
 		${rmdir} -p "${modulefile_dir}" 2>/dev/null || :
 	}
 
-	deprecate_module(){
+	bm::deprecate_module(){
 		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"is deprecated, skiping!"
-		install_module_config
+		bm::install_module_config
 	}
 
 	std::info \
@@ -1535,8 +1533,8 @@ _build_module() {
 		"building ..."
 
 	init_module_environment
-	load_overlays
-	load_build_dependencies
+	bm::load_overlays
+	bm::load_build_dependencies
 	BUILD_ROOT="${PMODULES_TMPDIR}/${module_name}-${module_version}"
 	SRC_DIR="${BUILD_ROOT}/src"
 	if [[ "${compile_in_sourcetree,,}" == 'yes' ]]; then
@@ -1558,7 +1556,7 @@ _build_module() {
 			 "%s " "${module_name}/${module_version}:" \
 			 "Module group not set! Aborting ..."
 
-	[[ "${is_subpkg}" != 'yes' ]] && set_full_module_name_and_prefix
+	[[ "${is_subpkg}" != 'yes' ]] && bm::set_full_module_name_and_prefix
 
 	# ok, finally we can start ...
  	std::info \
@@ -1567,34 +1565,36 @@ _build_module() {
 		${with_modules:+build with ${with_modules[@]}}
 
 	if [[ "${module_release}" == 'remove' ]]; then
-		remove_module
+		bm::remove_module
 	elif [[ "${module_release}" == 'deprecated' ]]; then
-		deprecate_module
+		bm::deprecate_module
 	elif [[ -d "${PREFIX}" || "${is_subpkg}" == 'yes' ]] && [[ "${force_rebuild}" == 'no' ]]; then
  		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"already exists, not rebuilding ..."
-		install_module_config
+		bm::install_module_config
 	else
 		if [[ "${opt_clean_install,,}" == 'yes' ]]; then
 			std::info \
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"remove module, if already exists ..."
-			remove_module
+			bm::remove_module
 		fi
 		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
 			"start building ..."
-		cleanup_build
-		cleanup_src
-		compile_and_install
-		post_install
-		install_module_config
+		bm::cleanup_build
+		bm::cleanup_src
+		bm::compile_and_install
+		bm::post_install
+		bm::install_module_config
+		bm::cleanup_build
+		bm::cleanup_src
 	fi
-	cleanup_modulefiles
+	bm::cleanup_modulefiles
 	std::info "* * * * *\n"
 }
 readonly -f _build_module
