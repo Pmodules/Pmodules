@@ -1315,7 +1315,9 @@ _build_module() {
 
  			local -r yaml_config_file="${modulefile_dir}/.config-${module_version}"
 			local -- status_yaml_config_file='unchanged'
-			if [[ -r "${yaml_config_file}" ]]; then
+			if [[ "${opt_update_modulefiles}" == 'yes' ]]; then
+				status_yaml_config_file='update'
+			elif [[ -r "${yaml_config_file}" ]]; then
 				while read -r key value; do
 					local -n ref="${key:0:-1}"
 					ref="${value}"
@@ -1560,7 +1562,6 @@ _build_module() {
 		${with_modules:+with ${with_modules[@]}} \
 		"building ..."
 
-	init_module_environment
 	bm::load_overlays
 	bm::load_build_dependencies
 	BUILD_ROOT="${PMODULES_TMPDIR}/${module_name}-${module_version}"
