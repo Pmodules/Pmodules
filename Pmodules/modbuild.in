@@ -526,6 +526,7 @@ declare -A Yaml_default_config=(
 	['group']='Tools'		# !!str
 	['group_deps']=''		# !!map
 	['kernels']=''			# !!seq of strings
+	['modulefile']=''		# !!str
 	['overlay']='base'		# !!str
 	['patch_files']=''		# !!seq
 	['patch_files+']=''		# !!seq
@@ -767,7 +768,7 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
-				default_variant | download_dir | group | overlay | script | suffix )
+				default_variant | download_dir | group | modulefile | overlay | script | suffix )
 					pm::get_value "${yaml_input}" value "${key}" '!!str'
 					cfg[${key,,}]="${value}"
 					;;
