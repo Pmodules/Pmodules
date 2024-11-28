@@ -336,36 +336,19 @@ yml::get_file_fmt(){
 	Get format version of configuration file. Print the version number
 	to stdout if it is valid.
 	"
-	local -n result="$1"
-	local -r fname="$2"
+	local -n yml_fmt="$1"
+	local -n yml_content="$2"
 
-	${yq} -e '.' "${fname}" &>/dev/null || \
-		std::die 3 "%s -- %s" \
-			 "Error in YAML config file, please check with linter" \
-			 "${fname}"
-	local -- fmt=''
-	result=$(${yq} -e ".format" "${fname}") || \
+	yml::get_value yml_fmt yml_content '.format' '!!int' || \
 		std::die 3 "Error reading config file format -- ${fname}"
-	case "${result}" in
+	case "${yml_fmt}" in
 		1 )
 			:
 			;;
 		* )
-			std::die 3 "Unknown YAML Pmodules config file format -- ${fname}"
+			std::die 3 "Unsupported YAML Pmodules config file format -- ${yml_fmt}"
 			;;
 	esac
-}
-
-yml::read_config_file() {
-	#
-  	# Test whether the configuration file '$1' provides configurations
-	# for the module '$2'.
-	#
-	local -n result="$1"		# [out] return configuration for module
-	local -- file_name="$2"		# [in]  name of configuration file
-	local -- module_name="$3"	# [in]  module name (without version)
-	result=$( ${yq} -Ne e ".${module_name}" "${file_name}" 2>/dev/null ) || \
-		std::die 3 "Configuration for '${module_name}' missing -- ${file_name}"
 }
 
 build_modules(){
@@ -383,18 +366,18 @@ build_modules(){
 			std::die 3 "yamllint not found"
 		yamllint "${yaml_config_file}"
 	fi
-	local -- file_fmt=''
-	yml::get_file_fmt \
-		file_fmt \
-		"${yaml_config_file}"
-	
+
+	local -- yaml_config=''
+	local -i file_fmt=0
+	yml::read_file yaml_config "${yaml_config_file}" '.'
+	yml::get_file_fmt file_fmt yaml_config
+
+	echo "file_fmt=${file_fmt}"
 	local -- yaml_module_config=''
-	yml::read_config_file \
-		yaml_module_config \
-		"${yaml_config_file}" \
-		"${name}"
 	case "${file_fmt}" in
 		1 )
+			yml::get_value yaml_module_config yaml_config ".${name}" '!!map' || \
+				std::die 3 "Configuration for '${name}' missing in config file -- ${file_name}"
 			build_modules_yaml_v1 \
 				"${yaml_module_config}" \
 				"${name}" "${version}" \
@@ -589,10 +572,6 @@ build_modules_yaml_v1(){
         local -a with_modules=( "$@" )
 
 
-	die_parsing(){
-		std::die 3 "error parsing YAML:\n----\n$1\n----"
-	}
-
 	die_missing_group_dep(){
 		std::die 3 "%s/%s: %s" \
 			 "${1}" "${2}" \
@@ -645,47 +624,33 @@ build_modules_yaml_v1(){
 		std::die 3 "Invalid module type -- '$1'!"
 	}
 
-	yml::check_keys(){
-		local -n yaml_input="$1"
-		local -n valid_yaml_keys="$2"
-		local -n used_yaml_keys="$3"
-		used_yaml_keys=()
-		local -- key=''
-		local -a keys=()
-		readarray -t keys < <( ${yq} -e '.|keys|.[]' 2>/dev/null <<<"${yaml_input}")
-		debug "top-level keys: ${keys[*]}"
-		for key in "${keys[@]}"; do
-			[[ -v valid_yaml_keys[${key}] ]] || \
-				die_invalid_key \
-					"${yaml_input}" \
-					'configuration file' \
-					"${key}"
-			used_yaml_keys[${key}]=1
-		done
-	}
-
 	yml::get_config(){
-		local -n yaml_input="$1"
-		local -n cfg="$2"	# ref. to return configuration
-		local -n dfl="$3"       # ref. to defaults
+		local -n yaml_input="$1"	# [in] YAML formated string
+		local -- node="$2"		# [in] config node
+		local -n cfg="$3"		# [in/out] module configuration
+
 		local -- key=''
 		local -- value=''
 
 		get_build_functions(){
-			local -n yaml_in="$1"
 			local -a keys=()
-			readarray -t keys < <( ${yq} -e ".|keys().[]" \
-						     <<<"${yaml_in}" \
-						     2>/dev/null ) || \
-				die_error_reading_keys "${yaml_input}"
+			yml::get_keys \
+				keys \
+				yaml_input \
+				"${node}.build_functions"
+
 			local -- key=''
-			local -- _val=''
+			local -- value=''
 			for key in "${keys[@]}"; do
 				case ${key} in
 					prep | configure | compile | install)
-						pm::get_seq "${yaml_in}" _val "${key}"
-						debug "${key} functions: ${_val}"
-						cfg[target_funcs:${key}]="${_val}"
+						yml::get_seq \
+							value \
+							yaml_input \
+							"${node}.build_functions.${key}" || \
+							yml::die_parsing "${yaml_input}"
+						debug "${key} functions: ${value}"
+						cfg[target_funcs:${key}]="${value}"
 						;;
 					* )
 						die_invalid_key \
@@ -697,31 +662,24 @@ build_modules_yaml_v1(){
 			done
 		}
 
-		for key in "${!dfl[@]}"; do
-			cfg[${key}]="${dfl[${key}]}"
-		done
-
 		if [[ -z "${yaml_input}" ]]; then
 			return 0
 		fi
 
 		local -a keys=()
-		readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null ) || \
-			die_error_reading_keys "${yaml_input}"
+		yml::get_keys keys yaml_input "${node}"
 		debug "config keys: ${keys[*]}"
 		for key in "${keys[@]}"; do
-			[[ -v dfl[${key,,}] ]] || \
-				die_invalid_key \
-					"${yaml_input}" \
-					'configuration' \
-					"${key}"
 			case ${key} in
 				build_functions )
-					pm::get_value "${yaml_input}" value "${key}" '!!map'
 					get_build_functions value
 					;;
 				build_variants )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!str' || \
+						yml::die_parsing "${yaml_input}"
 					case ${value,,} in
 						all ) : ;;
 						first_match ) : ;;
@@ -736,7 +694,11 @@ build_modules_yaml_v1(){
 					cfg[${key,,}]="${value}"
 					;;
 				compile_in_sourcetree )
-					pm::get_value "${yaml_input}" value "${key}" '!!bool'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!bool' || \
+						yml::die_parsing "${yaml_input}"
 					case ${value,,} in
 						true )
 							cfg[${key,,}]='yes'
@@ -754,7 +716,11 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				configure_with )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!str' || \
+						yml::die_parsing "${yaml_input}"
 					case ${value,,} in
 						auto | cmake | autotools )
 							cfg[${key,,}]="${value,,}"
@@ -769,21 +735,37 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				default_variant | download_dir | group | modulefile | overlay | script | suffix )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!str' || \
+						yml::die_parsing "${yaml_input}"
 					cfg[${key,,}]="${value}"
 					;;
 				group_deps )
-					pm::get_value "${yaml_input}" value "${key}" '!!map'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!map' || \
+						yml::die_parsing "${yaml_input}"
 					cfg[${key,,}]="${value}"
 					;;
 				use_flags )
-					pm::get_seq "${yaml_input}" value "${key}"
+					yml::get_seq \
+						value \
+						yaml_input \
+						"${node}.${key}" || \
+						yml::die_parsing "${yaml_input}"
 					local -a tmp=()
 					readarray -t tmp <<<"${value}"
 					cfg[${key,,}]=" ${tmp[*]} "
 					;;
 				relstage )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!str' || \
+						yml::die_parsing "${yaml_input}"
 					case ${value,,} in
 						unstable | stable | deprecated )
 							cfg[${key,,}]="${value,,}"
@@ -801,15 +783,27 @@ build_modules_yaml_v1(){
 					esac
 					;;
 				urls | sub_packages )
-					pm::get_value "${yaml_input}" value "${key}" '!!seq'
+					yml::get_value \
+						value \
+						yaml_input \
+						"${node}.${key}" '!!seq' || \
+						yml::die_parsing "${yaml_input}"
 					cfg[${key,,}]="${value}"
 					;;
 				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|use_overlays|variant )
-					pm::get_seq "${yaml_input}" value "${key}"
+					yml::get_seq \
+						value \
+						yaml_input \
+						"${node}.${key}" || \
+						yml::die_parsing "${yaml_input}"
 					cfg[${key,,}]="${value}"
 					;;
 				kernels )
-					pm::get_seq "${yaml_input}" value "${key}"
+					yml::get_seq \
+						value \
+						yaml_input \
+						"${node}.${key}" || \
+						yml::die_parsing "${yaml_input}"
 					set -o noglob
 					local -a items=( "${value,,}" )
 					set +o noglob
@@ -825,7 +819,11 @@ build_modules_yaml_v1(){
 					cfg[${key,,}]="${value}"
 					;;
 				target_cpus )
-					pm::get_seq "${yaml_input}" value "${key}"
+					yml::get_seq \
+						value \
+						yaml_input \
+						"${node}.${key}" || \
+						yml::die_parsing "${yaml_input}"
 					set -o noglob
 					local -a items=( "${value,,}" )
 					set +o noglob
@@ -834,14 +832,18 @@ build_modules_yaml_v1(){
 						[[ -v TargetCPUs[${item}] ]] || \
 							die_invalid_value \
 								"${yaml_input}" \
-								'config section'
+								'config section' \
 								'CPU' \
 								"${item}"
 					done
 					cfg[${key,,}]="${value}"
 					;;
 				'configure_args+' | 'docfiles+' | 'patch_files+' )
-					pm::get_seq "${yaml_input}" value "${key}"
+					yml::get_seq \
+						value \
+						yaml_input \
+						"${node}.${key}" || \
+						yml::die_parsing "${yaml_input}"
 					key="${key:0:-1}"
 					if [[ -z "${cfg[${key,,}]}" ]]; then
 						cfg[${key,,}]="${value}"
@@ -851,10 +853,11 @@ build_modules_yaml_v1(){
 					;;
 
 				* )
-					std::die 3 "%s '%s' in %s" \
-						 "Oops unhandled key" \
-						 "${key}" \
-						 "${FUNCNAME[0]}"
+					die_invalid_key \
+						"${yaml_input}" \
+						'configuration' \
+						"${key}"
+					;;
 			esac
 		done
 	}
@@ -868,9 +871,7 @@ build_modules_yaml_v1(){
 		local -- version="$3"		# [in]  version to match
 
 		local -a keys=()
-		readarray -t keys < <( ${yq} -e '.versions|keys().[]' 2>/dev/null <<<"${yaml_input}" ) || \
-			std::die 3 "No version keys in configuration file!"
-
+		yml::get_keys keys yaml_input '.versions'
 		result=()
 		for key in "${keys[@]}"; do
 			l=()
@@ -890,50 +891,6 @@ build_modules_yaml_v1(){
 		return 0
 	}
 
-	yml::get_version_block(){
-		#
-		# Get configuration for specific version.
-		#
-		# Please note: this can be an empty string.
-		#
-		local -n yaml_input="$1"	# [in]  YAML input
-		local -n result="$2"		# [out] result in YAML format
-		local -- version="$3"		# [in]  return config for this version
-		result=$( ${yq} -e ".versions.\"${version}\"" 2>/dev/null <<<"${yaml_input}" ) || \
-			result=""
-	}
-
-	yml::get_variants(){
-		#
-		# get variants of a specific version
-		#
-		local -n yaml_input="$1"	# [in]  YAML input with the variants
-		local -n result="$2"		# [out] variants in YAML format
-		local -n n="$3"			# [out] number of variants
-
-		local -- type_of_key=''
-		type_of_key=$( ${yq} -e ".variants | type" 2>/dev/null <<<"${yaml_input}")
-		if [[ "${type_of_key}" == '!!null' ]]; then
-			result=''
-			n=0
-			return 0
-                fi
-		if [[ "${type_of_key}" != '!!seq' ]]; then
-			die_invalid_variants_block "${name}" "${version}" \
-						   "${type_of_key}"
-		fi
-		result=$(${yq} -e '.variants' 2>/dev/null <<<"${yaml_input}") || \
-			result=''
-		n=$(${yq} '.|length' 2>/dev/null <<<"${result}")
-	}
-
-	yml::get_nth_variant(){
-		local -n yaml_input="$1"	# [in]  YAML input
-		local -n result="$2"		# [out] nth variant in YAML format
-		local -i n="$3"			# [in]  index of variant to return
-		result=$(${yq}  -e ".[$n]" 2>/dev/null <<<"${yaml_input}") || result=''
-	}
-
 	yml::chk_group_deps(){
 		#
 		# Check the group dependencies:
@@ -949,10 +906,9 @@ build_modules_yaml_v1(){
 		local -- version="$4"		# [in]  module version
 
 		# query all specified group dependencies
-		local -a keys=()
-		readarray -t keys < <( ${yq} ".|keys|.[]" <<<"${yaml_input}" 2>/dev/null )
-
 		local -- key=''
+		local -a keys=()
+		yml::get_keys keys yaml_input '.'
 		for key in "${keys[@]}"; do
 			# is this a name of a hierarchical group?
 			[[ -v hierarchical_groups[${key}] ]] || \
@@ -974,13 +930,14 @@ build_modules_yaml_v1(){
 		local -n with_modules="$3"	# [out] list of required modules
 
 		local -a modules=()
-		local keys=()
-		readarray -t keys < <( ${yq} ".${group,,}|keys|.[]" <<<"${yaml_input}" 2>/dev/null )
 		local key
+		local keys=()
+		yml::get_keys keys yaml_input ".${group,,}"
 		for key in "${keys[@]}"; do
-			local versions=()
-			readarray -t versions < <( ${yq} -e ".${group,,}.${key}[]" <<<"${yaml_input}" 2>/dev/null )
 			local version
+			local versions=()
+			yml::get_seq versions yaml_input ".${group,,}.${key}" || \
+				yml::die_parsing "${yaml_input}"
 			for version in "${versions[@]}"; do
 				if [[ -v opt_with_dict[${key}/${version}] ]]; then
 					with_modules+=( "${key}/${version}" )
@@ -1205,8 +1162,7 @@ build_modules_yaml_v1(){
 	set_urls() {
 		local -- yaml="$1"
 		local -i l=0
-		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
-			die_parsing "{yaml}"
+		yml::get_seq_length l yaml .
 		local -i i=0
 		local -- url_yaml=''
 		for ((i=0; i<l; i++)); do
@@ -1285,53 +1241,62 @@ build_modules_yaml_v1(){
 	}
 	build_sub_packages(){
 		local -- yaml="$1"
+		echo "sub_packages: ${yaml}" 1>&2
 		local -i l=0
-		l=$( ${yq} -Ne e '.|length'  <<<"${yaml}" 2>/dev/null) || \
-			die_parsing "${yaml}"
+		yml::get_seq_length l yaml .
 		if (( l == 0 )); then
 			debug "No sub-packages to built"
 		fi
 		local -i i=0
 		local -- fname=''
-		local -- pkgs_yaml=''
 		for ((i=0; i<l; i++)); do
-			pkgs_yaml=$(${yq} -Ne e ".[$i]" <<<"${yaml}" 2>/dev/null) || \
-				die_parsing "${yaml}"
+			local -- node=".[$i]"
 			local -- pkg_name=''
 			local -- pkg_version=''
 			local -a pkg_build_args=()
-			local -a keys=()
-			readarray -t keys < <( ${yq} -e ".|keys().[]" \
-						     <<<"${pkgs_yaml}" 2>/dev/null ) || \
-				die_parsing "${pkgs_yaml}"
+
 			local -- key=''
+			local -a keys=()
+			yml::get_keys keys yaml "${node}"
 			for key in "${keys[@]}"; do
 				case ${key,,} in
 					'name' )
-						pm::get_value "${pkgs_yaml}" \
-							      pkg_name "${key}" '!!str'
+						yml::get_value \
+							pkg_name \
+							yaml \
+							"${node}.${key}" \
+							'!!str' || \
+							yml::die_parsing "${yaml}"
 						;;
 					'version' )
-						pm::get_value "${pkgs_yaml}" \
-							      pkg_version "${key}" '!!str'
+						yml::get_value \
+							pkg_version \
+							yaml \
+							"${node}.${key}" \
+							'!!str' || \
+							yml::die_parsing "${yaml}"
 						;;
 					'build_args' )
 						local -- value=''
-						pm::get_seq "${pkgs_yaml}" value "${key}"
+						yml::get_seq \
+							value \
+							yaml \
+							"${node}.${key}" || \
+							yml::die_parsing "${yaml}"
 						readarray -t pkg_build_args <<< "${value}"
 						;;
 					* )
 						die_invalid_key \
-							"${pkgs_yaml}" \
+							"${yaml}" \
 							"in subpackage '$i'" \
 							"${key}"
 						;;
 				esac
 			done
 			[[ -n "${pkg_name}" ]] || \
-				die_sub_package_name_missing "${pkgs_yaml}"
+				die_sub_package_name_missing "${yaml}"
 			[[ -n "${pkg_version}" ]] || \
-				die_sub_package_version_missing "${pkgs_yaml}"
+				die_sub_package_version_missing "${yaml}"
 
 			[[ "${opt_verbose}" == 'yes' ]] && \
 				pkg_build_args+=( '--verbose' )
@@ -1348,7 +1313,7 @@ build_modules_yaml_v1(){
 	}
 
 
-	is_variant_to_be_built(){
+	is_variant_to_build(){
 		local -- name="$1"
 		local -- version="$2"
 		local -n config="$3"
@@ -1496,90 +1461,101 @@ build_modules_yaml_v1(){
 		done
 	}
 
-	local -A used_keys=()
-	local -A default_config=()
-	local -- version_key=''
+	local -a found_keys=()
 	local -a version_keys=()
-	local -A shasums=()
 
-	yml::check_keys \
+	yml::get_keys  \
+		found_keys \
 		yaml_module_config \
-		Yaml_valid_keys_for_module \
-		used_keys
-	[[ -v used_keys['versions'] ]] || \
-		std::die 3 "No version(s) specified in YAML configuration file."
+		'.'
 
-	local -- yaml_default_config=''
-	if [[ -v used_keys['defaults'] ]]; then
-		yaml_default_config=$(${yq} '.defaults' <<<"${yaml_module_config}" 2>/dev/null)
-	fi
-	yml::get_config \
-		yaml_default_config \
-		default_config \
-		Yaml_default_config
-
-	if [[ -v used_keys['shasums'] ]]; then
-		local yaml_shasums=''
-		yaml_shasums=$(${yq} '.shasums' <<<"${yaml_module_config}" 2>/dev/null)
-		while read -r key value; do
-			[[ -z ${key} ]] && continue
-			SHASUMS[${key//:}]="${value}"
-		done <<<"${yaml_shasums}"
-	fi
-	if [[ -v used_keys['type'] ]]; then
-		local -- value=''
-		pm::get_value "${yaml_module_config}" value 'type' '!!str'
-		case "${value,,}" in
-			'module' )
-				[[ "${module_type}" == 'sub_package' ]] && \
-					die_wrong_module_type 'module' 'sub_package'
+	local -A mod_config=()
+	local key=''
+	for key in "${!Yaml_default_config[@]}"; do
+		mod_config[${key}]="${Yaml_default_config[${key}]}"
+	done
+	for key in "${found_keys[@]}"; do
+		case "${key}" in
+			'defaults' )
+				yml::get_config \
+					yaml_module_config \
+					".${key}" \
+					mod_config \
 				;;
-			'sub_package' )
-				[[ "${module_type}" == 'module' ]] && \
-					die_wrong_module_type 'sub_package' 'module'
+			'shasums' )
+				local yaml_shasums=''
+				yaml_shasums=$(${yq} ".${key}" <<<"${yaml_module_config}" 2>/dev/null)
+				while read -r key value; do
+					[[ -z ${key} ]] && continue
+					SHASUMS[${key//:}]="${value}"
+				done <<<"${yaml_shasums}"
 				;;
-			* )
-				die_invalid_module_type "${value}"
+			'type' )
+				local -- value=''
+				yml::get_value \
+					value \
+					yaml_module_config \
+					".${key}" '!!str' || \
+					yml::die_parsing "${yaml_module_config}"
+				case "${value,,}" in
+					'module' )
+						[[ "${module_type}" == 'sub_package' ]] && \
+							die_wrong_module_type 'module' 'sub_package'
+						;;
+					'sub_package' )
+						[[ "${module_type}" == 'module' ]] && \
+							die_wrong_module_type 'sub_package' 'module'
+						;;
+					* )
+						die_invalid_module_type "${value}"
+						;;
+				esac
+				;;
+			'versions' )
+				yml::get_matching_version_keys \
+					yaml_module_config \
+					version_keys \
+					"${version}"
 				;;
 		esac
-	fi
-	yml::get_matching_version_keys \
-		yaml_module_config \
-		version_keys \
-		"${version}"
+	done
+	(( ${#version_keys[@]} > 0 )) || \
+		std::die 3 "No version(s) specified in YAML configuration file."
+
+
+	local -- version_key=''
+	local -i num_variants=0
 	for version_key in "${version_keys[@]}"; do
-		local -- yaml_version_block=''
-		yml::get_version_block \
+		local node=".versions.\"${version_key}\""
+		yml::get_keys \
+			found_keys \
 			yaml_module_config \
-			yaml_version_block \
-			"${version_key}" 
-
-		# check keys: allowed are 'config' and 'variants'
-		used_keys=()
-		yml::check_keys \
-			yaml_version_block \
-			Yaml_valid_vk_keys \
-			used_keys
-
-		# read (default) config of version if set
-		local -- yaml_version_config=''
-		if [[ -v used_keys['config'] ]]; then
-			yaml_version_config=$(${yq} '.config' <<<"${yaml_version_block}" 2>/dev/null)
-			debug "vk input: ${yaml_version_config}"
-		fi
-		# reminder: if YAML input is empty, next line copies defaults to 'vk_config'
-		local -A vk_config=()
-		yml::get_config \
-			yaml_version_config \
-			vk_config \
-			default_config
-
-		local -- yaml_variants=''
-		local -i num_variants=0
-		yml::get_variants \
-			yaml_version_block \
-			yaml_variants \
-			num_variants
+			"${node}"
+		for key in "${found_keys[@]}"; do
+			case "${key}" in
+				'config' )
+					yml::get_config \
+						yaml_module_config \
+						"${node}.config" \
+						mod_config
+					;;
+				'variants' )
+					local -- type_of_node=''
+					yml::get_type type_of_node yaml_module_config "${node}.variants"
+					if [[ "${type_of_node}" == '!!null' ]]; then
+						num_variants=0
+					elif [[ "${type_of_node}" != '!!seq' ]]; then
+						die_invalid_variants_block "${name}" "${version}" \
+									   "${type_of_key}"
+					else
+						yml::get_seq_length \
+							num_variants \
+							yaml_module_config \
+							"${node}.variants"
+					fi
+					;;
+			esac
+		done
 
 		local versions=()
 		expand_version_key versions "${version_key}" "${version}"
@@ -1590,33 +1566,30 @@ build_modules_yaml_v1(){
 			parse_version "${version}"
 
 			if (( num_variants == 0 )); then
-				is_variant_to_be_built \
-					"${name}" \
-					"${version}" \
-					vk_config || continue
+				is_variant_to_build \
+					"${name}" "${version}" \
+					mod_config || continue
 				build_modules_variant \
 					"${name}" "${version}" \
-					vk_config
+					mod_config
 			else
 				local -i n=0
-				local -- yaml_variant_config=''
 				for ((n=0; n<num_variants; n++)); do
-					yml::get_nth_variant \
-						yaml_variants \
-						yaml_variant_config \
-						"${n}"
-					
-					local -A mod_config=()
+					local -A variant_config=()
+					local -- key=''
+					for key in "${!mod_config[@]}"; do
+						variant_config[${key}]="${mod_config[${key}]}"
+					done
 					yml::get_config \
-						yaml_variant_config \
-						mod_config \
-						vk_config
-					is_variant_to_be_built \
+						yaml_module_config \
+						"${node}.variants[$n]" \
+						variant_config
+					is_variant_to_build \
 						"${name}" "${version}" \
-						mod_config || continue
+						variant_config || continue
 					build_modules_variant \
 						"${name}" "${version}" \
-						mod_config
+						variant_config
 					if [[ "${mod_config['build_variants']}" == 'first_match' ]]; then
 						break
 					fi
