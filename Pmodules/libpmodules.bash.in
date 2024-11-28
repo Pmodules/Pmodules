@@ -82,40 +82,100 @@ declare -A OverlayConfigKeys=(
 	['modulepath']=''
 )
 
-pm::get_value(){
-	local -- yaml_input="$1"
-	local -n val="$2"
-	local -- key="$3"
-	local -- expected_type="$4"
+yml::die_parsing(){
+	std::die 3 "error parsing YAML:\n----\n$1\n----"
+}
+
+yml::die_type_error(){
+	std::die 3 "%s" \
+		 "Value of '$1' must be of type '$2', but is '$3'!"
+}
+
+yml::die_invalid_key(){
+	std::die 3 "%s -- %s\n%s" \
+		 "Invalid key in configuration" \
+		 "$1" "$2"
+}
+
+yml::die_read_file(){
+	std::die 3 "Cannot read file '$1'. Please check with yamllint!"
+}
+
+yml::read_file(){
+	local -n yml_content="$1"
+	local -- yml_fname="$2"
+	local -- yml_node="$3"
+
+	yml_content=$( ${yq} -Ne e "${yml_node}|explode(.)" "${yml_fname}" 2>/dev/null ) || \
+		yml::die_read_file "${yml_fname}"
+}
+
+yml::get_keys(){
+	local -n yml_keys="$1"
+	local -n yml_input="$2"
+	local -- yml_node="$3"
+
+	local -- str=''
+	str="$( ${yq} -e "${yml_node}|keys|.[]" 2>/dev/null <<<"${yml_input}")" || \
+		{ yml_keys=(); return 0; };
+	readarray -t yml_keys <<<"${str}" 
+}
+
+yml::get_type(){
+	local -n yml_type="$1"
+	local -n yml_input="$2"
+	local -- yml_node="$3"
+	yml_type="$( ${yq} -e "${yml_node}|type" 2>/dev/null <<<"${yml_input}")" || \
+		yml::die_parsing "${yml_input}"
+}
+
+yml::get_value(){
+	local -n yml_val="$1"
+	local -n yml_input="$2"
+	local -- yml_node="$3"
+	local -- yml_expected_type="$4"
 	
 	local -- type=''
-	type=$( ${yq} -e ".${key} | type" 2>/dev/null <<<"${yaml_input}")
-	if [[ "${type}" != "${expected_type}" ]]; then
-		std::die 3 "%s" \
-			 "Value of '${key}' must be of type '${expected_type:2}', but is '${type:2}'!"
-	fi
-	val=$( ${yq} -e ".${key}" \
-		     2>/dev/null <<<"${yaml_input}" ) || val=''
+	type="$( ${yq} -e "${yml_node}|type" 2>/dev/null <<<"${yml_input}")" || \
+		yml::die_parsing "${yml_input}"
+	[[ "${type}" == "${yml_expected_type}" ]] || \
+		yml::die_type_error "${yml_node}" "${yml_expected_type:2}" "${type:2}"
+	yml_val=$( ${yq} -e "${yml_node}" 2>/dev/null <<<"${yml_input}" ) || \
+		return 1
 }
-pm::get_seq(){
-	local -- yaml_input="$1"
-	local -n val="$2"
-	local -- key="$3"
+
+yml::get_seq_length(){
+
+	local -n yml_seq_length="$1"	# [out] number of variants
+	local -n yml_input="$2"		# [in]  YAML input
+	local -- yml_node="$3"		# [in]  node
+
+	yml_seq_length=$(${yq} -e "${yml_node}|length" 2>/dev/null <<<"${yml_input}") || \
+		yml::die_parsing "${yml_input}"
+}
+
+yml::get_seq(){
+	local -n yml_val="$1"
+	local -n yml_input="$2"
+	local -- yml_node="$3"
 
 	local -- type=''
-	type=$( ${yq} ".${key} | type" 2>/dev/null <<<"${yaml_input}")
+	type=$( ${yq} -e "${yml_node}|type" 2>/dev/null <<<"${yml_input}")
 	if [[ "${type:2}" == 'null' ]]; then
-		val=''
+		yml_val=''
 		return 0
 	fi
-	if [[ "${type}" != '!!seq' ]]; then
-		std::die 3 "%s" \
-			 "Value of '${key}' must be of type 'seq', but is of type '${type:2}'!"
+	[[ "${type}" == '!!seq' ]] || \
+		yml::die_type_error "${yml_node}" 'seq' "${type:2}"
+	local -i length=0
+	length=$(${yq} -e "${yml_node}|length" 2>/dev/null <<<"${yml_input}")
+	if (( length == 0 )); then
+		yml_val=''
+		return 0
 	fi
-	val=$( ${yq} -e ".${key}[]" \
-		     2>/dev/null <<<"${yaml_input}" ) || val=''
+	yml_val=$( ${yq} -e "${yml_node}[]" 2>/dev/null <<<"${yml_input}" ) || \
+		return 1
 }
-
 
 pm::read_config(){
 	: "
@@ -135,9 +195,6 @@ pm::read_config(){
 		"
 		local -r yaml_input="$1"
 		local -r ol_name="$2"
-		local -- key=''
-		local -a keys=()
-		local -- value=''
 
 		Overlays+=( "${ol_name}" )
 		# init overlay with defaults
@@ -145,16 +202,15 @@ pm::read_config(){
 			OverlayInfo[${ol_name}:${key}]="${OverlayConfigKeys[${key}]}"
 		done
 		# get keys in YAML input
-		readarray -t keys < <( ${yq} -e ".|keys|.[]" <<<"${yaml_input}" 2>/dev/null ) || \
-			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+		local -- node=".Overlays.${ol_name}"
+		local -- key=''
+		local -a keys=()
+		yml::get_keys keys yaml_input "${node}"
+		local -- value=''
 		for key in "${keys[@]}"; do
-			[[ -v OverlayConfigKeys[${key,,}] ]] || \
-				std::die 3 "%s -- %s\n%s" \
-					 "Invalid key in configuration" \
-					 "${key}" "${yaml_input}"
 			case ${key,,} in
 				install_root )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value value yaml_input "${node}.${key}" '!!str'
 					OverlayInfo[${ol_name}:install_root]=$(${envsubst} <<< "${value}")
 					mkdir -p "${OverlayInfo[${ol_name}:install_root]}" 2>/dev/null
 					[[ -d ${OverlayInfo[${ol_name}:install_root]} ]] || \
@@ -162,7 +218,7 @@ pm::read_config(){
 							 "Invalid installation root directory for overlay '${ol_name}' -- ${value}"
 					;;
 				modulefiles_root )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value value yaml_input "${node}.${key}" '!!str'
 					OverlayInfo[${ol_name}:modulefiles_root]=$(${envsubst} <<< "${value}")
 					mkdir -p "${OverlayInfo[${ol_name}:modulefiles_root]}" 2>/dev/null
 					[[ -d ${OverlayInfo[${ol_name}:modulefiles_root]} ]] || \
@@ -170,7 +226,7 @@ pm::read_config(){
 							 "Invalid modulefiles root directory for overlay '${ol_name}' -- ${value}"
 					;;
 				type )
-					pm::get_value "${yaml_input}" value "${key}" '!!str'
+					yml::get_value value yaml_input "${node}.${key}" '!!str'
 					case ${value} in
 						"${ol_normal}" | "${ol_replacing}" | "${ol_hiding}" )
 							:
@@ -182,7 +238,7 @@ pm::read_config(){
 					OverlayInfo[${ol_name}:type]="${value}"
 					;;
 				excludes )
-					pm::get_seq "${yaml_input}" value "${key}" '!!seq'
+					yml::get_seq value yaml_input "${node}.${key}" '!!seq'
 					local -a tmp_array=()
 					readarray -t tmp_array <<<${value}
 					local excludes=''
@@ -190,13 +246,19 @@ pm::read_config(){
 					OverlayInfo[${ol_name}:excludes]=$(${envsubst} <<<"${excludes%:}" )
 					;;
 				modulepath )
-					pm::get_seq "${yaml_input}" value "${key}" '!!seq'
+					yml::get_seq value yaml_input "${node}.${key}" '!!seq'
 					local -a tmp_array=()
 					readarray -t tmp_array <<<${value}
 					local modulepath=''
 					printf -v modulepath "%s:" "${tmp_array[@]}"
 					OverlayInfo[${ol_name}:modulepath]=$(${envsubst} <<< "${modulepath%:}")
 					;;
+				* )
+					std::die 3 "%s -- %s\n%s" \
+						 "Invalid key in configuration" \
+						 "${key}" "${yaml_input}"
+					;;
+
 			esac
 		done
 		OverlayInfo[${ol_name}:used]='no'
@@ -205,25 +267,6 @@ pm::read_config(){
 		fi
 		local modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
 		Dir2OverlayMap[${modulefiles_root}]="${ol_name}"
-	}
-
-	get_config_of_overlays(){
-		: "
-		Get configuration of overlays in YAML input.
-
-		Args:
-			$1 YAML input
-		"
-		local -r yaml_input="$1"
-		local -- overlay=''
-		local -a overlays=()
-		readarray -t overlays < <( ${yq} -e '.|keys|.[]' <<<"${yaml_input}" )
-
-		for overlay in "${overlays[@]}"; do
-			local yaml_tmp
-			pm::get_value "${yaml_input}" yaml_tmp "${overlay}" '!!map'
-			get_config_of_overlay "${yaml_tmp}" "${overlay}"
-		done
 	}
 
 	get_config(){
@@ -235,34 +278,35 @@ pm::read_config(){
 		"
 		local -r config_file="$1"
 		local -- yaml_input=''
-		yaml_input=$( ${yq} -Ne e "." "${config_file}" 2>/dev/null ) || \
-			std::die 3 "Cannot read configuration file '${config_file}'!"
+		yml::read_file yaml_input "${config_file}" '.'
 
+		local -- key=''
 		local -a keys=()
-		readarray -t keys < <( ${yq} -e ".|keys().[]" <<<"${yaml_input}" 2>/dev/null ) || \
-			std::die 3 "Oops: retrieving keys from:\n${yaml_input}"
+		yml::get_keys keys yaml_input '.'
 		for key in "${keys[@]}"; do
-			[[ -v DefaultPmodulesConfig[${key,,}] ]] || \
-				std::die 3 "%s -- %s\n%s" \
-					 "Invalid key in configuration" \
-					 "${key}" "${yaml_input}"
 			case ${key,,} in
 				defaultgroups | default_groups )
-					pm::get_value "${yaml_input}" DefaultGroups "${key}" '!!str'
+					yml::get_value DefaultGroups yaml_input ".${key}" '!!str'
 					;;
 				defaultreleasestages | default_reltages )
-					pm::get_value "${yaml_input}" DefaultReleaseStages "${key}" '!!str'
+					yml::get_value DefaultReleaseStages yaml_input ".${key}" '!!str'
 					;;
 				tmpdir | tmp_dir )
-					pm::get_value "${yaml_input}" TmpDir "${key}" '!!str'
+					yml::get_value TmpDir yaml_input ".${key}" '!!str'
 					;;
 				distfilesdir | download_dir )
-					pm::get_value "${yaml_input}" DistfilesDir "${key}" '!!str'
+					yml::get_value DistfilesDir yaml_input ".${key}" '!!str'
 					;;
 				overlays )
-					local tmp_str=''
-					pm::get_value "${yaml_input}" tmp_str "${key}" '!!map'
-					get_config_of_overlays "${tmp_str}"
+					local -- overlay=''
+					local -a overlays=()
+					yml::get_keys overlays yaml_input ".${key}"
+					for overlay in "${overlays[@]}"; do
+						get_config_of_overlay "${yaml_input}" "${overlay}"
+					done
+					;;
+				* )
+					yml::die_invalid_key "${key}" "${yaml_input}"
 					;;
 			esac
 		done
