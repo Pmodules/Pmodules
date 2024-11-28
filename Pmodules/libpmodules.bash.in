@@ -271,7 +271,10 @@ pm::read_config(){
 	Overlays=()
 
 	# system config file
-	local -r sys_config_file="${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml"
+	local -- sys_config_file="${PMODULES_HOME%%/Tools*}/config/Pmodules.yaml"
+	if [[ -v PMODULES_CONFIG_FILE && -n "${PMODULES_CONFIG_FILE}" ]]; then
+		sys_config_file="${PMODULES_HOME%%/Tools*}/config/${PMODULES_CONFIG_FILE}"
+	fi
 	test -r "${sys_config_file}" || \
 		std::die 3 \
 			 "%s %s -- %s" \
