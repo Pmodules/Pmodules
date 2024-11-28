@@ -449,6 +449,12 @@ pbuild::unpack(){
 #
 # extract sources. For the time being only tar-files are supported.
 #
+pbuild::pre_prep(){
+	:
+}
+pbuild::post_prep(){
+	:
+}
 pbuild::prep() {
 	#......................................................................
 	#
@@ -660,6 +666,12 @@ pbuild.compile_in_sourcetree(){
 # Arguments:
 #	none
 #
+pbuild::pre_configure() {
+	:
+}
+pbuild::post_configure() {
+	:
+}
 pbuild::configure() {
 	case "${configure_with}" in
 		autotools )
@@ -729,6 +741,12 @@ pbuild::configure() {
 # Arguments:
 #	none
 #
+pbuild::pre_compile() {
+	:
+}
+pbuild::post_compile() {
+	:
+}
 pbuild::compile() {
 	local v_save="$V"
 	unset V
@@ -765,6 +783,12 @@ readonly -f pbuild::install_docfiles
 # Arguments:
 #	none
 #
+pbuild::pre_install() {
+	:
+}
+pbuild::post_install() {
+	:
+}
 pbuild::install() {
 	${make} install || \
 		std::die 3 \
@@ -1436,6 +1460,20 @@ _build_module() {
 			fi
 			debug "build functions for target ${target}: ${ModuleConfig[target_funcs:${target}]}"
 			local -- t=''
+			if (( ${#ModuleConfig[target_funcs:${target}]} == 0 )); then
+				${touch} "${BUILD_DIR}/.${target}"
+				return 0
+			fi
+			local -A target_info=(
+				[prep]='preparing sources'
+				[configure]='configuring'
+				[compile]='compiling'
+				[install]='installing'
+			)
+			std::info \
+				"%s " \
+				"${module_name}/${module_version}:" \
+				"${target_info[${target}]} ..."
 			for t in ${ModuleConfig[target_funcs:${target}]}; do
 				# We cd into the dir before calling the function -
 				# just to be sure we are in the right directory.
@@ -1459,32 +1497,16 @@ _build_module() {
 		${mkdir} -p "${SRC_DIR}"
 		${mkdir} -p "${BUILD_DIR}"
 
- 		std::info \
-			"%s " \
-			"${module_name}/${module_version}:" \
-			"preparing sources ..."
 		build_target "${SRC_DIR}" prep
 		[[ "${build_target}" == "prep" ]] && return 0
 
- 		std::info \
-			"%s " \
-			"${module_name}/${module_version}:" \
-			"configuring ..."
 		build_target "${BUILD_DIR}" configure
 		[[ "${build_target}" == "configure" ]] && return 0
 
- 		std::info \
-			"%s " \
-			"${module_name}/${module_version}:" \
-			"compiling ..."
 		build_target "${BUILD_DIR}" compile
 		[[ "${build_target}" == "compile" ]] && return 0
 
 		${mkdir} -p "${PREFIX}"
- 		std::info \
-			"%s " \
-			"${module_name}/${module_version}:" \
-			"installing ..."
 		build_target "${BUILD_DIR}" install
 	} # bm::compile_and_install()
 
