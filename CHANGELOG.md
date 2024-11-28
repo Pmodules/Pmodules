@@ -10,31 +10,78 @@
 ## Version 1.1.22
 
 ### modulecmd
+* excludes in overlays are now supporting regex notation
+  {#353}
+* the dependencies of a module are now defined in the modulefiles
+  directory. This way it is possbile to define different dependencies 
+  per overlay.
+  (#338)
+* fixes in loading/unloading Lua modules
+  (#331)
 * Create overlay directories if the do not already exist. 
-  Print error message if the directories cannot be created (#326)
-* An overlay can now add additional directories to `MODULEPATH` (#321)
-* Review/optimze code to find modulefiles (#318, #319, #328)
-* Ignore relative directories in `MODULEPATH` (#316)
-* Add alias `spider` to `search` sub-command (#313)
-* Print help text if `modulecmd` is called without argument (#312)
+  Print error message if the directories cannot be created
+  (#326)
+* An overlay can now add additional directories to `MODULEPATH`
+  (#321)
+* Review/optimze code to find modulefiles
+  (#318, #319, #328)
+* Ignore relative directories in `MODULEPATH`
+  (#316)
+* Add alias `spider` to `search` sub-command
+  (#313)
+* Print help text if `modulecmd` is called without argument
+  (#312)
 * fixes/improvements in module search command. Handling of
-  directories outside Pmodules hierarchy fixed. (#301, #311)
-* Improved support for Lmod (#302, #325, #327)
-* code review, cleanup and bugfixes (#299, #300, #314, #315, #317)
+  directories outside Pmodules hierarchy fixed.
+  (#301, #311)
+* Improved support for Lmod 
+  (#302, #325, #327)
+* code review, cleanup and bugfixes 
+  (#299, #300, #314, #315, #317, #332, #333, #334, #337, #339, #346,
+  #352, #360, #363, #364)
 
 ### build-system
+* YAML anchors can now be used in the module config file.
+  (#374)
+* The modulefile to be installed can now be configured
+  (#371)
+* The function used to build a module can now be defined in the 
+  YAML config file.
+  (#359)
+* Legacy build function removed
+  (#355)
+* Cleanup/review reading YAML config files
+  (#348)
+* Use regex instead of glob to match systems
+  (#343)
+* Type checks of YAML nodes added
+  (#342)
+* Configure required overlays in YAML config and load them before
+  starting to build a module.
+  (#341)
 * `pbuild::add_configure_args()` isn't deprecated any more. Sometimes
-  it is useful in the build-script (#322).
-* `none` added as unpacker (#307).
+  it is useful in the build-script
+  (#322).
+* `none` added as unpacker.
+  (#307)
 * Don't override existing RPATH. This is an important fix for packages
-  like conda (#304).
-* Force rebuild if build script is called with `--clean-install`
-  (#305).
-* code review, cleanup and bugfixes (#299, #300, #303, #306, #310, #320, #323, #324)
+  like conda.
+  (#304)
+* Force rebuild if build script is called with `--clean-install`.
+  (#305)
+* code review, cleanup and bugfixes .
+  (#299, #300, #303, #306, #310, #320, #323, #324, #335, #336, #345,
+  #349, #350, #351, #354, #362, #362, #365, #368, #369, #370, #372)
 
 ### both
-* sles15 added to list of recognized Linux distributions (#309)
-* bugfixes (#308)
+* The default Pmodules system config can now be overwritten with the 
+  environment variables `PMODULES_CONFIG_FILE`.
+  (#373)
+* support for aarch64 added
+* sles15 added to list of recognized Linux distributions
+  (#309)
+* bugfixes
+  (#308, #367)
 
 ## Version 1.1.21
 ### modulecmd
