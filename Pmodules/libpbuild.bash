@@ -821,15 +821,19 @@ pbuild::install_shared_libs() {
 #
 
 declare -n ModuleConfig
-declare -a Systems
-declare -a UseOverlays
+declare -a Systems=()
+declare -a UseOverlays=()
 pbuild.build_module_yaml(){
 	local -- module_name="$1"
 	local -- module_version="$2"
 	ModuleConfig="$3"
 	local -- module_relstage="${ModuleConfig['relstage']}"
-	readarray -t Systems <<< "${ModuleConfig['systems']}"
-	readarray -t UseOverlays <<< "${ModuleConfig['use_overlays']}"
+	if [[ -n "${ModuleConfig['systems']}" ]]; then
+		readarray -t Systems <<< "${ModuleConfig['systems']}"
+	fi
+	if [[ -n "${ModuleConfig['use_overlays']}" ]]; then
+		readarray -t UseOverlays <<< "${ModuleConfig['use_overlays']}"
+	fi
 	shift 3
 	_build_module "${module_name}" "${module_version}" "${module_relstage}" "$@"
 }
