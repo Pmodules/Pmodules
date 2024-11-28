@@ -1236,7 +1236,9 @@ _build_module() {
 			}
 			[[ "${is_subpkg}" == 'yes' ]] && return 0
 			local src=''
-			if ! find_modulefile src; then
+			if [[ -n "${ModuleConfig['modulefile']}" ]]; then
+				src="${ModuleConfig['modulefile']}"
+			elif ! find_modulefile src; then
 				std::info \
 					"%s " \
 					"${module_name}/${module_version}:" \
