@@ -68,6 +68,7 @@ sevenz=$(std::def_cmd 'sevenz');	declare -r sevenz
 sort=$(std::def_cmd 'sort');		declare -r sort
 tar=$(std::def_cmd 'tar');		declare -r tar
 tee=$(std::def_cmd 'tee');		declare -r tee
+touch=$(std::def_cmd 'touch');		declare -r touch
 tput=$(std::def_cmd 'tput');		declare -r tput
 uname=$(std::def_cmd 'uname');		declare -r uname
 yq=$(std::def_cmd 'yq');		declare -r yq

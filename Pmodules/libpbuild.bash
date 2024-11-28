@@ -537,7 +537,7 @@ pbuild::prep() {
 		local -r strip="$3"
 		local -r unpacker="$4"
 		{
-			mkdir -p "${dir}"
+			${mkdir} -p "${dir}"
 			pbuild::unpack "${fname}" "${dir}" "${strip}" "${unpacker}"
 		} || {
 			${rm} -f "${fname}"
@@ -1444,12 +1444,13 @@ _build_module() {
 				#
 				cd "${dir}"
 				if typeset -F "$t" 2>/dev/null; then
-					"$t" || \
-						std::die 10 "Aborting..."
+					"$t" || std::die 10 "Aborting..."
+				else
+					std::die 10 "Function is not defined -- $t"
 				fi
 			done
-			touch "${BUILD_DIR}/.${target}"
-		} # compile_and_install():build_target()
+			${touch} "${BUILD_DIR}/.${target}"
+		} # build_target()
 
 		[[ ${dry_run} == yes ]] && std::die 0 ""
 
