@@ -40,9 +40,9 @@ if (! $?DefaultGroups ) then
 endif
 foreach group ( ${DefaultGroups} )
   if ( "${MODULEPATH}" == "" ) then
-    setenv MODULEPATH "${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+    setenv MODULEPATH "${PMODULES_ROOT}/${group}/modulefiles"
   else
-    setenv MODULEPATH "${MODULEPATH}:${PMODULES_ROOT}/${group}/${PMODULES_MODULEFILES_DIR}"
+    setenv MODULEPATH "${MODULEPATH}:${PMODULES_ROOT}/${group}/modulefiles"
   endif
 end
 

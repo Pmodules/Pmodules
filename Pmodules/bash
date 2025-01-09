@@ -8,19 +8,11 @@ if [ ${BASH_VERSINFO:-0} -lt 3 ]; then
 	return 1
 fi
 
-############################################################################
-# some sanity checks
-#
-if [[ ! -d ${PMODULES_HOME} ]]; then
-        echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
-        return 1
-fi
-
 #############################################################################
 # initialize bash completion
 #
-if [[ -r "${PMODULES_HOME}/init/bash_completion" ]]; then
-	source "${PMODULES_HOME}/init/bash_completion"
+if [[ -r "${BASH_SOURCE[0]%/*}/bash_completion" ]]; then
+	source "${BASH_SOURCE[0]%/*}/bash_completion"
 fi
 
 #############################################################################
@@ -30,22 +22,29 @@ unset MODULE_VERSION
 unset MODULE_VERSION_STACK
 unset MODULESHOME
 
-declare -x PMODULES_DIR="${PMODULES_HOME}"
-
 #############################################################################
 # implement module comand as shell function
 #
-module() {
-	unset BASH_ENV
-	local output="$("${PMODULES_HOME}/bin/modulecmd" bash "$@")"
-	eval "${output}"
-}
+declare -- _dname_=$(dirname "${BASH_SOURCE[0]}")
+declare -- PMODULES_HOME="$(cd "${_dname_}/.." && pwd -L)"
+unset _dname_
+
+declare -- _cmd_="module() {
+        unset BASH_ENV
+        local output=\"\$(\"${PMODULES_HOME}/bin/modulecmd\" bash \"\$@\")\"
+        eval \"\${output}\"
+}"
+
+eval "$(echo "${_cmd_}")"
 export -f module
 
-modbuild(){
-	"${PMODULES_HOME}/bin/modbuild" "$@"
-}
+_cmd_="modbuild(){
+	\"${PMODULES_HOME}/bin/modbuild\" \"\$@\"
+}"
+eval "$(echo "${_cmd_}")"
 export -f modbuild
+
+unset _cmd_
 
 # Local Variables:
 # mode: sh
