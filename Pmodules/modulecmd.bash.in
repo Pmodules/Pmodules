@@ -50,11 +50,18 @@ declare -- ReleaseStages=':unstable:stable:deprecated:'
 # set releases which should be available after initialization
 declare -- DefaultReleaseStages='stable'
 
-declare -- OverlayExcludes=''
-declare -a UsedOverlays=()
-declare -- PmFiles=''
+declare -A Dir2OverlayMap=()
+declare -A GroupDepths=()
 declare -- ModulePathAppend=''
 declare -- ModulePathPrepend=''
+declare -a Overlays=()
+declare -- OverlayExcludes=''
+declare -A OverlayInfo=()
+declare -- PmFiles=''
+declare -g UsedGroups=''
+declare -g UsedReleaseStages=''
+declare -a UsedOverlays=()
+declare -- Version=''
 
 ##############################################################################
 declare -- Verbosity_lvl='verbose'
@@ -70,6 +77,14 @@ declare -A Subcommands=()
 declare -A Options=()
 declare -A Help=()
 
+# these variables must exist
+if [[ ! -v LOADEDMODULES ]] || [[ ! -v _LMFILES_ ]]; then
+	LOADEDMODULES=''
+	_LMFILES_=''
+fi
+[[ -v MODULEPATH ]]	   || MODULEPATH=''
+[[ -v PMODULES_ENV ]]      || PMODULES_ENV=''
+
 # initialize help text of 'module --version'
 Help['version']="
 Pmodules @PMODULES_VERSION@
@@ -77,12 +92,7 @@ using Tcl Environment Modules
 VERSION = @MODULES_VERSION@
 "
 
-# these variables must exist
-if [[ ! -v LOADEDMODULES ]] || [[ ! -v _LMFILES_ ]]; then
-	LOADEDMODULES=''
-	_LMFILES_=''
-fi
-
+#..............................................................................
 #
 # display help text for command given in $1
 #
@@ -91,6 +101,57 @@ print_help() {
         std::die 1
 }
 
+#..............................................................................
+#
+# Save/cache state in the environment variable PMODULES_ENV. The content is
+# base64 encoded. This function is called on exit via a trap handler.
+#
+# Arguments:
+#       none
+#
+save_env() {
+	local __doc__="set PMODULES_ENV"
+
+	encode_base64(){
+		local -- os_name=''
+		os_name=$(${uname} -s)
+
+		case "${os_name}" in
+			Linux )
+				"${base64}" --wrap=0 <<< "$1"
+				;;
+			Darwin )
+				# does not wrap if running in a script
+				"${base64}"  <<< "$1"
+				;;
+			* )
+				std::die 255 "Oops: Unsupported OS"
+				;;
+		esac
+	}
+
+	local vars=()
+	vars+=( 'Version' )
+	vars+=( 'UsedReleaseStages' 'UsedGroups' )
+	vars+=( 'DefaultGroups' 'DefaultReleaseStages' )
+	vars+=( 'ReleaseStages' )
+	vars+=( 'GroupDepths' )
+	vars+=( 'Overlays' )
+	vars+=( 'UsedOverlays' )
+	vars+=( 'OverlayExcludes' )
+	vars+=( 'OverlayInfo' 'Dir2OverlayMap')
+	vars+=( 'PmFiles' )
+	vars+=( 'ModulePathAppend' )
+	vars+=( 'ModulePathPrepend' )
+	local s=''
+	s=$(typeset -p "${vars[@]}")
+	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
+}
+
+#..............................................................................
+#
+# Export required environment variables
+declare -A vars_to_be_exported=()
 export_env() {
 	local -A export_functions=()
 	export_functions['sh']='export_env_sh'
@@ -118,65 +179,17 @@ export_env() {
 			shift
 		done
 	}
+	[[ -v vars_to_be_exported['PMODULES_ENV'] ]] && save_env
 	[[ -v export_functions[${Shell}] ]] || \
 		std::die 1 "Unsupported shell -- ${Shell}"
-	${export_functions[${Shell}]} "$@"
-}
-
-#
-# Save/cache state in the environment variable PMODULES_ENV. The content is
-# base64 encoded. This function is called on exit via a trap handler.
-#
-# Arguments:
-#       none
-#
-
-declare EnvMustBeSaved='no'
-
-save_env() {
-	encode_base64(){
-		local -- os_name=''
-		os_name=$(${uname} -s)
-
-		case "${os_name}" in
-			Linux )
-				"${base64}" --wrap=0 <<< "$1"
-				;;
-			Darwin )
-				# does not wrap if running in a script
-				"${base64}"  <<< "$1"
-				;;
-			* )
-				std::die 255 "Oops: Unsupported OS"
-				;;
-		esac
-	}
-
-        [[ "${EnvMustBeSaved}" == 'no' ]] && return 0
-        local vars=( Version )
-	vars+=( UsedReleaseStages UsedGroups )
-	vars+=( DefaultGroups DefaultReleaseStages )
-        vars+=( ReleaseStages )
-	vars+=( GroupDepths )
-	vars+=( Overlays )
-        vars+=( UsedOverlays )
-	vars+=( OverlayExcludes )
-        vars+=( OverlayInfo Dir2OverlayMap)
-	vars+=( PmFiles )
-	vars+=( 'ModulePathAppend' )
-	vars+=( 'ModulePathPrepend' )
-	local s=''
-	s=$(typeset -p "${vars[@]}")
-	declare -gx PMODULES_ENV=''
-	PMODULES_ENV=$( encode_base64 "$s" )
-	export_env 'PMODULES_ENV'
+	${export_functions[${Shell}]} "${!vars_to_be_exported[@]}"
 }
 
 #
 # function called on exit
 #
 _exit() {
-	save_env
+	export_env
 	if [[ -n "${TmpFile}" ]] && [[ -e "${TmpFile}" ]]; then
 		${rm} -f "${TmpFile}" || :
 	fi
@@ -450,13 +463,6 @@ find_overlay () {
 }
 
 #
-# Check whether the module passed in argument $1 is loaded.
-#
-module_is_loaded() {
-	[[ :${LOADEDMODULES}: =~ :$1: ]]
-}
-
-#
 # test whether the given file is a module file.
 #
 # - for lua: the extension must be .lua
@@ -604,8 +610,8 @@ set_lmfiles(){
 	  _LMFILE_.
 	'
 	if [[ ! -v _LMFILES_ ]]; then
-		declare -x _LMFILES_=''
-		declare -x LOADEDMODULES=''
+		declare -gx _LMFILES_=''
+		declare -gx LOADEDMODULES=''
 	fi
 	local -- dir=''
 	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
@@ -615,7 +621,9 @@ set_lmfiles(){
 			std::append_path _LMFILES_ "${dir}"
 		done
 	fi
-
+	if [[ -z "${_LMFILES_}" ]]; then
+		return 0
+	fi
 	# rebuild LOADEDMODULES by setting it to _LMFILES_ and then removing
 	# all directories given in MODULEPATH from LOADEDMODULES.
 	LOADEDMODULES="${_LMFILES_}"
@@ -757,7 +765,7 @@ subcommand_load() {
 		local -i depth
 		compute_group_depth depth "${moduledir}" || return 1
 		GroupDepths[${group}]=${depth}
-		EnvMustBeSaved='yes'
+		vars_to_be_exported['PMODULES_ENV']=1
 	}
 
 	#......................................................................
@@ -854,7 +862,7 @@ subcommand_load() {
 			        is_release_stage "${relstage}" || \
                                         die_illegal_relstage "${relstage}"
 				std::append_path UsedReleaseStages "${relstage}"
-                                EnvMustBeSaved='yes'
+                                vars_to_be_exported['PMODULES_ENV']=1
 			fi
 		fi # handle extended module names
 		local moduledir=''
@@ -866,9 +874,24 @@ subcommand_load() {
 			"${m}" \
 			"${modulepath[@]}"
 
-		[[ ${m} == Pmodules/*  ]] && [[ -n ${LOADEDMODULES} ]] && \
-			die_conflict "${m}"
-		# continue if already loaded
+		if [[ ${m} == Pmodules/*  ]]; then
+			# The user wants to load another Pmodules version!
+			# This is possible if
+			# - no other module is loaded
+			# - the loaded version of Pmodules is >= 1.1.22
+			# - the to be loaded version of Pmodules is >= 1.1.22
+			local -r new_version="${m##*/}"
+			[[ -v Version ]] || Version='0.0.0'
+			if [[ -n ${LOADEDMODULES} ]]; then
+				if std::version_lt "${new_version}" '1.1.22' || \
+						std::version_lt "${Version}" '1.1.22'; then
+					die_conflict "${m}"
+				fi
+				Version="${new_version}"
+			fi
+		fi
+		# nothing to do if already loaded, continue with
+		# next module to be loaded
 		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
 		interp[${current_modulefile}]="${modulecmd}"
@@ -941,8 +964,9 @@ subcommand_load() {
 		${logger} -t Pmodules "${msg}"
 	done
 	set_lmfiles
-        EnvMustBeSaved='yes'
-	export_env 'LOADEDMODULES' '_LMFILES_'
+        vars_to_be_exported['PMODULES_ENV']=1
+	vars_to_be_exported['LOADEDMODULES']=1
+	vars_to_be_exported[]'_LMFILES_']=1
 }
 
 ##############################################################################
@@ -1027,9 +1051,11 @@ subcommand_unload() {
 		case ${Shell} in
 			sh | bash | zsh )
 				echo "${output}"
+				echo ""
 				;;
 			* )
 				"${modulecmd}" "${Shell}" 'unload' "${arg}"
+				echo ""
                 		;;
 		esac
 		if [[ "${modulecmd}" == "${Tcl_cmd}" ]]; then
@@ -1037,12 +1063,8 @@ subcommand_unload() {
 		fi
 	done
 	if [[ ! -v PMODULES_HOME || -z ${PMODULES_HOME} ]]; then
-		PMODULES_HOME="${saved_home}"
-		export_env 'PMODULES_HOME'
-	fi
-	if [[ ! -v _LMFILES_ ]]; then
-		declare -x _LMFILES_=''
-		declare -x LOADEDMODULES=''
+		declare -gx PMODULES_HOME="${saved_home}"
+		vars_to_be_exported['PMODULES_HOME']=1
 	fi
 	set_lmfiles
 
@@ -1057,8 +1079,11 @@ subcommand_unload() {
 	for dir in "${dirs[@]}"; do
 		std::prepend_path MODULEPATH "${dir}"
 	done
-	export_env 'LOADEDMODULES' '_LMFILES_'
-	EnvMustBeSaved='yes'
+	if [[ -n "${LOADEDMODULES}" ]]; then
+		vars_to_be_exported['LOADEDMODULES']=1
+		vars_to_be_exported['_LMFILES_']=1
+	fi
+	vars_to_be_exported['PMODULES_ENV']=1
 } # subcommand_unload
 
 ##############################################################################
@@ -1261,7 +1286,6 @@ get_available_modules() {
 #       0  if a modulefile has been found
 #       != else
 #       
-
 find_modulefile(){
 	local -n ref_modulefile="$1"
 	local -n ref_relstage="$2"
@@ -1296,7 +1320,7 @@ find_modulefile(){
 			local -- mod=''
 			local -a found_modules=()
 			mapfile -t found_modules \
-				< <(find -L "${dir}" \
+				< <(${find} -L "${dir}" \
 					 -type f \
 					 -not -name '.*' \
 					 \( -ipath "${dir}/${modulename}" \
@@ -1897,8 +1921,8 @@ subcommand_use() {
         for arg in "${args[@]}"; do
 		use "${arg}"
         done
-        EnvMustBeSaved='yes'
-	export_env 'MODULEPATH'
+	vars_to_be_exported['PMODULES_ENV']=1
+	vars_to_be_exported['MODULEPATH']=1
 }
 
 ##############################################################################
@@ -2004,8 +2028,7 @@ subcommand_unuse() {
                                         std::remove_path MODULEPATH "${dir}"
 
                         done
-                        export_env UsedOverlays
-                        EnvMustBeSaved='yes'
+                        vars_to_be_exported['PMODULES_ENV']=1
                 }
 
 		#..............................................................
@@ -2093,8 +2116,8 @@ subcommand_unuse() {
         for arg in "${args[@]}"; do
                 unuse "${args[@]}"
         done
-        EnvMustBeSaved='yes'
-        export_env 'MODULEPATH'
+        vars_to_be_exported['PMODULES_ENV']=1
+        vars_to_be_exported['MODULEPATH']=1
 }
 
 ##############################################################################
@@ -2142,40 +2165,45 @@ subcommand_refresh() {
 # Arguments:
 #	none
 #
-init_modulepath() {
-	declare -gx MODULEPATH=''
-	local group
-	local ol
-	for ol in "${UsedOverlays[@]}"; do
-		for group in ${UsedGroups//:/ }; do
-			local dir="${OverlayInfo[${ol}:modulefiles_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
-			if [[ -d "${dir}" ]]; then
-				std::prepend_path MODULEPATH "${dir}"
-			fi
-		done
-	done
-}
-
-pmodules_init() {
+pmodules_setup() {
+	local -r mode="${1:-check}"
 	init_used_groups() {
 		declare -gx UsedGroups=''
 		local group
 		for group in ${DefaultGroups//:/ }; do
 			std::append_path UsedGroups "${group}"
 		done
-		EnvMustBeSaved='yes'
+		vars_to_be_exported['PMODULES_ENV']=1
 	}
 	init_used_releases() {
 		declare -g  UsedReleaseStages=''
 		for r in ${DefaultReleaseStages//:/ }; do
 			std::append_path UsedReleaseStages "${r}"
 		done
-		EnvMustBeSaved='yes'
+		vars_to_be_exported['PMODULES_ENV']=1
 	}
 	init_overlay_vars() {
-		declare -ag UsedOverlays=( 'base' )
+		declare -agx UsedOverlays=( 'base' )
 		OverlayInfo['base:used']='yes'
 		declare -g OverlayExcludes=''
+		scan_groups "${UsedOverlays[@]}"
+		vars_to_be_exported['PMODULES_ENV']=1
+	}
+
+	init_modulepath() {
+		declare -gx MODULEPATH=''
+		local group
+		local ol
+		for ol in "${UsedOverlays[@]}"; do
+			for group in ${UsedGroups//:/ }; do
+				local dir="${OverlayInfo[${ol}:modulefiles_root]}"
+				dir+="/${group}/${__MODULEFILES_DIR__}"
+				if [[ -d "${dir}" ]]; then
+					std::prepend_path MODULEPATH "${dir}"
+				fi
+			done
+		done
+		vars_to_be_exported['MODULEPATH']=1
 	}
 
 	init_manpath() {
@@ -2202,28 +2230,46 @@ pmodules_init() {
 			std::append_path  MANPATH "${PMODULES_HOME}/share/man"
 			std::append_path  MANPATH "/usr/share/man"
 		fi
+		vars_to_be_exported['MANPATH']=1
 	}
 
-	pm::read_config
+	init_load_modules(){
+		declare -gx LOADEDMODULES=''
+		declare -gx _LMFILES_=''
+	}
 
-	declare -gx LOADEDMODULES=''
-	declare -gx _LMFILES_=''
-	declare -Ag GroupDepths=()
-	declare -g  Version="${PMODULES_VERSION}"
-
-        init_used_groups
-        init_used_releases
-	init_overlay_vars
-        init_modulepath
-        init_manpath
-	scan_groups "${UsedOverlays[@]}"
+	# We (re-)initialise the Pmodules system, if
+	# PMODULES_ENV was not set/is empty
+	[[ -v PMODULES_ENV ]] || PMODULES_ENV=''
+	if [[ -z ${PMODULES_ENV} || ${mode} = 'init' ]]; then
+		pm::read_config
+		init_load_modules
+		init_used_groups
+		init_used_releases
+		init_overlay_vars
+		scan_groups "${UsedOverlays[@]}"
+		init_modulepath
+		init_manpath
+	else
+		# restore variables from last call
+		eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
+		if (( ${#UsedOverlays[@]} == 0 )); then
+			pm::read_config
+		fi
+		[[ -z "${LOADEDMODULES}" || -z ${_LMFILES_} ]] && init_load_modules
+		[[ -z "${UsedGroups}" ]] && init_used_groups
+		[[ -z "${UsedReleaseStages}" ]] && init_used_releases
+		(( ${#UsedOverlays[@]} == 0 )) && init_overlay_vars
+		(( ${#GroupDepths[@]} == 0 )) && scan_groups "${UsedOverlays[@]}"
+		[[ -z "${MODULEPATH}" ]] && init_modulepath
+		[[ -z "${MANPATH}" ]] && init_manpath
+	fi
+	[[ -z Version ]] || Version='0.0.0'
+	if [[ "${Version}" != "${PMODULES_VERSION}" ]]; then
+		Version="${PMODULES_VERSION}"
+		vars_to_be_exported[PMODULES_HOME]=1
+	fi
 	save_env
-        export_env \
-                LOADEDMODULES \
-                _LMFILES_ \
-                MODULEPATH \
-                PATH \
-                MANPATH
 }
 
 ##############################################################################
@@ -2430,7 +2476,7 @@ subcommand_clear() {
                          "${CMD}" "${SubCommand}" \
                          "no arguments allowed"
         fi
-	pmodules_init
+	pmodules_setup 'init'
 }
 
 ##############################################################################
@@ -3325,15 +3371,12 @@ subcommand_restore() {
 		[[ -z "${item}" ]] && continue
 		subcommand_unuse "${item}"
 	done
-	save_env
-	export_env PMODULES_ENV
 
 	# load collection
 	for collection in "${collections[@]}"; do
 		${cat} "${collection}"
 	done
-
-	EnvMustBeSaved='no'
+	vars_to_be_exported['PMODULES_ENV']=1
 }
 
 ##############################################################################
@@ -3366,7 +3409,10 @@ subcommand_savelist() {
 		for _pattern in "$@"; do
 			while read -r _coll; do
 				_result+=( "${_coll}" )
-			done < <(find "${gc_dirs[@]}" -type f -ipath "*/${_pattern}" -printf "%P\n" 2>/dev/null)
+			done < <(${find} "${gc_dirs[@]}" \
+					 -type f \
+					 -ipath "*/${_pattern}" \
+					 -printf "%P\n" 2>/dev/null)
 		done
 	}
 
@@ -3719,38 +3765,25 @@ if [[ ! -v Subcommands[${SubCommand}] ]]; then
 	std::die 1 "${CMD}: unknown sub-command -- ${SubCommand}"
 fi
 
-# restore variables from last call
-if [[ -v PMODULES_ENV ]]; then
-	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
-fi
-# Version should now be defined again, if not:
-# - PMODULES_ENV was not set
-# - Version was not defined the last time the status was saved.
-#   This is true for older Pmodules versions.
 
 # We (re-)initialise the Pmodules system, if
-# - PMODULES_ENV was not set/is empty
-# - A new Pmodules version has been loaded
-if [[ ! -v Version ]] || \
-	   [[ ${Version} != "${PMODULES_VERSION}" ]] || \
-	   [[ ! -v PMODULES_ENV ]] || \
-	   [[ -z ${PMODULES_ENV} ]]; then
-	declare _tmp_loaded_modules_="${LOADEDMODULES}"
-	declare _tmp_lmfiles_="${_LMFILES_}"
-
-	pmodules_init
-
-	LOADEDMODULES="${_tmp_loaded_modules_}"
-	_LMFILES_="${_tmp_lmfiles_}"
-        export_env \
-                LOADEDMODULES \
-                _LMFILES_
+# PMODULES_ENV or MODULEPATH was not set/is empty
+if [[ -z ${PMODULES_ENV} ]] || [[ -z "${MODULEPATH}" ]]; then
+	pmodules_setup 'init'
+else
+	# restore variables from last call
+	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
 
-# re-define these variables. Lmod muught have unset them!
-if [[ ! -v _LMFILES_ ]]; then
-	declare -x _LMFILES_=''
-	declare -x LOADEDMODULES=''
+if [[ "${Version}" != "${PMODULES_VERSION}" ]]; then
+	Version="${PMODULES_VERSION}"
+	vars_to_be_exported['PMODULES_ENV']=1
+fi
+
+if [[ -z "${UsedGroups}" ]]        || \
+	   [[ -z "${UsedReleaseStages}" ]] || \
+	   (( ${#UsedOverlays[@]} == 0 )); then
+	pmodules_setup 
 fi
 
 # we need to handle help text and options for sub-cmd aliases
