@@ -39,6 +39,158 @@ std::def_cmd(){
 	which "$1" 2>/dev/null || std::die 255 "'$1' not found!"
 }
 
+#..............................................................................
+#
+# compare two version numbers
+#
+# std::version_compare
+#	- returns 0 if the version numbers are equal
+#	- returns 1 if first version number is higher
+#	- returns 2 if second version number is higher
+#
+# std::version_lt
+#	- returns 0 if second version number is higher
+# std::version_le
+#	- returns 0 if second version number is higher or equal
+# std::version_gt
+#	- returns 0 if first version number is higher
+# std::version_ge
+#	- returns 0 if first version number is higher or equal
+#
+# otherwise a value != 0 is returned
+#
+# Arguments:
+#	$1 first version number
+#	$2 second version number
+#
+# Note:
+#	Original implementation found on stackoverflow:
+# https://stackoverflow.com/questions/4023830/how-to-compare-two-strings-in-dot-separated-version-format-in-bash
+#
+std::version_compare () {
+        is_uint() {
+                [[ $1 =~ ^[0-9]+$ ]]
+        }
+
+        [[ "$1" == "$2" ]] && return 0
+	local ver1 ver2
+        IFS='.' read -r -a ver1 <<<"$1"
+        IFS='.' read -r -a ver2 <<<"$2"
+
+        # fill empty fields in ver1 with zeros
+        local i
+        for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+                ver1[i]=0
+        done
+        for ((i=0; i<${#ver1[@]}; i++)); do
+                [[ -z ${ver2[i]} ]] && ver2[i]=0
+                if is_uint "${ver1[i]}" && is_uint "${ver2[i]}"; then
+                        ((10#${ver1[i]} > 10#${ver2[i]})) && return 1
+                        ((10#${ver1[i]} < 10#${ver2[i]})) && return 2
+                else
+                        [[ ${ver1[i]} > ${ver2[i]} ]] && return 1
+                        [[ ${ver1[i]} < ${ver2[i]} ]] && return 2
+                fi
+        done
+        return 0
+}
+readonly -f std::version_compare
+
+std::version_lt() {
+	local -r __doc__="
+	result:
+	    0 if version in $1 is less than version in $2.
+	    >=1: otherwise
+	"
+	if (( $# == 1 )); then
+		local vers1="${V_PKG}"
+		local vers2="$1"
+	else
+		local vers1="$1"
+		local vers2="$2"
+	fi
+        std::version_compare "${vers1}" "${vers2}"
+        (( $? == 2 ))
+}
+readonly -f std::version_lt
+
+std::version_le() {
+	local -r __doc__="
+	result:
+	    0 if version in $1 is less than or equal version in $2.
+	    >=1: otherwise
+	"
+	if (( $# == 1 )); then
+		local vers1="${V_PKG}"
+		local vers2="$1"
+	else
+		local vers1="$1"
+		local vers2="$2"
+	fi
+        std::version_compare "${vers1}" "${vers2}"
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code == 2 ))
+}
+readonly -f std::version_le
+
+std::version_gt() {
+	local -r __doc__="
+	result:
+	    0 if version in $1 is greate than version in $2.
+	    >=1: otherwise
+	"
+	if (( $# == 1 )); then
+		local vers1="${V_PKG}"
+		local vers2="$1"
+	else
+		local vers1="$1"
+		local vers2="$2"
+	fi
+        std::version_compare "${vers1}" "${vers2}"
+        (( $? == 1 ))
+        local -i exit_code=$?
+        (( exit_code == 1 ))
+}
+readonly -f std::version_gt
+
+std::version_ge() {
+	local -r __doc__="
+	result:
+	    0 if version in $1 is greate than or equal version in $2.
+	    >=1: otherwise
+	"
+	#	- returns 0 if version numbers are equal
+	if (( $# == 1 )); then
+		local vers1="${V_PKG}"
+		local vers2="$1"
+	else
+		local vers1="$1"
+		local vers2="$2"
+	fi
+        std::version_compare "${vers1}" "${vers2}"
+        (( $? == 1 ))
+        local -i exit_code=$?
+        (( exit_code == 0 || exit_code == 1 ))
+}
+readonly -f std::version_gt
+
+std::version_eq() {
+	local -r __doc__="
+	result:
+	    0 if versions are equal
+	    >=1 otherwise
+	"
+	if (( $# == 1 )); then
+		local vers1="${V_PKG}"
+		local vers2="$1"
+	else
+		local vers1="$1"
+		local vers2="$2"
+	fi
+        std::version_compare "${vers1}" "${vers2}"
+}
+readonly -f std::version_eq
+
 awk=$(std::def_cmd 'awk');		declare -r awk
 base64=$(std::def_cmd 'base64');	declare -r base64
 bash=$(std::def_cmd 'bash');		declare -r bash
