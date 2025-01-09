@@ -1,19 +1,9 @@
 #!/bin/zsh
 
-############################################################################
-# some sanity checks
-#
-if [[ ! -d ${PMODULES_HOME} ]]; then
-        echo "Oops: ${PMODULES_HOME}: Set as Pmodules home, but this is not a directory." 1>&2
-        return 1
-fi
-
 #############################################################################
 # initialize zsh completion
 #
-#if [[ -r "${PMODULES_HOME}/init/bash_completion" ]]; then
-#	source "${PMODULES_HOME}/init/bash_completion"
-#fi
+# :FIXME:
 
 #############################################################################
 # legacy...
@@ -21,26 +11,28 @@ fi
 unset MODULE_VERSION
 unset MODULE_VERSION_STACK
 unset MODULESHOME
-unset PMODULES_ENV
-
-declare -x PMODULES_DIR="${PMODULES_HOME}"
-
 
 #############################################################################
 # implement module comand as shell function
 #
-module() {
-	eval $("${PMODULES_HOME}/bin/modulecmd" bash "$@")
-}
+declare -- PMODULES_HOME=$0:A:h:h
+
+declare -- _cmd_="module() {
+        unset BASH_ENV
+        local output=\"\$(\"${PMODULES_HOME}/bin/modulecmd\" zsh \"\$@\")\"
+        eval \"\${output}\"
+}"
+
+eval "$(echo "${_cmd_}")"
 export -f module
 
-modbuild(){
-	(
-		eval $("${PMODULES_HOME}/bin/modulecmd" bash load System:bash)
-		"${PMODULES_HOME}/bin/modbuild" "$@"
-	)
-}
+_cmd_="modbuild(){
+	\"${PMODULES_HOME}/bin/modbuild\" \"\$@\"
+}"
+eval "$(echo "${_cmd_}")"
 export -f modbuild
+
+unset _cmd_
 
 # Local Variables:
 # mode: sh
