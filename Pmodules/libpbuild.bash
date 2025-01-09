@@ -932,7 +932,7 @@ _build_module() {
 				 "module is in group '${GROUP}' but no HDF5 module loaded!"
 		}
 
-		modulefile_dir="${ol_modulefiles_root}/${GROUP}/${PMODULES_MODULEFILES_DIR}/"
+		modulefile_dir="${ol_modulefiles_root}/${GROUP}/${__MODULEFILES_DIR__}/"
 		PREFIX="${ol_install_root}/${GROUP}/${module_name}/${module_version}/"
 		case "${GROUP}" in
 			Compiler )

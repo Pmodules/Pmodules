@@ -339,7 +339,7 @@ get_module_config(){
 	ref_cfg['relstage']='unstable'
 	ref_cfg['systems']=''
 	ref_cfg['blocklist']=''
-	if [[ ! -v Dir2OverlayMap[${dir%/"${PMODULES_MODULEFILES_DIR}"*}] ]]; then
+	if [[ ! -v Dir2OverlayMap[${dir%/"${__MODULEFILES_DIR__}"*}] ]]; then
 		# this module is not in an overlay
 		ref_cfg['relstage']='stable'
 		return
@@ -439,7 +439,7 @@ find_overlay () {
         local -n fo_group="$2"
 	local path="${3//+(\/)/\/}"	# replace multpile '/' with one
 	path="${path/%\/}"		# remove trailing slash if exist
-	path="${path%/"${PMODULES_MODULEFILES_DIR}"*}"
+	path="${path%/"${__MODULEFILES_DIR__}"*}"
 
 	# return if not in an overlay
 	[[ -v Dir2OverlayMap[${path}] ]] || return 1
@@ -735,7 +735,7 @@ subcommand_load() {
 	is_group () {
 		find_overlay_with_group() {
 			local -n _ol="$1"
-			local -r group="$2/${PMODULES_MODULEFILES_DIR}"
+			local -r group="$2/${__MODULEFILES_DIR__}"
 			local ol
 			for ol in "${UsedOverlays[@]}"; do
 				local install_root="${OverlayInfo[${ol}:install_root]}"
@@ -753,7 +753,7 @@ subcommand_load() {
 
 		local ol=''
 		find_overlay_with_group ol "${group}" || return 1
-		local moduledir="${OverlayInfo[${ol}:modulefiles_root]}/${group}/${PMODULES_MODULEFILES_DIR}"
+		local moduledir="${OverlayInfo[${ol}:modulefiles_root]}/${group}/${__MODULEFILES_DIR__}"
 		local -i depth
 		compute_group_depth depth "${moduledir}" || return 1
 		GroupDepths[${group}]=${depth}
@@ -844,7 +844,7 @@ subcommand_load() {
 				local -i depth=${GroupDepths[${group}]}
 				(( depth != 0 )) && \
 					die_illegal_group "${group}"
-				group+="/${PMODULES_MODULEFILES_DIR}"
+				group+="/${__MODULEFILES_DIR__}"
                                 for overlay in "${UsedOverlays[@]}"; do
 					local modulefiles_root="${OverlayInfo[${overlay}:modulefiles_root]}"
 				        modulepath=( "${modulefiles_root}/${group}" "${modulepath[@]}" )
@@ -1764,10 +1764,10 @@ subcommand_use() {
 				for group in ${UsedGroups//:/ }; do
 					# is this group in the to be added overlay?
                                         local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
-                                        dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                        dir+="${group}/${__MODULEFILES_DIR__}"
                                         [[ -d "${dir}" ]] || continue  # no
 
-					dir="/${group}/${PMODULES_MODULEFILES_DIR}"
+					dir="/${group}/${__MODULEFILES_DIR__}"
 					local -a dirs=()
 					for ol in "${UsedOverlays[@]}"; do
 						dirs+=( "${OverlayInfo[${ol}:modulefiles_root]}${dir}" )
@@ -1778,7 +1778,7 @@ subcommand_use() {
 			scan_groups "${ol_name}"
                         for group in ${UsedGroups//:/ }; do
                                 local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
-                                dir+="${group}/${PMODULES_MODULEFILES_DIR}"
+                                dir+="${group}/${__MODULEFILES_DIR__}"
                                 if [[ -d "${dir}" ]]; then
                                         std::prepend_path MODULEPATH "${dir}"
                                 fi
@@ -1820,7 +1820,7 @@ subcommand_use() {
 			local -i n="${#UsedOverlays[@]}"
                         for ((i=n-1; i>=0; i--)); do
 				ol_name="${UsedOverlays[i]}"
-                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/$1/${PMODULES_MODULEFILES_DIR}"
+                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/$1/${__MODULEFILES_DIR__}"
                                 [[ -d "${dir}" ]] || continue
                                 std::prepend_path MODULEPATH "${dir}"
 				[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && break
@@ -1956,10 +1956,10 @@ subcommand_unuse() {
 				local modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
 				for group in ${UsedGroups//:/ }; do
 					# is this group in the to be removed overlay?
-                                        local dir="${modulefiles_root}/${group}/${PMODULES_MODULEFILES_DIR}"
+                                        local dir="${modulefiles_root}/${group}/${__MODULEFILES_DIR__}"
                                         [[ -d "${dir}" ]] || continue  # no
 					
-					dir="/${group}/${PMODULES_MODULEFILES_DIR}"
+					dir="/${group}/${__MODULEFILES_DIR__}"
 					std::prepend_path MODULEPATH "${UsedOverlays[@]/%/${dir}}"
 				done
 			fi
@@ -2031,7 +2031,7 @@ subcommand_unuse() {
                         local overlay
                         for overlay in "${UsedOverlays[@]}"; do
 				local dir="${OverlayInfo[${overlay}:modulefiles_root]}"
-				dir+="/${arg}/${PMODULES_MODULEFILES_DIR}"
+				dir+="/${arg}/${__MODULEFILES_DIR__}"
 			        std::remove_path MODULEPATH "${dir}"
                         done
 		}

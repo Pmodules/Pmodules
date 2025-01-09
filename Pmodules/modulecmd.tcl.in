@@ -296,13 +296,6 @@ proc _pmodules_setenv { PREFIX name version } {
 
 #
 # intialize global vars
-# Modulefile is something like
-#
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/name/version
-# or
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1/name/version
-# or
-#   ${PMODULES_ROOT}/group/${PMODULES_MODULEFILES_DIR}/X1/Y1//X2/Y2/name/version
 #
 proc _init_global_vars { prefixVN } {
 	global	group
@@ -313,7 +306,7 @@ proc _init_global_vars { prefixVN } {
 
 	reportDebug	"$::ModulesCurrentModulefile"
 	set	::PmodulesRoot		$::env(PMODULES_ROOT)
-	set	::PmodulesModulfilesDir	$::env(PMODULES_MODULEFILES_DIR)
+	set	::PmodulesModulfilesDir	"modulefiles"
 	set	modulefile		[file split $::ModulesCurrentModulefile]
 	set	pmodules_root		[file split $::PmodulesRoot]
 	set	pmodules_root_num_dirs	[llength $pmodules_root]
