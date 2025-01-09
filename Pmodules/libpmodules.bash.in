@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare    PMODULES_MODULEFILES_DIR='modulefiles'
+declare -r __MODULEFILES_DIR__='modulefiles'
 declare    PMODULES_VERSION='@PMODULES_VERSION@'
 declare -A GroupDepths=(['none']=0)
 
@@ -48,14 +48,14 @@ scan_groups () {
         for ol in "$@"; do
 		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 	        local dir
-	        for dir in "${modulefiles_root}"/*/"${PMODULES_MODULEFILES_DIR}"; do
+	        for dir in "${modulefiles_root}"/*/"${__MODULEFILES_DIR__}"; do
 			local group="${dir%/*}"
 			group="${group##*/}"
 			if [[ ! -v GroupDepths[${group}] ]]; then
 				compute_group_depth depth "${dir}"
 				GroupDepths[$group]=${depth}
 			fi
-			Dir2OverlayMap[${dir%/"${PMODULES_MODULEFILES_DIR}"*}]="${ol}"
+			Dir2OverlayMap[${dir%/"${__MODULEFILES_DIR__}"*}]="${ol}"
 	        done
         done
 	GroupDepths['none']=0
