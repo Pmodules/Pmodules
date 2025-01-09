@@ -1,5 +1,5 @@
 #!/bin/sh
 
 unset BASH_ENV
-
-"${PMODULES_HOME}/libexec/bash" --noprofile --norc "${PMODULES_HOME}/libexec/modulecmd.bash" "$@"
+origin="${BASH_SOURCE[0]%/*}"
+"${origin}/../libexec/bash" --noprofile --norc "${origin}/../libexec/modulecmd.bash" "$@"

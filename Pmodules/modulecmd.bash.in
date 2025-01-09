@@ -15,29 +15,28 @@ set   -o nounset
 shopt -s nullglob
 
 # get absolute path of script
-mydir=$(cd "$(/usr/bin/dirname -- "${BASH_SOURCE[0]}")" && pwd -L)
-prefix=$(/usr/bin/dirname -- "${mydir}");
+declare -- mydir=$(cd "$(/usr/bin/dirname -- "${BASH_SOURCE[0]}")" && pwd -L)
+declare -- PMODULES_HOME=$(/usr/bin/dirname -- "${mydir}");
 
-path_orig="${PATH}"
-PATH="${prefix}/bin:${prefix}/libexec:/bin:/usr/bin:/sbin:/usr/sbin"
-source "${prefix}/lib/libstd.bash" || {
+declare -- path_orig="${PATH}"
+PATH="${PMODULES_HOME}/bin:${PMODULES_HOME}/libexec:/bin:/usr/bin:/sbin:/usr/sbin"
+source "${PMODULES_HOME}/lib/libstd.bash" || {
         echo "Oops: cannot source library -- '$_'" 1>&2; exit 3;
 }
-source "${prefix}/lib/libpmodules.bash"  || \
+source "${PMODULES_HOME}/lib/libpmodules.bash"  || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
-declare -rx TCL_LIBRARY="${prefix}/lib/tcl@TCL_VERSION@"
+declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
 declare -x  TCLLIBPATH=${TCLLIBPATH:-''}
-std::prepend_path TCLLIBPATH "${prefix}/lib/Pmodules"
-declare -r Tcl_cmd="${prefix}/libexec/modulecmd.bin"
-declare -r Lmod_cmd="${prefix}/libexec/lmod/lmod/libexec/lmod"
+std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
+declare -r Tcl_cmd="${PMODULES_HOME}/libexec/modulecmd.bin"
+declare -r Lmod_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod"
 declare -- modulecmd="${Tcl_cmd}"
 
 # we have to use the orignal path. Otherwise module load doesn't work.
 PATH="${path_orig}"
 unset path_orig
 unset mydir
-unset prefix
 
 ##############################################################################
 # the following settings are used if the config file doesn't exist
