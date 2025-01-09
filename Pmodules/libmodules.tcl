@@ -27,6 +27,12 @@ package require base64
 set ::MODULEFILES_DIR "modulefiles"
 set ::ol_replacing "r"
 
+# variable derived from PMODULES_ENV
+set ::Dir2OverlayMap {}
+set ::OverlayInfo {}
+set ::UsedGroups {}
+set ::UsedOverlays {}
+
 proc _pmodules_parse_pmodules_env { } {
 	#
 	# In this library we need the value of some BASH variables
