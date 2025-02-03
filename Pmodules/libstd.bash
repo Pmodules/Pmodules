@@ -121,55 +121,72 @@ std::get_abspath() {
 }
 
 std::append_path () {
-        local -nr P="$1"
+        local -n path="$1"
 	shift 1
-	local dir
-	local dirs=''
-	for dir in "$@"; do
-		[[ "${P}" == @(|*:)${dir}@(|:*) ]] && continue
-		dirs+=":${dir}"
+	local -ar append_dirs="$@"
+
+	local -- dirs=''
+
+	# ignore directories which are already in ${path}
+	local -- dir=''
+	for dir in "${append_dirs[@]}"; do
+		[[ "${path}" == @(|*:)${dir}@(|:*) ]] && continue
+		dirs+="${dir}:"
 	done
 
-        if [[ -z ${P} ]]; then
-                P="${dirs:1}"		# remove leading ':'
+	# assemble new path
+	dirs="${dirs%:}"		# remove leading ':'
+        if [[ -z ${path} ]]; then
+                path="${dirs}"	
         else
-		P="${P}${dirs}"
+		path="${path}:${dirs}"
         fi
 }
 
 std::prepend_path () {
-        local -nr P="$1"
+        local -n path="$1"		# [in/out] prepend dirs to this path variable
 	shift 1
+	local -ar prepend_dirs="$@"	# [in] prepend this directories
 
-	local dir
-	local dirs=''
-	for dir in "$@"; do
-		[[ "${P}" == @(|*:)${dir}@(|:*) ]] && continue
+	local -- dirs=''
+
+	# ignore directories which are already in ${path}
+	local -- dir=''
+	for dir in "${prepend_dirs[@]}"; do
+		[[ "${path}" == @(|*:)${dir}@(|:*) ]] && continue
 		dirs+="${dir}:"
 	done
 
-        if [[ -z ${P} ]]; then
-                P="${dirs:0:-1}"	# remove trailing ':'
+	# assemble new path
+	dirs="${dirs%:}"		# remove leading ':'
+        if [[ -z ${path} ]]; then
+                path="${dirs}"
         else
-		P="${dirs}${P}"
+		path="${dirs}:${path}"
         fi
 }
 
 std::remove_path() {
-        local -nr path="$1"
+        local -n path="$1"		# [in/out] remove dirs from this path variable
 	shift 1
-        local -ar remove_dirs=("$@")
-	local new_path=''
+        local -ar remove_dirs=("$@")	# [in] dirs to be removed
+
 	local -a _path=()
 	IFS=':' read -r -a _path <<<"${path}"
 	local dir=''
 	for dir in "${remove_dirs[@]}"; do
-		# loop over all entries in path
-		for entry in "${_path[@]}"; do
-			[[ "${entry}" != "${dir}" ]] && new_path+=":${entry}"
+		# loop over all entries in path and mark
+		# the to be deleted directories.
+		for ((i=0; i<${#_path[@]}; i++)); do
+			[[ "${_path[i]}" == "${dir}" ]] && _path[i]=''
 		done
 	done
-	path="${new_path:1}"		# remove leading ':'
+	# assemble new path
+	path=''
+	for dir in "${_path[@]}"; do
+		[[ -n "${dir}" ]] && path+="${dir}:"
+	done
+	path="${path%:}"		# remove trailing ':'
 }
 
 std.get_os_release_linux() {
