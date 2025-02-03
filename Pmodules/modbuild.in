@@ -934,10 +934,12 @@ build_modules_yaml_v1(){
 		local keys=()
 		yml::get_keys keys yaml_input ".${group,,}"
 		for key in "${keys[@]}"; do
-			local version
-			local versions=()
-			yml::get_seq versions yaml_input ".${group,,}.${key}" || \
+			local -- version
+			local -a versions=()
+			local -- value=''
+			yml::get_seq value yaml_input ".${group,,}.${key}" || \
 				yml::die_parsing "${yaml_input}"
+			readarray -t versions <<<"${value}"
 			for version in "${versions[@]}"; do
 				if [[ -v opt_with_dict[${key}/${version}] ]]; then
 					with_modules+=( "${key}/${version}" )
