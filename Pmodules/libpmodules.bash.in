@@ -262,9 +262,10 @@ pm::read_config(){
 					OverlayInfo[${ol_name}:modulepath]=$(${envsubst} <<< "${modulepath%:}")
 					;;
 				* )
-					std::die 3 "%s -- %s\n%s" \
-						 "Invalid key in configuration" \
-						 "${key}" "${yaml_input}"
+					[[ -v OverlayConfigKeys[${key}] ]] || \
+						std::die 3 "%s -- %s\n%s" \
+							 "Invalid key in configuration" \
+							 "${key}" "${yaml_input}"
 					;;
 
 			esac
