@@ -80,6 +80,14 @@ declare -A OverlayConfigKeys=(
 	['excludes']=''
 	['type']='n'
 	['modulepath']=''
+	['modulepath_unstable']=''
+	['modulepath_stable']=''
+	['modulepath_deprecated']=''
+	['has_groups']='true'
+	['has_relstages']='true'
+	['default_relstage']='unstable'
+	['has_additional_modulepaths']='false'
+	['conflicts']=''
 )
 
 yml::die_parsing(){
