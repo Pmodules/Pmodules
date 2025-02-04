@@ -285,6 +285,7 @@ std::append_path () {
 		[[ "${path}" == @(|*:)${dir}@(|:*) ]] && continue
 		dirs+="${dir}:"
 	done
+	[[ -n "${dirs}" ]] || return 0
 
 	# assemble new path
 	dirs="${dirs%:}"		# remove leading ':'
@@ -308,12 +309,13 @@ std::prepend_path () {
 		[[ "${path}" == @(|*:)${dir}@(|:*) ]] && continue
 		dirs+="${dir}:"
 	done
+	[[ -n "${dirs}" ]] || return 0
 
 	# assemble new path
 	dirs="${dirs%:}"		# remove leading ':'
         if [[ -z ${path} ]]; then
                 path="${dirs}"
-        else
+	else
 		path="${dirs}:${path}"
         fi
 }
