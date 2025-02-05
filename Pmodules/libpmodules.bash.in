@@ -207,7 +207,7 @@ pm::read_config(){
 			OverlayInfo[${ol_name}:${key}]="${OverlayConfigKeys[${key}]}"
 		done
 		# get keys in YAML input
-		local -- node=".Overlays.${ol_name}"
+		local -- node=".Overlays.\"${ol_name}\""
 		local -- key=''
 		local -a keys=()
 		yml::get_keys keys yaml_input "${node}"
