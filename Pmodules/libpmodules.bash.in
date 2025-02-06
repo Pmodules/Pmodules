@@ -8,20 +8,49 @@ declare -a Overlays=()
 declare -A OverlayInfo
 declare -A Dir2OverlayMap
 
+# An overlay has a type defining the way modules in this overlay
+# make modules in the other overlays unavailable.
+#
+# 'normal'
+#	Make modules in other overlay unavailable with the same full name.
+#	If the overlay doesn't support groups, the overlay should provide
+#	only modules with different names from the modules in the other
+#	overlays. Otherwise you modules as available which cannot be loaded.
+#	Example:
+#	A overlay providing modules with name gcc doesn't conceal the gcc
+#	modules in the base overlay, but they are listed as available.
+#
+#
+# 'hiding'
+#	Make modules in other overlay unavailable with the same name.
+#	Examples:
+#	- If a module with name 'gcc' is in a overlay with this
+#	  type, only the gcc modules in this overlay are available. This
+#	  can for example be used to conceal old versions of gcc.
+#	- In same case we need special variants of a module for a system,
+#	  for exampe openmpi and mpich. Variants of these software can be
+#	  made available in an overlay. If such an overlay is used, modules
+#	  which should not be used can be concealed.
+#	If the overlay doesn't support groups, a module in the overlay
+#	conceals all modules in other overlays independend from the group.
+#	Example:
+#	- In the Spack overlays - which doesn't support groups - are modules
+#	  with name gcc. The gcc modules in the Spack overlays conceals the
+#	  gcc modules in the group Programming of the base overlay.
+# 'replacing'
+#	This type can be used to make hole groups unavailable.
+#
+# 
 declare -r ol_normal='n'
 declare -r ol_hiding='h'
 declare -r ol_replacing='r'
 
-
-#
-# compute depth of modulefile directory.
-#
-# Args:
-#       $1: absolute path of a modulefile directory
-#
 compute_group_depth () {
-	local -n result="$1"
-        local -r dir="$2"
+	: "
+	Compute depth of modulefile directory.
+	"
+	local -n result="$1"	# ref.var to return result
+        local -r dir="$2"	# absolute path of a modulefile directory
 	if [[ ! -d "${dir}" ]]; then
 		${mkdir} -p "${dir}" || \
 			std::die 1 "Cannot create directory -- ${dir}"
@@ -36,27 +65,28 @@ compute_group_depth () {
 	(( result < 0 )) && (( result = 0 )) || :
 }
 
-#
-# (Re-)Scan available groups in given overlays and compute group depth's
-#
-# Args:
-#       $@: overlay names
-#
 scan_groups () {
-        local ol
-	local depth
+	: "
+	(Re-)Scan available groups in the overlays $@ and compute group depth's.
+	Set GroupDepths[group] and Dir2OverlayMap[ol:dir].
+	"
+        local -- ol=''
+	local -i depth=0
         for ol in "$@"; do
+		[[ "${OverlayInfo[${ol}:has_groups]}" == 'true' ]] || continue
 		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
-	        local dir
-	        for dir in "${modulefiles_root}"/*/"${__MODULEFILES_DIR__}"; do
+		local dir=''
+		for dir in "${modulefiles_root}"/*/"${__MODULEFILES_DIR__}"; do
 			local group="${dir%/*}"
 			group="${group##*/}"
 			if [[ ! -v GroupDepths[${group}] ]]; then
 				compute_group_depth depth "${dir}"
 				GroupDepths[$group]=${depth}
 			fi
+			# :FIXME: do we need this?
+			Dir2OverlayMap[${dir}]="${ol}"
 			Dir2OverlayMap[${dir%/"${__MODULEFILES_DIR__}"*}]="${ol}"
-	        done
+		done
         done
 	GroupDepths['none']=0
 }
@@ -79,15 +109,21 @@ declare -A OverlayConfigKeys=(
 	['modulefiles_root']=''
 	['excludes']=''
 	['type']='n'
-	['modulepath']=''
-	['modulepath_unstable']=''
-	['modulepath_stable']=''
-	['modulepath_deprecated']=''
+	['conflicts']=''
+	['config']=''
 	['has_groups']='true'
 	['has_relstages']='true'
 	['default_relstage']='unstable'
 	['has_additional_modulepaths']='false'
-	['conflicts']=''
+)
+
+declare -A OverlayPathConfigKeys=(
+	['target_cpus']=''
+	['modulepath']=''
+	['modulepath_unstable']=''
+	['modulepath_stable']=''
+	['modulepath_deprecated']=''
+
 )
 
 yml::die_parsing(){
@@ -185,33 +221,102 @@ yml::get_seq(){
 		return 1
 }
 
+yml::die_invalid_ol_install_root(){
+	std::die 3 "Invalid installation root directory for overlay '$1' -- $2"
+}
+
+yml::die_invalid_ol_modulefiles_root(){
+	std::die 3 "Invalid modulefiles root directory for overlay '$1' -- $2"
+}
+
+yml::die_invalid_ol_type(){
+	std::die 3 "Invalid type for overlay '$1' -- $2"
+}
+
+yml::die_invalid_ol_relstage(){
+	std::die 3 "Invalid default release stage for overlay '$1' -- $2"
+}
+
+yml::die_invalid_ol_key(){
+	std::die 3 "%s -- %s\n%s" \
+		 "Invalid key in configuration" \
+		 "$1" "$2"
+}
+
+parse_path_config(){
+	local -n yaml="$1"
+	local -- ol_name="$2"
+
+	local -- key=''
+	for key in "${!OverlayPathConfigKeys[@]}"; do
+		OverlayInfo[${ol_name}:${key}]="${OverlayPathConfigKeys[${key}]}"
+	done
+	local -i l=0
+	yml::get_seq_length l yaml .
+	local -i i=0
+	for ((i=0; i<l; i++)); do
+		local -- node=".[$i]"
+		local -a keys=()
+		yml::get_keys keys yaml "${node}"
+		for key in "${keys[@]}"; do
+			case ${key} in
+				target_cpus )
+					local -- str=''
+					yml::get_seq \
+						str \
+						yaml \
+						"${node}.${key}" || \
+						yml::die_parsing "${yaml}"
+					set -o noglob
+					local -a target_cpus=( "${str,,}" )
+					set +o noglob
+					local -- system_cpu=$(uname -p)
+					local -- cpu=''
+					for cpu in "${target_cpus[@]}"; do
+						if [[ ${cpu} != 'any' && ${cpu} != ${system_cpu} ]]; then
+							break 2
+						fi
+					done
+					;;
+				modulepath | modulepath_unstable | modulepath_stable | modulepath_deprecated)
+					local -- str=''
+					yml::get_seq str yaml "${node}.${key}" '!!seq'
+					local -a tmp_array=()
+					readarray -t tmp_array <<<${str}
+					local modulepath=''
+					printf -v modulepath "%s:" "${tmp_array[@]}"
+					OverlayInfo[${ol_name}:${key}]=$(${envsubst} <<< "${modulepath%:}")
+					OverlayInfo[${ol_name}:has_additional_modulepaths]='true'
+					;;
+			esac
+		done
+	done
+}
+
 pm::read_config(){
 	: "
 	Read Pmodules configuration files '${PMODULES_ROOT}/config/Pmodules.yaml'
 	and '${HOME}/.Pmodules/Pmodules.yaml'.
-
-	Args:
-		none
 	"
+
 	get_config_of_overlay(){
 		: "
 		Get configuration of an overlay.
-
-		Args:
-			$1 YAML config
-			$2 name of overlay
 		"
-		local -r yaml_input="$1"
-		local -r ol_name="$2"
+		local -r yaml_input="$1"	# YAML formatted string
+		local -r ol_name="$2"		# name of overlay
 
 		Overlays+=( "${ol_name}" )
 		# init overlay with defaults
+		local -- key=''
 		for key in "${!OverlayConfigKeys[@]}"; do
 			OverlayInfo[${ol_name}:${key}]="${OverlayConfigKeys[${key}]}"
 		done
+		for key in "${!OverlayPathConfigKeys[@]}"; do
+			OverlayInfo[${ol_name}:${key}]="${OverlayPathConfigKeys[${key}]}"
+		done
 		# get keys in YAML input
-		local -- node=".Overlays.${ol_name}"
-		local -- key=''
+		local -- node=".Overlays.\"${ol_name}\""
 		local -a keys=()
 		yml::get_keys keys yaml_input "${node}"
 		local -- value=''
@@ -222,16 +327,14 @@ pm::read_config(){
 					OverlayInfo[${ol_name}:install_root]=$(${envsubst} <<< "${value}")
 					mkdir -p "${OverlayInfo[${ol_name}:install_root]}" 2>/dev/null
 					[[ -d ${OverlayInfo[${ol_name}:install_root]} ]] || \
-						std::die 3 \
-							 "Invalid installation root directory for overlay '${ol_name}' -- ${value}"
+						yml::die_invalid_ol_install_root "${ol_name}" "${value}"
 					;;
 				modulefiles_root )
 					yml::get_value value yaml_input "${node}.${key}" '!!str'
 					OverlayInfo[${ol_name}:modulefiles_root]=$(${envsubst} <<< "${value}")
 					mkdir -p "${OverlayInfo[${ol_name}:modulefiles_root]}" 2>/dev/null
 					[[ -d ${OverlayInfo[${ol_name}:modulefiles_root]} ]] || \
-						std::die 3 \
-							 "Invalid modulefiles root directory for overlay '${ol_name}' -- ${value}"
+						yml::die_invalid_ol_modulefiles_root "${ol_name}" "${value}"
 					;;
 				type )
 					yml::get_value value yaml_input "${node}.${key}" '!!str'
@@ -240,31 +343,41 @@ pm::read_config(){
 							:
 							;;
 						* )
-							std::die 3 "Invalid type for overlay '${ol_name}' -- ${type}"
+							yml::die_invalid_ol_type "${ol_name}" "${value}"
 							;;
 					esac
 					OverlayInfo[${ol_name}:type]="${value}"
 					;;
-				excludes )
+				default_relstage )
+					yml::get_value value yaml_input "${node}.${key}" '!!str'
+					case ${value} in
+						'unstable' | 'stable' | 'deprecated' )
+							:
+							;;
+						*)
+							yml::die_invalid_ol_relstage "${ol_name}" "${value}"
+							;;
+					esac
+					OverlayInfo[${ol_name}:${key}]="${value}"
+					;;
+				conflicts | excludes )
 					yml::get_seq value yaml_input "${node}.${key}" '!!seq'
 					local -a tmp_array=()
 					readarray -t tmp_array <<<${value}
 					local excludes=''
 					printf -v excludes "%s:" "${tmp_array[@]}"
-					OverlayInfo[${ol_name}:excludes]=$(${envsubst} <<<"${excludes%:}" )
+					OverlayInfo[${ol_name}:${key}]=$(${envsubst} <<<"${excludes%:}" )
 					;;
-				modulepath )
-					yml::get_seq value yaml_input "${node}.${key}" '!!seq'
-					local -a tmp_array=()
-					readarray -t tmp_array <<<${value}
-					local modulepath=''
-					printf -v modulepath "%s:" "${tmp_array[@]}"
-					OverlayInfo[${ol_name}:modulepath]=$(${envsubst} <<< "${modulepath%:}")
+				path_config )
+					yml::get_value value yaml_input "${node}.${key}" '!!seq'
+					parse_path_config value "${ol_name}"
+					;;
+				has_groups | has_relstages)
+					yml::get_value value yaml_input "${node}.${key}" '!!bool'
+					OverlayInfo[${ol_name}:${key,,}]="${value}"
 					;;
 				* )
-					std::die 3 "%s -- %s\n%s" \
-						 "Invalid key in configuration" \
-						 "${key}" "${yaml_input}"
+					yml::die_invalid_ol_key "${key}" "${yaml_input}"
 					;;
 
 			esac
@@ -280,11 +393,9 @@ pm::read_config(){
 	get_config(){
 		: "
 		Get Pmodules configuration.
-
-		Args:
-			$1 Pmodules configuration file
 		"
-		local -r config_file="$1"
+		local -r config_file="$1"	# Pmodules configuration file
+
 		local -- yaml_input=''
 		yml::read_file yaml_input "${config_file}" '.'
 
@@ -344,6 +455,9 @@ pm::read_config(){
 	if [[ -r "${usr_config_file}" ]]; then
 		get_config "${usr_config_file}"
 	fi
+	OverlayInfo[none:type]='n'
+	OverlayInfo[none:has_group]='false'
+	OverlayInfo[none:has_relstages]='false'
 }
 
 # Local Variables:

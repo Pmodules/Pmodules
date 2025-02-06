@@ -62,6 +62,9 @@ declare -g UsedGroups=''
 declare -g UsedReleaseStages=''
 declare -a UsedOverlays=()
 declare -- Version=''
+declare -x OSRelease=$(std::get_os_release)
+declare -x SystemCPU=$(uname -p)
+declare -A MaskedGroups=()
 
 ##############################################################################
 declare -- Verbosity_lvl='verbose'
@@ -143,6 +146,9 @@ save_env() {
 	vars+=( 'PmFiles' )
 	vars+=( 'ModulePathAppend' )
 	vars+=( 'ModulePathPrepend' )
+	vars+=( 'OSRelease' )
+	vars+=( 'SystemCPU')
+	vars+=( 'MaskedGroups' )
 	local s=''
 	s=$(typeset -p "${vars[@]}")
 	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
@@ -276,12 +282,6 @@ die_cannot_use_overlay(){
 		 "overlay cannot be added since some modules are already loaded!" "$1"
 }
 
-die_overlay_already_in_use(){
-	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${SubCommand}" \
-		 "overlay already in use" "$1"
-}
-
 die_not_a_modulefile(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
@@ -316,6 +316,12 @@ die_removing_collection_failed(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "cannot remove collection" "$1"
+}
+
+die_ol_conflict(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${SubCommand}" \
+		 "Overlay '$1' conflicts with" "$2"
 }
 
 get_module_config(){
@@ -398,8 +404,6 @@ is_available(){
 	"
 	local -n ref_cfg="$1"
 	local -- relstages="$2"
-	local -- os_release=''
-	os_release=$(std::get_os_release)
 
 	check_relstage(){
 		[[ ":${relstages}:" == *:${ref_cfg['relstage']}:* ]]
@@ -408,7 +412,7 @@ is_available(){
 		[[ -z ${ref_cfg['blocklist']} ]] && return 0
 		local -- s=''
 		for s in ${ref_cfg['blocklist']}; do
-			if [[ "${os_release}" =~ $s ]] || [[ "${HostName}" =~ $s ]]; then
+			if [[ "${OSRelease}" =~ $s ]] || [[ "${HostName}" =~ $s ]]; then
 				return 0
 			fi
 		done
@@ -418,7 +422,7 @@ is_available(){
 		[[ -z ${ref_cfg['systems']} ]] && return 0
 		local -- s=''
 		for s in ${ref_cfg['systems']}; do
-			if [[ "${os_release}" =~ $s ]] || [[ "${HostName}" =~ $s ]]; then
+			if [[ "${OSRelease}" =~ $s ]] || [[ "${HostName}" =~ $s ]]; then
 				return 0
 			fi
 		done
@@ -447,19 +451,45 @@ is_release_stage() {
 #	$2	ref.var to return group
 #	$3	moduledir to check
 #
-find_overlay () {
-        local -n fo_ol="$1"
-        local -n fo_group="$2"
-	local path="${3//+(\/)/\/}"	# replace multpile '/' with one
-	path="${path/%\/}"		# remove trailing slash if exist
-	path="${path%/"${__MODULEFILES_DIR__}"*}"
+find_overlay_old () {
+        local -n ref_ol="$1"
+        local -n ref_group="$2"
+	local -- path="${3%/"${__MODULEFILES_DIR__}"*}"
 
 	# return if not in an overlay
-	[[ -v Dir2OverlayMap[${path}] ]] || return 1
+	if [[ ! -v Dir2OverlayMap[${path}] ]]; then
+		ref_ol='None'
+		ref_group='None'
+		return 1
+	fi
 
-        fo_ol="${Dir2OverlayMap[${path}]}"
-        fo_group="${path#"${OverlayInfo[${ol}:modulefiles_root]}"/}"
+        ref_ol="${Dir2OverlayMap[${path}]}"
+	if [[ "${OverlayInfo[${ref_ol}:has_groups]}" == 'true' ]]; then
+		ref_group="${path#"${OverlayInfo[${ol}:modulefiles_root]}"/}"
+	else
+		ref_group='None'
+	fi
 	return 0
+}
+find_overlay () {
+        local -n ref_ol="$1"
+        local -n ref_group="$2"
+	local -- path="${3%/"${__MODULEFILES_DIR__}"*}"
+	for ol in "${UsedOverlays[@]}"; do
+		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
+		if [[ "${path}" == ${modulefiles_root}/* ]]; then
+			ref_ol="${ol}"
+			if [[ "${OverlayInfo[${ref_ol}:has_groups]}" == 'true' ]]; then
+				ref_group="${path#"${OverlayInfo[${ol}:modulefiles_root]}"/}"
+			else
+				ref_group='None'
+			fi
+			return 0
+		fi
+	done
+	ref_ol='None'
+	ref_group='None'
+	return 1
 }
 
 #
@@ -482,7 +512,7 @@ find_overlay () {
 is_modulefile() {
 	local -n im_interp="$1"
 	local -r fname="$2"
-
+	
 	# is this a regular, readable file?
 	[[ -f "${fname}" && -r "${fname}" ]] || return 2
 	
@@ -741,7 +771,7 @@ subcommand_load() {
 	# hierarchical depth of a group must always be the same.
 	#
 	is_group () {
-		find_overlay_with_group() {
+		find_overlay_with_group(){
 			local -n _ol="$1"
 			local -r group="$2/${__MODULEFILES_DIR__}"
 			local ol
@@ -1194,28 +1224,22 @@ subcommand_show() {
 # Find all modules in a given modulepath matching a specific string.
 # The search can be restricted to certain release stages.
 #
-# Args:
-#	$1	reference variable to return result
-#	$2	search pattern
-#	$3	release stages
-#	$4...   module path (fully qualified directory names)
-#
 # return list like
 #	modulename_1 relstage_1 modulefile_1 ...
 #
 get_available_modules() {
-        local -n gam_mods="$1"
-	local -r module="$2"
-	local -r used_relstages="${3:-${UsedReleaseStages}}"
-	shift 3 # in the for loop below we use $@ to loop over module path
-	local    relstage
+        local -n result="$1"		# reference variable to return result
+	local -r pattern="$2"		# search pattern
+	local -r relstages="$3"		# excepted release stages
+        local -n ref_modules="$4"	# dict. with available modules
+	local -n ref_modulenames="$5"	# dict. with available module names
+	shift 5
+	local -a dirs=("$@")		#  module path (absolute directory names)
 
-        local -A dict
-	local -A modulenames
-	local dir
-	gam_mods=()
+	local -- dir=''
+	result=()
 	# loop over all entries in given module path
-        for dir in "$@"; do
+        for dir in "${dirs[@]}"; do
                 test -d "${dir}" || continue
 		cd "${dir}" || std::die 3 "Oops: cannot change to directory '${dir}'"
 		# find overlay and group for this directory
@@ -1227,7 +1251,6 @@ get_available_modules() {
                 local -a dir_entries=(*)
 		(( ${#dir_entries[@]} > 0 )) || continue
 
-		local sdirs="${dir##*/modulefiles}"
 		# loop over all files (and sym-links) in this directory and
 		# its sub-directories
 		local mod=''	# module_name/module_version
@@ -1235,25 +1258,25 @@ get_available_modules() {
 			[[ -n ${OverlayExcludes} && "${mod}" =~ ${OverlayExcludes} ]] && continue
 			local name="${mod%/*}"
 			local add='no'
-			if [[ -n "${ol}" && "${ol}" != 'none' ]]; then
+			if [[ -n "${ol}" && "${ol,,}" != 'none' ]]; then
 				# module is in an overlay
 				#
 				# add to list of available modules, if
 				# - first time found by name only
 				# - in same overlay as first found
 				# - new version and not hidden by overlay
-				if [[ ! -v modulenames[${name}] ]]; then
+				if [[ ! -v ref_modulenames[${name}] ]]; then
 					# new entry
 					if [[ "${OverlayInfo[${ol}:type]}" == "${ol_hiding}" ]]; then
-						modulenames[${name}]="${ol}"
+						ref_modulenames[${name}]="${ol}"
 					else
-						modulenames[${name}]='0'
+						ref_modulenames[${name}]='0'
 					fi
 					add='yes'
-				elif [[ "${modulenames[${name}]}" == "${ol}" ]]; then
+				elif [[ "${ref_modulenames[${name}]}" == "${ol}" ]]; then
 					add='yes'
-				elif [[ "${modulenames[${name}]}" == '0'  ]] \
-					     && [[ ! -v dict[${sdirs}/${mod}] ]]; then
+				elif [[ "${ref_modulenames[${name}]}" == '0'  ]] \
+					     && [[ ! -v ref_modules[${mod}] ]]; then
 					add='yes'
 				fi
 			else
@@ -1263,14 +1286,18 @@ get_available_modules() {
 			[[ "${add}" == 'no' ]] && continue
 			local -A cfg=()
 			get_module_config cfg "${dir}" "${mod}"
-			is_available cfg "${used_relstages}" || continue
-
-			gam_mods+=( "${mod}" "${cfg['relstage']}" "${dir}/${mod}" "${ol}" )
-                        dict[${sdirs}/${mod}]=1
+			if [[ "${OverlayInfo[${ol}:has_relstages]}" == 'true' ]]; then
+				is_available cfg "${relstages}" || continue
+				result+=( "${mod}" "${cfg['relstage']}" "${dir}/${mod}" "${ol}" )
+			else
+				is_available cfg "${ReleaseStages}" || continue
+				result+=( "${mod}" 'stable' "${dir}/${mod}" "${ol}" )
+			fi
+                        ref_modules[${mod}]=1
 		done < <(${find} -L "${dir_entries[@]}" \
 				 \( -type f -o -type l \) \
 				 -not -name ".*" \
-                                 -ipath "${module}*" \
+                                 -ipath "${pattern}*" \
 				 | ${sort} --version-sort)
         done
 } # get_available_modules()
@@ -1630,25 +1657,45 @@ subcommand_avail() {
 		done
 		groups+=( "${name}" )
         done
+	local -A found_modules=()
+	local -A found_modulenames=()
         local string
-	for string in  "${pattern[@]}"; do
+	for string in "${pattern[@]}"; do
                 for group in "${groups[@]}"; do
 			# limit output to certain groups
 			if (( ${#opt_groups[@]} > 0 )) && [[ ! -v opt_groups[${group}] ]]; then
 				continue
 			fi
-
+			# replace the characters '/', ' ', '.' and '-' with underscore
 			local ref="${group//[\/ .-]/_}"
+			# continue if module path for this group is empty
 			[[ -v modulepath_${ref} ]] || continue
+
 			typeset -n path"=modulepath_${ref}"
+			local -- header_text=''
+			local -- ol="${UsedOverlays[0]}"
+			if [[ "${OverlayInfo[${ol}:has_groups]}" == 'true' ]]; then
+				found_modules=()
+				found_modulenames=()
+			fi
 			get_available_modules \
 				mods \
 				"${string}*" \
                                 "${opt_use_relstages}" \
+				found_modules \
+				found_modulenames \
 				"${path[@]}"
 
 			[[ ${#mods[@]} == 0 ]] && continue
-			${output_function} "${group}"
+			if [[ "${group,,}" == 'none' ]]; then
+				# if we have no groups, the overlay is the
+				# same for all modules in ${mods[@]}. So we
+				# can use the overlay of the first module.
+				header_text="${mods[3]}"
+			else
+				header_text="${group}"
+			fi
+			${output_function} "${header_text}"
 		done
 	done
 } # subcommand_avail()
@@ -1682,6 +1729,74 @@ SWITCHES:
                 Append/prepend agrument to module search path or list of to be
                 searched releases.
 "
+
+set_ol_modulepaths(){
+	local -r ol_name="$1"
+	# if unstable is used:
+	#   prepend modulepath_unstable if not empty
+	#   otherwise prepend modulepath
+	# else if only stable is used
+	#   prepend modulepath_stable if not empty
+	#   otherwise prepend modulepath
+	# else if deprecated modules are available
+	#   prepend modulepath_deprecated if not empty
+	#   otherwise prepend modulepath
+	local -- path=''y
+	if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
+		path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
+		if [[ -z "${path}" ]]; then
+			path="${OverlayInfo[${ol_name}:modulepath]}"
+		fi
+	elif [[ ":${UsedReleaseStages}:" == *:deprecated:* ]]; then
+		path="${OverlayInfo[${ol_name}:modulepath_deprecated]}"
+		if [[ -z "${path}" ]]; then
+			path="${OverlayInfo[${ol_name}:modulepath]}"
+		fi
+	else
+		path="${OverlayInfo[${ol_name}:modulepath_stable]}"
+		if [[ -z "${path}" ]]; then
+			path="${OverlayInfo[${ol_name}:modulepath]}"
+		fi
+	fi
+	if [[ -n "${path}" ]]; then
+		local -a modulepath=()
+		IFS=':' read -r -a modulepath <<<"${path}"
+		local -- dir=''
+		for dir in "${modulepath[@]}"; do
+			std::prepend_path MODULEPATH "${dir}"
+			std::prepend_path ModulePathAppend "${dir}"
+			std::prepend_path ModulePathPrepend "${dir}"
+		done
+	fi
+}
+
+unset_ol_modulepaths(){
+	# remove additional directories added by overlay
+	local -- path=''
+	if [[ -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
+		path+="${OverlayInfo[${ol_name}:modulepath]}:"
+	fi
+	if [[ -n "${OverlayInfo[${ol_name}:modulepath_unstable]}" ]]; then
+		path+="${OverlayInfo[${ol_name}:modulepath_unstable]}:"
+	fi
+	if [[ -n "${OverlayInfo[${ol_name}:modulepath_stable]}" ]]; then
+		path+="${OverlayInfo[${ol_name}:modulepath_stable]}:"
+	fi
+	if [[ -n "${OverlayInfo[${ol_name}:modulepath_deprecated]}" ]]; then
+		path+="${OverlayInfo[${ol_name}:modulepath_deprecated]}:"
+	fi
+	if [[ -n "${path}" ]]; then
+		path="${path%:}"
+		local -a modulepath=()
+		IFS=':' read -r -a modulepath <<<"${path}"
+		local -- dir=''
+		for dir in "${modulepath[@]}"; do
+			std::remove_path MODULEPATH "${dir}"
+			std::remove_path ModulePathAppend "${dir}"
+			std::remove_path ModulePathPrepend "${dir}"
+		done
+	fi
+}
 
 subcommand_use() {
 	local -a modulepath=()
@@ -1771,6 +1886,21 @@ subcommand_use() {
 
 	#......................................................................
 	use () {
+		#..............................................................
+		use_relstage(){
+			local -r relstage="$1"
+			[[ ":${UsedReleaseStages}" =~ :${relstage}: ]] && return 0
+			std::append_path UsedReleaseStages "${relstage}" || rc=$?
+
+			local -- ol_name=''
+			for ol_name in "${UsedOverlays[@]}"; do
+				[[ "${OverlayInfo[${ol_name}:has_additional_modulepaths]}" == 'false' ]] && \
+					continue
+				unset_ol_modulepaths "${ol_name}"
+				set_ol_modulepaths "${ol_name}"
+			done
+		}
+		#..............................................................
                 use_overlay() {
 			local ol_name="$1"
 			
@@ -1779,24 +1909,40 @@ subcommand_use() {
 				die_cannot_use_overlay "${ol_name}"
 
 			[[ ${OverlayInfo[${ol_name}:used]} == 'yes' ]] && return 0
-			# die_overlay_already_in_use "${ol_name}"
+
+			local -a conflicts=( "${OverlayInfo[${ol_name}:conflicts]//:/ }" )
+			for ol in "${UsedOverlays[@]}"; do
+				for conflict in "${conflicts[@]}"; do
+					[[ "${ol}" == ${conflict} ]] && \
+						die_ol_conflict "${ol_name}" "${ol}"
+				done
+			done
 			
 			if [[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]]; then
-				# if this overlay replaces groups, we have
-				# to remove the modules made available by
-				# other overlays in these groups
+				# this overlay is masking groups. So, we have to remove
+				# the corresponding directories of the already used
+				# overlays from MODULEPATH.
 				for group in ${UsedGroups//:/ }; do
-					# is this group in the to be added overlay?
-                                        local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
-                                        dir+="${group}/${__MODULEFILES_DIR__}"
-                                        [[ -d "${dir}" ]] || continue  # no
-
+					MaskedGroups[${group}]=''
+					local -- dir=''
+					# if this overlay has groups, we have to check whether
+					# ${group} exists in this overlay. If not, we have to
+					# do nothing.
+					# if this overlay doesn't have groups, we remove all
+					# groups.
+					if [[ "${OverlayInfo[${ol_name}:has_groups]}" == 'true' ]]; then
+						dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
+						dir+="${group}/${__MODULEFILES_DIR__}"
+						# is this group in this overlay?
+						[[ -d "${dir}" ]] || continue  # no
+					fi
 					dir="/${group}/${__MODULEFILES_DIR__}"
 					local -a dirs=()
 					for ol in "${UsedOverlays[@]}"; do
 						dirs+=( "${OverlayInfo[${ol}:modulefiles_root]}${dir}" )
 					done
 					std::remove_path MODULEPATH "${dirs[@]}"
+					MaskedGroups[${group}]="${ol_name}:${MaskedGroups[${group}]}"
 				done
 			fi
 			scan_groups "${ol_name}"
@@ -1807,16 +1953,7 @@ subcommand_use() {
                                         std::prepend_path MODULEPATH "${dir}"
                                 fi
                         done
-
-			if [[ -v OverlayInfo[${ol_name}:modulepath] && \
-				      -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
-				local -a modulepath=()
-				IFS=':' read -r -a modulepath <<<"${OverlayInfo[${ol_name}:modulepath]}"
-				local -- dir=''
-				for dir in "${modulepath[@]}"; do
-					std::prepend_path MODULEPATH "${dir}"
-				done
-			fi
+			set_ol_modulepaths "${ol_name}"
                         UsedOverlays=( "${ol_name}" "${UsedOverlays[@]}" )
 			OverlayInfo[${ol_name}:used]='yes'
 
@@ -1855,8 +1992,7 @@ subcommand_use() {
 		local -- arg="$1"
 		local -i rc=0
 		if is_release_stage "${arg}"; then
-                        # argument is release stage
-			std::append_path UsedReleaseStages "${arg}" || rc=$?
+			use_relstage "${arg}" || rc=$?
                         return ${rc}
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
@@ -1943,6 +2079,21 @@ subcommand_unuse() {
 
 	#......................................................................
         unuse() {
+		unuse_relstage() {
+			local -r relstage="$1"
+
+			[[ ! ":${UsedReleaseStages}:" =~ :${relstage}: ]] && return 0
+			std::remove_path UsedReleaseStages "${relstage}"
+
+			local -- ol_name=''
+			for ol_name in "${UsedOverlays[@]}"; do
+				[[ "${OverlayInfo[${ol_name}:has_additional_modulepaths]}" == 'false' ]] && \
+					continue
+				unset_ol_modulepaths "${ol_name}"
+				set_ol_modulepaths "${ol_name}"
+			done
+		}
+
 		#..............................................................
                 unuse_overlay() {
 			local ol_name="$1"
@@ -1974,22 +2125,45 @@ subcommand_unuse() {
 					 "it not on top of the stack" \
 					 "${ol_name}"
 
+			OverlayInfo[${ol_name}:used]='no'
+			UsedOverlays=( "${UsedOverlays[@]:1}")
+
 			if [[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]]; then
-				# if this overlay hides groups, we have to re-add
-				# the modules made available by other overlays
-				local modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
+				# if this overlay masks groups, we have to re-add
+				# some directories to MODULEPATH.
 				for group in ${UsedGroups//:/ }; do
-					# is this group in the to be removed overlay?
-                                        local dir="${modulefiles_root}/${group}/${__MODULEFILES_DIR__}"
-                                        [[ -d "${dir}" ]] || continue  # no
-					
-					dir="/${group}/${__MODULEFILES_DIR__}"
-					std::prepend_path MODULEPATH "${UsedOverlays[@]/%/${dir}}"
+					local -a overlays=( ${MaskedGroups[${group}]//:/ } )
+					(( ${#overlays[@]} == 0)) && continue
+					[[ "${ol_name}" != "${overlays[0]}" ]] && continue
+					# remove overlay "${ol_name}"
+					local -- s
+					printf -v s "%s:" "${overlays[@]:1}"
+					MaskedGroups[${group}]="$s"
+
+					local -- ol=''
+					local -- dir=''
+					if (( ${#overlays[@]} == 1 )); then
+						# Only overlay ${ol_name} is masking this group.
+						# Add the group directories for all overlays.
+						for ol in "${UsedOverlays[@]}"; do
+							dir="${OverlayInfo[${ol}:modulefiles_root]}/"
+							dir+="${group}/${__MODULEFILES_DIR__}"
+							[[ -d "${dir}" ]] || continue
+							std::prepend_path MODULEPATH "${dir}"
+						done
+						continue
+					fi
+					# There is at least one more overlay masking this group.
+					# If this overlay has no groups, we have to do nothing.
+					ol="${overlays[1]}"
+					[[ "${OverlayInfo[${ol}:has_groups]}" == 'false' ]] && continue
+					# add group directory for this overlay, if exists
+					dir="${OverlayInfo[${ol}:modulefiles_root]}/"
+					dir+="${group}/${__MODULEFILES_DIR__}"
+					[[ -d "${dir}" ]] || continue
+					std::prepend_path MODULEPATH "${dir}"
 				done
 			fi
-
-                        OverlayInfo[${ol_name}:used]='no'
-			UsedOverlays=( "${UsedOverlays[@]:1}")
 
 			# rebuild exclude list.
 			# Note:
@@ -2008,18 +2182,7 @@ subcommand_unuse() {
 			if [[ -n "${OverlayExcludes}" ]]; then
 				OverlayExcludes="${OverlayExcludes:0: -1}"
 			fi
-			# remove additional directories added by overlay
-			if [[ -v OverlayInfo[${ol_name}:modulepath] && \
-				      -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
-				local -a modulepath=()
-				IFS=':' read -r -a modulepath <<<"${OverlayInfo[${ol_name}:modulepath]}"
-				local -- dir=''
-				for dir in "${modulepath[@]}"; do
-					std::remove_path MODULEPATH "${dir}"
-					std::remove_path ModulePathAppend "${dir}"
-					std::remove_path ModulePathPrepend "${dir}"
-				done
-			fi
+			unset_ol_modulepaths "${ol_name}"
 
 			# remove root of overlay
                         local dir
@@ -2063,8 +2226,7 @@ subcommand_unuse() {
                 local arg=$1
 
                 if is_release_stage "${arg}"; then
-                        # argument is release stage
-			std::remove_path UsedReleaseStages "${arg}"
+			unuse_relstage "${arg}"
                         return 0
                 fi
 		if [[ -v OverlayInfo[${arg}:type] ]]; then
@@ -2269,6 +2431,8 @@ pmodules_setup() {
 		Version="${PMODULES_VERSION}"
 		vars_to_be_exported[PMODULES_HOME]=1
 	fi
+	OSRelease=$(std::get_os_release)
+	SystemCPU=$(uname -p)
 	save_env
 }
 
@@ -2701,11 +2865,15 @@ subcommand_search() {
 		# get and print all available modules in $mpath
 		# with respect to the requested release stage
 		# TmpFile: module/version relstage group dependencies...
-		local mods
+		local -- mods=''
+		local -A found_modules=()
+		local -A found_modulenames=()
 		get_available_modules \
 			mods \
 			"${module}" \
 			"${opt_use_relstages}" \
+			found_modules \
+			found_modulenames \
 			"${modulepath[@]}"
 		local i=0
 		for (( i=0; i<${#mods[@]}; i+=4 )); do
@@ -3358,7 +3526,7 @@ subcommand_restore() {
 	for item in "${tmp[@]}"; do
 		(( ${GroupDepths["${item}"]} > 0 )) && continue
 		std::is_member_of_array "${item}" default_grps && continue
-		items+=( "${grp}" )
+		items+=( "${item}" )
 	done
 	IFS=':' read -r -a tmp <<< "${UsedOverlays}"
 	for item in "${tmp[@]}"; do
@@ -3776,10 +3944,16 @@ else
 fi
 
 if [[ "${Version}" != "${PMODULES_VERSION}" ]]; then
+	pm::read_config
+	for ol_name in "${UsedOverlays[@]}"; do
+		OverlayInfo[${ol_name}:used]='yes'
+	done
 	Version="${PMODULES_VERSION}"
 	vars_to_be_exported['PMODULES_ENV']=1
 fi
-
+#if [[ ! -v OverlayInfo[base:has_groups] ]]; then
+#	pm::read_config
+#fi
 if [[ -z "${UsedGroups}" ]]        || \
 	   [[ -z "${UsedReleaseStages}" ]] || \
 	   (( ${#UsedOverlays[@]} == 0 )); then

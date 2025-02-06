@@ -28,11 +28,12 @@ set ::MODULEFILES_DIR "modulefiles"
 set ::ol_replacing "r"
 
 # variable derived from PMODULES_ENV
-set ::Dir2OverlayMap {}
-set ::OverlayInfo {}
+array set ::Dir2OverlayMap {}
+array set ::OverlayInfo {}
 set ::UsedGroups {}
 set ::UsedOverlays {}
 
+debug "_pmodules_parse_pmodules_env"
 proc _pmodules_parse_pmodules_env { } {
 	#
 	# In this library we need the value of some BASH variables
@@ -41,6 +42,8 @@ proc _pmodules_parse_pmodules_env { } {
 	# 'typeset -p VAR' - to Tcl.
 	#
 	foreach line [split [base64::decode $::env(PMODULES_ENV)] "\n"] {
+		# lines are something like "declare -a UsedGroups=value"
+		# assign variable name -> key and value -> value
 		if { ![regexp -- {.* -[aAx]* (.*)=\((.*)\)} $line -> key value] } {
 			continue
 		}
@@ -49,7 +52,8 @@ proc _pmodules_parse_pmodules_env { } {
 				array set ::Dir2OverlayMap [regsub -all  {[]=[]} $value " "]
 			}
 			OverlayInfo {
-				array set ::OverlayInfo [regsub -all  {[]=[]} $value " "]
+				set tmp_olinfo [regsub -all {[]=[]} $value " "]
+				array set ::OverlayInfo $tmp_olinfo
 			}
 		        UsedOverlays {
 			        array set tmp [regsub -all  {[]=[]} $value " "]
@@ -64,8 +68,10 @@ proc _pmodules_parse_pmodules_env { } {
 			}
 		}
 	}
+	debug "return"
 }
 
+debug "module-addgroup"
 proc module-addgroup { group } {
 	global env
 	global name
@@ -289,88 +295,71 @@ proc ModulesHelp { } {
 # or
 #   <root_dir>/group/modulefiles/X1/Y1//X2/Y2/name/version
 #
-proc _find_overlay { modulefile_components } {
+proc _find_overlay { modulefile } {
         debug "_find_overlay()"
         foreach ol $::UsedOverlays  {
                 debug "ol = $ol"
 		set ol_modulefiles_root $::OverlayInfo(${ol}:modulefiles_root)
-                if { [string range $ol_modulefiles_root end end] == "/" } {
-                        set ol_modulefiles_root [string range $ol_modulefiles_root 0 end-1]
-                }
-		debug "ol_modulefiles_root = $ol_modulefiles_root"
-                set ol_modulefiles_root_splitted [file split $ol_modulefiles_root]
-                set modulefile_root [file join \
-					 {*}[lrange \
-						 $modulefile_components \
-						 0 [expr [llength $ol_modulefiles_root_splitted] - 1]]]
-		debug "modulefile_root = $modulefile_root"
-                if { [string compare $ol_modulefiles_root $modulefile_root] == 0 } {
-			debug "ol_modulefiles_root_splitted = $ol_modulefiles_root_splitted"
-                        return $ol_modulefiles_root_splitted
-                }
-        }
+		if { [string match "$ol_modulefiles_root/*" modulefile] == 0 } {
+			return "$ol"
+		}
+	}
         debug "overlay not found"
         return {}
 }
 
-proc _is_in_overlay { } {
-	debug "_is_in_overlay?"
-	set parts [_find_overlay [file split $::ModulesCurrentModulefile]]
-	debug "_is_in_overlay: $parts"
-	expr {[string compare $parts ""] == 0 }
-}
-
 proc _pmodules_init_global_vars { } {
 	debug "_pmodules_init_global_vars() called"
-	global	group
 	global  GROUP
-	global  name
-	global	P
-	global  version
-	global	V
+	global	P		# name of module (without version)
+	global	V		# full version of module 
 	global	V_MAJOR
 	global	V_MINOR
 	global	V_PATCHLVL
 	global	V_RELEASE
-	global	V_PKG
-	global	variant
+	global	V_PKG		# version without release no. and/or suffix
 	global	PREFIX		# prefix of package
 
-	set	modulefile_splitted	[file split $::ModulesCurrentModulefile]
+	set current_modulefile [file split $::ModulesCurrentModulefile]
 
-	set     ol_modulefiles_root_splitted [_find_overlay ${modulefile_splitted}]
-	debug "init: ol_modulefiles_root_splitted=$ol_modulefiles_root_splitted"
-	set	rel_modulefile	[lrange $modulefile_splitted [llength $ol_modulefiles_root_splitted] end]
-	set	group		[lindex $rel_modulefile 0]
-	set	GROUP		"${group}"
-	set	name		[lindex $modulefile_splitted end-1]
-	set	version		[lindex $modulefile_splitted end]
-	set	suffixes	[lassign [split $version _] v]
+	set P [lindex $current_modulefile end-1]
+	set V [lindex $current_modulefile end]
+	set suffixes [lassign [split $V _] v]
 	lassign [split $v -]	V_PKG V_RELEASE
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 
-	set	variant 	[lrange $rel_modulefile 2 end]
-	set	modulefiles_root	[file join {*}$ol_modulefiles_root_splitted]
-	set	ol $::Dir2OverlayMap($modulefiles_root)
+	set ol [_find_overlay $::ModulesCurrentModulefile]
+	if { $::OverlayInfo(${ol}:has_groups) == "true" } {
+		set modulefiles_root [file split $::OverlayInfo(${ol}:modulefiles_root)]
+		set rel_modulefile [lrange $current_modulefile [llength $modulefiles_root] end]
+		set GROUP [lindex $rel_modulefile 0]
+		set install_prefix [file split $::OverlayInfo(${ol}:install_root)]
+		set ::variant [lrange $rel_modulefile 2 end]
+		set prefix "$install_prefix $GROUP [lreverse_n $::variant 2]"
+		set PREFIX [file join {*}$prefix]
+	} else {
+		set GROUP "None"
+		set ::variant {}
+		set PREFIX $::OverlayInfo(${ol}:install_root)
+	}
 
-	set	install_prefix	[file split $::OverlayInfo(${ol}:install_root)]
-	set	prefix		"$install_prefix $group [lreverse_n $variant 2]"
-	set	PREFIX		[file join {*}$prefix]
-	set	P		"${name}"
-	set 	V		"${version}"
+	# :FIXME: the following vars are still used
+	set ::name $P
+	set ::version $V
+	set ::group $GROUP
 
-        debug	"modulefiles_root=$modulefiles_root"
 	debug	"ol=$ol"
 	debug	"PREFIX=$PREFIX"
-	debug	"group of module $name: $group"
+	debug	"group of module $P: $GROUP"
 }
 
 if { [info exists ::whatis] } {
 	module-whatis	"$whatis"
 }
 
+debug "init"
 _pmodules_parse_pmodules_env
-if {[_is_in_overlay] == 0} {
+if {[_find_overlay $::ModulesCurrentModulefile] != ""} {
 	debug "setup env vars for module in overlay"
 	_pmodules_init_global_vars 
 	conflict	$name
