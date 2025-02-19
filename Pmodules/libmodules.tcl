@@ -296,11 +296,12 @@ proc ModulesHelp { } {
 #   <root_dir>/group/modulefiles/X1/Y1//X2/Y2/name/version
 #
 proc _find_overlay { modulefile } {
-        debug "_find_overlay()"
+        debug "_find_overlay(${modulefile})"
         foreach ol $::UsedOverlays  {
                 debug "ol = $ol"
 		set ol_modulefiles_root $::OverlayInfo(${ol}:modulefiles_root)
-		if { [string match "$ol_modulefiles_root/*" modulefile] == 0 } {
+		debug "ol_modulefiles_root: ${ol_modulefiles_root}"
+		if { [string match "$ol_modulefiles_root/*" $modulefile] } {
 			return "$ol"
 		}
 	}
@@ -329,9 +330,11 @@ proc _pmodules_init_global_vars { } {
 	lassign [split $V_PKG .] V_MAJOR V_MINOR V_PATCHLVL
 
 	set ol [_find_overlay $::ModulesCurrentModulefile]
-	if { $::OverlayInfo(${ol}:has_groups) == "true" } {
+	if { $::OverlayInfo(${ol}:layout) == "Pmodules" } {
 		set modulefiles_root [file split $::OverlayInfo(${ol}:modulefiles_root)]
 		set rel_modulefile [lrange $current_modulefile [llength $modulefiles_root] end]
+		debug "modulefiles_root: ${modulefiles_root}"
+		debug "rel_modulefile: ${rel_modulefile}"
 		set GROUP [lindex $rel_modulefile 0]
 		set install_prefix [file split $::OverlayInfo(${ol}:install_root)]
 		set ::variant [lrange $rel_modulefile 2 end]
