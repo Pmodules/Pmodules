@@ -914,6 +914,12 @@ _build_module() {
 
 			std::info "Loading module: ${m}"
 			eval "$( "${modulecmd}" bash load "${m}" )"
+			if ! bm::is_loaded "$m"; then
+				"${modulecmd}" bash list
+				std::die 5 \
+					 "%s " "${m}:" \
+					 "module cannot be loaded!"
+			fi
 		done
 	} # bm::load_build_dependencies
 
