@@ -1335,9 +1335,9 @@ build_modules_yaml_v1(){
 			debug "don't build this variant: ${config['variant']} !=  *:${build_variant}:*"
 			return 0
 		fi
-		check_system     module_config || return 1
 		check_kernel     module_config || return 1
 		check_target_cpu module_config || return 1
+		check_system     module_config || return 1
 		return 0
 	}
 
