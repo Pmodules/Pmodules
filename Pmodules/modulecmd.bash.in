@@ -343,7 +343,7 @@ get_module_config(){
 	Note:
 	 - the release stage of a module outside our hierarchy is always
 	   'stable'.
-	 - the release stage of a module inside out hierarchy without a
+	 - the release stage of a module inside a Pmodules hierarchy without a
 	   config file is always 'unstable'.
 	"
 	local -n ref_cfg="$1"		# [out] reference to a dictionary to return the configuration
@@ -353,41 +353,39 @@ get_module_config(){
 	ref_cfg['relstage']='unstable'
 	ref_cfg['systems']=''
 	ref_cfg['blocklist']=''
-	if [[ ! -v Dir2OverlayMap[${dir%/"${__MODULEFILES_DIR__}"*}] ]]; then
-		# this module is not in an overlay
-		ref_cfg['relstage']='stable'
-		return
-	fi
+
 	local -r config_file="${modulefile%/*}/.config-${modulefile##*/}"
-	local -r relstage_file="${modulefile%/*}/.release-${modulefile##*/}"
-	if [[ -r ${config_file} ]]; then
-		local -- yaml=''
-		yaml=$(${yq} -e '.' < "${config_file}")
-		debug "module config: ${yaml}"
-		local -- key=''
-		for key in "${!ref_cfg[@]}"; do
-			case "${key,,}" in
-				systems | blocklist )
-					value=$( ${yq} -e ".${key}[]" \
-						       2>/dev/null <<<"${yaml}") ||
-						value='null'
-					;;
-				* )
-					value=$( ${yq} -e ".${key}" \
-						       2>/dev/null <<<"${yaml}") ||
-						value='null'
-					;;
-			esac
-			if [[ "${value}" != 'null' ]]; then
-				ref_cfg[${key,,}]="${value}"
-			fi
-		done
+	if [[ ! -r ${config_file} ]]; then
+		local -- ol_name=''
+		local -- group=''
+		find_overlay ol_name group "${modulefile}"
+		if [[ "${OverlayInfo[${ol_name}:layout]}" == 'Pmodules' ]]; then
+			[[ -r ${relstage_file} ]] && ref_cfg['relstage']=$( < "${relstage_file}" )
+		else
+			ref_cfg['relstage']='stable'
+		fi
 		return 0
-	elif [[ -r ${relstage_file} ]]; then
-		ref_cfg['relstage']=$( < "${relstage_file}" )
-	else
-		ref_cfg['relstage']='unstable'
 	fi
+	local -- yaml=''
+	yaml=$(${yq} -e '.' < "${config_file}")
+	debug "module config: ${yaml}"
+	local -- key=''
+	for key in "${!ref_cfg[@]}"; do
+		case "${key,,}" in
+			systems | blocklist )
+				value=$( ${yq} -e ".${key}[]" \
+					       2>/dev/null <<<"${yaml}") ||
+					value='null'
+				;;
+			* )
+				value=$( ${yq} -e ".${key}" \
+					       2>/dev/null <<<"${yaml}") ||
+					value='null'
+				;;
+		esac
+		[[ "${value}" != 'null' ]] && ref_cfg[${key,,}]="${value}"
+	done
+	return 0
 }
 
 is_available(){
@@ -1671,7 +1669,7 @@ subcommand_avail() {
 				# if we have no groups, the overlay is the
 				# same for all modules in ${mods[@]}. So we
 				# can use the overlay of the first module.
-				header_text="${mods[3]}"
+				header_text="${mods[4]}"
 			else
 				header_text="${group}"
 			fi
@@ -2730,10 +2728,10 @@ subcommand_search() {
 			(( ${#deps[@]} == 0 )) && deps[0]=''
 			local -- str=''
 			if [[ "${opt_wrap}" == 'no' ]]; then
-				str=$(printf "${fmt}"  "$1" "$2" "$3" "$5" "${deps[*]}")
+				str=$(printf "${fmt}" "${1/.lua}" "$2" "$3" "$5" "${deps[*]}")
 				write_line "${str}"
 			else
-				str=$(printf "${fmt}"  "$1" "$2" "$3" "$5" "${deps[0]}")
+				str=$(printf "${fmt}" "${1/.lua}" "$2" "$3" "$5" "${deps[0]}")
 				for (( i = 1; i < ${#deps[@]}; i++ )); do
 					if (( ${#str} + ${#deps[i]} + 1 <= cols )); then
 						str+=" ${deps[i]}"
@@ -2970,6 +2968,7 @@ subcommand_search() {
 	[[ "${opt_use_relstages}" == ":" ]] && opt_use_relstages=":${UsedReleaseStages}:"
 	[[ ${#modules[@]} == 0 ]] && modules+=( '' )
 
+	local -a groups=( "${!GroupDepths[@]}" )
 	local -- module=''
 	for module in "${modules[@]}"; do
 		[[ ${opt_glob} == 'no' ]] && module+="*"
@@ -2978,6 +2977,8 @@ subcommand_search() {
 		# search in overlays with layout 'Spack'
 		for ol_name in "${UsedOverlays[@]}"; do
 			[[ "${OverlayInfo[${ol_name}:layout]}" != 'Spack' ]] && break
+			[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && \
+				groups=()
 			local -- path=''
 			if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
 				path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
@@ -2998,11 +2999,11 @@ subcommand_search() {
 		done
 
 		# search in overlays with layout 'Pmodules'
-		for group in "${!GroupDepths[@]}"; do
+		for group in "${groups[@]}"; do
 			for ol_name in "${UsedOverlays[@]}"; do
 				[[ "${OverlayInfo[$ol_name:layout]}" != 'Pmodules' ]] && continue
-				local -- dir=''
-				dir="${OverlayInfo[${ol_name}:modulefiles_root]}/${group}/${__MODULEFILES_DIR__}"
+				local -- dir="${OverlayInfo[${ol_name}:modulefiles_root]}"
+				dir+="/${group}/${__MODULEFILES_DIR__}"
 				[[ -r "${dir}" ]] && modulepath+=( "${dir}" )
 			done
 		done
