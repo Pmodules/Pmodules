@@ -2,11 +2,10 @@
 #
 # https://
 #
-P=lmod
-V=${LMOD_VERSION:-8.7}
+P=Lmod
+V=${LMOD_VERSION:-8.7.56}
 FNAME="$P-$V.tar.gz"
-DOWNLOAD_URL="https://sourceforge.net/projects/lmod/files/Lmod-$V.tar.bz2/download"
-
+DOWNLOAD_URL="https://github.com/TACC/Lmod/archive/refs/tags/8.7.56.tar.gz"
 source "$(dirname "$0")/librecipes.bash"
 
 #---
