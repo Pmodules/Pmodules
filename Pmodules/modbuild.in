@@ -389,45 +389,6 @@ build_modules(){
 	esac
 }
 
-#......................................................................
-#
-# Initialise environment modules.
-#
-# Arguments:
-#	none
-#
-init_module_environment(){
-	eval $( "${modulecmd}" bash use unstable )
-	eval $( "${modulecmd}" bash use deprecated )
-	eval $( "${modulecmd}" bash purge )
-
-	# :FIXME: this is a hack!!!
-	# shouldn't this be set in the build-script?
-	if [[ -e "${PMODULES_HOME%%/Tools*}/Libraries" ]]; then
-		eval $( "${modulecmd}" bash use Libraries )
-	fi
-	if [[ -e "${PMODULES_HOME%%/Tools*}/System" ]]; then
-		eval $( "${modulecmd}" bash use System )
-	fi
-	unset	C_INCLUDE_PATH
-	unset	CPLUS_INCLUDE_PATH
-	unset	CPP_INCLUDE_PATH
-	unset	LIBRARY_PATH
-	unset	LD_LIBRARY_PATH
-	unset	DYLD_LIBRARY_PATH
-
-	unset	CFLAGS
-	unset	CPPFLAGS
-	unset	CXXFLAGS
-	unset	LIBS
-	unset	LDFLAGS
-
-	unset	CC
-	unset	CXX
-	unset	FC
-	unset	F77
-	unset	F90
-}
 
 parse_version() {
 	local v="$1"
@@ -1133,7 +1094,6 @@ build_modules_yaml_v1(){
 						&& ! is_subset opt_with_modules \
 						     "${compiler}" "${mpi}" "${hdf5}" \
 						&& continue
-
 					pbuild.build_module_yaml \
 						"${module_name}" "${module_version}" \
 						"$3" \
@@ -1387,7 +1347,6 @@ build_modules_yaml_v1(){
 		local -n module_config="$3"
 
 		debug "build variant ${module_name}/${module_version}"
-
 		local ol_name="${module_config['overlay']}"
 		[[ -v OverlayInfo[${ol_name}:install_root] ]] || \
 			std::die 2 "%s" \
@@ -1609,7 +1568,16 @@ debug(){
 #.............................................................................
 # main
 
-init_module_environment
+eval $( "${modulecmd}" bash use unstable )
+eval $( "${modulecmd}" bash use deprecated )
+
+if [[ -e "${PMODULES_HOME%%/Tools*}/Libraries" ]]; then
+	eval $( "${modulecmd}" bash use Libraries )
+fi
+if [[ -e "${PMODULES_HOME%%/Tools*}/System" ]]; then
+	eval $( "${modulecmd}" bash use System )
+fi
+
 parse_args "$@"
 
 #
