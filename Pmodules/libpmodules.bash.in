@@ -73,7 +73,7 @@ scan_groups () {
         local -- ol=''
 	local -i depth=0
         for ol in "$@"; do
-		[[ "${OverlayInfo[${ol}:has_groups]}" == 'true' ]] || continue
+		[[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]] || continue
 		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 		local dir=''
 		for dir in "${modulefiles_root}"/*/"${__MODULEFILES_DIR__}"; do
@@ -110,10 +110,9 @@ declare -A OverlayConfigKeys=(
 	['excludes']=''
 	['type']='n'
 	['conflicts']=''
-	['config']=''
-	['has_groups']='true'
-	['has_relstages']='true'
+	['path_config']=''
 	['default_relstage']='unstable'
+	['layout']='Pmodules'
 	['has_additional_modulepaths']='false'
 )
 
@@ -233,6 +232,10 @@ yml::die_invalid_ol_type(){
 	std::die 3 "Invalid type for overlay '$1' -- $2"
 }
 
+yml::die_invalid_ol_layout(){
+	std::die 3 "Invalid layout for overlay '$1' -- $2\nAllowed values are 'Pmodules', 'Spack' and 'flat'."
+}
+
 yml::die_invalid_ol_relstage(){
 	std::die 3 "Invalid default release stage for overlay '$1' -- $2"
 }
@@ -348,6 +351,18 @@ pm::read_config(){
 					esac
 					OverlayInfo[${ol_name}:type]="${value}"
 					;;
+				layout )
+					yml::get_value value yaml_input "${node}.${key}" '!!str'
+					case ${value} in
+						'Pmodules' | 'Spack' | 'flat' )
+							:
+							;;
+						* )
+							yml::die_invalid_ol_layout "${ol_name}" "${value}"
+							;;
+					esac
+					OverlayInfo[${ol_name}:${key,,}]="${value}"
+					;;
 				default_relstage )
 					yml::get_value value yaml_input "${node}.${key}" '!!str'
 					case ${value} in
@@ -371,10 +386,6 @@ pm::read_config(){
 				path_config )
 					yml::get_value value yaml_input "${node}.${key}" '!!seq'
 					parse_path_config value "${ol_name}"
-					;;
-				has_groups | has_relstages)
-					yml::get_value value yaml_input "${node}.${key}" '!!bool'
-					OverlayInfo[${ol_name}:${key,,}]="${value}"
 					;;
 				* )
 					yml::die_invalid_ol_key "${key}" "${yaml_input}"
@@ -456,8 +467,7 @@ pm::read_config(){
 		get_config "${usr_config_file}"
 	fi
 	OverlayInfo[none:type]='n'
-	OverlayInfo[none:has_group]='false'
-	OverlayInfo[none:has_relstages]='false'
+	OverlayInfo[none:layout]='flat'
 }
 
 # Local Variables:

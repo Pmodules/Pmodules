@@ -345,15 +345,10 @@ get_module_config(){
 	   'stable'.
 	 - the release stage of a module inside out hierarchy without a
 	   config file is always 'unstable'.
-
-	Arguments:
-	    $1 reference to dictionary to return the configuration
-	    $2 directory containing modulefile
-	    $3 module name (inkl. version and/or sub-dirs)
 	"
-	local -n ref_cfg="$1"
-	local -r dir="$2"
-	local -r modulefile="${dir}/$3"
+	local -n ref_cfg="$1"		# [out] reference to a dictionary to return the configuration
+	local -r dir="$2"		# [in]  directory containing modulefile
+	local -r modulefile="${dir}/$3" # [in]  module name (inkl. version and/or sub-dirs)
 
 	ref_cfg['relstage']='unstable'
 	ref_cfg['systems']=''
@@ -446,49 +441,26 @@ is_release_stage() {
 # Check whether a given moduledir is in an used overlay.
 # If yes, return 0 otherwise return 1
 #
-# Arguments
-#	$1	ref.var to return overlay
-#	$2	ref.var to return group
-#	$3	moduledir to check
-#
-find_overlay_old () {
-        local -n ref_ol="$1"
-        local -n ref_group="$2"
-	local -- path="${3%/"${__MODULEFILES_DIR__}"*}"
-
-	# return if not in an overlay
-	if [[ ! -v Dir2OverlayMap[${path}] ]]; then
-		ref_ol='None'
-		ref_group='None'
-		return 1
-	fi
-
-        ref_ol="${Dir2OverlayMap[${path}]}"
-	if [[ "${OverlayInfo[${ref_ol}:has_groups]}" == 'true' ]]; then
-		ref_group="${path#"${OverlayInfo[${ol}:modulefiles_root]}"/}"
-	else
-		ref_group='None'
-	fi
-	return 0
-}
 find_overlay () {
-        local -n ref_ol="$1"
-        local -n ref_group="$2"
-	local -- path="${3%/"${__MODULEFILES_DIR__}"*}"
+        local -n ref_ol="$1"		# ref.var to return overlay name
+        local -n ref_group="$2"		# ref.var to return group
+	local -- path="$3"		# moduledir to check
+
+	path="${path%/"${__MODULEFILES_DIR__}"*}"
 	for ol in "${UsedOverlays[@]}"; do
 		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 		if [[ "${path}" == ${modulefiles_root}/* ]]; then
 			ref_ol="${ol}"
-			if [[ "${OverlayInfo[${ref_ol}:has_groups]}" == 'true' ]]; then
+			if [[ "${OverlayInfo[${ref_ol}:layout]}" == 'Pmodules' ]]; then
 				ref_group="${path#"${OverlayInfo[${ol}:modulefiles_root]}"/}"
 			else
-				ref_group='None'
+				ref_group='none'
 			fi
 			return 0
 		fi
 	done
-	ref_ol='None'
-	ref_group='None'
+	ref_ol='none'
+	ref_group='none'
 	return 1
 }
 
@@ -1241,21 +1213,27 @@ get_available_modules() {
 	# loop over all entries in given module path
         for dir in "${dirs[@]}"; do
                 test -d "${dir}" || continue
-		cd "${dir}" || std::die 3 "Oops: cannot change to directory '${dir}'"
 		# find overlay and group for this directory
 		local ol=''
 		local group=''
 		find_overlay ol group "${dir}"
 
-		# if directory is empty continue
-                local -a dir_entries=(*)
-		(( ${#dir_entries[@]} > 0 )) || continue
-
 		# loop over all files (and sym-links) in this directory and
 		# its sub-directories
 		local mod=''	# module_name/module_version
-                while read -r mod; do
-			[[ -n ${OverlayExcludes} && "${mod}" =~ ${OverlayExcludes} ]] && continue
+                while read -r rel_modulefile; do
+			IFS='/' read -a toks <<<"${rel_modulefile}"
+			if (( ${#toks[@]} == 0 )); then
+				continue
+			elif (( ${#toks[@]} == 1 )); then
+				mod="${toks[0]}"
+				name="${mod}"
+			else
+				name="${toks[-2]}"
+				mod="${name}/${toks[-1]}"
+			fi
+			[[ -n ${OverlayExcludes} \
+				   && "${mod}" =~ ${OverlayExcludes} ]] && continue
 			local name="${mod%/*}"
 			local add='no'
 			if [[ -n "${ol}" && "${ol,,}" != 'none' ]]; then
@@ -1280,24 +1258,26 @@ get_available_modules() {
 					add='yes'
 				fi
 			else
-				ol='none'
+				# :FIXME: 
 				add='yes'	# module is NOT in an overlay
 			fi
 			[[ "${add}" == 'no' ]] && continue
 			local -A cfg=()
-			get_module_config cfg "${dir}" "${mod}"
-			if [[ "${OverlayInfo[${ol}:has_relstages]}" == 'true' ]]; then
+			get_module_config cfg "${dir}" "${rel_modulefile}"
+			if [[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]]; then
 				is_available cfg "${relstages}" || continue
-				result+=( "${mod}" "${cfg['relstage']}" "${dir}/${mod}" "${ol}" )
+				result+=( "${mod}" "${cfg['relstage']}" "${dir}" "${rel_modulefile}" "${ol}" "${group}" )
 			else
 				is_available cfg "${ReleaseStages}" || continue
-				result+=( "${mod}" 'stable' "${dir}/${mod}" "${ol}" )
+				result+=( "${mod}" 'stable' "${dir}" "${rel_modulefile}" "${ol}" "${group}" )
 			fi
                         ref_modules[${mod}]=1
-		done < <(${find} -L "${dir_entries[@]}" \
-				 \( -type f -o -type l \) \
+		done < <(${find} -L "${dir}" \
 				 -not -name ".*" \
-                                 -ipath "${pattern}*" \
+				 \( -regex ".*/${pattern}[^/]+/[^/]+$" \
+				 -o -regex ".*/${pattern}[^/]+$" -regextype posix-basic \) \
+				 \( -type f -o -type l \) \
+				 -printf "%P\n" \
 				 | ${sort} --version-sort)
         done
 } # get_available_modules()
@@ -1486,7 +1466,7 @@ subcommand_avail() {
 	terse_output() {
 		output_header "$1"
 		local -i i=0
-		for (( i=0; i<${#mods[@]}; i+=4 )); do
+		for (( i=0; i<${#mods[@]}; i+=6 )); do
 			local mod=${mods[i]%.lua}
 			local relstage=${mods[i+1]}
 			case ${relstage} in
@@ -1504,7 +1484,7 @@ subcommand_avail() {
 
 	#......................................................................
 	machine_output() {
-		for (( i=0; i<${#mods[@]}; i+=4 )); do
+		for (( i=0; i<${#mods[@]}; i+=6 )); do
 			printf "%-20s\t%s\n" "${mods[i]}" "${mods[i+1]}" 1>&2
 		done
 	}
@@ -1513,7 +1493,7 @@ subcommand_avail() {
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
 		output_header "$1"
-		for (( i=0; i<${#mods[@]}; i+=4 )); do
+		for (( i=0; i<${#mods[@]}; i+=6 )); do
 			local mod=${mods[i]%.lua}
 			local relstage=${mods[i+1]}
 			case ${relstage} in
@@ -1536,7 +1516,7 @@ subcommand_avail() {
 		local -a available_modules=()
 		local mod=''
 		local -i max_length=1
-		for ((i=0; i<${#mods[@]}; i+=4)); do
+		for ((i=0; i<${#mods[@]}; i+=6)); do
 			if [[ ${Verbosity_lvl} == 'verbose' ]]; then
 			        local  relstage=${mods[i+1]}
 			        case ${relstage} in
@@ -1674,7 +1654,7 @@ subcommand_avail() {
 			typeset -n path"=modulepath_${ref}"
 			local -- header_text=''
 			local -- ol="${UsedOverlays[0]}"
-			if [[ "${OverlayInfo[${ol}:has_groups]}" == 'true' ]]; then
+			if [[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]]; then
 				found_modules=()
 				found_modulenames=()
 			fi
@@ -1741,33 +1721,25 @@ set_ol_modulepaths(){
 	# else if deprecated modules are available
 	#   prepend modulepath_deprecated if not empty
 	#   otherwise prepend modulepath
-	local -- path=''y
+	local -- path=''
 	if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
 		path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
-		if [[ -z "${path}" ]]; then
-			path="${OverlayInfo[${ol_name}:modulepath]}"
-		fi
 	elif [[ ":${UsedReleaseStages}:" == *:deprecated:* ]]; then
 		path="${OverlayInfo[${ol_name}:modulepath_deprecated]}"
-		if [[ -z "${path}" ]]; then
-			path="${OverlayInfo[${ol_name}:modulepath]}"
-		fi
 	else
 		path="${OverlayInfo[${ol_name}:modulepath_stable]}"
-		if [[ -z "${path}" ]]; then
-			path="${OverlayInfo[${ol_name}:modulepath]}"
-		fi
 	fi
-	if [[ -n "${path}" ]]; then
-		local -a modulepath=()
-		IFS=':' read -r -a modulepath <<<"${path}"
-		local -- dir=''
-		for dir in "${modulepath[@]}"; do
-			std::prepend_path MODULEPATH "${dir}"
-			std::prepend_path ModulePathAppend "${dir}"
-			std::prepend_path ModulePathPrepend "${dir}"
-		done
-	fi
+	[[ -z "${path}" ]] && path="${OverlayInfo[${ol_name}:modulepath]}"
+	[[ -z "${path}" ]] && return 0
+
+	local -a modulepath=()
+	IFS=':' read -r -a modulepath <<<"${path}"
+	local -- dir=''
+	for dir in "${modulepath[@]}"; do
+		std::prepend_path MODULEPATH "${dir}"
+		std::prepend_path ModulePathAppend "${dir}"
+		std::prepend_path ModulePathPrepend "${dir}"
+	done
 }
 
 unset_ol_modulepaths(){
@@ -1785,17 +1757,17 @@ unset_ol_modulepaths(){
 	if [[ -n "${OverlayInfo[${ol_name}:modulepath_deprecated]}" ]]; then
 		path+="${OverlayInfo[${ol_name}:modulepath_deprecated]}:"
 	fi
-	if [[ -n "${path}" ]]; then
-		path="${path%:}"
-		local -a modulepath=()
-		IFS=':' read -r -a modulepath <<<"${path}"
-		local -- dir=''
-		for dir in "${modulepath[@]}"; do
-			std::remove_path MODULEPATH "${dir}"
-			std::remove_path ModulePathAppend "${dir}"
-			std::remove_path ModulePathPrepend "${dir}"
-		done
-	fi
+	[[ -z "${path}" ]] && return 0
+
+	path="${path%:}"
+	local -a modulepath=()
+	IFS=':' read -r -a modulepath <<<"${path}"
+	local -- dir=''
+	for dir in "${modulepath[@]}"; do
+		std::remove_path MODULEPATH "${dir}"
+		std::remove_path ModulePathAppend "${dir}"
+		std::remove_path ModulePathPrepend "${dir}"
+	done
 }
 
 subcommand_use() {
@@ -1930,7 +1902,7 @@ subcommand_use() {
 					# do nothing.
 					# if this overlay doesn't have groups, we remove all
 					# groups.
-					if [[ "${OverlayInfo[${ol_name}:has_groups]}" == 'true' ]]; then
+					if [[ "${OverlayInfo[${ol_name}:layout]}" == 'Pmodules' ]]; then
 						dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
 						dir+="${group}/${__MODULEFILES_DIR__}"
 						# is this group in this overlay?
@@ -2156,7 +2128,7 @@ subcommand_unuse() {
 					# There is at least one more overlay masking this group.
 					# If this overlay has no groups, we have to do nothing.
 					ol="${overlays[1]}"
-					[[ "${OverlayInfo[${ol}:has_groups]}" == 'false' ]] && continue
+					[[ "${OverlayInfo[${ol}:layout]}" != 'Pmodules' ]] && continue
 					# add group directory for this overlay, if exists
 					dir="${OverlayInfo[${ol}:modulefiles_root]}/"
 					dir+="${group}/${__MODULEFILES_DIR__}"
@@ -2704,8 +2676,6 @@ subcommand_search() {
 	local -i cols=80
 	[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
-	local -- search_range='all'
-	local -a src_prefix=()
 	local opt_print_header='yes'
 	local opt_print_modulefiles='no'
 	local opt_print_csv='no'
@@ -2849,17 +2819,11 @@ subcommand_search() {
 	#.....................................................................
 	#
 	# search modules
-	# Args:
-	#   $1: module name pattern
-	#
-	# Variables used from enclosing function
-	#   :FIXME:
 	#
 	search () {
-		local -r module="$1"
-		local -r group="$2"
-		shift 2
-		local -a modulepath=("$@")
+		local -r module="$1"		# name/pattern to search
+		shift 1
+		local -a modulepath=("$@")	# directories to search
 		local -i depth=0
 
 		# get and print all available modules in $mpath
@@ -2876,36 +2840,47 @@ subcommand_search() {
 			found_modulenames \
 			"${modulepath[@]}"
 		local i=0
-		for (( i=0; i<${#mods[@]}; i+=4 )); do
-			local name=${mods[i]}
-			local relstage=${mods[i+1]}
-			local modulefile=${mods[i+2]}
-			local ol=${mods[i+3]}
+		for (( i=0; i<${#mods[@]}; i+=6 )); do
+			local -- name="${mods[i]}"
+			local -- relstage="${mods[i+1]}"
+			local -- moduledir="${mods[i+2]}"
+			local -- rel_modulefile="${mods[i+3]}"
+			local -- modulefile="${moduledir}/${rel_modulefile}"
+			local -- ol="${mods[i+4]}"
+			local -- group="${mods[i+5]}"
 			local -a deps=()
 			
 			if (( ${#name} > max_len_modulename)); then
 				max_len_modulename=${#name}
 			fi
 			
-			if [[ "${opt_print_verbose}" == 'yes' ]] || \
-				   [[ "${opt_all_deps}" == 'yes' ]]; then
-				local prefix=''
-				get_module_prefix prefix "${modulefile}"
-				local dependencies_file="${prefix}/.dependencies"
-				if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
-					mapfile -t deps < "${dependencies_file}"
+			if [[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]]; then
+				if [[ "${opt_print_verbose}" == 'yes' ]] || \
+					   [[ "${opt_all_deps}" == 'yes' ]]; then
+					local prefix=''
+					get_module_prefix prefix "${modulefile}"
+					local dependencies_file="${prefix}/.dependencies"
+					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
+						mapfile -t deps < "${dependencies_file}"
+					fi
+				else
+					# get dependencies encoded in directory name
+					local -i j
+					local -a toks
+					IFS='/'
+					read -r -a toks <<< "${modulefile}"
+					local -i depth=${GroupDepths[${group}]}
+					for ((j = -depth-2; j < -2; j += 2)); do
+						deps+=( "${toks[*]: $j:2}" );
+					done
+					unset IFS
 				fi
-			elif [[ "${group}" != 'other' ]]; then
-				# get dependencies encoded in directory name
-				local -i j
-				local -a toks
-				IFS='/'
-				read -r -a toks <<< "${modulefile}"
-				local -i depth=${GroupDepths[${group}]}
-				for ((j = -depth-2; j < -2; j += 2)); do
-					deps+=( "${toks[*]: $j:2}" );
+			elif [[ "${OverlayInfo[${ol}:layout]}" == 'Spack' ]]; then
+				IFS='/' read -r -a toks <<< "${rel_modulefile}"
+				local -i j=0
+				for ((j = 0; j < ${#toks[@]}-2; j+=2)); do
+					deps+=( "${toks[$j]}/${toks[$j+1]}" );
 				done
-				unset IFS
 			fi
 			echo "${name}" "${relstage}" "${group}" "${modulefile}" \
 			     "${ol}" \
@@ -2968,27 +2943,6 @@ subcommand_search() {
 			-a | --all-releases-stages )
 				opt_use_relstages+="${ReleaseStages}"
 				;;
-			--src | --src=*)
-                                if [[ "$1" == --src ]]; then
-                                        local dir="$2"
-                                        shift
-                                else
-                                        local dir="${1/--src=}"
-                                fi
-				if [[ ! -e "${dir}" ]]; then
-					std::die 1 "%s %s: %s -- %s" \
-						 "${CMD}" 'search' \
-                                                 "illegal value for --src option" \
-                                                 "${dir} does not exist"
-				fi
-				if [[ ! -d "${dir}" ]]; then
-					std::die 1 "%s %s: %s -- %s" \
-						 "${CMD}" 'search' \
-                                                 "illegal value for --src option" \
-                                                 "${dir} is not a directory"
-				fi
-				src_prefix+=( "$(std::get_abspath "${src_prefix}")" )
-				;;
                         -v | --verbose )
                                 opt_print_verbose='yes'
                                 ;;
@@ -3001,26 +2955,6 @@ subcommand_search() {
 			--newest )
 				opt_newest='yes'
 				;;
-			--group | --group=* )
-				if [[ $1 == *=* ]]; then
-					group="${1/--*=}"
-				else
-					group="$2"
-					shift
-				fi
-				if [[ -v GroupDepths[${group}] ]]; then
-					search_range='inside'
-				elif [[ "${group}" == 'other' ]]; then
-					search_range='outside'
-				else
-					std::die 1 "%s %s: %s -- %s" \
-						 "${CMD}" 'search' \
-						 "illegal value for --group option" \
-						 "${group} is not a valid group!"
-				fi
-				groups+=( "${group}" )
-				;;
-					
 			-- )
 				shift 1
 				modules+=( "$@" )
@@ -3032,66 +2966,62 @@ subcommand_search() {
 		esac
 		shift
 	done
-	if (( ${#src_prefix[@]} == 0 )); then
-		local ol=''
-		for ol in "${UsedOverlays[@]}"; do
-			src_prefix+=( "${OverlayInfo[${ol}:modulefiles_root]}" )
-		done
-	fi
 
-	if [[ "${opt_use_relstages}" == ":" ]]; then
-                opt_use_relstages=":${UsedReleaseStages}:"
-	fi
-
-	if [[ ${#modules[@]} == 0 ]]; then
-		modules+=( '' )
-	fi
+	[[ "${opt_use_relstages}" == ":" ]] && opt_use_relstages=":${UsedReleaseStages}:"
+	[[ ${#modules[@]} == 0 ]] && modules+=( '' )
 
 	local -- module=''
-	if [[ "${search_range}" == 'all' || "${search_range}" == 'inside' ]]; then
-		# search inside the Pmodules hierarchy
-		# search in all groups if search is not limited
-		if (( ${#groups[@]} == 0 )); then
-			groups=( "${!GroupDepths[@]}" )
-		fi
-		for module in "${modules[@]}"; do
-			[[ ${opt_glob} == 'no' ]] && module+="*"
-			for group in "${groups[@]}"; do
-				# loop over all directories which can be added to
-				# MODULEPATH inside current group
-				local -i depth=${GroupDepths[${group}]}
-				local s=''
-				if (( depth > 0 )); then
-					s=$(printf '/*%.0s' $(seq 1 ${depth}))
-				fi
-				modulepath=( ${src_prefix[@]/%//${group}/modulefiles$s} )
-				search "${module}" "${group}" "${modulepath[@]}"
-			done
-		done
-	fi
+	for module in "${modules[@]}"; do
+		[[ ${opt_glob} == 'no' ]] && module+="*"
+		local -a modulepath=()
 
-	if [[ "${search_range}" == 'all' || "${search_range}" == 'outside' ]]; then
-		# search outside the Pmodules hierarchy
-		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
-		local -a dirs=()
-		local -- dir=''
-		for dir in "${modulepath[@]}"; do
-			# skip all directories in Pmodules hierarchy
-			local -- ol_name=''
-			local -- install_root=''
-			for ol_name in "${Overlays[@]}"; do
-				install_root="${OverlayInfo[${ol_name}:install_root]}"
-				[[ "${dir}" == "${install_root}"/* ]] && continue 2
+		# search in overlays with layout 'Spack'
+		for ol_name in "${UsedOverlays[@]}"; do
+			[[ "${OverlayInfo[${ol_name}:layout]}" != 'Spack' ]] && break
+			local -- path=''
+			if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
+				path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
+			elif [[ ":${UsedReleaseStages}:" == *:deprecated:* ]]; then
+				path="${OverlayInfo[${ol_name}:modulepath_deprecated]}"
+			else
+				path="${OverlayInfo[${ol_name}:modulepath_stable]}"
+			fi
+			[[ -z "${path}" ]] && path="${OverlayInfo[${ol_name}:modulepath]}"
+			[[ -z "${path}" ]] && continue
+			local -a modulepath=()
+			IFS=':' read -r -a modulepath <<<"${path}"
+			local -- dir=''
+			# remove last directory
+			for dir in "${modulepath[@]}"; do
+				modulepath+=( "${dir%/*}" )
 			done
-			# add moduledir outside Pmodules hierarchy
-			dirs+=( "${dir}" )
 		done
-		for module in "${modules[@]}"; do
-			[[ ${opt_glob} == 'no' ]] && module+="*"
-			search "${module}" 'other' "${dirs[@]}"
+
+		# search in overlays with layout 'Pmodules'
+		for group in "${!GroupDepths[@]}"; do
+			for ol_name in "${UsedOverlays[@]}"; do
+				[[ "${OverlayInfo[$ol_name:layout]}" != 'Pmodules' ]] && continue
+				local -- dir=''
+				dir="${OverlayInfo[${ol_name}:modulefiles_root]}/${group}/${__MODULEFILES_DIR__}"
+				[[ -r "${dir}" ]] && modulepath+=( "${dir}" )
+			done
 		done
-	fi
+
+		# search directories in modulpath outside overlays
+		local -a dirs
+		IFS=':' read -r -a dirs <<<"${MODULEPATH}"
+		for dir in "${dirs[@]}"; do
+			local -- ol=''
+			local -- grp=''
+			find_overlay ol grp "${dir}" && continue
+			[[ -r "${dir}" ]] && modulepath+=( "${dir}" )
+		done
+
+		search "${module}" "${modulepath[@]}"
+	done
 	print_result
+
+	# empty tmp file
 	echo -n '' > ${TmpFile}
 }
 
@@ -3951,9 +3881,7 @@ if [[ "${Version}" != "${PMODULES_VERSION}" ]]; then
 	Version="${PMODULES_VERSION}"
 	vars_to_be_exported['PMODULES_ENV']=1
 fi
-#if [[ ! -v OverlayInfo[base:has_groups] ]]; then
-#	pm::read_config
-#fi
+
 if [[ -z "${UsedGroups}" ]]        || \
 	   [[ -z "${UsedReleaseStages}" ]] || \
 	   (( ${#UsedOverlays[@]} == 0 )); then
