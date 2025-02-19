@@ -851,6 +851,27 @@ pbuild.build_module_yaml(){
 	local -- module_name="$1"
 	local -- module_version="$2"
 	ModuleConfig="$3"
+
+	eval $( "${modulecmd}" bash purge )
+	unset	C_INCLUDE_PATH
+	unset	CPLUS_INCLUDE_PATH
+	unset	CPP_INCLUDE_PATH
+	unset	LIBRARY_PATH
+	unset	LD_LIBRARY_PATH
+	unset	DYLD_LIBRARY_PATH
+
+	unset	CFLAGS
+	unset	CPPFLAGS
+	unset	CXXFLAGS
+	unset	LIBS
+	unset	LDFLAGS
+
+	unset	CC
+	unset	CXX
+	unset	FC
+	unset	F77
+	unset	F90
+
 	local -- module_relstage="${ModuleConfig['relstage']}"
 	if [[ -n "${ModuleConfig['systems']}" ]]; then
 		readarray -t Systems <<< "${ModuleConfig['systems']}"
