@@ -1237,14 +1237,20 @@ get_available_modules() {
 			fi
 			[[ "${add}" == 'no' ]] && continue
 			local -A cfg=()
-			get_module_config cfg "${dir}" "${rel_modulefile}"
+			local -- relstage='stable'
 			if [[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]]; then
+				get_module_config cfg "${dir}" "${rel_modulefile}"
 				is_available cfg "${relstages}" || continue
-				result+=( "${mod}" "${cfg['relstage']}" "${dir}" "${rel_modulefile}" "${ol}" "${group}" )
+				relstage="${cfg['relstage']}"
+			elif [[ "${OverlayInfo[${ol}:layout]}" == 'Spack' ]]; then
+				if [[ ":${UsedReleaseStages}:" =~ :unstable: ]]; then
+					relstage='unstable'
+				fi
 			else
+				get_module_config cfg "${dir}" "${rel_modulefile}"
 				is_available cfg "${ReleaseStages}" || continue
-				result+=( "${mod}" 'stable' "${dir}" "${rel_modulefile}" "${ol}" "${group}" )
 			fi
+			result+=( "${mod}" "${relstage}" "${dir}" "${rel_modulefile}" "${ol}" "${group}" )
                         ref_modules[${mod}]=1
 		done < <(${find} -L "${dir}" \
 				 -not -name ".*" \
