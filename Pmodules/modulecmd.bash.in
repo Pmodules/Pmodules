@@ -76,6 +76,8 @@ declare -r TmpFile
 HostName=$(${hostname} -f)
 declare -r HostName
 
+declare -r CMD='module'
+declare -- SubCommand=''
 declare -A Subcommands=()
 declare -A Options=()
 declare -A Help=()
@@ -179,8 +181,7 @@ export_env() {
 		done
 	}
 	[[ -v vars_to_be_exported['PMODULES_ENV'] ]] && save_env
-	[[ -v export_functions[${Shell}] ]] || \
-		std::die 1 "Unsupported shell -- ${Shell}"
+	[[ -v export_functions[${Shell}] ]] || die_args_unsupported_shell "${Shell}"
 	${export_functions[${Shell}]} "${!vars_to_be_exported[@]}"
 }
 
@@ -194,51 +195,64 @@ _exit() {
 }
 trap '_exit' EXIT
 
-declare -r CMD='module'
-declare    SubCommand=''
-die_missing_arg(){
+#..............................................................................
+# Error messages
+die_args_unsupported_shell(){
+	std::die 1 "${CMD}: unsupported shell -- $1"
+}
+
+die_args_subcmd_missing(){
+	std::die 1 "${CMD}: no sub-command specified."
+}
+
+die_args_invalid_subcmd(){
+	std::die 1 "${CMD}: unknown sub-command -- $1"
+}
+
+die_args_missing(){
 	std::die 3 "%s %s: %s\n" \
                  "${CMD}" "${SubCommand}" 'missing argument'
 }
 
-die_too_many_args(){
+die_args_too_many(){
 	std::die 3 "%s %s: %s\n" \
                  "${CMD}" "${SubCommand}" 'too many arguments'
 }
 
-die_no_args_allowed(){
+die_args_not_allowed(){
 	std::die 3 "%s %s: %s\n" \
                  "${CMD}" "${SubCommand}" "no arguments allowed"
 }
 
-die_wrong_number_of_args(){
-	std::die 1 "%s %s: %s\n" \
-                 "${CMD}" "${SubCommand}" "wrong number of arguments"
+die_args_wrong_number(){
+                "${CMD}" "${SubCommand}" "invalid option" "$1"
 }
 
-die_illegal_opt(){
-	std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${SubCommand}" "illegal option" "$1"
-}
-
-die_illegal_arg(){
-	std::die 3 "%s %s: %s -- %s\n" \
+die_args_invalid_for_subcmd_use(){
+	std::die 1 "%s %s: %s -- %s\n" \
                  "${CMD}" "${SubCommand}" "invalid argument" "$1"
 }
 
-die_illegal_group(){
-        std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${SubCommand}" "invalid group name" "$1"
+die_args_invalid_value(){
+	std::die 1 "%s %s: %s -- %s" \
+                 "${CMD}" 'search' \
+                 "invalid value for option '$1'" \
+                 "$2"
 }
 
-die_illegal_relstage(){
+die_grp_invalid(){
         std::die 3 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${SubCommand}" "invalid release stage" "$1"
+                 "${CMD}" "${SubCommand}" "invalid group" "$1"
 }
 
-die_cannot_remove_grp(){
+die_grp_cannot_be_removed(){
         std::die 3 "%s %s: %s -- %s\n" \
                  "${CMD}" "${SubCommand}" "cannot remove group due to loaded modules" "$1"
+}
+
+die_relstage_invalid(){
+        std::die 3 "%s %s: %s -- %s\n" \
+                 "${CMD}" "${SubCommand}" "invalid release stage" "$1"
 }
 
 die_module_unavail(){
@@ -251,69 +265,85 @@ die_module_nexist(){
                  "${CMD}" "${SubCommand}" "$1"
 }
 
-die_invalid_value(){
-	std::die 1 "%s %s: %s -- %s\n" \
-                 "${CMD}" "${SubCommand}" "invalid string for $1" "$2"
-}
-
-die_conflict(){
+die_module_conflict(){
 	std::die 3 "%s %s: %s -- %b\n" \
 		 "${CMD}" "${SubCommand}" \
                  "module conflicts with already loaded modules" "$1"
 }
 
-die_cmd_failed(){
+die_module_cmd_failed(){
 	std::die 3 "%s %s: %s" \
                  "${CMD}" "${SubCommand}" \
                  "failed"
 }
 
-die_cannot_use_overlay(){
-	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${SubCommand}" \
-		 "overlay cannot be added since some modules are already loaded!" "$1"
-}
-
-die_not_a_modulefile(){
+die_module_not_a_modulefile(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "not a modulefile" "$1"
 }
 
-die_cannot_create_directory(){
-	std::die 3 "%s %s: %s -- %s" \
-		 "${CMD}" "${SubCommand}" \
-		 "cannot create directory" "$1"
-}
-
-die_cannot_save_collection(){
+die_col_cannot_be_saved(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "cannot save_collection" "$1"
 }
 
-die_invalid_collection_name(){
+die_col_invalid_name(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "invalid collection name" "$1"
 }
 
-die_collection_doesnt_exist(){
+die_col_doesnt_exist(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "collection doesn't exist or isn't readable" "$1"
 }
 
-die_removing_collection_failed(){
+die_col_cannot_be_removed(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "cannot remove collection" "$1"
+}
+
+die_ol_cannot_be_added(){
+	std::die 3 "%s %s: %s -- %s" \
+		 "${CMD}" "${SubCommand}" \
+		 "overlay cannot be added since some modules are already loaded!" "$1"
 }
 
 die_ol_conflict(){
 	std::die 3 "%s %s: %s -- %s" \
 		 "${CMD}" "${SubCommand}" \
 		 "Overlay '$1' conflicts with" "$2"
+}
+
+die_ol_cannot_be_removed(){
+	std::die 3 "%s %s: %s" \
+		 "${CMD}" "${SubCommand}" \
+		 "overlay cannot be removed since some modules are still loaded!"
+}
+
+die_ol_cannot_remove_base(){
+        std::die 3 "%s %s: %s" \
+                 "${CMD}" "${SubCommand}" \
+                 "cannot remove base overlay!"
+}
+
+die_ol_not_used(){
+	std::die 3 "%s %s: %s -- %s" \
+                 "${CMD}" "${SubCommand}" \
+                 "not an used overlay" \
+                 "$1"
+}
+
+die_ol_not_on_top_of_stack(){
+	std::die 3 "%s %s: %s %s -- %s" \
+		 "${CMD}" "${SubCommand}" \
+		 "overlay cannot be removed since" \
+		 "it is not on top of the stack" \
+		 "$1"
 }
 
 #..............................................................................
@@ -537,7 +567,7 @@ subcommand_generic0() {
 		shift 1
 	done
         (( ${#args[@]} == 0 )) || \
-		die_no_args_allowed
+		die_args_not_allowed
 	"${modulecmd}" "${Shell}" "${SubCommand}"
 }
 #..............................................................................
@@ -563,9 +593,9 @@ subcommand_generic1() {
 		shift
 	done
 	(( ${#args[@]} == 0 )) && \
-		die_missing_arg
+		die_args_missing
 	(( ${#args[@]} > 1 )) && \
-		die_too_many_args
+		die_args_too_many
 	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
 #..............................................................................
@@ -591,7 +621,7 @@ subcommand_generic1plus() {
 		shift
 	done
 	(( ${#args[@]} == 0 )) && \
-		die_missing_arg
+		die_args_missing
 	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
 #..............................................................................
@@ -806,7 +836,7 @@ subcommand_load() {
 		shift
 	done
 	(( ${#args[@]} == 0 )) && \
-		die_missing_arg
+		die_args_missing
         if [[ ! -v LOADEDMODULES ]]; then
 		LOADEDMODULES=''
 		_LMFILES_=''
@@ -890,7 +920,7 @@ subcommand_load() {
 			if [[ -n ${LOADEDMODULES} ]]; then
 				if std::version_lt "${new_version}" '1.1.22' || \
 						std::version_lt "${Version}" '1.1.22'; then
-					die_conflict "${m}"
+					die_module_conflict "${m}"
 				fi
 				Version="${new_version}"
 			fi
@@ -933,8 +963,8 @@ subcommand_load() {
 		if [[ "${error}" == *:ERROR:* ]]; then
 			local s=${error%%$'\n'*}
                         [[ "$s" =~ ' conflicts ' ]] && \
-				die_conflict "${m}"
-			die_cmd_failed "${m}"
+				die_module_conflict "${m}"
+			die_module_cmd_failed "${m}"
 		fi
                 if [[ "${Shell}" == "sh" ]]; then
 			# for sh-like shells just echo 
@@ -1008,7 +1038,7 @@ subcommand_unload() {
 				break
 				;;
 			-* )
-				die_illegal_opt "$1"
+				die_args_invalid_opt "$1"
 				;;
 
 			* )
@@ -1018,7 +1048,7 @@ subcommand_unload() {
 		shift
 	done
 	(( ${#args[@]} == 0 )) && \
-	        die_missing_arg
+	        die_args_missing
 	
 	# The module() function uses PMODULES_HOME to call modulecmd.
 	# If a Pmodules module is unloaded this evnvironment variable
@@ -1047,7 +1077,7 @@ subcommand_unload() {
 			continue
 		fi
 		# yes, module has been loaded
-		is_modulefile modulecmd "${lmfile}" || die_not_a_modulefile "${arg}"
+		is_modulefile modulecmd "${lmfile}" || die_module_not_a_modulefile "${arg}"
 
 	        local output=''
 		output=$("${modulecmd}" 'bash' 'unload' "${arg}")
@@ -1127,9 +1157,9 @@ subcommand_swap() {
 		shift
 	done
 	(( ${#args[@]} == 0 )) && \
-		die_missing_arg
+		die_args_missing
         (( ${#args[@]} > 2 )) && \
-                die_too_many_args
+                die_args_too_many
 
         if (( ${#args[@]} == 1 )); then
                 local -r module_to_load=${args[0]}
@@ -1177,7 +1207,7 @@ subcommand_show() {
 		shift
 	done
         (( ${#args[@]} == 0 )) && \
-		die_missing_arg
+		die_args_missing
 
         local arg
 	for arg in "${args[@]}"; do
@@ -1406,7 +1436,7 @@ find_modulefile(){
 		fi
 	fi
 
-	is_modulefile modulecmd "${ref_modulefile}" || die_not_a_modulefile "${modulename}"
+	is_modulefile modulecmd "${ref_modulefile}" || die_module_not_a_modulefile "${modulename}"
 	if [[ "${ref_interp}" == "${Lmod_cmd}" ]]; then
 		# Lmod doesn't support full qualified path names!
 		ref_modulefile="${ref_modulefile/${ref_moduledir}\/}"
@@ -1890,7 +1920,7 @@ subcommand_use() {
 			
 			[[ -n "${LOADEDMODULES}" ]] && \
 				[[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]] && \
-				die_cannot_use_overlay "${ol_name}"
+				die_ol_cannot_be_added "${ol_name}"
 
 			[[ ${OverlayInfo[${ol_name}:used]} == 'yes' ]] && return 0
 
@@ -1957,7 +1987,7 @@ subcommand_use() {
                 use_group() {
 			# die if argument is a hierarchical group
 			(( ${GroupDepths[${arg}]} > 0 )) && \
-				die_illegal_group "${arg}"
+				die_grp_invalid "${arg}"
 
 			std::append_path UsedGroups "$1"
                         local -- ol_name
@@ -2004,8 +2034,7 @@ subcommand_use() {
 			fi
                         return ${rc}
 		fi
-		die_invalid_value "use flag, group, overlay or directory" \
-                         "${arg}"
+		die_args_invalid_for_subcmd_use "${arg}"
 	} # use ()
 
 	#......................................................................
@@ -2082,30 +2111,17 @@ subcommand_unuse() {
 
 			if [[ -n "${LOADEDMODULES}" ]] && \
 				   [[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]]; then
-				std::die 3 "%s %s: %s %s" \
-					   "${CMD}" "${SubCommand}" \
-					   "overlay cannot be removed since" \
-					   "some modules are still loaded!"
+				die_ol_cannot_be_removed
 			fi
 
-                        [[ "${OverlayInfo[${ol_name}:modulefiles_root]}" == "${PMODULES_HOME%%/Tools*}" ]] && \
-                                std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${SubCommand}" \
-                                         "cannot remove base overlay" \
-                                         "${ol_name}"
+                        [[ "${ol_name}" == 'base' ]] && \
+				die_ol_cannot_remove_base
 			[[ "${OverlayInfo[${ol_name}:used]}" !=  'yes' ]] && \
-                                std::die 3 "%s %s: %s -- %s" \
-                                         "${CMD}" "${SubCommand}" \
-                                         "not an used overlay" \
-                                         "${ol_name}"
+				die_ol_not_used "${ol_name}"
 			# make sure first index is '0' (it should, but you never know)
 			UsedOverlays=( "${UsedOverlays[@]}" )
 			[[ "${ol_name}" != "${UsedOverlays[0]}" ]] && \
-				std::die 3 "%s %s: %s %s -- %s" \
-					 "${CMD}" "${SubCommand}" \
-					 "overlay cannot be removed since" \
-					 "it not on top of the stack" \
-					 "${ol_name}"
+				die_ol_not_on_top_of_stack "${ol_name}"
 
 			OverlayInfo[${ol_name}:used]='no'
 			UsedOverlays=( "${UsedOverlays[@]:1}")
@@ -2178,22 +2194,13 @@ subcommand_unuse() {
 
 		#..............................................................
                 unuse_group() {
-                        if (( ${GroupDepths[${arg}]} > 0 )); then
-				# argument is a hierarchical group in our root
-				std::die 3 "%s %s: %s -- %s" \
-					 "${CMD}" "${SubCommand}" \
-					 "illegal group" \
-					 "${arg}"
-			fi
+                        (( ${GroupDepths[${arg}]} > 0 )) && \
+				die_grp_invalid "${arg}"
 
 			if [[ -v PMODULES_LOADED_${arg^^} ]]; then 
 				local var="PMODULES_LOADED_${arg^^}"
-				if [[ -n "${!var}" ]]; then
-					std::die 3 "%s %s: %s -- %s" \
-						 "${CMD}" "${SubCommand}" \
-						 "cannot remove group due to loaded modules" \
-						 "${arg}"
-				fi
+				[[ -n "${!var}" ]] && \
+					die_grp_cannot_be_removed "${arg}"
 			fi
                         std::remove_path UsedGroups "${arg}"
                         local overlay
@@ -2227,11 +2234,7 @@ subcommand_unuse() {
                         unuse_group "${arg}"
                         return 0
                 fi
-
-		std::die 3 "%s %s: %s -- %s" \
-                         "${CMD}" "${SubCommand}" \
-                         "invalid keyword, group, overlay or directory" \
-                         "${arg}"
+		die_args_invalid_for_subcmd_use "${arg}"
         } # unuse()
 
 	#......................................................................
@@ -2252,11 +2255,7 @@ subcommand_unuse() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${SubCommand}" \
-                         'missing argument'
-	fi
+	(( ${#args[@]} == 0 )) && die_args_missing
         for arg in "${args[@]}"; do
                 unuse "${args[@]}"
         done
@@ -2437,7 +2436,7 @@ subcommand_purge() {
 				break
 			        ;;
 			-* )
-				die_illegal_opt "$1"
+				die_args_invalid_opt "$1"
 				;;
 		        * )
 			        args+=( "$1" )
@@ -2445,7 +2444,7 @@ subcommand_purge() {
 		esac
 		shift
 	done
-        (( ${#args[@]} > 0 ))  && die_no_args_allowed
+        (( ${#args[@]} > 0 ))  && die_args_not_allowed
 
 	# get list of loaded modules with stripped MODULEPATH
 	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
@@ -2553,7 +2552,7 @@ subcommand_list() {
 				break
 				;;
 			-* )
-				die_illegal_opt "$1"
+				die_args_invalid_opt "$1"
 				;;
 			* )
                                 args+=( "$1" )
@@ -2561,11 +2560,8 @@ subcommand_list() {
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${SubCommand}" \
-                         "no arguments allowed"
-        fi
+        (( ${#args[@]} > 0 )) && \
+		die_args_not_allowed
 
 	"${output_function}"
 }
@@ -2599,11 +2595,8 @@ subcommand_clear() {
 		esac
 		shift
 	done
-        if (( ${#args[@]} > 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${SubCommand}" \
-                         "no arguments allowed"
-        fi
+        (( ${#args[@]} > 0 )) && die_args_not_allowed
+
 	pmodules_setup 'init'
 }
 
@@ -2905,10 +2898,7 @@ subcommand_search() {
                                         local arg=${1/--release=}
                                 fi
 				is_release_stage "${arg}" || \
-				        std::die 1 "%s %s: %s -- %s" \
-                                                 "${CMD}" 'search' \
-                                                 "illegal release stage" \
-                                                 "${arg}"
+					die_relstage_invalid "${arg}"
 				opt_use_relstages+="${arg}:"
 				;;
 			--with | --with=* )
@@ -2919,10 +2909,7 @@ subcommand_search() {
                                         local arg=${1/--with=}
                                 fi
 				if [[ -z ${arg} ]] || [[ "${arg}" == -* ]]; then
-				        std::die 1 "%s %s: %s -- %s" \
-                                                 "${CMD}" 'search' \
-                                                 "illegal value for --with option" \
-                                                 "${arg}"
+					die_args_invalid_value '--with' "${arg}"
 				fi
                                 arg=${arg//:/ }
                                 arg=${arg//,/ }
@@ -3205,15 +3192,11 @@ subcommand_apropos() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} == 0 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${SubCommand}" \
-                         "no search string specified"
-	elif (( ${#args[@]} > 1 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${SubCommand}" \
-                         "more then one search string specified"
-	fi
+	(( ${#args[@]} == 0 )) && \
+		die_args_missing
+	(( ${#args[@]} > 1 )) && \
+		die_args_too_many
+
 	local arg="${args[0]}"
 	local group=''
 	for group in "${!GroupDepths[@]}"; do
@@ -3295,10 +3278,10 @@ subcommand_save(){
 		esac
 		shift
 	done
-        (( ${#args[@]} > 1 )) && die_too_many_args
+        (( ${#args[@]} > 1 )) && die_args_too_many
 
 	[[ ${args[0]:0:1} =~ [0-9a-zA-Z] ]] || \
-		die_invalid_collection_name "${args[0]}"
+		die_col_invalid_name "${args[0]}"
 
 	local -- basedir="${UsrCollectionsDir}"
 	if [[ "${opt_system}" == 'yes' ]]; then
@@ -3357,7 +3340,7 @@ subcommand_save(){
 
 	# save collection
 	echo -e "$s" > "${collection}" || \
-		die_cannot_save_collection "${collection}"
+		die_col_cannot_be_saved "${collection}"
 }
 
 ##############################################################################
@@ -3411,7 +3394,7 @@ subcommand_restore() {
 		esac
 		shift
 	done
-        (( ${#args[@]} > 1 )) && die_too_many_args
+        (( ${#args[@]} > 1 )) && die_args_too_many
 
 	(( ${#args[@]} == 0 )) && args=( 'default' )
 	local -- path=''
@@ -3586,9 +3569,9 @@ subcommand_saverm() {
 	for collection in "${args[@]}"; do
 		search_collection path "${collection}"
 		test -e "${path}/${collection}" || \
-			die_collection_doesnt_exist "${collection}"
+			die_col_doesnt_exist "${collection}"
 		${rm} -f "${path}/${collection}" 2>/dev/null || \
-			die_removing_collection_failed "${collection}"
+			die_col_cannot_be_removed "${collection}"
 		# remove directories if empty
 		${rmdir} -p "${path}/${collection%%/*}" 2>/dev/null
 	done
@@ -3633,7 +3616,7 @@ subcommand_saveshow() {
 	for collection in "${args[@]}"; do
 		search_collection path "${collection}"
 		test -e "${path}/${collection}" || \
-			die_collection_doesnt_exist "${collection}"
+			die_col_doesnt_exist "${collection}"
 		std::info "Collection '${collection}':"
 		cat "${path}/${collection}" 1>&2
 	done
@@ -3745,11 +3728,8 @@ subcommand_initswitch() {
 		esac
 		shift
 	done
-	if (( ${#args[@]} != 2 )); then
-	        std::die 3 "%s %s: %s" \
-                         "${CMD}" "${SubCommand}" \
-                         "two arguments required not less not more"
-	fi
+	(( ${#args[@]} != 2 )) && \
+		die_args_wrong_number
 	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
 
@@ -3808,7 +3788,7 @@ case "$1" in
 		declare Shell='python'
 		;;
 	* )
-		std::die 1 "${CMD}: unsupported shell -- $1"
+		die_args_unsupported_shell "$1"
 		;;
 esac
 shift
@@ -3849,14 +3829,8 @@ while (( $# > 0 )); do
 	shift
 done
 
-if [[ -z "${SubCommand}" ]]; then
-	std::die 1 "${CMD}: no sub-command specified."
-fi
-
-if [[ ! -v Subcommands[${SubCommand}] ]]; then
-	std::die 1 "${CMD}: unknown sub-command -- ${SubCommand}"
-fi
-
+[[ -z "${SubCommand}" ]] && die_args_subcmd_missing
+[[ -v Subcommands[${SubCommand}] ]] || die_args_invalid_subcmd "${SubCommand}"
 
 # We (re-)initialise the Pmodules system, if
 # PMODULES_ENV or MODULEPATH was not set/is empty
