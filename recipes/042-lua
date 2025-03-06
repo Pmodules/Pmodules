@@ -3,7 +3,7 @@
 # https://
 #
 P=lua
-V=${LUA_VERSION:-5.4.6}
+V=${LUA_VERSION:-5.4.7}
 FNAME="$P-$V.tar.gz"
 DOWNLOAD_URL="http://www.lua.org/ftp/$P-$V.tar.gz"
 
