@@ -758,52 +758,6 @@ subcommand_load() {
 	}
 
 	#......................................................................
-	# Check whether argument is a group.
-	#
-	# In the following function we test whether the group exist in
-	# an overlay. It doesn't matter which overlay. If we find an
-	# overlay providing modules for this group, we compute the
-	# hierarchical depth of the group and save this value for later
-	# use.
-	#
-	# Args:
-	#       $1: group
-	#
-	# Notes:
-	# This function is used with extended module names.
-	#
-	# Multiple overlays may provide modules for the same group. But the
-	# hierarchical depth of a group must always be the same.
-	#
-	is_group () {
-		find_overlay_with_group(){
-			local -n _ol="$1"
-			local -r group="$2/${__MODULEFILES_DIR__}"
-			local ol
-			for ol in "${UsedOverlays[@]}"; do
-				local install_root="${OverlayInfo[${ol}:install_root]}"
-				if [[ -d "${install_root}/${group}" ]]; then
-					_ol="${ol}"
-					return 0
-				fi
-			done
-			return 1
-		}
-
-		local -r group="$1"
-		# arg isn't emtpy and group already in cache
-		[[ -n ${group} ]] && [[ -v GroupDepths[${group}] ]] && return 0
-
-		local ol=''
-		find_overlay_with_group ol "${group}" || return 1
-		local moduledir="${OverlayInfo[${ol}:modulefiles_root]}/${group}/${__MODULEFILES_DIR__}"
-		local -i depth
-		compute_group_depth depth "${moduledir}" || return 1
-		GroupDepths[${group}]=${depth}
-		vars_to_be_exported['PMODULES_ENV']=1
-	}
-
-	#......................................................................
 	local args=()
 	local opts=()
         local overlay
@@ -844,62 +798,41 @@ subcommand_load() {
 
         local m=''
 	for m in "${args[@]}"; do
-		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 		if [[ "$m" == *:* ]]; then
-
-			# extendet module name is either
-			# - group:name or
-			# - group:name:relstage or
-			# - relstage:name or
-			# - relstage:group:name or
-			# - name:stage
-
 			local -a toks=()
 			IFS=':' read -r -a toks <<< "${m}"
-			local group=''
-			local relstage=''
-			if is_group "${toks[0]}"; then
-				group=${toks[0]}
-				m=${toks[1]}
-				relstage=${toks[2]}
-			elif is_release_stage "${toks[0]}"; then
-				relstage=${toks[0]}
-				if is_group "${toks[1]}"; then
-					group=${toks[1]}
-					m=${toks[2]}
-				else
-					m=${toks[1]}
-					group=${toks[2]}
-				fi
+			local -- group=''
+			local -- relstage=''
+			if (( ${#toks[@]} > 3 )); then
+				: # invalid name
+			elif (( ${#toks[@]} == 3 )); then
+				group="${toks[0]}"
+				[[ -v GroupDepths[${group}] ]] || \
+					die_grp_invalid
+				m="${toks[1]}"
+				relstage="${toks[2]}"
 			else
-				m=${toks[0]}
-				if is_group "${toks[1]}"; then
-					group=${toks[1]}
-					relstage=${toks[2]}
+				if [[ -v GroupDepths[${toks[0]}] ]]; then
+					group="${toks[0]}"
+					m="${toks[1]}"
 				else
-					relstage=${toks[1]}
-					group=${toks[2]}
+					m="${toks[0]}"
+					relstage="${toks[1]}"
 				fi
 			fi
 			if [[ -n ${group} ]]; then
-				is_group "${group}" || \
-                                        die_illegal_group "${group}"
 				local -i depth=${GroupDepths[${group}]}
 				(( depth != 0 )) && \
-					die_illegal_group "${group}"
-				group+="/${__MODULEFILES_DIR__}"
-                                for overlay in "${UsedOverlays[@]}"; do
-					local modulefiles_root="${OverlayInfo[${overlay}:modulefiles_root]}"
-				        modulepath=( "${modulefiles_root}/${group}" "${modulepath[@]}" )
-                                done
+					die_grp_invalid "${group}"
+				subcommand_use "${group}"
 			fi
 			if [[ -n ${relstage} ]]; then
 			        is_release_stage "${relstage}" || \
-                                        die_illegal_relstage "${relstage}"
-				std::append_path UsedReleaseStages "${relstage}"
-                                vars_to_be_exported['PMODULES_ENV']=1
+                                        die_relstage_invalid "${relstage}"
+				subcommand_use "${relstage}"
 			fi
 		fi # handle extended module names
+		IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
 		local moduledir=''
                 find_modulefile \
 			current_modulefile \
