@@ -382,6 +382,7 @@ get_module_config(){
 	ref_cfg['blocklist']=''
 
 	local -r config_file="${modulefile%/*}/.config-${modulefile##*/}"
+	local -r relstage_file="${modulefile%/*}/.release-${modulefile##*/}"
 	if [[ ! -r ${config_file} ]]; then
 		local -- ol_name=''
 		local -- group=''
@@ -515,14 +516,14 @@ is_modulefile() {
 	[[ -f "${fname}" && -r "${fname}" ]] || return 2
 	
 	if [[ "${fname##*.}" == 'lua' ]]; then
-		im_interp="${Lmod_cmd}"
+		ref_intrp="${Lmod_cmd}"
 		return 0
 	fi
 	local -- shebang
 	read -r -n 11 shebang < "${fname}"
 	if [[ "${shebang:0:8}" == '#%Module' ]] \
 		   || [[ "${shebang:0:9}" == '#%Pmodule' ]]; then
-		im_interp="${Tcl_cmd}"
+		ref_intrp="${Tcl_cmd}"
 		return 0
 	fi
 	return 1
@@ -1842,7 +1843,7 @@ subcommand_use() {
 		#..............................................................
 		use_relstage(){
 			local -r relstage="$1"
-			[[ ":${UsedReleaseStages}" =~ :${relstage}: ]] && return 0
+			[[ ":${UsedReleaseStages}:" =~ :${relstage}: ]] && return 0
 			std::append_path UsedReleaseStages "${relstage}" || rc=$?
 
 			local -- ol_name=''
@@ -3710,11 +3711,14 @@ subcommand_initclear() {
 #
 # main
 #
-
-# parse arguments
-#
-
 (( $# > 0 )) || print_help 'help'
+
+# the debug() function will be re-defined if modulecmd is called with the
+# option '--verbose'. See below.
+debug(){
+	:
+}
+
 # first argument must be a shell!
 case "$1" in
 	sh | bash | zsh )
@@ -3732,11 +3736,8 @@ case "$1" in
 esac
 shift
 
-debug(){
-	:
-}
-
-# parse agruments till and including the sub-command
+# Parse agruments till and including the sub-command.
+# The arguments for the sub-command are parsed later.
 declare -a opts=()
 while (( $# > 0 )); do
 	case $1 in
@@ -3780,6 +3781,7 @@ else
 	eval "$("${base64}" -d <<< "${PMODULES_ENV}" 2>/dev/null)"
 fi
 
+# re-read config if Pmodules has been changed
 if [[ "${Version}" != "${PMODULES_VERSION}" ]]; then
 	pm::read_config
 	for ol_name in "${UsedOverlays[@]}"; do
@@ -3789,13 +3791,14 @@ if [[ "${Version}" != "${PMODULES_VERSION}" ]]; then
 	vars_to_be_exported['PMODULES_ENV']=1
 fi
 
+# make sure that these variables are set
 if [[ -z "${UsedGroups}" ]]        || \
 	   [[ -z "${UsedReleaseStages}" ]] || \
 	   (( ${#UsedOverlays[@]} == 0 )); then
 	pmodules_setup 
 fi
 
-# we need to handle help text and options for sub-cmd aliases
+# repace alias with the real "name"
 SubCommand=${Subcommands[${SubCommand}]}
 
 # parse arguments of the sub-command and call it
