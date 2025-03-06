@@ -258,6 +258,7 @@ parse_path_config(){
 	yml::get_seq_length l yaml .
 	local -i i=0
 	for ((i=0; i<l; i++)); do
+		local -a target_cpus=()
 		local -- node=".[$i]"
 		local -a keys=()
 		yml::get_keys keys yaml "${node}"
@@ -270,25 +271,32 @@ parse_path_config(){
 						yaml \
 						"${node}.${key}" || \
 						yml::die_parsing "${yaml}"
-					set -o noglob
-					local -a target_cpus=( "${str,,}" )
-					set +o noglob
+					readarray -t target_cpus <<<${str}
 					local -- system_cpu=$(uname -p)
 					local -- cpu=''
+					local -- found='no'
 					for cpu in "${target_cpus[@]}"; do
-						if [[ ${cpu} != 'any' && ${cpu} != ${system_cpu} ]]; then
-							break 2
+						if [[ ${cpu} == ${system_cpu} ]]; then
+							found='yes'
+							break 1
 						fi
 					done
+					[[ ${found} == 'no' ]] && break 1
 					;;
 				modulepath | modulepath_unstable | modulepath_stable | modulepath_deprecated)
 					local -- str=''
 					yml::get_seq str yaml "${node}.${key}" '!!seq'
 					local -a tmp_array=()
 					readarray -t tmp_array <<<${str}
-					local modulepath=''
-					printf -v modulepath "%s:" "${tmp_array[@]}"
-					OverlayInfo[${ol_name}:${key}]=$(${envsubst} <<< "${modulepath%:}")
+					local -- modulepath=''
+					local -- dir=''
+					export target_cpu=''
+					for dir in "${tmp_array[@]}"; do
+						for target_cpu in "${target_cpus[@]}"; do
+							std::append_path modulepath $(${envsubst} <<< "${dir}")
+						done
+					done
+					OverlayInfo[${ol_name}:${key}]="${modulepath}"
 					OverlayInfo[${ol_name}:has_additional_modulepaths]='true'
 					;;
 			esac
@@ -301,7 +309,6 @@ pm::read_config(){
 	Read Pmodules configuration files '${PMODULES_ROOT}/config/Pmodules.yaml'
 	and '${HOME}/.Pmodules/Pmodules.yaml'.
 	"
-
 	get_config_of_overlay(){
 		: "
 		Get configuration of an overlay.
