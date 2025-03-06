@@ -33,7 +33,7 @@ declare -r Tcl_cmd="${PMODULES_HOME}/libexec/modulecmd.bin"
 declare -r Lmod_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod"
 declare -- modulecmd="${Tcl_cmd}"
 
-# we have to use the orignal path. Otherwise module load doesn't work.
+# we have to use the original path. Otherwise module load doesn't work.
 PATH="${path_orig}"
 unset path_orig
 unset mydir
@@ -96,25 +96,19 @@ VERSION = @MODULES_VERSION@
 "
 
 #..............................................................................
-#
-# display help text for command given in $1
-#
 print_help() {
+	local -r __doc__='Display help text for command given in $1.'
+
         echo -e "${Help[$1]}" 1>&2
         std::die 1
 }
 
 #..............................................................................
-#
-# Save/cache state in the environment variable PMODULES_ENV. The content is
-# base64 encoded. This function is called on exit via a trap handler.
-#
-# Arguments:
-#       none
-#
 save_env() {
-	local __doc__="set PMODULES_ENV"
-
+	local -r __doc__='
+		Save/cache state in the environment variable PMODULES_ENV.
+		The content is base64 encoded. This function is called on exit
+		via a trap handler.'
 	encode_base64(){
 		local -- os_name=''
 		os_name=$(${uname} -s)
@@ -155,10 +149,9 @@ save_env() {
 }
 
 #..............................................................................
-#
-# Export required environment variables
 declare -A vars_to_be_exported=()
 export_env() {
+	local -r __doc__='Export required environment variables.'
 	local -A export_functions=()
 	export_functions['sh']='export_env_sh'
 	export_functions['bash']='export_env_sh'
@@ -191,10 +184,9 @@ export_env() {
 	${export_functions[${Shell}]} "${!vars_to_be_exported[@]}"
 }
 
-#
-# function called on exit
-#
+#..............................................................................
 _exit() {
+	local -r __doc__='Function called on exit via trap.'
 	export_env
 	if [[ -n "${TmpFile}" ]] && [[ -e "${TmpFile}" ]]; then
 		${rm} -f "${TmpFile}" || :
@@ -324,28 +316,33 @@ die_ol_conflict(){
 		 "Overlay '$1' conflicts with" "$2"
 }
 
+#..............................................................................
 get_module_config(){
-	: "
-	Read module configuration.
+	local -r __doc__='
+		Read module configuration.
 
-	If a file '.config-<version>' exists, read configuration from this
-	file. The file must be in YAML format. The following keys are
-	supported:
+		If a file ".config-<version>" exists, read configuration from this
+		file. The file must be in YAML format. The following keys are
+		supported:
 
-	  RelStage: <relstage>
-	  Systems: <list-of-systems>
-	  Blocklist: <list-of-host-names>
+	  	RelStage: <relstage>
+	  	Systems: <list-of-systems>
+	  	Blocklist: <list-of-host-names>
 
-	If the above configuration file doesn't exist, get the release
-	stage from '.release-<version>'. Restrictions to systems or blocking
-	hosts is not possible.
+		If the above configuration file does not exist, get the release
+		stage from ".release-<version>". Restrictions to systems or
+		blocking hosts is not possible.
 
-	Note:
-	 - the release stage of a module outside our hierarchy is always
-	   'stable'.
-	 - the release stage of a module inside a Pmodules hierarchy without a
-	   config file is always 'unstable'.
-	"
+		Note:
+	 	- the release stage of a module inside a Pmodules hierarchy
+		  without a config file is always "unstable".
+	 	- the release stage of a module inside a Lmod hierarchy created
+		  by Spack depends on the used release stages:
+ 	   	  - if "unstable" is used, the release stage is "unstable"
+	   	  - otherwise it is "stable".
+	 	- the release stage of other modules without a config file is
+		  always "stable".
+	'
 	local -n ref_cfg="$1"		# [out] reference to a dictionary to return the configuration
 	local -r dir="$2"		# [in]  directory containing modulefile
 	local -r modulefile="${dir}/$3" # [in]  module name (inkl. version and/or sub-dirs)
@@ -388,13 +385,14 @@ get_module_config(){
 	return 0
 }
 
+#..............................................................................
 is_available(){
-	: "
-	Module is available if
-	- release stage is used
-	- the systems list is empty or the system is in the list
-	- the blocklist is empty or the hostname is NOT in the list
-	"
+	local -r __doc__='
+		Module is available if
+		- release stage is used
+		- the systems list is empty or the system is in the list
+		- the blocklist is empty or the hostname is NOT in the list
+	'
 	local -n ref_cfg="$1"
 	local -- relstages="$2"
 
@@ -428,21 +426,23 @@ is_available(){
 	return ${ec}
 }
 
-#
-# check whether the argument in $1 is a valid release stage.
-#
+#..............................................................................
 is_release_stage() {
+	local -r __doc__='
+	      check whether the argument in $1 is a valid release stage.	
+	'
 	[[ :${ReleaseStages}: =~ :$1: ]]
 }
 
-#
-# Check whether a given moduledir is in an used overlay.
-# If yes, return 0 otherwise return 1
-#
+#..............................................................................
 find_overlay () {
-        local -n ref_ol="$1"		# ref.var to return overlay name
-        local -n ref_group="$2"		# ref.var to return group
-	local -- path="$3"		# moduledir to check
+	local -r __doc__='
+	      Check whether a given moduledir is in an used overlay.
+	      If yes, return 0 otherwise return 1
+	'
+        local -n ref_ol="$1"		# [out] ref.var to return overlay name
+        local -n ref_group="$2"		# [out] ref.var to return group
+	local -- path="$3"		# [in]  moduledir to check
 
 	path="${path%/"${__MODULEFILES_DIR__}"*}"
 	for ol in "${UsedOverlays[@]}"; do
@@ -462,26 +462,24 @@ find_overlay () {
 	return 1
 }
 
-#
-# test whether the given file is a module file.
-#
-# - for lua: the extension must be .lua
-# - for Tcl: check shebang
-#
-# return interpreter in reference variable
-#
-# Arguments:
-#       $1      [out] ref. variable for result
-#	$2	[in]  full qualified file name to test
-#
-# Return value:
-#       0       if file exist, is readable and is either a lua or Tcl module file
-#       1       if file exist but is neither a lua or Tcl module file
-#       2       if file doesn't exist
-#
+#..............................................................................
 is_modulefile() {
-	local -n im_interp="$1"
-	local -r fname="$2"
+	local -r __doc__='
+		Test whether the given file is a module file.
+
+		- for lua: the extension must be .lua
+		- for Tcl: check shebang
+
+		return interpreter in reference variable
+
+		Return value:
+	       	0       if file exist, is readable and is either a lua or
+			Tcl module file
+	       	1       if file exist but is neither a lua or Tcl module file
+	       	2       if file does not exist
+       	'
+	local -n ref_intrp="$1"	# [out] ref. variable for result
+	local -r fname="$2"	# [in]  absolute file name to test
 	
 	# is this a regular, readable file?
 	[[ -f "${fname}" && -r "${fname}" ]] || return 2
@@ -500,32 +498,27 @@ is_modulefile() {
 	return 1
 }
 
-#
-# Get the value of <module>_PREFIX.
-#
-# Arguments:
-#	$1	reference variable to return result
-#	$2	modulefile
-#
+#..............................................................................
 get_module_prefix() {
-	local -n _prefix="$1"
-	_prefix=$("${modulecmd}" bash show "$2" 2>&1 | \
+	local -r __doc__='
+	      Get the value of <module>_PREFIX.
+	'
+	local -n ref_prefix="$1"	# [out] ref. variable to return result
+	local -- modulefile="$2"	# [in]  modulefile
+	ref_prefix=$("${modulecmd}" bash show "${modulefile}" 2>&1 | \
 			   ${awk} '/_PREFIX |_HOME / {print $3; exit}')
 }
 
+###############################################################################
+# Generic wrappers for the modulecmd (Tcl and Lmod):
 #
-# Generic wrappers of 'modulecmd':
+# The options to output help are supported.
 #
-# subcommand_generic0:
-#	no argument allowed
-# subcommand_generic1:
-#	Exact one argument must be passed
-# subcommand_generic1plus:
-#	One or more arguments must be passed
-#
-# The options to output help are always accepted.
-#
+#..............................................................................
 subcommand_generic0() {
+	local -r __doc__='
+	      Call modulecmd without arguments.
+	'
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -547,8 +540,11 @@ subcommand_generic0() {
 		die_no_args_allowed
 	"${modulecmd}" "${Shell}" "${SubCommand}"
 }
-
+#..............................................................................
 subcommand_generic1() {
+	local -r __doc__='
+	      Call modulecmd with exactly one argument.
+	'
 	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -572,8 +568,11 @@ subcommand_generic1() {
 		die_too_many_args
 	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
-
+#..............................................................................
 subcommand_generic1plus() {
+	local -r __doc__='
+	      Call modulecmd with one or more arguments.
+	'
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -595,19 +594,18 @@ subcommand_generic1plus() {
 		die_missing_arg
 	"${modulecmd}" "${Shell}" "${SubCommand}" "${args[@]}"
 }
-
-##############################################################################
+#..............................................................................
 set_lmfiles(){
-	: '
-	Set/fix the environment variable _LMFILES_ and LOADEDMODULES.
+	local -r __doc__='
+		Set/fix the environment variable _LMFILES_ and LOADEDMODULES.
 
-	Why do we have to do this?
-	- Lmod removes files from _LMFILE_ which have been loaded
-	  by the Tcl modulecmd. Even worse Lmod might unset _LMFILE_.
-	  If the modulecmd was Lmod, the Tcl module files have to
-	  be added again to _LMFILE_.
-	- After fixing _LMFILE_ we rebuild LOADEDMODULES from
-	  _LMFILE_.
+		Why do we have to do this?
+		- Lmod removes files from _LMFILE_ which have been loaded
+	  	  by the Tcl modulecmd. Even worse Lmod might unset _LMFILE_.
+	  	  If the modulecmd was Lmod, the Tcl module files have to
+	  	  be added again to _LMFILE_.
+		- After fixing _LMFILE_ we rebuild LOADEDMODULES from
+	  	  _LMFILE_.
 	'
 	if [[ ! -v _LMFILES_ ]]; then
 		declare -gx _LMFILES_=''
@@ -649,25 +647,32 @@ set_lmfiles(){
 }
 
 ##############################################################################
-#
-# load [-fsvw] <module>
-#
-# $1: module to load
-#
 Subcommands['add']='load'
 Subcommands['load']='load'
 Options['load']='-l help -o \?Hfsvw -l force -l silent -l verbose -l warn'
-Help[load]='
+Help['load']='
 USAGE:
         module add     modulefile...
         module load    modulefile...
                 Load modulefile(s) into the shell environment. Loading a
-		'group-head' will extend the MODULEPATH. E.g.: loading a
+		"group-head" will extend the MODULEPATH. E.g.: loading a
 		compiler makes additional modules like openmpi and libraries
 		compiled with this compiler available.
 '
-
+#..............................................................................
 subcommand_load() {
+	local -r __doc__='
+	      Load a module. The following formats are supported for the
+	      name of the module to be loaded:
+
+	      - name
+	      - name/version
+	      - group:name
+	      - group:name/version
+	      - group:name:relstage
+	      - group:name/version:relstage
+	      - name:relstage
+	'
 	local -- relstage='undef'
 	local -- current_modulefile=''
 	local -- prefix=''
@@ -682,7 +687,7 @@ subcommand_load() {
 	#	but not changed.
 	#
 	get_load_hints() {
-		local -n output="$1"	# ref.var to store result
+		local -n output="$1"	# [out] ref.var to return result
 		local relstage=''
 		output=''
 		while read -r -a line; do
@@ -970,26 +975,27 @@ subcommand_load() {
 }
 
 ##############################################################################
-#
-# unload
-#
 Subcommands['rm']='unload'
 Subcommands['unload']='unload'
 Options['unload']='-o \?H -l help'
-Help[unload]="
+Help['unload']='
 USAGE:
         module rm      modulefile...
         module unload  modulefile...
                 Remove modulefile(s) from the shell environment. Removing
-		a 'group-head' will also unload all modules belonging to
+		a "group-head" will also unload all modules belonging to
 		this group.
-"
-
+'
+#..............................................................................
 subcommand_unload() {
-	# :FIXME: add dependency tests: don't unload if module is required
-        #         be another module.
-        #         For the time being the modules requiring this module will
-        #         be unloaded too.
+	local -r __doc__='
+	      Unload a module.
+
+	      :FIXME:
+	      add dependency tests: do not unload if module is required
+              be another module. For the time being the modules requiring
+	      this module will be unloaded too.
+	'
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -1087,22 +1093,22 @@ subcommand_unload() {
 } # subcommand_unload
 
 ##############################################################################
-#
-# swap <module> [<module>]
-#
 Subcommands['switch']='swap'
 Subcommands['swap']='swap'
 Options['swap']='-o \?H -l help'
-Help['swap']="
+Help['swap']='
 USAGE:
         module switch  [modulefile1] modulefile2
         module swap    [modulefile1] modulefile2
 		Switch loaded modulefile1 with modulefile2. If modulefile1
 		is not specified, then it is assumed to be the currently
 		loaded module with the same base name as modulefile2.
-"
-
+'
+#..............................................................................
 subcommand_swap() {
+	local -r __doc__='
+	      Swap two modules.
+	'
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -1137,9 +1143,6 @@ subcommand_swap() {
 }
 
 ##############################################################################
-#
-# show <module>
-#
 Subcommands['display']='show'
 Subcommands['show']='show'
 Options['show']='-o \?H -l help'
@@ -1153,9 +1156,10 @@ USAGE:
 		the modulefile(s) will make if loaded.  It will not display
 		any environment changes found within conditional statements.
 '
-
+#..............................................................................
 subcommand_show() {
-	local args=()
+	local -r __doc__='Show module info.'
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
@@ -1190,21 +1194,30 @@ subcommand_show() {
 	done
 }
 
-###############################################################################
-# Find all modules in a given modulepath matching a specific string.
-# The search can be restricted to certain release stages.
-#
-# return list like
-#	modulename_1 relstage_1 modulefile_1 ...
-#
+#..............................................................................
 get_available_modules() {
-        local -n result="$1"		# reference variable to return result
-	local -r pattern="$2"		# search pattern
-	local -r relstages="$3"		# excepted release stages
-        local -n ref_modules="$4"	# dict. with available modules
-	local -n ref_modulenames="$5"	# dict. with available module names
+	local -r __doc__='
+	      Find all modules in a given modulepath matching a specific
+	      string. The search can be restricted to certain release stages.
+
+	      Return list like
+	      (
+		module_name_1
+		release_stage_1
+		directory_1
+		relative_modulefile_1
+		overlay_1
+		group_1
+		module_name_2
+		...
+	      )'
+        local -n result="$1"		# [out] reference variable to return result
+	local -r pattern="$2"		# [in]  search pattern
+	local -r relstages="$3"		# |in]  excepted release stages
+        local -n ref_modules="$4"	# [in/out] dict. with available modules
+	local -n ref_modulenames="$5"	# [in/out] dict. with available module names
 	shift 5
-	local -a dirs=("$@")		#  module path (absolute directory names)
+	local -a dirs=("$@")		#  [in] module path (absolute directory names)
 
 	local -- dir=''
 	result=()
@@ -1280,18 +1293,18 @@ get_available_modules() {
         done
 } # get_available_modules()
 
-#
-# find module(file) to load. The module name can be
-#       name
-#       name/version
-#	relative path
-#	absolute path
-#
-# Return
-#       0  if a modulefile has been found
-#       != else
-#       
+#..............................................................................       
 find_modulefile(){
+	local -r __doc__='
+	      find module(file) to load. The module name can be
+	             name
+		     name/version
+		     relative path
+		     absolute path
+
+		     Return
+		            0 if a modulefile has been found
+			    1 else'
 	local -n ref_modulefile="$1"
 	local -n ref_relstage="$2"
 	local -n ref_moduledir="$3"
@@ -1401,9 +1414,6 @@ find_modulefile(){
 }
 
 ##############################################################################
-#
-# avail [-hlt] [<module-pattern>...]
-#
 Subcommands['avail']='avail'
 Options['avail']='-l help -o \?Hahlmtg: -l all -l all-release-stages -l group: '
 Options['avail']+='-l human -l long -l machine -l terse'
@@ -1438,8 +1448,9 @@ SWITCHES:
 	-m|--machine
 		Output in machine readable format
 "
-
+#..............................................................................       
 subcommand_avail() {
+	local -r __doc__='List available modules.'
 	# use this variable in the output functions
 	local -a mods=()
 	local -- dir=''
@@ -1679,9 +1690,6 @@ subcommand_avail() {
 } # subcommand_avail()
 
 ##############################################################################
-#
-# use [-a|--append|-p|--prepend] [directory|group|release_stage...]
-#
 Subcommands['use']='use'
 Options['use']='-l help -o \?Hap -l append -l prepend'
 Help['use']="
@@ -1707,18 +1715,20 @@ SWITCHES:
                 Append/prepend agrument to module search path or list of to be
                 searched releases.
 "
-
+#..............................................................................
 set_ol_modulepaths(){
-	local -r ol_name="$1"
-	# if unstable is used:
-	#   prepend modulepath_unstable if not empty
-	#   otherwise prepend modulepath
-	# else if only stable is used
-	#   prepend modulepath_stable if not empty
-	#   otherwise prepend modulepath
-	# else if deprecated modules are available
-	#   prepend modulepath_deprecated if not empty
-	#   otherwise prepend modulepath
+	local -r __doc__='
+	      Prepend overlay specific directories to MODULEPATH.
+	      If unstable is used:
+	          prepend modulepath_unstable if not empty
+		  otherwise prepend modulepath
+	      else if only stable is used
+	          prepend modulepath_stable if not empty
+		  otherwise prepend modulepath
+	      else if deprecated modules are available
+	          prepend modulepath_deprecated if not empty
+		  otherwise prepend modulepath.'
+	local -r ol_name="$1"	# [in] name of overlay
 	local -- path=''
 	if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
 		path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
@@ -1740,8 +1750,10 @@ set_ol_modulepaths(){
 	done
 }
 
+#..............................................................................
 unset_ol_modulepaths(){
-	# remove additional directories added by overlay
+	local -r __doc__='Remove additional directories added by overlay'
+	local -r ol_name="$1"	# [in] name of overlay
 	local -- path=''
 	if [[ -n "${OverlayInfo[${ol_name}:modulepath]}" ]]; then
 		path+="${OverlayInfo[${ol_name}:modulepath]}:"
@@ -1768,7 +1780,9 @@ unset_ol_modulepaths(){
 	done
 }
 
+#..............................................................................
 subcommand_use() {
+	local -r __doc__='Implementation of the sub-command use.'
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
         local add2path_func='std::append_path'
@@ -2032,9 +2046,6 @@ subcommand_use() {
 }
 
 ##############################################################################
-#
-# unuse directory|group|release_stage|...
-#
 Subcommands['unuse']='unuse'
 Options['unuse']='-o \?H -l help'
 Help['unuse']='
@@ -2042,8 +2053,9 @@ unuse directory|group|release...
 		Remove the given modulefiles directory, group, release stage,
                 flag from the search path.
 '
-
+#..............................................................................
 subcommand_unuse() {
+	local -r __doc__='Implementation of the sub-command unuse.'
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
 
@@ -2253,13 +2265,6 @@ subcommand_unuse() {
 }
 
 ##############################################################################
-#
-# update
-#
-# :FIXME:
-# either compile Modules with --enable-beginenv or remove the
-# sub-command
-#
 Subcommands['update']='update'
 Options['update']='-o \?H -l help'
 Help['update']='
@@ -2267,15 +2272,17 @@ USAGE:
         module update
                 Attempt  to  reload  all  loaded  modulefiles.
 '
-
+#..............................................................................
 subcommand_update() {
+	local -r __doc__'
+	      Implementation of the sub-command update
+	      :FIXME:
+	      Either compile Modules with --enable-beginenv or remove the
+	      sub-command'
         subcommand_generic0 "$@"
 }
 
 ##############################################################################
-#
-# refresh
-#
 Subcommands['refresh']='refresh'
 Options[refresh]='-o \?H -l help'
 Help[refresh]='
@@ -2286,18 +2293,15 @@ USAGE:
 		aliases need to be reinitialized but the environment variables
 		have already been set by the currently loaded modules.
 '
-
+#..............................................................................
 subcommand_refresh() {
+	local -r __doc__='Implementation of the sub-command refresh.'
         subcommand_generic0 "$@"
 }
 
-#
-# Helper functions, used during initialization and for purging all modules.
-#
-# Arguments:
-#	none
-#
+#..............................................................................
 pmodules_setup() {
+	local -r 'Setup/initialize Pmodules environment.'
 	local -r mode="${1:-check}"
 	init_used_groups() {
 		declare -gx UsedGroups=''
@@ -2407,9 +2411,6 @@ pmodules_setup() {
 }
 
 ##############################################################################
-#
-# purge
-#
 Subcommands['purge']='purge'
 Options['purge']='-o \?H -l help'
 Help['purge']='
@@ -2417,15 +2418,13 @@ USAGE:
         module purge
 		Unload all loaded modulefiles.
 '
-
+#..............................................................................
 subcommand_purge() {
-	#
-	# unload all loaded modules
-	#
-	# Note:
-	#     If a Pmodule module is loaded, it will *not* be
-	#     unloaded! 
-	#
+	local -r __doc__='
+	      Implementation of the sub-command purge.
+	      Note:
+	      If a Pmodule module is loaded, it will *not* be
+	      unloaded!'
 	local -a args=()
 	while (( $# > 0)); do
 		case "$1" in
@@ -2458,9 +2457,6 @@ subcommand_purge() {
 }
 
 ##############################################################################
-#
-# list [-hlt]
-#
 Subcommands['list']='list'
 Options['list']='-l help -o \?Hhlt -l human -l long -l terse'
 Help['list']='
@@ -2468,9 +2464,9 @@ USAGE:
         module list
 		List loaded modules.
 '
-
+#..............................................................................
 subcommand_list() {
-
+	local -r __doc__='Implementation of the sub-command list.'
 	human_readable_output(){
 		# get list of loaded modules with stripped MODULEPATH
 		IFS=':' read -r -a modules \
@@ -2575,9 +2571,6 @@ subcommand_list() {
 }
 
 ##############################################################################
-#
-# clear
-#
 Subcommands['clear']='clear'
 Options['clear']='-o \?H -l help'
 Help['clear']='
@@ -2586,8 +2579,9 @@ USAGE:
 		Force the Modules package to believe that no modules are
 		currently loaded.
 '
-
+#..............................................................................
 subcommand_clear() {
+	local -r __doc__='Implementation of the sub-command clear.'
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -2614,9 +2608,6 @@ subcommand_clear() {
 }
 
 ##############################################################################
-#
-# search [switches] [STRING...]
-#
 Subcommands['search']='search'
 Subcommands['find']='search'
 Subcommands['spider']='search'
@@ -2665,8 +2656,9 @@ SWITCHES:
         --wrap
                 wrap output
 '
-
+#..............................................................................
 subcommand_search() {
+	local -r __doc__='Implementation of the sub-command search.'
 	local -a modules=()
 	local -a groups=()
 	local -- group=''
@@ -3027,9 +3019,6 @@ subcommand_search() {
 }
 
 ##############################################################################
-#
-# help [module|sub-command]
-#
 Subcommands['help']='help'
 Options['help']='-o hHV\? -l version -l help'
 Help['help']='
@@ -3073,7 +3062,9 @@ DOCUMENTATION:
 	Full documentation is available at 
 	http://pmodules.gitpages.psi.ch
 '
+#..............................................................................
 subcommand_help() {
+	local -r __doc__='Implementation of the sub-command help.'
 	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -3117,9 +3108,6 @@ subcommand_help() {
 }
 
 ##############################################################################
-#
-# whatis
-#
 Subcommands['whatis']='whatis'
 Options['whatis']='-o \?Ha -l help -l all'
 Help['whatis']='
@@ -3129,10 +3117,11 @@ USAGE:
 		inside the specified modulefile(s). If no modulefile is
 		specified, all whatis lines will be shown.
 '
-
+#..............................................................................
 subcommand_whatis() {
-	local options=()
-	local args=()
+	local -r __doc__='Implementation of the sub-command whatis.'
+	local -- options=()
+	local -- args=()
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -3182,9 +3171,6 @@ subcommand_whatis() {
 }
 
 ##############################################################################
-#
-# apropos
-#
 Subcommands['apropos']='apropos'
 Subcommands['keyword']='apropos'
 Options['apropos']='-o \?Ha -l help -l all'
@@ -3195,8 +3181,9 @@ USAGE:
                 all modulefiles for the specified string.  All module-whatis
                 informations matching the string will be displayed.
 '
-
+#..............................................................................
 subcommand_apropos() {
+	local -r __doc__='Implementation of the sub-command apropos|keyword'
 	local options=()
 	local args=()
 	while (( $# > 0 )); do
@@ -3269,9 +3256,6 @@ subcommand_apropos() {
 ##
 
 ##############################################################################
-#
-# save [collection]
-#
 Subcommands['save']='save'
 Options['save']='-o \?H -l help'
 Help['save']="
@@ -3285,9 +3269,11 @@ USAGE:
 	       saved at this location rather than under the user's collection
 	       directory.
 "
-
+#..............................................................................
 declare -r UsrCollectionsDir="${HOME}/.Pmodules/collections"
-subcommand_save() {
+subcommand_save(){
+	local -r __doc__='
+	      Implementation of the save collection sub-command save.'
         local -a args=()
 	local -- opt_system='no'
 	while (( $# > 0 )); do
@@ -3375,9 +3361,6 @@ subcommand_save() {
 }
 
 ##############################################################################
-#
-# restore [collection]
-#
 Subcommands['restore']='restore'
 Options['restore']='-o \?H -l help'
 Help['restore']="
@@ -3388,6 +3371,7 @@ USAGE:
 	       to be the default collection.
 
 "
+#..............................................................................
 search_collection(){
 	local -n _path="$1"
 	local -- _collection="$2"
@@ -3403,10 +3387,13 @@ search_collection(){
 			return 0
 		fi
 	done
-	die_collection_doesnt_exist "${_collection}"
+	die_col_doesnt_exist "${_collection}"
 }
 
+#..............................................................................
 subcommand_restore() {
+	local -r __doc__='
+	      Implementation of the restore collection sub-command.'
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -3479,9 +3466,6 @@ subcommand_restore() {
 }
 
 ##############################################################################
-#
-# module savelist [pattern...]
-#
 Subcommands['savelist']='savelist'
 Options['savelist']='-o \?H -l help'
 Help['savelist']="
@@ -3496,8 +3480,10 @@ USAGE:
 	       given, collection has to match at least one of them to be
 	       listed.
 "
+#..............................................................................
 subcommand_savelist() {
-
+	local -r __doc__='
+	      Implementation of the savelist collection sub-command.'
 	get_collections() {
 		local -n _result="$1"
 		local -n gc_dirs="$2"
@@ -3561,9 +3547,6 @@ subcommand_savelist() {
 }
 
 ##############################################################################
-#
-# module saverm [collection...]
-#
 Subcommands['saverm']='saverm'
 Options['saverm']='-o \?H -l help'
 Help['saverm']="
@@ -3573,7 +3556,11 @@ USAGE:
 	       directory. If collection name is not specified, then it
 	       is assumed to be the default collection.
 "
+#..............................................................................
 subcommand_saverm() {
+	local -r __doc__='
+	      Implementation of the saverm collection sub-command.'
+
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -3608,9 +3595,6 @@ subcommand_saverm() {
 }
 
 ##############################################################################
-#
-# module saveshow [collection]
-#
 Subcommands['saveshow']='saveshow'
 Options['saveshow']='-o \?H -l help'
 Help['saveshow']="
@@ -3619,8 +3603,11 @@ USAGE:
 	       Display the content of collection. If collection name is not
 	       specified, then it is assumed to be the default collection,
 "
-
+#..............................................................................
 subcommand_saveshow() {
+	local -r __doc__='
+	      Implementation of the saveshow collection sub-command.'
+
         local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -3654,8 +3641,11 @@ subcommand_saveshow() {
 
 ##############################################################################
 #
-# initadd module...
+# sub-commands to manipulate the shell profile.
 #
+##
+
+##############################################################################
 Subcommands['initadd']='initadd'
 Options['initadd']='-o \?H -l help'
 Help['initadd']="
@@ -3683,15 +3673,15 @@ USAGE:
                 line is found in multiple shell initialization files, all
 		of the lines are changed.
 "
-
+#..............................................................................
 subcommand_initadd() {
+	local -r __doc__='
+	      Implementation of the initadd sub-command.'
+
         subcommand_generic1plus "$@"
 }
 
 ##############################################################################
-#
-# initprepend module...
-#
 Subcommands['initprepend']='initprepend'
 Options['initprepend']='-o \?H -l help'
 Help['initprepend']="
@@ -3700,15 +3690,15 @@ USAGE:
 		Does the same as initadd but prepends the given modules to
 		the beginning of the list.
 "
-
+#..............................................................................
 subcommand_initprepend() {
+	local -r __doc__='
+	      Implementation of the initprepend sub-command.'
+
         subcommand_generic1plus "$@"
 }
 
 ##############################################################################
-#
-# initrm module...
-#
 Subcommands['initrm']='initrm'
 Options['initrm']='-o \?H -l help'
 Help['initrm']="
@@ -3716,15 +3706,15 @@ USAGE:
         module initrm modulefile...
 		Remove modulefile(s) from the shell's initialization files.
 "
-
+#..............................................................................
 subcommand_initrm() {
+	local -r __doc__='
+	      Implementation of the initrm sub-command.'
+
         subcommand_generic1plus "$@"
 }
 
 ##############################################################################
-#
-# initswitch module1 module2
-#
 Subcommands['initswitch']='initswitch'
 Options['initswitch']='-o \?H -l help'
 Help['initswitch']="
@@ -3733,8 +3723,11 @@ USAGE:
 		Switch modulefile1 with modulefile2 in the shell's
                 initialization files.
 "
-
+#..............................................................................
 subcommand_initswitch() {
+	local -r __doc__='
+	      Implementation of the initswitch sub-command.'
+
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -3761,9 +3754,6 @@ subcommand_initswitch() {
 }
 
 ##############################################################################
-#
-# initlist
-#
 Subcommands['initlist']='initlist'
 Options['initlist']='-o \?H -l help'
 Help['initlist']="
@@ -3772,15 +3762,15 @@ USAGE:
 		List all of the modulefiles loaded from the shell's
                 initialization file.
 "
-
+#..............................................................................
 subcommand_initlist() {
+	local -r __doc__='
+	      Implementation of the initlist sub-command.'
+
 	subcommand_generic0 "$@"
 }
 
 ##############################################################################
-#
-# initclear
-#
 Subcommands['initclear']='initclear'
 Options['initclear']='-o \?H -l help'
 Help['initclear']="
@@ -3789,8 +3779,11 @@ USAGE:
 		Clear all of the modulefiles from the shell's
                 initialization files.
 "
-
+#..............................................................................
 subcommand_initclear() {
+	local -r __doc__='
+	      Implementation of the initclear sub-command.'
+
 	subcommand_generic0 "$@"
 }
 
