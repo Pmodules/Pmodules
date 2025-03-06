@@ -2,10 +2,38 @@
 
 ## Version 1.1.23
 ### modulecmd
+* bugfix in read the Pmodules config: overlay names may contain dots. The 
+  overlay name must be quoted in the query.
+  (#387)
+* bugfix in std::append_path() and std::prepend_path()
+  (#386)
+* bugfix in std::remove_path(), the function didn't work for more then
+  one directory.
+* support for Lmods created by Spack
+  (#383, #385, #388, #393, #396, #400)
+* bugfix: switching between Pmodules version now works without unsetting
+  PMODULES_ENV.
+  (#381)
+* The init are now relocatable and do not depend on the directory
+  set in $PMODULES_HOME
+  (#376)
 
 ### build-system
+* order of checks changes whether a module variant must be built on this
+  system. Order is now: kernel, cpu, system/os/hostname.
+  (#391)
+* checkk add that a build dependency has been successfully loaded.
+  (#390)
+* bugfix in setting up the environment before building a module.
+  (#389)
+* bugfix in reading group dependencies from the YAML config file.
+  (#382)
 
 ### both
+* Tcl, Lua, Lmod, yq and BASH updated to current versions.
+  (#392, #394, #395)
+* code review/refactoring
+  (#377, #378, #379, #380, #397, #398, #399, #401)
 
 ## Version 1.1.22
 
