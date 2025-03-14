@@ -1943,17 +1943,18 @@ subcommand_use() {
 
 		#..............................................................
                 use_group() {
+			local -- grp="$1"
 			# die if argument is a hierarchical group
-			(( ${GroupDepths[${arg}]} > 0 )) && \
-				die_grp_invalid "${arg}"
+			(( ${GroupDepths[${grp}]} > 0 )) && \
+				die_grp_invalid "${grp}"
 
-			std::append_path UsedGroups "$1"
+			std::append_path UsedGroups "${grp}"
                         local -- ol_name
 			local -i i=0
 			local -i n="${#UsedOverlays[@]}"
                         for ((i=n-1; i>=0; i--)); do
 				ol_name="${UsedOverlays[i]}"
-                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/$1/${__MODULEFILES_DIR__}"
+                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/${grp}/${__MODULEFILES_DIR__}"
                                 [[ -d "${dir}" ]] || continue
                                 std::prepend_path MODULEPATH "${dir}"
 				[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && break
@@ -2169,19 +2170,20 @@ subcommand_unuse() {
 
 		#..............................................................
                 unuse_group() {
-                        (( ${GroupDepths[${arg}]} > 0 )) && \
-				die_grp_invalid "${arg}"
+			local -- grp="$1"
+                        (( ${GroupDepths[${grp}]} > 0 )) && \
+				die_grp_invalid "${grp}"
 
-			if [[ -v PMODULES_LOADED_${arg^^} ]]; then 
-				local var="PMODULES_LOADED_${arg^^}"
+			if [[ -v PMODULES_LOADED_${grp^^} ]]; then 
+				local var="PMODULES_LOADED_${grp^^}"
 				[[ -n "${!var}" ]] && \
-					die_grp_cannot_be_removed "${arg}"
+					die_grp_cannot_be_removed "${grp}"
 			fi
-                        std::remove_path UsedGroups "${arg}"
+                        std::remove_path UsedGroups "${grp}"
                         local overlay
                         for overlay in "${UsedOverlays[@]}"; do
 				local dir="${OverlayInfo[${overlay}:modulefiles_root]}"
-				dir+="/${arg}/${__MODULEFILES_DIR__}"
+				dir+="/${grp}/${__MODULEFILES_DIR__}"
 			        std::remove_path MODULEPATH "${dir}"
                         done
 		}
