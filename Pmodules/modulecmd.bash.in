@@ -142,8 +142,6 @@ save_env() {
 	vars+=( 'PmFiles' )
 	vars+=( 'ModulePathAppend' )
 	vars+=( 'ModulePathPrepend' )
-	vars+=( 'OSRelease' )
-	vars+=( 'SystemCPU')
 	vars+=( 'MaskedGroups' )
 	local s=''
 	s=$(typeset -p "${vars[@]}")
@@ -2381,8 +2379,6 @@ pmodules_setup() {
 		Version="${PMODULES_VERSION}"
 		vars_to_be_exported[PMODULES_HOME]=1
 	fi
-	OSRelease=$(std::get_os_release)
-	SystemCPU=$(uname -p)
 	save_env
 }
 
