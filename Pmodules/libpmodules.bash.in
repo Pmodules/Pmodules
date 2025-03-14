@@ -114,6 +114,7 @@ declare -A OverlayConfigKeys=(
 	['default_relstage']='unstable'
 	['layout']='Pmodules'
 	['has_additional_modulepaths']='false'
+	['groups']=''
 )
 
 declare -A OverlayPathConfigKeys=(
@@ -382,13 +383,13 @@ pm::read_config(){
 					esac
 					OverlayInfo[${ol_name}:${key}]="${value}"
 					;;
-				conflicts | excludes )
+				conflicts | excludes | groups)
 					yml::get_seq value yaml_input "${node}.${key}" '!!seq'
 					local -a tmp_array=()
 					readarray -t tmp_array <<<${value}
-					local excludes=''
-					printf -v excludes "%s:" "${tmp_array[@]}"
-					OverlayInfo[${ol_name}:${key}]=$(${envsubst} <<<"${excludes%:}" )
+					local -- tmp_str=''
+					printf -v tmp_str "%s:" "${tmp_array[@]}"
+					OverlayInfo[${ol_name}:${key}]=$(${envsubst} <<<"${tmp_str%:}" )
 					;;
 				path_config )
 					yml::get_value value yaml_input "${node}.${key}" '!!seq'
