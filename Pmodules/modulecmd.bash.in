@@ -2426,6 +2426,45 @@ subcommand_purge() {
 		[[ ${modules[$i]} == Pmodules/* ]] && continue
 		subcommand_unload "${modules[$i]}"
 	done
+	# re-initialize Pmodules
+	# - save
+	#   - used release stages
+	#   - used groups
+	#   - used overlays
+	#   - additional directories in MODULEPATH
+	# - re-initialize PMODULES_ENV
+	# - restore
+	local -- saved_relstages="${UsedReleaseStages}"
+	local -- saved_groups="${UsedGroups}"
+	local -- saved_overlays=''
+	printf -v used_overlays "%s:" "${UsedOverlays[@]}"
+	used_overlays="${used_overlays%:}"
+	local -- dir=''
+        local -- group=''
+	local -a modulepath=()
+	local -- saved_modulepath=''
+	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
+	for dir in "${modulepath[@]}"; do
+		find_overlay ol group "${dir}" && continue
+		saved_modulepath+="${dir}:"
+	done
+	pmodules_setup init
+	local -- item=''
+	for item in "${saved_relstages//:/ }"; do
+		subcommand_use "${item}"
+	done
+	for item in "${saved_overlays//:/ }"; do
+		[[ -v OverlayInfo[${item}:used] ]] || continue
+		subcommand_use "${item}"
+	done
+	for item in "${saved_groups//:/ }"; do
+		[[ -v GroupDepths[${item}] ]] || continue
+		subcommand_use "${item}"
+	done
+	for item in "${saved_modulepath//:/ }"; do
+		[[ -d "${item}" ]] || continue
+		subcommand_use "${item}"
+	done
 }
 
 ##############################################################################
