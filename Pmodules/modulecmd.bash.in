@@ -1899,6 +1899,26 @@ subcommand_use() {
 					MaskedGroups[${group}]="${ol_name}:${MaskedGroups[${group}]}"
 				done
 			fi
+			if [[ -n "${OverlayInfo[${ol_name}:groups]}" ]]; then
+				local -- grp_changes=':'
+				local -a groups=()
+				IFS=':' read -r -a groups <<< "${OverlayInfo[${ol_name}:groups]}"
+				local -- group=''
+				for group in "${groups[@]}"; do
+					if [[ "${group:0:1}" == '~' ]]; then
+						if [[ ":${UsedGroups}:" == *:${group:1}:* ]]; then
+							subcommand_unuse "${group:1}"
+							grp_changes+="${group}:"
+						fi
+					else
+						if [[ ":${UsedGroups}:" != *:${group}:* ]]; then
+							use_group "${group}"
+							grp_changes+="${group}:"
+						fi
+					fi
+				done
+				OverlayInfo[${ol_name}:grp_changes]="${grp_changes:0: -1}"
+			fi
 			scan_groups "${ol_name}"
                         for group in ${UsedGroups//:/ }; do
                                 local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
@@ -2101,6 +2121,23 @@ subcommand_unuse() {
 					[[ -d "${dir}" ]] || continue
 					std::prepend_path MODULEPATH "${dir}"
 				done
+			fi
+			if [[ -n "${OverlayInfo[${ol_name}:groups]}" ]]; then
+				local -a groups=()
+				IFS=':' read -r -a groups <<< "${OverlayInfo[${ol_name}:grp_changes]}"
+				local -- group=''
+				for group in "${groups[@]}"; do
+					if [[ "${group:0:1}" == '~' ]]; then
+						if [[ ":${UsedGroups}:" != *:${group:1}:* ]]; then
+							subcommand_use "${group:1}"
+						fi
+					else
+						if [[ ":${UsedGroups}:" == *:${group}:* ]]; then
+							unuse_group "${group}"
+						fi
+					fi
+				done
+				OverlayInfo[${ol_name}:grp_changes]=':'
 			fi
 
 			# rebuild exclude list.
