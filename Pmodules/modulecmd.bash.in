@@ -645,8 +645,8 @@ set_lmfiles(){
 		declare -gx LOADEDMODULES=''
 	fi
 	local -- dir=''
+	local -a dirs=()
 	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
-		local -a dirs=()
 		IFS=':' read -r -a dirs <<<"${PmFiles}"
 		for dir in "${dirs[@]}"; do
 			std::append_path _LMFILES_ "${dir}"
@@ -658,7 +658,8 @@ set_lmfiles(){
 	# rebuild LOADEDMODULES by setting it to _LMFILES_ and then removing
 	# all directories given in MODULEPATH from LOADEDMODULES.
 	LOADEDMODULES="${_LMFILES_}"
-	while read -r dir; do
+	IFS=':' read -r -a dirs <<<"${MODULEPATH}"
+	for dir in "${dirs[@]}"; do
 		# If the first or last character of MODULEPATH is ':',
 		# we get an empty string. This shouldn't happen, but
 		# with this test we are on the save side.
@@ -676,7 +677,7 @@ set_lmfiles(){
 
 		# Remove this directory from all entries in LOADEDMODULES
 		LOADEDMODULES="${LOADEDMODULES//${dir}}"
-	done <<< "${MODULEPATH//:/$'\n'}"
+	done
 }
 
 ##############################################################################
@@ -862,16 +863,19 @@ subcommand_load() {
 				Version="${new_version}"
 			fi
 		fi
+
 		# nothing to do if already loaded, continue with
 		# next module to be loaded
 		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
-		interp[${current_modulefile}]="${modulecmd}"
-
-		# show info file if exist
+		# show info file
 		local prefix=''
 		get_module_prefix prefix "${current_modulefile}"
 		[[ -n ${prefix} && -r "${prefix}/.info" ]] && cat "${prefix}/.info" 1>&2
+
+		# loading the dependencies overwrites the interpreter for the
+		# currend modulefile, so we have to save it for later use.
+		interp[${current_modulefile}]="${modulecmd}"
 
 		# load dependencies
 		local -- deps_file="${current_modulefile%/*}/.deps-${current_modulefile##*/}"
@@ -879,8 +883,6 @@ subcommand_load() {
 			deps_file="${prefix}/.dependencies"
 		fi
 		test -r "${deps_file}" && load_dependencies "$_"
-
-		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
 		# load module
 		modulecmd="${interp[${current_modulefile}]}"
@@ -1294,66 +1296,6 @@ get_available_modules() {
 } # get_available_modules()
 
 #..............................................................................       
-find_modulefile2(){
-	local -r __doc__='
-	      find module(file) to load. The module name can be
-	             name
-		     name/version
-		     relative path
-		     absolute path
-
-		     Return
-		            0 if a modulefile has been found
-			    1 else'
-	local -n ref_modulefile="$1"
-	local -n ref_relstage="$2"
-	local -n ref_moduledir="$3"
-	local -n ref_interp="$4"
-	local -r modulename="$5"
-
-	local -- dir=''
-	local -- group=''
-	local -- groups=''
-	local -- ol=''
-	local -A modulepath_of_group=()
-	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
-	for dir in "${modulepath[@]}"; do
-		find_overlay ol group "${dir}" || group="${dir}"
-		[[ -v modulepath_of_group[${group}] ]] || modulepath_of_group[${group}]=''
-		typeset -n tmp="modulepath_of_group[${group}]"
-		std::append_path tmp "${dir}"
-		std::append_path groups "${group}"
-	done
-	local -a mods=()
-	local -a modulepath=()
-	local -A found_modules=()
-	local -A found_modulenames=()
-	local -- relstages="${UsedReleaseStages}"
-	[[ "${modulename}" = */* ]] && relstages="${ReleaseStages}"
-        for group in ${groups//:/ }; do
-		local -a path=()
-		IFS=':' read -r -a path <<<"${modulepath_of_group[${group}]}"
-		get_available_modules \
-			'load' \
-			mods \
-			"${modulename}" \
-                        "${relstages}" \
-			found_modules \
-			found_modulenames \
-			"${path[@]}"
-	done
-	(( ${#mods[@]} == 0 )) && return 1
-	ref_relstage="${mods[1]}"
-	ref_moduledir="${mods[2]}"
-	ref_modulefile="${mods[2]}/${mods[3]}"
-	is_modulefile ref_interp "${ref_modulefile}" || die_module_not_a_modulefile "${modulename}"
-	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
-		# Lmod doesn't support full qualified path names!
-		ref_modulefile="${ref_modulefile/${ref_moduledir}\/}"
-	fi
-	return 0
-}
-
 find_modulefile(){
 	local -r __doc__='
 	      find module(file) to load. The module name can be
