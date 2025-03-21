@@ -1185,14 +1185,14 @@ get_available_modules() {
 		...
 	      )'
 	local -- mode="$1"
-	shift
-        local -n result="$1"		# [out] reference variable to return result
-	local -r pattern="$2"		# [in]  search pattern
-	local -r relstages="$3"		# [in]  excepted release stages
-        local -n ref_modules="$4"	# [in/out] dict. with available modules
-	local -n ref_modulenames="$5"	# [in/out] dict. with available module names
-	shift 5
+        local -n result="$2"		# [out] reference variable to return result
+	local -r pattern="$3"		# [in]  search pattern
+	local -r relstages="$4"		# [in]  excepted release stages
+	shift 4
 	local -a dirs=("$@")		# [in] module path (absolute directory names)
+
+	local -A modules=()
+	local -A modulenames=()
 
 	local -- fpattern="${pattern}"	# pattern used in find(1)
 	if [[ ${pattern} == */* ]]; then
@@ -1239,18 +1239,18 @@ get_available_modules() {
 				# - first time found by name only
 				# - in same overlay as first found
 				# - new version and not hidden by overlay
-				if [[ ! -v ref_modulenames["${name}"] ]]; then
+				if [[ ! -v modulenames["${name}"] ]]; then
 					# new entry
 					if [[ "${OverlayInfo[${ol_name}:type]}" == "${ol_hiding}" ]]; then
-						ref_modulenames[${name}]="${ol_name}"
+						modulenames[${name}]="${ol_name}"
 					else
-						ref_modulenames[${name}]='0'
+						modulenames[${name}]='0'
 					fi
 					add='yes'
-				elif [[ "${ref_modulenames[${name}]}" == "${ol_name}" ]]; then
+				elif [[ "${modulenames[${name}]}" == "${ol_name}" ]]; then
 					add='yes'
-				elif [[ "${ref_modulenames[${name}]}" == '0'  ]] \
-					     && [[ ! -v ref_modules[${mod}] ]]; then
+				elif [[ "${modulenames[${name}]}" == '0'  ]] \
+					     && [[ ! -v modules[${mod}] ]]; then
 					add='yes'
 				fi
 			else
@@ -1281,7 +1281,7 @@ get_available_modules() {
 				get_module_config cfg "${dir}" "${rel_modulefile}"
 				is_available cfg "${ReleaseStages}" || continue
 			fi
-                        ref_modules[${mod}]=1
+                        modules[${mod}]=1
 
 			result+=( "${mod}" "${relstage}" "${dir}" "${rel_modulefile}" "${ol_name}" "${group}" )
 			[[ "${mode}" != 'search' ]] && return 0
@@ -1316,8 +1316,6 @@ find_modulefile(){
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
 	local -a mods=()
-	local -A found_modules=()
-	local -A found_modulenames=()
 	local -- relstages="${UsedReleaseStages}"
 	[[ "${modulename}" = */* ]] && relstages="${ReleaseStages}"
 	get_available_modules \
@@ -1325,8 +1323,6 @@ find_modulefile(){
 		mods \
 		"${modulename}" \
                 "${relstages}" \
-		found_modules \
-		found_modulenames \
 		"${modulepath[@]}"
 	(( ${#mods[@]} == 0 )) && return 1
 	ref_relstage="${mods[1]}"
@@ -1599,26 +1595,18 @@ subcommand_avail() {
 		std::append_path groups "${group}"
         done
 	local -a modulepath=()
-	local -A found_modules=()
-	local -A found_modulenames=()
-        local string
+        for group in ${groups//:/ }; do
+		modulepath+="${modulepath_of_group[${group}]}:"
+	done
+	local -a path=()
+	IFS=':' read -r -a path <<<"${modulepath%:}"
 	for string in "${pattern[@]}"; do
-		found_modules=()
-		found_modulenames=()
-                for group in ${groups//:/ }; do
-			[[ -v modulepath_of_group[${group}] ]] || continue
-
-			local -a path=()
-			IFS=':' read -r -a path <<<"${modulepath_of_group[${group}]}"
-			get_available_modules \
-				'search' \
-				mods \
-				"${string}" \
-                                "${opt_use_relstages}" \
-				found_modules \
-				found_modulenames \
-				"${path[@]}"
-		done
+		get_available_modules \
+			'search' \
+			mods \
+			"${string}" \
+                        "${opt_use_relstages}" \
+			"${path[@]}"
 		${output_function}
 	done
 } # subcommand_avail()
@@ -2792,15 +2780,11 @@ subcommand_search() {
 		# with respect to the requested release stage
 		# TmpFile: module/version relstage group dependencies...
 		local -a mods=()
-		local -A found_modules=()
-		local -A found_modulenames=()
 		get_available_modules \
 			'search' \
 			mods \
 			"${module}" \
 			"${opt_use_relstages}" \
-			found_modules \
-			found_modulenames \
 			"${modulepath[@]}"
 		local i=0
 		for (( i=0; i<${#mods[@]}; i+=6 )); do
