@@ -1447,11 +1447,18 @@ subcommand_avail() {
 	[[ -t 1 && -t 2 ]] && cols=$(tput cols)
 
 	#......................................................................
+
 	output_header() {
 		local -i i=$1
 
-		local -- caption="${mods[i+5]}"
-		[[ "${caption,,}" == 'none' ]] && caption="${mods[i+2]}"
+		# use group name, overlay name or directory
+		local -- caption="${mods[i+5]}"		# group name
+		if [[ "${caption,,}" == 'none' ]]; then
+			caption="${mods[i+4]}"		# overlay name
+			if [[ "${caption,,}" == 'none' ]]; then
+				caption="${mods[i+2]}"	# directory
+			fi
+		fi
 		(( i != 0 )) && printf -- "\n\n" 1>&2
 		local -i i=0
 		(( i=(cols-${#caption})/2-2 ))
