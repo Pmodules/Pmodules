@@ -371,9 +371,11 @@ get_module_config(){
 	 	- the release stage of other modules without a config file is
 		  always "stable".
 	'
-	local -n ref_cfg="$1"		# [out] reference to a dictionary to return the configuration
+	local -n ref_cfg="$1"		# [out] reference to a dictionary to
+					#	return the configuration
 	local -r dir="$2"		# [in]  directory containing modulefile
-	local -r modulefile="${dir}/$3" # [in]  module name (inkl. version and/or sub-dirs)
+	local -r modulefile="${dir}/$3" # [in]  module name (inkl. version
+					#	and/or sub-dirs)
 
 	ref_cfg['relstage']='unstable'
 	ref_cfg['systems']=''
@@ -386,7 +388,8 @@ get_module_config(){
 		local -- group=''
 		find_overlay ol_name group "${modulefile}"
 		if [[ "${OverlayInfo[${ol_name}:layout]}" == 'Pmodules' ]]; then
-			[[ -r ${relstage_file} ]] && ref_cfg['relstage']=$( < "${relstage_file}" )
+			[[ -r ${relstage_file} ]] && \
+				ref_cfg['relstage']=$( < "${relstage_file}" )
 		else
 			ref_cfg['relstage']='stable'
 		fi
@@ -843,12 +846,12 @@ subcommand_load() {
 			fi
 		}
 
+		# If the user wants to load/switch to another Pmodules version:
+		# This is possible if
+		# - no other module is loaded
+		# - the loaded version of Pmodules is >= 1.1.22
+		# - the to be loaded version of Pmodules is >= 1.1.22
 		if [[ ${m} == Pmodules/*  ]]; then
-			# The user wants to load another Pmodules version!
-			# This is possible if
-			# - no other module is loaded
-			# - the loaded version of Pmodules is >= 1.1.22
-			# - the to be loaded version of Pmodules is >= 1.1.22
 			local -r new_version="${m##*/}"
 			[[ -v Version ]] || Version='0.0.0'
 			if [[ -n ${LOADEDMODULES} ]]; then
@@ -885,13 +888,17 @@ subcommand_load() {
 		output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
                                               "${current_modulefile}" 2> "${TmpFile}")
 
-                # we do not want to print the error message we got from
-                # modulecmd, they are a bit ugly
-                # :FIXME: Not sure whether this is now correct!
+                # we don't print the error message we got from modulecmd, due to
+		# readability.
+                # :FIXME:
+		# Not sure whether this is now correct!
                 # The idea is to supress the error messages from the Tcl
                 # modulecmd, but not the output to stderr coded in a
                 # modulefile.
-
+		# :FIXME:
+		# Handle errors from Lmod.
+		# :FIXME:
+		# In some cases the error message is unclear.
 		local error=''
 		error=$( < "${TmpFile}")
 		if [[ "${error}" == *:ERROR:* ]]; then
@@ -1383,7 +1390,8 @@ find_modulefile(){
 	ref_relstage="${mods[1]}"
 	ref_moduledir="${mods[2]}"
 	ref_modulefile="${mods[2]}/${mods[3]}"
-	is_modulefile ref_interp "${ref_modulefile}" || die_module_not_a_modulefile "${modulename}"
+	is_modulefile ref_interp "${ref_modulefile}" || \
+		die_module_not_a_modulefile "${modulename}"
 	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
 		# Lmod doesn't support full qualified path names!
 		ref_modulefile="${ref_modulefile/${ref_moduledir}\/}"
