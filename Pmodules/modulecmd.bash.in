@@ -1456,14 +1456,16 @@ subcommand_avail() {
 	#......................................................................
 	terse_output() {
 		local -- cur_group=''
-		local -- cur_location=''
+		local -- cur_dir=''
 
 		local -i i=0
 		for (( i=0; i<${#mods[@]}; i+=6 )); do
-			if [[ "${cur_group}" != "${mods[i+5]}" && "${cur_location}" != "${mods[i+4]}" ]]; then
+			if [[ "${cur_group}" != "${mods[i+5]}" ]] || \
+				   [[ "${cur_group}" == 'none' && \
+					      "${cur_dir}" != "${mods[i+2]}" ]]; then
 				output_header "$i"
 				cur_group="${mods[i+5]}"
-				cur_location="${mods[i+4]}"
+				cur_dir="${mods[i+2]}"
 			fi
 
 			local mod=${mods[i]%.lua}
@@ -1492,16 +1494,17 @@ subcommand_avail() {
 	# :FIXME: for the time being, this is the same as terse_output!
 	long_output() {
 		local -- cur_group=''
-		local -- cur_location=''
+		local -- cur_dir=''
 
 		local -i i=0
 		for (( i=0; i<${#mods[@]}; i+=6 )); do
-			if [[ "${cur_group}" != "${mods[i+5]}" && "${cur_location}" != "${mods[i+4]}" ]]; then
+			if [[ "${cur_group}" != "${mods[i+5]}" ]] || \
+				   [[ "${cur_group}" == 'none' && \
+					      "${cur_dir}" != "${mods[i+2]}" ]]; then
 				output_header "$i"
 				cur_group="${mods[i+5]}"
-				cur_location="${mods[i+4]}"
+				cur_dir="${mods[i+2]}"
 			fi
-
 			local mod=${mods[i]%.lua}
 			local relstage=${mods[i+1]}
 			case ${relstage} in
@@ -1519,15 +1522,18 @@ subcommand_avail() {
 
 	#......................................................................
 	human_readable_output() {
-		#output_header 0
-
 		local -- cur_group=''
 		local -- cur_dir=''
 		local mod=''
-		local -i colsize=16				# as multiple of 16
-		local -i column=$cols				# force a line-break
+		local -i colsize=16
+		local -i column=$cols		# force a line-break
 		for ((i=0; i<${#mods[@]}; i+=6)); do
-			if [[ "${cur_group}" != "${mods[i+5]}" && "${cur_dir} != "${mods[i+2]} ]]; then
+			# print header if
+			# - module is in another group or overlay
+			# - group == none && overlay == none and module is in another dir
+			if [[ "${cur_group}" != "${mods[i+5]}" ]] || \
+				   [[ "${cur_group}" == 'none' && \
+					      "${cur_dir}" != "${mods[i+2]}" ]]; then
 				output_header "$i"
 				cur_group="${mods[i+5]}"
 				cur_dir="${mods[i+2]}"
