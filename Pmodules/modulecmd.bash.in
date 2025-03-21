@@ -837,7 +837,7 @@ subcommand_load() {
 			fi
 		fi # handle extended module names
 
-		find_modulefile current_modulefile relstage moduledir odulecmd "${m}" || {
+		find_modulefile current_modulefile relstage moduledir modulecmd "${m}" || {
 			local hints=''
 			get_load_hints hints
 			if [[ -z "${hints}" ]]; then
