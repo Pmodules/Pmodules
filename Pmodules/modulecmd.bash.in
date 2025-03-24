@@ -2375,9 +2375,8 @@ subcommand_purge() {
 	done
         (( ${#args[@]} > 0 ))  && die_args_not_allowed
 
-	# get list of loaded modules with stripped MODULEPATH
+	# unload all modules (except Pmodules itself)
 	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
-
 	for (( i=${#modules[@]}-1; i>=0; i-- )); do
 		[[ ${modules[$i]} == Pmodules/* ]] && continue
 		subcommand_unload "${modules[$i]}"
@@ -2385,39 +2384,44 @@ subcommand_purge() {
 	# re-initialize Pmodules
 	# - save
 	#   - used release stages
-	#   - used groups
-	#   - used overlays
-	#   - additional directories in MODULEPATH
-	# - re-initialize PMODULES_ENV
-	# - restore
 	local -- saved_relstages="${UsedReleaseStages}"
+	#   - used groups
 	local -- saved_groups="${UsedGroups}"
+	#   - used overlays
 	local -- saved_overlays=''
-	printf -v used_overlays "%s:" "${UsedOverlays[@]}"
-	used_overlays="${used_overlays%:}"
-	local -- dir=''
-        local -- group=''
-	local -a modulepath=()
-	local -- saved_modulepath=''
-	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
-	for dir in "${modulepath[@]}"; do
-		find_overlay ol group "${dir}" && continue
-		saved_modulepath+="${dir}:"
-	done
-	pmodules_setup init
+	printf -v saved_overlays "%s:" "${UsedOverlays[@]}"
+	saved_overlays="${saved_overlays%:}"
+	#   - additional directories in MODULEPATH
 	local -- item=''
-	for item in "${saved_relstages//:/ }"; do
+        local -- group=''
+	local -a items=()
+	local -- saved_modulepath=''
+	IFS=':' read -r -a items <<<"${MODULEPATH}"
+	for item in "${items[@]}"; do
+		find_overlay ol group "${item}" && continue
+		saved_modulepath+="${item}:"
+	done
+
+	# - re-initialize PMODULES_ENV
+	pmodules_setup init
+
+	# - restore
+	IFS=':' read -r -a items <<<"${saved_relstages}"
+	for item in "${items[@]}"; do
 		subcommand_use "${item}"
 	done
-	for item in "${saved_overlays//:/ }"; do
+	IFS=':' read -r -a items <<<"${saved_overlays}"
+	for item in "${items[@]}"; do
 		[[ -v OverlayInfo[${item}:used] ]] || continue
 		subcommand_use "${item}"
 	done
-	for item in "${saved_groups//:/ }"; do
+	IFS=':' read -r -a items <<<"${saved_groups}"
+	for item in "${items[@]}"; do
 		[[ -v GroupDepths[${item}] ]] || continue
 		subcommand_use "${item}"
 	done
-	for item in "${saved_modulepath//:/ }"; do
+	IFS=':' read -r -a items <<<"${saved_modulepath}"
+	for item in "${items[@]}"; do
 		[[ -d "${item}" ]] || continue
 		subcommand_use "${item}"
 	done
