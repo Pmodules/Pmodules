@@ -1206,6 +1206,11 @@ get_available_modules() {
 		# otherwise match max one slash
 		fpattern=".*/${pattern}[^/]*/*[^/]+"
 	fi
+	local -- opt_regex='-regex'
+	if [[ "${mode}" != 'load' ]]; then
+		opt_regex='-iregex'
+	fi
+
 	local -- dir=''
 	# loop over all entries in given module path
         for dir in "${dirs[@]}"; do
@@ -1259,7 +1264,7 @@ get_available_modules() {
 			fi
 			[[ "${add}" == 'no' ]] && continue
 			if [[ "${mode}" == 'search' ]]; then
-				[[ "${mod}" =~ ${pattern} ]] || continue
+				[[ "${mod,,}" =~ ${pattern,,} ]] || continue
 			else
 				if [[ "${pattern}" == */* ]]; then
 					[[ "${mod}" == ${pattern} ]] || continue
@@ -1287,7 +1292,7 @@ get_available_modules() {
 			[[ "${mode}" != 'search' ]] && return 0
 		done < <(${find} -L "${dir}" \
 				 -not -name ".*" \
-				 \( -regex "${fpattern}" \
+				 \( "${opt_regex}" "${fpattern}" \
 				 -regextype posix-basic \) \
 				 \( -type f -o -type l \) \
 				 -printf "%P\n" \
