@@ -1489,7 +1489,7 @@ _build_module() {
 		bm::remove_module
 	elif [[ "${module_release}" == 'deprecated' ]]; then
 		bm::deprecate_module
-	elif [[ -d "${PREFIX}" || "${is_subpkg}" == 'yes' ]] && [[ "${force_rebuild}" == 'no' ]]; then
+	elif [[ -d "${PREFIX}" && "${is_subpkg}" != 'yes' ]] && [[ "${force_rebuild}" == 'no' ]]; then
  		std::info \
 			"%s " \
 			"${module_name}/${module_version}:" \
