@@ -423,6 +423,12 @@ std::is_member_of_array(){
 	return 1
 }
 
+std::find_elf64_binaries(){
+	${find} "$@" -type f -not -name '*.pyc' -not -name '*.sh' -executable | \
+		file -f - | \
+		awk '/ELF 64-bit/ {print substr($1, 1, length($1)-1)}'
+}
+
 std::find_executables(){
 	${find} "$@" -type f -printf "%i %P\n" | \
 		${sort} -n -k1 -u              | \

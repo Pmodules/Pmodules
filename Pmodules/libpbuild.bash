@@ -1040,24 +1040,15 @@ _build_module() {
 			return 0
 		}
 
-		patch_elf_exe_and_libs(){
+		patch_elf64_files(){
 			local -- libdir="${OverlayInfo[${ol_name}:install_root]}/lib64"
 			[[ -d "${libdir}" ]] || return 0
 			local -a bin_objects=()
-			mapfile -t bin_objects < <(std::find_executables '.')
+			mapfile -t files < <(std::find_elf64_binaries '.')
 			local -- fname=''
 			local -- rpath=''
 			local -i depth=0
-			for fname in "${bin_objects[@]}"; do
-				# don't override existing RPATH
-				rpath=$(patchelf --print-rpath "${fname}")
-				[[ -z "${rpath}" ]] || continue
-				(( depth=$(std::get_dir_depth "${fname}") + group_depth + 3 ))
-				rpath='$ORIGIN/'$(printf "../%.0s" $(${seq} 1 ${depth}))lib64
-				${patchelf} --force-rpath --set-rpath "${rpath}" "${fname}"
-			done
-			mapfile -t bin_objects < <(std::find_shared_objects '.')
-			for fname in "${bin_objects[@]}"; do
+			for fname in "${files[@]}"; do
 				# don't override existing RPATH
 				rpath=$(patchelf --print-rpath "${fname}")
 				[[ -z "${rpath}" ]] || continue
@@ -1075,9 +1066,11 @@ _build_module() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"running post-installation for ${KernelName} ..."
-			cd "${PREFIX}"
-			[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
-			patch_elf_exe_and_libs
+			{
+				cd "${PREFIX}"
+				[[ -d "lib" ]] && [[ ! -d "lib64" ]] && ln -s lib lib64
+				patch_elf64_files
+			};
 			return 0
 		}
 
