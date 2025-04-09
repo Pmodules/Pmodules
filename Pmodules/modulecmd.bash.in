@@ -1301,7 +1301,7 @@ get_available_modules() {
 				[[ "${mod,,}" =~ ${pattern,,} ]] || continue
 			else
 				if [[ "${pattern}" == */* ]]; then
-					[[ "${mod}" == ${pattern} ]] || continue
+					[[ "${mod}" == ${pattern} || "${mod}" == ${pattern}.lua ]] || continue
 				else
 					[[ "${mod%/*}" == ${pattern} ]] || continue
 				fi
