@@ -344,6 +344,49 @@ die_ol_not_on_top_of_stack(){
 		 "$1"
 }
 
+print_deprecated_msg(){
+	local -- msg=''
+	printf -v msg "
+#############################################
+# DEPRECATED MODULE - IMPORTANT INFORMATION #
+#############################################
+
+This module is deprecated and should no longer be used.
+
+Please always use modules from the stable repository. Modules
+from the unstable repository may also be used, but please
+note that they are subject to change and may not be fully
+tested.
+
+Deprecated modules are no longer maintained, and support
+requests related to them will not be addressed.
+
+Thank you for your understanding.
+"
+	std::info "%s" "${msg}"
+}
+
+print_module_load_msg(){
+	local -r relstage="$1"
+	local -- msg=''
+	printf -v msg "%s %s: %s -- %s" \
+	       "${CMD}" 'load' \
+	       "${relstage} module has been loaded" \
+	       "${m}"
+	std::info "%s" "${msg}"
+}
+
+log_module_load_msg(){
+	local -r modulefile="$1"
+	local -r relstage="$2"
+	printf -v msg "%s: %s %s %s" \
+	       'load' \
+	       "modulefile=${modulefile}" \
+	       "rel-stage=${relstage}" \
+	       "user=${USER}"
+	${logger} -t Pmodules "${msg}"
+}
+
 #..............................................................................
 get_module_config(){
 	local -r __doc__='
@@ -925,21 +968,12 @@ subcommand_load() {
 		if [[ "${modulecmd}" == "${Tcl_cmd}" ]]; then
 			std::append_path PmFiles "${current_modulefile}"
 		fi
-		local msg=''
-		if [[ ${Verbosity_lvl} != silent ]] && \
-			   [[ ${relstage} != stable ]]; then
-			msg=$(printf "%s %s: %s -- %s" \
-				     "${CMD}" 'load' \
-				     "${relstage} module has been loaded" \
-				     "${m}")
-		        std::info "%s" "${msg}"
+
+		if [[ ${Verbosity_lvl} != silent ]]; then
+			[[ "${relstage}" == 'deprecated' ]] && print_deprecated_msg
+			print_module_load_msg "${relstage}"
 		fi
-		msg=$(printf "%s: %s %s %s" \
-			     'load' \
-			     "modulefile=${current_modulefile}" \
-			     "rel-stage=${relstage}" \
-			     "user=${USER}")
-		${logger} -t Pmodules "${msg}"
+		log_module_load_msg "${current_modulefile}" "${relstage}"
 	done
 	set_lmfiles
         vars_to_be_exported['PMODULES_ENV']=1
