@@ -1241,9 +1241,9 @@ get_available_modules() {
 		fpattern=".*/${pattern}[^/]*/*[^/]+"
 	fi
 	local -- opt_regex='-regex'
-	if [[ "${mode}" != 'load' ]]; then
-		opt_regex='-iregex'
-	fi
+	[[ "${mode}" != 'load' ]] && opt_regex='-iregex'
+	local -- opt_sort='-r'
+	[[ -z ${pattern} ]] && opt_sort=''
 
 	local -- dir=''
 	# loop over all entries in given module path
@@ -1330,7 +1330,7 @@ get_available_modules() {
 				 -regextype posix-basic \) \
 				 \( -type f -o -type l \) \
 				 -printf "%P\n" \
-				 | ${sort} -r --version-sort)
+				 | ${sort} ${opt_sort} --version-sort)
         done
 } # get_available_modules()
 
