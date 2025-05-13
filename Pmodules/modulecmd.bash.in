@@ -82,13 +82,14 @@ declare -A Subcommands=()
 declare -A Options=()
 declare -A Help=()
 
-# these variables must exist
+# these variables must exist. Under some conditions Lmod unset them.
 if [[ ! -v LOADEDMODULES ]] || [[ ! -v _LMFILES_ ]]; then
 	LOADEDMODULES=''
 	_LMFILES_=''
 fi
 [[ -v MODULEPATH ]]	   || MODULEPATH=''
 [[ -v PMODULES_ENV ]]      || PMODULES_ENV=''
+[[ -v MANPATH ]]           || MANPATH=''
 
 # initialize help text of 'module --version'
 Help['version']="
