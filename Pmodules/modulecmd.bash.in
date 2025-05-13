@@ -3181,6 +3181,19 @@ DOCUMENTATION:
 '
 #..............................................................................
 subcommand_help() {
+	print_help_hints(){
+		local -- pattern="$1"
+		local -- modules=''
+		find_matching_modules modules "${pattern}" -a
+
+		std::info "A module with the name '${pattern}' is not available in the current module path!\n"
+		local -- output=''
+		create_module_tab output "${modules}" || return 0
+		std::info "The following modules are matching the given name:\n"
+		std::info "${output}"
+		std::info "To get help for a specific module, the runtime dependencies must be loaded first!"
+	}
+
 	local -r __doc__='Implementation of the sub-command help.'
 	local -a args=()
 	while (( $# > 0 )); do
@@ -3209,18 +3222,21 @@ subcommand_help() {
         for arg in "${args[@]}"; do
         	if [[ -v Help[${arg}] ]] ; then
                 	print_help "${arg}"
-                else
-			local -- modulefile=''
-			local -- relstage=''
-			local -- moduledir=''
-			find_modulefile \
-				modulefile \
-				relstage \
-				moduledir \
-				modulecmd \
-				"${arg}"
-			"${modulecmd}" 'bash' 'help' "${modulefile}"
-	        fi
+			continue
+                fi
+		local -- modulefile=''
+		local -- relstage=''
+		local -- moduledir=''
+		if ! find_modulefile \
+		     modulefile \
+		     relstage \
+		     moduledir \
+		     modulecmd \
+		     "${arg}"; then
+			print_help_hints "${arg}"
+			continue
+		fi
+		"${modulecmd}" 'bash' 'help' "${modulefile}"
         done
 }
 
@@ -3237,7 +3253,7 @@ USAGE:
 #..............................................................................
 subcommand_whatis() {
 	local -r __doc__='Implementation of the sub-command whatis.'
-	local -- options=()
+	local -- opts=('--newest')
 	local -- args=()
 
 	while (( $# > 0 )); do
@@ -3246,7 +3262,7 @@ subcommand_whatis() {
 				print_help "${SubCommand}"
 				;;
 			-a | --all )
-				options+=( '-a' )
+				opts+=( '-a' )
 				;;
 			-- )
 				shift 1
@@ -3260,31 +3276,34 @@ subcommand_whatis() {
 		shift
 	done
 
-	local group=''
-	for group in "${!GroupDepths[@]}"; do
-		local mod_name=''
-		local file_name=''
-		while read -r mod_name file_name; do
-			[[ -n ${file_name} ]] || continue
-			if [[ "${file_name##*.}" == 'lua' ]]; then
-				modulecmd="${Lmod_cmd}"
-				file_name="${mod_name}"
-			else
-				modulecmd="${Tcl_cmd}"
-			fi
-			local whatis=''
-			whatis=$("${modulecmd}" bash \
-						      whatis \
-						      "${file_name}" \
-						      2>&1 1>/dev/null)
-			printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
-		done < <(set +x; subcommand_search \
-			--group "${group}" \
-			--print-modulefiles \
-			--newest \
-			"${options[@]}" \
-			"${args[@]}" 2>&1)
-	done
+	local -- modules=''
+	find_matching_modules modules \
+			      "${opts[@]}" \
+			      "${args[@]}"
+
+	local -- modulename=''
+	local -- relstage=''
+	local -- grp=''
+	local -- modulefile=''
+	local -- ol_name=''
+	local -- deps=''
+	while read modulename relstage grp modulefile ol_name deps; do
+		[[ -n ${modulefile} ]] || continue
+		if [[ "${modulefile##*.}" == 'lua' ]]; then
+			modulecmd="${Lmod_cmd}"
+			modulefile="${modulename}"
+		else
+			modulecmd="${Tcl_cmd}"
+		fi
+		local whatis=''
+		whatis=$("${modulecmd}" bash \
+					whatis \
+					"${modulename}" \
+					2>&1 1>/dev/null)
+		[[ "${whatis}" == *:ERROR:* ]] && continue
+		whatis="${whatis/*:}" # remove modulefile name
+		printf "%-25s: %s\n" "${modulename}" "${whatis}" 1>&2
+	done <<<"${modules}"
 }
 
 ##############################################################################
@@ -3301,7 +3320,7 @@ USAGE:
 #..............................................................................
 subcommand_apropos() {
 	local -r __doc__='Implementation of the sub-command apropos|keyword'
-	local options=()
+	local opts=()
 	local args=()
 	while (( $# > 0 )); do
 		case $1 in
@@ -3309,7 +3328,7 @@ subcommand_apropos() {
 				print_help "${SubCommand}"
 				;;
 			-a | --all )
-				options+=( '-a' )
+				opts+=( '-a' )
 				;;
 			-- )
 				shift 1
@@ -3327,34 +3346,36 @@ subcommand_apropos() {
 	(( ${#args[@]} > 1 )) && \
 		die_args_too_many
 
-	local arg="${args[0]}"
-	local group=''
-	for group in "${!GroupDepths[@]}"; do
-		local mod_name=''
-		local file_name=''
-		while read -r mod_name file_name; do
-			[[ -n ${file_name} ]] || continue
-			if [[ "${file_name##*.}" == 'lua' ]]; then
-				modulecmd="${Lmod_cmd}"
-				file_name="${mod_name}"
-			else
-				modulecmd="${Tcl_cmd}"
-			fi
-			local whatis=''
-			whatis=$("${modulecmd}" bash \
-						      whatis \
-						      "${file_name}" \
-						      2>&1 1>/dev/null)
-			if [[ ${whatis,,} =~ ${arg,,} ]]; then
-				printf "%-25s: %s\n" "${mod_name}" "${whatis/*:}" 1>&2
-			fi
-		done < <(set +x; subcommand_search \
-			--group "${group}" \
-			--print-modulefiles \
-			"${options[@]}" 2>&1)
-	done
-}
+	local arg="${args[0],,}"
 
+	local -- modules=''
+	find_matching_modules modules '' "${opts[@]}"
+
+	local -- modulename=''
+	local -- relstage=''
+	local -- grp=''
+	local -- modulefiles=''
+	local -- ol_name=''
+	local -- deps=''
+	while read modulename relstage grp modulefile ol_name deps; do
+		[[ -z "${modulename}" ]] && continue
+		if [[ "${modulename##*.}" == 'lua' ]]; then
+			modulecmd="${Lmod_cmd}"
+			modulefile="${modulename}"
+		else
+			modulecmd="${Tcl_cmd}"
+		fi
+		local whatis=''
+		whatis=$("${modulecmd}" bash \
+					whatis \
+					"${modulefile}" \
+					2>&1 1>/dev/null)
+		[[ "${whatis}" == *:ERROR:* ]] && continue
+		whatis="${whatis/*:}"
+		[[ ${whatis,,} == *${arg}* ]] && \
+			printf "%-25s: %s\n" "${modulename}" "${whatis}" 1>&2
+	done <<<"${modules}"
+}
 ##############################################################################
 #
 # Collections
