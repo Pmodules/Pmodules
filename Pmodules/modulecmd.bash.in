@@ -31,6 +31,7 @@ declare -x  TCLLIBPATH=${TCLLIBPATH:-''}
 std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
 declare -r Tcl_cmd="${PMODULES_HOME}/libexec/modulecmd.bin"
 declare -r Lmod_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod"
+declare -r Spider_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/spider"
 declare -- modulecmd="${Tcl_cmd}"
 
 # we have to use the original path. Otherwise module load doesn't work.
@@ -69,12 +70,19 @@ declare -A MaskedGroups=()
 ##############################################################################
 declare -- Verbosity_lvl='verbose'
 declare -- Shell=''
-TmpFile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) \
-	|| std::die 1 "Oops: unable to create tmp file!"
+TmpFile=$( ${mktemp} /tmp/Pmodules.XXXXXX ) || \
+	std::die 1 "Oops: unable to create tmp file!"
 declare -r TmpFile
+declare -r CacheDir="${HOME}/.cache/Pmodules"
+${mkdir} -p "${CacheDir}" || \
+	std::die 1 "Oops: unable to create cache directoy '${CacheDir}"
+declare -- SpiderCache=''
 
 HostName=$(${hostname} -f)
 declare -r HostName
+
+CurTime=$( ${date} --date=now +%s )
+declare -r CurTime
 
 declare -r CMD='module'
 declare -- SubCommand=''
@@ -441,7 +449,6 @@ get_module_config(){
 	fi
 	local -- yaml=''
 	yaml=$(${yq} -e '.' < "${config_file}")
-	debug "module config: ${yaml}"
 	local -- key=''
 	for key in "${!ref_cfg[@]}"; do
 		case "${key,,}" in
@@ -2679,6 +2686,9 @@ subcommand_search() {
 	local opt_all_deps='no'
 	local opt_wrap='no'
 	local opt_newest='no'
+	local -- opt_print_raw='no'
+	local -A spider_keys=()
+	local -- spider_output=''
 
 	#.....................................................................
 	#
@@ -2778,14 +2788,14 @@ subcommand_search() {
 			fi
                 }
 
-                print_line_csv() {
-                        :
+                print_line_raw() {
+                        echo "$@"
                 }
                 
-                print_csv() {
+                print_raw() {
                         fmt=''
                         func_print_header='print_header_none'
-                        func_print_line='print_line_csv'
+                        func_print_line='print_line_raw'
                 }
 
                 if [[ "${opt_print_modulefiles}" == 'yes' ]]; then
@@ -2794,6 +2804,8 @@ subcommand_search() {
                         print_csv
                 elif [[ "${opt_print_verbose}" == 'yes' ]]; then
                         print_verbose
+		elif [[ "${opt_print_raw}" == 'yes' ]]; then
+			print_raw
                 else
                         print_default
                 fi
@@ -2865,14 +2877,25 @@ subcommand_search() {
 					done
 					unset IFS
 				fi
-			elif [[ "${OverlayInfo[${ol}:layout]}" == 'Spack' ]]; then
-				if [[ "${rel_modulefile}" != Core/* ]]; then
-					IFS='/' read -r -a toks <<< "${rel_modulefile}"
-					local -i j=0
-					for ((j = 0; j < ${#toks[@]}-2; j+=2)); do
-						deps+=( "${toks[$j]}/${toks[$j+1]}" );
-					done
-				fi
+				echo "${name}" "${relstage}" "${group}" "${modulefile}" \
+				     "${ol}" \
+				     "${deps[@]}" >> "${TmpFile}"
+				continue
+			fi
+			if [[ "${modulefile}" == *.lua ]] && \
+				   [[ -v spider_keys[${modulefile}] ]]; then
+				local -i j=0
+				local -i n=0
+				local -- tmp_str=''
+				n=$( ${yq} ".\"${modulefile}\".parentAA|length" <<<"${spider_output}" )
+				for (( j=0; j<n; j++ )); do
+					tmp_str="$(${yq} ".\"${modulefile}\".parentAA[$j][]" <<<"${spider_output}" )"
+					readarray -t deps <<<"${tmp_str}"
+					echo "${name}" "${relstage}" "${group}" "${modulefile}" \
+					     "${ol}" \
+					     "${deps[@]}" >> "${TmpFile}"
+				done
+				continue
 			fi
 			echo "${name}" "${relstage}" "${group}" "${modulefile}" \
 			     "${ol}" \
@@ -2895,8 +2918,8 @@ subcommand_search() {
 				opt_print_modulefiles='yes'
 				opt_print_header='no'
 				;;
-			--print-csv )
-				opt_print_csv='yes'
+			--print-raw )
+				opt_print_raw='yes'
 				opt_print_header='no'
 				;;
 			--release-stage | --release-stage=* )
@@ -2953,62 +2976,163 @@ subcommand_search() {
 	[[ "${opt_use_relstages}" == ":" ]] && opt_use_relstages=":${UsedReleaseStages}:"
 	[[ ${#modules[@]} == 0 ]] && modules+=( '' )
 
+	#......................................................................
+	# collect directories containing modulefiles -> modulepath
 	local -a groups=( "${!GroupDepths[@]}" )
+	local -a modulepath_spack=()
+	local -a modulepath_pmodules=()
+	local -a modulepath_other=()
+	# search in overlays with layout 'Spack'
+	for ol_name in "${UsedOverlays[@]}"; do
+		[[ "${OverlayInfo[${ol_name}:layout]}" != 'Spack' ]] && break
+		[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && \
+			groups=()
+		local -- path=''
+		if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
+			path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
+		elif [[ ":${UsedReleaseStages}:" == *:deprecated:* ]]; then
+			path="${OverlayInfo[${ol_name}:modulepath_deprecated]}"
+		else
+			path="${OverlayInfo[${ol_name}:modulepath_stable]}"
+		fi
+		[[ -z "${path}" ]] && path="${OverlayInfo[${ol_name}:modulepath]}"
+		[[ -z "${path}" ]] && continue
+
+		IFS=':' read -r -a modulepath_spack <<<"${path}"
+	done
+
+	# search in overlays with layout 'Pmodules'
+	for group in "${groups[@]}"; do
+		for ol_name in "${UsedOverlays[@]}"; do
+			[[ "${OverlayInfo[$ol_name:layout]}" != 'Pmodules' ]] && continue
+			local -- dir="${OverlayInfo[${ol_name}:modulefiles_root]}"
+			dir+="/${group}/${__MODULEFILES_DIR__}"
+			[[ -r "${dir}" ]] && modulepath_pmodules+=( "${dir}" )
+		done
+	done
+
+	# add directories in modulpath outside overlays
+	local -a dirs
+	IFS=':' read -r -a dirs <<<"${MODULEPATH}"
+	for dir in "${dirs[@]}"; do
+		local -- ol=''
+		local -- grp=''
+		find_overlay ol grp "${dir}" && continue
+		[[ -r "${dir}" ]] && modulepath_other+=( "${dir}" )
+	done
+
+	local -a modulepath=()
+	printf -v modulepath "%s:" \
+	       "${modulepath_spack[@]}" \
+	       "${modulepath_pmodules[@]}" \
+	       "${modulepath_other[@]}"
+	modulepath="${modulepath%:}"
+
+	local hash=$(echo "${modulepath}" | md5sum)
+	SpiderCache="${CacheDir}/spider-${hash:0:16}.yaml"
+
+	local -- update_cache='yes'
+	if [[ -r "${SpiderCache}" ]]; then
+		local -i mtime=0
+		mtime=$( ${stat} --format %Y "${SpiderCache}" )
+		(( CurTime - mtime <= 3600 )) && update_cache='no'
+	fi
+	if [[ "${update_cache}" == 'yes' ]]; then
+		std::info "(Re-)building the Pmodules cache. Please be patient ..."
+		spider_output="$( ${Spider_cmd} -o spider-json "${modulepath}" | \
+				  ${yq} -p j -o y '.*' |
+				  ${yq} '(.*.parentAA|select(.)) as $i ireduce({}; setpath($i | path; $i))')"
+		echo "${spider_output}" > "${SpiderCache}"
+	else
+		spider_output=$(< "${SpiderCache}")
+	fi
+	local -a keys=()
+	mapfile -t keys < <( ${yq} '.|keys[]' "${SpiderCache}" )
+	local -- key=''
+	for key in "${keys[@]}"; do
+		spider_keys[${key}]=1
+	done
+
+	#......................................................................
 	local -- module=''
 	for module in "${modules[@]}"; do
-		local -a modulepath=()
-
-		# search in overlays with layout 'Spack'
-		for ol_name in "${UsedOverlays[@]}"; do
-			[[ "${OverlayInfo[${ol_name}:layout]}" != 'Spack' ]] && break
-			[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && \
-				groups=()
-			local -- path=''
-			if [[ ":${UsedReleaseStages}:" == *:unstable:* ]]; then
-				path="${OverlayInfo[${ol_name}:modulepath_unstable]}"
-			elif [[ ":${UsedReleaseStages}:" == *:deprecated:* ]]; then
-				path="${OverlayInfo[${ol_name}:modulepath_deprecated]}"
-			else
-				path="${OverlayInfo[${ol_name}:modulepath_stable]}"
-			fi
-			[[ -z "${path}" ]] && path="${OverlayInfo[${ol_name}:modulepath]}"
-			[[ -z "${path}" ]] && continue
-			local -a mpath=()
-			IFS=':' read -r -a mpath <<<"${path}"
-			local -- dir=''
-			# remove last directory
-			for dir in "${mpath[@]}"; do
-				
-				modulepath+=( "${dir%/*}" )
-			done
-		done
-
-		# search in overlays with layout 'Pmodules'
-		for group in "${groups[@]}"; do
-			for ol_name in "${UsedOverlays[@]}"; do
-				[[ "${OverlayInfo[$ol_name:layout]}" != 'Pmodules' ]] && continue
-				local -- dir="${OverlayInfo[${ol_name}:modulefiles_root]}"
-				dir+="/${group}/${__MODULEFILES_DIR__}"
-				[[ -r "${dir}" ]] && modulepath+=( "${dir}" )
-			done
-		done
-
-		# search directories in modulpath outside overlays
-		local -a dirs
-		IFS=':' read -r -a dirs <<<"${MODULEPATH}"
-		for dir in "${dirs[@]}"; do
-			local -- ol=''
-			local -- grp=''
-			find_overlay ol grp "${dir}" && continue
-			[[ -r "${dir}" ]] && modulepath+=( "${dir}" )
-		done
-
-		search "${module}" "${modulepath[@]}"
+		search "${module}" \
+		       "${modulepath_spack[@]%/Core}" \
+		       "${modulepath_pmodules[@]}" \
+		       "${modulepath_other[@]}"
 	done
 	print_result
 
 	# empty tmp file
 	echo -n '' > ${TmpFile}
+}
+
+##############################################################################
+find_matching_modules(){
+	local -r __doc__='
+	      Find modules matching the specified arguments.
+	      Return "table" with the columns:
+	      name-name release-stage group modulefile overlay deps
+	      '
+	local -n result="$1"
+	shift
+	local -a opts=('--print-raw')
+	local -a patterns=()
+	while (( $# > 0 )); do
+		case $1 in
+			-* )
+				opts+=( "$1" )
+				;;
+			* )
+				patterns+=( "$1")
+				;;
+		esac
+		shift
+	done
+	result=$(set +x; subcommand_search "${patterns[@]}" "${opts[@]}")
+}
+
+##############################################################################
+create_module_tab(){
+	local -n result="$1"
+	local -- modules="$2"
+
+	local -- modulename=''
+	local -- relstage=''
+	local -- grp=''
+	local -- modulefile=''
+	local -- ol_name=''
+	local -- deps=''
+
+	local -- rest=''
+	local -i size_of_first_col=0
+	local -i num_rows=0
+	while read modulename rest; do
+		[[ -z "${modulename}" ]] && continue
+		(( ${#modulename} > size_of_first_col )) && size_of_first_col=${#modulename}
+		(( num_rows++ ))
+	done <<<"${modules}"
+	result=''
+	(( num_rows == 0 )) && return 1
+	printf -v result "%-${size_of_first_col}s %-10s %s\n" \
+		  "Module" "Group" "Dependencies"
+
+	while read modulename relstage grp modulefile ol_name deps; do
+		[[ -z "${modulename}" ]] && continue
+		local -- str=''
+		printf -v str "%-${size_of_first_col}s " "${modulename}"
+		result+="${str}"
+		if [[ "${grp}" == 'none' ]]; then
+			grp='-'
+		elif [[ ":${UsedGroups}:" != *:${grp}:* ]]; then
+			grp="(${grp})"
+		fi
+		printf -v str "%-10s " "${grp}"
+		result+="${str}"
+		result+="${deps}"
+		result+='\n'
+	done <<<"${modules}"
+	return 0
 }
 
 ##############################################################################
