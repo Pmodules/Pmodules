@@ -198,6 +198,7 @@ cat=$(std::def_cmd 'cat');		declare -r cat
 cp=$(std::def_cmd 'cp');		declare -r cp
 curl=$(std::def_cmd 'curl');		declare -r curl
 envsubst=$(std::def_cmd 'envsubst');	declare -r envsubst
+date=$(std::def_cmd 'date');		declare -r date
 dirname=$(std::def_cmd 'dirname');	declare -r dirname
 file=$(std::def_cmd 'file');		declare -r file
 find=$(std::def_cmd 'find');		declare -r find
@@ -218,6 +219,7 @@ sed=$(std::def_cmd 'sed');		declare -r sed
 seq=$(std::def_cmd 'seq');		declare -r seq
 sevenz=$(std::def_cmd 'sevenz');	declare -r sevenz
 sort=$(std::def_cmd 'sort');		declare -r sort
+stat=$(std::def_cmd 'stat');		declare -r stat
 tar=$(std::def_cmd 'tar');		declare -r tar
 tee=$(std::def_cmd 'tee');		declare -r tee
 touch=$(std::def_cmd 'touch');		declare -r touch
@@ -233,10 +235,9 @@ if [[ ${KernelName} == 'Darwin' ]]; then
 	sysctl=$(std::def_cmd 'sysctl');declare -r sysctl
 	declare -r sha256sum="${shasum -a 256}"
 else
-	ldd=$(std::def_cmd 'ldd');	declare -r ldd
+	ldd=$(std::def_cmd 'ldd');		declare -r ldd
 	patchelf=$(std::def_cmd 'patchelf');	declare -r patchelf
-	sha256sum=$(std::def_cmd 'sha256sum');
-	declare -r sha256sum
+	sha256sum=$(std::def_cmd 'sha256sum');	declare -r sha256sum
 fi
 
 #
