@@ -1328,9 +1328,17 @@ get_available_modules() {
 				get_module_config cfg "${dir}" "${rel_modulefile}"
 				is_available cfg "${ReleaseStages}" || continue
 			fi
-                        modules[${mod}]=1
+                        modules[${rel_modulefile}]=1
 
-			result+=( "${mod}" "${relstage}" "${dir}" "${rel_modulefile}" "${ol_name}" "${group}" )
+			result+=(
+				"${long_module_name}"
+				"${relstage}"
+				"${dir}"
+				"${rel_modulefile}"
+				"${ol_name}"
+				"${group}" )
+
+			# return after first match, e.g. for loading a module
 			[[ "${mode}" != 'search' ]] && return 0
 		done < <(${find} -L "${dir}" \
 				 -not -name ".*" \
@@ -3035,7 +3043,8 @@ subcommand_search() {
 	if [[ -r "${SpiderCache}" ]]; then
 		local -i mtime=0
 		mtime=$( ${stat} --format %Y "${SpiderCache}" )
-		(( CurTime - mtime <= 3600 )) && update_cache='no'
+		# cache expiration time is 4h
+		(( CurTime - mtime <= 14400 )) && update_cache='no'
 	fi
 	if [[ "${update_cache}" == 'yes' ]]; then
 		std::info "(Re-)building the Pmodules cache. Please be patient ..."
@@ -3043,6 +3052,7 @@ subcommand_search() {
 				  ${yq} -p j -o y '.*' |
 				  ${yq} '(.*.parentAA|select(.)) as $i ireduce({}; setpath($i | path; $i))')"
 		echo "${spider_output}" > "${SpiderCache}"
+		std::info "Done ..."
 	else
 		spider_output=$(< "${SpiderCache}")
 	fi
