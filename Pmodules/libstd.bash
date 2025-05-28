@@ -39,6 +39,16 @@ std::def_cmd(){
 	which "$1" 2>/dev/null || std::die 255 "'$1' not found!"
 }
 
+std::def_cmd2(){
+        local -- name="$1"
+        bin=$(which $1)
+
+        eval "${name}(){
+                LD_LIBRARY_PATH= LD_PRELOAD= ${bin} \"\$@\"
+        }
+        declare -g ${name}=${name}
+        readonly -f ${name}"
+}
 #..............................................................................
 #
 # compare two version numbers
@@ -196,7 +206,8 @@ base64=$(std::def_cmd 'base64');	declare -r base64
 bash=$(std::def_cmd 'bash');		declare -r bash
 cat=$(std::def_cmd 'cat');		declare -r cat
 cp=$(std::def_cmd 'cp');		declare -r cp
-curl=$(std::def_cmd 'curl');		declare -r curl
+#curl=$(std::def_cmd 'curl');		declare -r curl
+std::def_cmd2 'curl'
 envsubst=$(std::def_cmd 'envsubst');	declare -r envsubst
 date=$(std::def_cmd 'date');		declare -r date
 dirname=$(std::def_cmd 'dirname');	declare -r dirname
