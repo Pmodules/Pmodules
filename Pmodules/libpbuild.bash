@@ -1448,6 +1448,87 @@ _build_module() {
 		bm::install_module_config
 	}
 
+	die_sub_package_name_missing(){
+		std::die 3 "Name of sub-package not specified in \n===\n$1\n===\n"
+	}
+	die_sub_package_version_missing(){
+		std::die 3 "Version of sub-package not specified in \n===\n$1\n===\n"
+	}
+	bm::build_sub_packages(){
+		local -- yaml="$1"
+
+		# get no of sub-packages to build
+		local -i l=0
+		yml::get_seq_length l yaml .
+		(( l == 0 )) && return 0
+
+		std::info "\n %d sub-package(s) to build..." "$l"
+		local -i i=0
+		local -- fname=''
+		for ((i=0; i<l; i++)); do
+			local -- node=".[$i]"
+			local -- pkg_name=''
+			local -- pkg_version=''
+			local -a pkg_build_args=()
+
+			local -- key=''
+			local -a keys=()
+			yml::get_keys keys yaml "${node}"
+			for key in "${keys[@]}"; do
+				case ${key,,} in
+					'name' )
+						yml::get_value \
+							pkg_name \
+							yaml \
+							"${node}.${key}" \
+							'!!str' || \
+							yml::die_parsing "${yaml}"
+						;;
+					'version' )
+						yml::get_value \
+							pkg_version \
+							yaml \
+							"${node}.${key}" \
+							'!!str' || \
+							yml::die_parsing "${yaml}"
+						;;
+					'build_args' )
+						local -- value=''
+						yml::get_seq \
+							value \
+							yaml \
+							"${node}.${key}" || \
+							yml::die_parsing "${yaml}"
+						readarray -t pkg_build_args <<< "${value}"
+						;;
+					* )
+						die_invalid_key \
+							"${yaml}" \
+							"in subpackage '$i'" \
+							"${key}"
+						;;
+				esac
+			done
+			[[ -n "${pkg_name}" ]] || \
+				die_sub_package_name_missing "${yaml}"
+			[[ -n "${pkg_version}" ]] || \
+				die_sub_package_version_missing "${yaml}"
+
+			[[ "${opt_verbose}" == 'yes' ]] && \
+				pkg_build_args+=( '--verbose' )
+			[[ "${opt_debug}" == 'yes' ]] && \
+				pkg_build_args+=( '--debug' )
+			[[ "${opt_force_rebuild}" == 'yes' ]] && \
+				pkg_build_args+=( '-f' )
+			pkg_build_args+=( "--parent-prefix=${PREFIX}" )
+			"$BUILDBLOCK_DIR/build-${pkg_name}" \
+				"${pkg_name}/${pkg_version}" \
+				"${pkg_build_args[@]}"
+		done
+		debug "Building sub-packages done"
+	}
+
+
 	std::info \
 		"%s " \
 		"${module_name}/${module_version}:" \
@@ -1514,9 +1595,14 @@ _build_module() {
 		bm::install_module_config
 		bm::cleanup_build
 		bm::cleanup_src
+		bm::build_sub_packages "${ModuleConfig['sub_packages']}"
+
 	fi
 	bm::cleanup_modulefiles
-	std::info "* * * * *\n"
+ 	std::info \
+		"\n%s\n%s" \
+		"${module_name}/${module_version}: done" \
+		"* * * * *"
 }
 readonly -f _build_module
 

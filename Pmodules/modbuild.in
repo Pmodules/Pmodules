@@ -1195,85 +1195,6 @@ build_modules_yaml_v1(){
 		pbuild.add_patch_files "${args[@]}"
 	}
 
-	die_sub_package_name_missing(){
-		std::die 3 "Name of sub-package not specified in \n===\n$1\n===\n"
-	}
-	die_sub_package_version_missing(){
-		std::die 3 "Version of sub-package not specified in \n===\n$1\n===\n"
-	}
-	build_sub_packages(){
-		local -- yaml="$1"
-		echo "sub_packages: ${yaml}" 1>&2
-		local -i l=0
-		yml::get_seq_length l yaml .
-		if (( l == 0 )); then
-			debug "No sub-packages to built"
-		fi
-		local -i i=0
-		local -- fname=''
-		for ((i=0; i<l; i++)); do
-			local -- node=".[$i]"
-			local -- pkg_name=''
-			local -- pkg_version=''
-			local -a pkg_build_args=()
-
-			local -- key=''
-			local -a keys=()
-			yml::get_keys keys yaml "${node}"
-			for key in "${keys[@]}"; do
-				case ${key,,} in
-					'name' )
-						yml::get_value \
-							pkg_name \
-							yaml \
-							"${node}.${key}" \
-							'!!str' || \
-							yml::die_parsing "${yaml}"
-						;;
-					'version' )
-						yml::get_value \
-							pkg_version \
-							yaml \
-							"${node}.${key}" \
-							'!!str' || \
-							yml::die_parsing "${yaml}"
-						;;
-					'build_args' )
-						local -- value=''
-						yml::get_seq \
-							value \
-							yaml \
-							"${node}.${key}" || \
-							yml::die_parsing "${yaml}"
-						readarray -t pkg_build_args <<< "${value}"
-						;;
-					* )
-						die_invalid_key \
-							"${yaml}" \
-							"in subpackage '$i'" \
-							"${key}"
-						;;
-				esac
-			done
-			[[ -n "${pkg_name}" ]] || \
-				die_sub_package_name_missing "${yaml}"
-			[[ -n "${pkg_version}" ]] || \
-				die_sub_package_version_missing "${yaml}"
-
-			[[ "${opt_verbose}" == 'yes' ]] && \
-				pkg_build_args+=( '--verbose' )
-			[[ "${opt_debug}" == 'yes' ]] && \
-				pkg_build_args+=( '--debug' )
-			[[ "${opt_force_rebuild}" == 'yes' ]] && \
-				pkg_build_args+=( '-f' )
-			pkg_build_args+=( "--parent-prefix=${PREFIX}" )
-			"$BUILDBLOCK_DIR/build-${pkg_name}" \
-				"${pkg_name}/${pkg_version}" \
-				"${pkg_build_args[@]}"
-		done
-		debug "Building sub-packages done"
-	}
-
 
 	is_variant_to_build(){
 		local -- name="$1"
@@ -1399,7 +1320,6 @@ build_modules_yaml_v1(){
 			"${module_version}" \
 			module_config \
 			"${runtime_deps[@]}" "${build_requires[@]}"
-		build_sub_packages "${module_config['sub_packages']}"
 	}
 
 	expand_version_key(){
