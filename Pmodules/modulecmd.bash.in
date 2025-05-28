@@ -1265,17 +1265,18 @@ get_available_modules() {
 
 		# loop over all files (and sym-links) in this directory and
 		# its sub-directories
-		local mod=''	# module_name/module_version
+		local -- short_module_name=''	# module name
+		local -- long_module_name=''	# module name & version
                 while read -r rel_modulefile; do
 			IFS='/' read -a toks <<<"${rel_modulefile}"
 			if (( ${#toks[@]} == 0 )); then
 				continue
 			elif (( ${#toks[@]} == 1 )); then
-				mod="${toks[0]}"
-				name="${mod}"
+				short_module_name="${mod}"
+				long_module_name="${toks[0]}"
 			else
-				name="${toks[-2]}"
-				mod="${name}/${toks[-1]}"
+				short_module_name="${toks[-2]}"
+				long_module_name="${toks[-2]}/${toks[-1]}"
 			fi
 			[[ -n ${OverlayExcludes} \
 				   && "${mod}" =~ ${OverlayExcludes} ]] && continue
@@ -1287,18 +1288,18 @@ get_available_modules() {
 				# - first time found by name only
 				# - in same overlay as first found
 				# - new version and not hidden by overlay
-				if [[ ! -v modulenames["${name}"] ]]; then
+				if [[ ! -v modulenames["${short_module_name}"] ]]; then
 					# new entry
 					if [[ "${OverlayInfo[${ol_name}:type]}" == "${ol_hiding}" ]]; then
-						modulenames[${name}]="${ol_name}"
+						modulenames[${short_module_name}]="${ol_name}"
 					else
-						modulenames[${name}]='0'
+						modulenames[${short_module_name}]='0'
 					fi
 					add='yes'
-				elif [[ "${modulenames[${name}]}" == "${ol_name}" ]]; then
+				elif [[ "${modulenames[${short_module_name}]}" == "${ol_name}" ]]; then
 					add='yes'
-				elif [[ "${modulenames[${name}]}" == '0'  ]] \
-					     && [[ ! -v modules[${mod}] ]]; then
+				elif [[ "${modulenames[${short_module_name}]}" == '0'  ]] \
+					     && [[ ! -v modules[${rel_modulefile}] ]]; then
 					add='yes'
 				fi
 			else
@@ -1307,12 +1308,14 @@ get_available_modules() {
 			fi
 			[[ "${add}" == 'no' ]] && continue
 			if [[ "${mode}" == 'search' ]]; then
-				[[ "${mod,,}" =~ ${pattern,,} ]] || continue
+				[[ "${long_module_name,,}" =~ ${pattern,,} ]] || continue
 			else
 				if [[ "${pattern}" == */* ]]; then
-					[[ "${mod}" == ${pattern} || "${mod}" == ${pattern}.lua ]] || continue
+					[[ "${long_module_name}" == ${pattern} || \
+						   "${long_module_name}" == ${pattern}.lua ]] || \
+						continue
 				else
-					[[ "${mod%/*}" == ${pattern} ]] || continue
+					[[ "${long_module_name%/*}" == ${pattern} ]] || continue
 				fi
 			fi
 			local -A cfg=()
