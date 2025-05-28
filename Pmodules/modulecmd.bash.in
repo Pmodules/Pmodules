@@ -378,6 +378,7 @@ Thank you for your understanding.
 print_module_load_msg(){
 	local -r relstage="$1"
 	local -- msg=''
+	[[ "${relstage}" == 'stable' ]] && return 0
 	printf -v msg "%s %s: %s -- %s" \
 	       "${CMD}" 'load' \
 	       "${relstage} module has been loaded" \
