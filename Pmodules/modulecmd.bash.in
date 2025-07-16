@@ -26,13 +26,29 @@ source "${PMODULES_HOME}/lib/libstd.bash" || {
 source "${PMODULES_HOME}/lib/libpmodules.bash"  || \
         std::die 3 "Oops: cannot source library -- '$_'"
 
-declare -rx TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
+Tcl_cmd(){
+	local -- TCL_LIBRARY="${PMODULES_HOME}/lib/tcl@TCL_VERSION@"
+	TCL_LIBRARY="${TCL_LIBRARY}" LD_PRELOAD='' \
+		   "${PMODULES_HOME}/libexec/modulecmd.bin" "$@"
+}
+readonly -f Tcl_cmd
+
+Lmod_cmd(){
+	LD_PRELOAD='' \
+		  "${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod" "$@"
+}
+readonly -f Lmod_cmd
+
+Spider_cmd(){
+	LD_PRELOAD='' LD_LIBRARY_PATH='' \
+		  "${PMODULES_HOME}/libexec/lmod/lmod/libexec/spider" "$@"
+}
+readonly -f Spider_cmd
+
 declare -x  TCLLIBPATH=${TCLLIBPATH:-''}
 std::prepend_path TCLLIBPATH "${PMODULES_HOME}/lib/Pmodules"
-declare -r Tcl_cmd="${PMODULES_HOME}/libexec/modulecmd.bin"
-declare -r Lmod_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/lmod"
-declare -r Spider_cmd="${PMODULES_HOME}/libexec/lmod/lmod/libexec/spider"
-declare -- modulecmd="${Tcl_cmd}"
+
+declare -- modulecmd="Tcl_cmd"
 
 # we have to use the original path. Otherwise module load doesn't work.
 PATH="${path_orig}"
@@ -570,14 +586,14 @@ is_modulefile() {
 	[[ -f "${fname}" && -r "${fname}" ]] || return 2
 	
 	if [[ "${fname##*.}" == 'lua' ]]; then
-		ref_intrp="${Lmod_cmd}"
+		ref_intrp="Lmod_cmd"
 		return 0
 	fi
 	local -- shebang
 	read -r -n 11 shebang < "${fname}"
 	if [[ "${shebang:0:8}" == '#%Module' ]] \
 		   || [[ "${shebang:0:9}" == '#%Pmodule' ]]; then
-		ref_intrp="${Tcl_cmd}"
+		ref_intrp="Tcl_cmd"
 		return 0
 	fi
 	return 1
@@ -698,7 +714,7 @@ set_lmfiles(){
 	fi
 	local -- dir=''
 	local -a dirs=()
-	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
+	if [[ "${modulecmd}" == "Lmod_cmd" ]]; then
 		IFS=':' read -r -a dirs <<<"${PmFiles}"
 		for dir in "${dirs[@]}"; do
 			std::append_path _LMFILES_ "${dir}"
@@ -975,7 +991,7 @@ subcommand_load() {
 		if [[ -n "${error}" ]]; then
                        	echo "${error}" 1>&2
 		fi
-		if [[ "${modulecmd}" == "${Tcl_cmd}" ]]; then
+		if [[ "${modulecmd}" == "Tcl_cmd" ]]; then
 			std::append_path PmFiles "${current_modulefile}"
 		fi
 
@@ -1081,7 +1097,7 @@ subcommand_unload() {
 				echo ""
                 		;;
 		esac
-		if [[ "${modulecmd}" == "${Tcl_cmd}" ]]; then
+		if [[ "${modulecmd}" == "Tcl_cmd" ]]; then
 			std::remove_path PmFiles "${lmfile}"
 		fi
 	done
@@ -1390,7 +1406,7 @@ find_modulefile(){
 	ref_modulefile="${mods[2]}/${mods[3]}"
 	is_modulefile ref_interp "${ref_modulefile}" || \
 		die_module_not_a_modulefile "${modulename}"
-	if [[ "${modulecmd}" == "${Lmod_cmd}" ]]; then
+	if [[ "${modulecmd}" == "Lmod_cmd" ]]; then
 		# Lmod doesn't support full qualified path names!
 		ref_modulefile="${ref_modulefile/${ref_moduledir}\/}"
 	fi
@@ -3305,10 +3321,10 @@ subcommand_whatis() {
 	while read modulename relstage grp modulefile ol_name deps; do
 		[[ -n ${modulefile} ]] || continue
 		if [[ "${modulefile##*.}" == 'lua' ]]; then
-			modulecmd="${Lmod_cmd}"
+			modulecmd="Lmod_cmd"
 			modulefile="${modulename}"
 		else
-			modulecmd="${Tcl_cmd}"
+			modulecmd="Tcl_cmd"
 		fi
 		local whatis=''
 		whatis=$("${modulecmd}" bash \
@@ -3375,10 +3391,10 @@ subcommand_apropos() {
 	while read modulename relstage grp modulefile ol_name deps; do
 		[[ -z "${modulename}" ]] && continue
 		if [[ "${modulename##*.}" == 'lua' ]]; then
-			modulecmd="${Lmod_cmd}"
+			modulecmd="Lmod_cmd"
 			modulefile="${modulename}"
 		else
-			modulecmd="${Tcl_cmd}"
+			modulecmd="Tcl_cmd"
 		fi
 		local whatis=''
 		whatis=$("${modulecmd}" bash \
