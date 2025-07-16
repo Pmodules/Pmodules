@@ -29,7 +29,10 @@ esac
 #export TCL_INCLUDE="${PREFIX}/include/tcl.h"
 #export TCL_LIBS="${PREFIX}/lib/libtcl8.6.a"
 
-PATH="${PREFIX}/libexec/lua/bin:$PAT:$PATH" 
+unset LD_PRELOAD
+unset LD_LIBRARY_PATH
+#PATH="${PREFIX}/libexec:${PREFIX}/libexec/lua/bin:$PATH" 
+PATH="${PREFIX}/libexec/lua/bin:$PATH" 
 LMOD_PREFIX="${PREFIX}/libexec"
 "${SRC_DIR}"/configure \
 	--prefix="${LMOD_PREFIX}" \
