@@ -41,7 +41,8 @@ std::def_cmd(){
 
 std::def_cmd2(){
         local -- name="$1"
-        bin=$(which $1)
+	local -- bin=''
+        bin=$(which $1) || std::die 255 "'${name}' not found!"
 
         eval "${name}(){
                 LD_LIBRARY_PATH= LD_PRELOAD= ${bin} \"\$@\"
@@ -49,6 +50,7 @@ std::def_cmd2(){
         declare -g ${name}=${name}
         readonly -f ${name}"
 }
+
 #..............................................................................
 #
 # compare two version numbers
@@ -201,54 +203,54 @@ std::version_eq() {
 }
 readonly -f std::version_eq
 
-awk=$(std::def_cmd 'awk');		declare -r awk
-base64=$(std::def_cmd 'base64');	declare -r base64
-bash=$(std::def_cmd 'bash');		declare -r bash
-cat=$(std::def_cmd 'cat');		declare -r cat
-cp=$(std::def_cmd 'cp');		declare -r cp
-#curl=$(std::def_cmd 'curl');		declare -r curl
+std::def_cmd2 'awk'
+std::def_cmd2 'base64'
+std::def_cmd2 'bash'
+std::def_cmd2 'cat'
+std::def_cmd2 'cp'
 std::def_cmd2 'curl'
-envsubst=$(std::def_cmd 'envsubst');	declare -r envsubst
-date=$(std::def_cmd 'date');		declare -r date
-dirname=$(std::def_cmd 'dirname');	declare -r dirname
-file=$(std::def_cmd 'file');		declare -r file
-find=$(std::def_cmd 'find');		declare -r find
-getopt=$(std::def_cmd 'getopt');	declare -r getopt
-grep=$(std::def_cmd 'grep');		declare -r grep
-hostname=$(std::def_cmd 'hostname');	declare -r hostname
-install=$(std::def_cmd 'install');	declare -r install
-logger=$(std::def_cmd 'logger');	declare -r logger
-make=$(std::def_cmd 'make');		declare -r make
-mkdir=$(std::def_cmd 'mkdir');		declare -r mkdir
-mktemp=$(std::def_cmd 'mktemp');	declare -r mktemp
-modulecmd=$(std::def_cmd 'modulecmd');	declare -- modulecmd
-patch=$(std::def_cmd 'patch');		declare -r patch
-pwd=$(std::def_cmd 'pwd');		declare -r pwd
-rm=$(std::def_cmd 'rm');		declare -r rm
-rmdir=$(std::def_cmd 'rmdir');		declare -r rmdir
-sed=$(std::def_cmd 'sed');		declare -r sed
-seq=$(std::def_cmd 'seq');		declare -r seq
-sevenz=$(std::def_cmd 'sevenz');	declare -r sevenz
-sort=$(std::def_cmd 'sort');		declare -r sort
-stat=$(std::def_cmd 'stat');		declare -r stat
-tar=$(std::def_cmd 'tar');		declare -r tar
-tee=$(std::def_cmd 'tee');		declare -r tee
-touch=$(std::def_cmd 'touch');		declare -r touch
-tput=$(std::def_cmd 'tput');		declare -r tput
-uname=$(std::def_cmd 'uname');		declare -r uname
-yq=$(std::def_cmd 'yq');		declare -r yq
+std::def_cmd2 'envsubst'
+std::def_cmd2 'date'
+std::def_cmd2 'dirname'
+std::def_cmd2 'file'
+std::def_cmd2 'find'
+std::def_cmd2 'getopt'
+std::def_cmd2 'grep'
+std::def_cmd2 'hostname'
+std::def_cmd2 'install'
+std::def_cmd2 'logger'
+std::def_cmd2 'make'
+std::def_cmd2 'md5sum'
+std::def_cmd2 'mkdir'
+std::def_cmd2 'mktemp'
+std::def_cmd2 'modulecmd'
+std::def_cmd2 'patch'
+std::def_cmd2 'pwd'
+std::def_cmd2 'rm'
+std::def_cmd2 'rmdir'
+std::def_cmd2 'sed'
+std::def_cmd2 'seq'
+std::def_cmd2 'sevenz'
+std::def_cmd2 'sort'
+std::def_cmd2 'stat'
+std::def_cmd2 'tar'
+std::def_cmd2 'tee'
+std::def_cmd2 'touch'
+std::def_cmd2 'tput'
+std::def_cmd2 'uname'
+std::def_cmd2 'yq'
 
 KernelName=$(${uname} -s);		declare -r KernelName
 if [[ ${KernelName} == 'Darwin' ]]; then
 	PATH+=':/opt/local/bin'
-	otool=$(std::def_cmd 'otool');	declare -r otool
-	shasum=$(std::def_cmd 'shasum');declare -r shasum
-	sysctl=$(std::def_cmd 'sysctl');declare -r sysctl
+	std::def_cmd2 'otool'
+	std::def_cmd2 'shasum'
+	std::def_cmd2 'sysctl'
 	declare -r sha256sum="${shasum -a 256}"
 else
 	ldd=$(std::def_cmd 'ldd');		declare -r ldd
-	patchelf=$(std::def_cmd 'patchelf');	declare -r patchelf
-	sha256sum=$(std::def_cmd 'sha256sum');	declare -r sha256sum
+	std::def_cmd2 'patchelf'
+	std::def_cmd2 'sha256sum'
 fi
 
 #
