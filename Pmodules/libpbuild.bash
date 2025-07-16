@@ -17,7 +17,7 @@ declare -a SOURCE_URLS=()
 declare -a SOURCE_NAMES=()
 declare -a SOURCE_STRIP_DIRS=() 
 declare -a SOURCE_UNPACKER=()
-declare -A SOURCE_UNPACK_DIRS=()
+declare -a SOURCE_UNPACK_DIRS=()
 declare -ax CONFIGURE_ARGS=()
 declare -a PATCH_FILES=()
 declare -a PATCH_STRIPS=()
@@ -223,11 +223,15 @@ pbuild::set_download_url() {
 readonly -f pbuild::set_download_url
 
 pbuild.set_urls(){
+	local -n src="$1"
 	local -i _i=${#SOURCE_URLS[@]}
-	SOURCE_URLS[_i]="$1"
-	SOURCE_NAMES[_i]="$2"
-	SOURCE_STRIP_DIRS[_i]="$3"
-	SOURCE_UNPACKER[_i]="$4"
+	SOURCE_URLS[_i]="${src['url']}"
+	SOURCE_NAMES[_i]="${src['name']}"
+	SOURCE_STRIP_DIRS[_i]="${src['strip_dirs']}"
+	SOURCE_UNPACKER[_i]="${src['unpacker']}"
+	SOURCE_UNPACK_DIRS[_i]="${src['unpack_dir']}"
+	SOURCE_PATCH_FILES[_i]="${src['patch_file']}"
+	SOURCE_PATCH_STRIPS[_i]="${src['patch_strip']}"
 }
 
 #..............................................................................
@@ -246,19 +250,6 @@ pbuild::set_sha256sum() {
 		 "The SHA256 hash must be configured in the YAML configuration file!"
 }
 readonly -f pbuild::set_sha256sum
-
-#..............................................................................
-#
-# Unpack file $1 in directory $2
-#
-# Arguments:
-#	$1	file-name
-#	$2	directory
-#
-pbuild::set_unpack_dir() {
-	SOURCE_UNPACK_DIRS[$1]="$2"
-}
-readonly -f pbuild::set_unpack_dir
 
 #..............................................................................
 #
@@ -290,26 +281,35 @@ readonly -f pbuild::set_default_patch_strip
 #
 pbuild::unpack(){
 	local -r fname="$1"
-	local -r dir="${2:-${SRC_DIR}}"
+	local -- dir="$2"
 	local -r strip="${3:-1}"
 	local -r unpacker="${4:-${tar}}"
+
+	if [[ -z "${dir}" ]]; then
+		dir="${SRC_DIR}"
+	else
+		dir=$(envsubst <<<"${dir}")
+	fi
+	mkdir -p "${dir}"
+
 	case "${unpacker}" in
 		tar )
-			${tar} \
+			tar \
 				--directory="${dir}" \
 				-xv \
+				--exclude-vcs \
 				--strip-components "${strip}" \
 				-f "${fname}"
 			;;
 		7z )
-			${sevenz} \
+			sevenz \
 				x \
 				-y \
 				-o"${dir}" \
 				"${fname}"
 			;;
 		none )
-			:
+			cp "${fname}" "${dir}"
 			;;
 		* )
 			std::die 1 "Unsupportet tool for unpacking -- '${unpacker}'"
@@ -328,148 +328,162 @@ pbuild::post_prep(){
 	:
 }
 pbuild::prep() {
-	#......................................................................
-	#
-	# download the source file if not already downloaded and validate
-	# checksum (if known).
-	# Abort on any error!
-	#
-	# Arguments:
-	#	$1	reference varibale to return result
-	#	$2	download URL
-	#	$3	save downloaded file with this name. If the empty
-	#		string is passed, derive file name from URL
-	#	$4...	directories the source file might be already in. If the
-	#		file does not exist in one of these directories, it
-	#		is downloaded and stored in the first given directory.
-	#
-	download_source_file() {
-		download_with_curl() {
-			local -r output="$1"
-			local -r url="$2"
-			${curl} \
-				--location \
-				--fail \
-				--output "${output}" \
-				"${url}"
-			# :FIXME: How to handle insecure downloads? 
-			#if (( $? != 0 )); then
-			#	curl \
-			#		--insecure \
-			#		--output "${output}" \
-			#		"${url}"
-			#fi
-		}
-
-		check_hash_sum() {
-			local -r fname="$1"
-			local -r expected_hash_sum="$2"
-			local hash_sum=''
-
-			hash_sum=$(${sha256sum} "${fname}" | awk '{print $1}')
-			test "${hash_sum}" == "${expected_hash_sum}" || \
-				std::die 42 \
-					 "%s " \
-					 "${module_name}/${module_version}:" \
-					 "hash-sum missmatch for file '${fname}'!"
-		}
-
-		local -n _result="$1"
-		local -r url="$2"
-		local    fname="$3"
-		shift 3
-		dirs+=( "$@" )
-
-		[[ -n "${fname}" ]] || fname="${url##*/}"
-		local dir=''
-		dirs+=( 'not found' )
+	search_source_file(){
+		local -n  ref_dir="$1"
+		local -r fname="$2"
+		local -a dirs=(
+			"${PMODULES_DISTFILESDIR}"
+			"${BUILDBLOCK_DIR}"
+			"${BUILDBLOCK_DIR}/files"
+		)
+		# return if neither a URL nor a file name given
+		[[ -n "${fname}" ]] || return 0
 		for dir in "${dirs[@]}"; do
-			[[ -r "${dir}/${fname}" ]] && break
+			if [[ -r "${dir}/${fname}" ]]; then
+				ref_dir="${dir}"
+				return 0
+			fi
 		done
-		if [[ "${dir}" == 'not found' ]]; then
-			dir="${dirs[0]}"
-			download_with_curl "${dir}/${fname}" "${url}" || \
+		ref_dir=''
+		return 1
+	}
+
+	download_source_file() {
+		local -- src_dir="$1"
+		local -i idx="$2"
+		if [[ -z "${SOURCE_NAMES[idx]}" ]]; then
+			SOURCE_NAMES[idx]="${PMODULES_DISTFILESDIR}/${SOURCE_URLS[idx]##*/}"
+		fi
+		curl \
+			--location \
+				--fail \
+				--output "${src_dir}/${SOURCE_NAMES[idx]}" \
+				"${SOURCE_URLS[idx]}" || \
 				std::die 42 \
 					 "%s " \
 					 "${module_name}/${module_version}:" \
 					 "downloading source file '${fname}' failed!"
-		fi
-		_result="${dir}/${fname}"
-		[[ -r "${_result}" ]] || \
-			std::die 42 \
-				 "%s " \
-				 "${module_name}/${module_version}:" \
-				 "source file '${_result}' is not readable!"
 
-		if [[ -v SHASUMS[${fname}] ]]; then
-			check_hash_sum "${dir}/${fname}" "${SHASUMS[${fname}]}"
-			std::info "${module_name}/${module_version}: SHA256 hash sum is OK ..." 
-		else
-			std::info "${module_name}/${module_version}: SHA256 hash sum missing NOK ..." 
-		fi
+			# :FIXME: How to handle insecure downloads? 
+			#if (( $? != 0 )); then
+			#	curl \
+			#		--insecure \
+			#		--output "${fname}" \
+			#		"${url}"
+			#fi
 	}
 
 	unpack() {
-		local -r fname="$1"
-		local -r dir="$2"
-		local -r strip="$3"
-		local -r unpacker="$4"
-		{
-			${mkdir} -p "${dir}"
-			pbuild::unpack "${fname}" "${dir}" "${strip}" "${unpacker}"
-		} || {
+		local -r  src_dir="$1"
+		local -ri idx="$2"
+
+		local -r fname="${src_dir}/${SOURCE_NAMES[idx]}"
+		local -r dir="${SOURCE_UNPACK_DIRS[idx]}"
+		local -r strip="${SOURCE_STRIP_DIRS[idx]}"
+		local -r unpacker="${SOURCE_UNPACKER[idx]}"
+
+		if ! pbuild::unpack "${fname}" "${dir}" "${strip}" "${unpacker}"; then
 			${rm} -f "${fname}"
 			std::die 4 \
 				 "%s " \
 				 "${module_name}/${module_version}:" \
 				 "cannot unpack sources!"
-		}
+		fi
+	}
+
+	check_hash_sum() {
+		local -r  src_dir="$1"
+		local -ri idx="$2"
+		local -r fname="${SOURCE_NAMES[i]}"
+		if [[ -v SHASUMS[${fname}] ]]; then
+			local hash_sum=''
+			hash_sum=$(sha256sum "${src_dir}/${fname}" | awk '{print $1}')
+			test "${hash_sum}" == "${SHASUMS[${fname}]}" || \
+				std::die 42 \
+					 "%s " \
+					 "${module_name}/${module_version}:" \
+					 "hash-sum missmatch for file '${fname}'!"
+			std::info "${module_name}/${module_version}: SHA256 hash sum is OK ..." 
+		else
+			std::info "${module_name}/${module_version}: SHA256 hash sum missing NOK ..." 
+		fi
+
+	}
+
+	apply_patch(){
+		local -r fname="$1"
+		local -r strip="$2"
+		local -r dir="$3"
+		std::info \
+			"%s " \
+			"${module_name}/${module_version}:" \
+			"Appling patch '${fname}' ..."
+		patch \
+			--strip="${strip}" \
+			--directory="${dir}" < "${fname}" || \
+			std::die 4 \
+				 "%s " \
+				 "${module_name}/${module_version}:" \
+				 "error patching sources!"
 	}
 
 	patch_sources() {
-		cd "${SRC_DIR}"
-		local i=0
+		local _i=0
 		for ((_i = 0; _i < ${#PATCH_FILES[@]}; _i++)); do
-			std::info \
-				"%s " \
-				"${module_name}/${module_version}:" \
-				"Appling patch '${PATCH_FILES[_i]}' ..."
-			local -i strip_val="${PATCH_STRIPS[_i]:-${PATCH_STRIP_DEFAULT}}"
-			${patch} -p${strip_val} < "${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}" || \
-				std::die 4 \
-					 "%s " \
-					 "${module_name}/${module_version}:" \
-					 "error patching sources!"
+			local -i strip=
+			apply_patch \
+				"${BUILDBLOCK_DIR}/${PATCH_FILES[_i]}" \
+				"${PATCH_STRIPS[_i]:-${PATCH_STRIP_DEFAULT}}" \
+				"${SRC_DIR}"
 		done
 	}
+
 	(( ${#SOURCE_URLS[@]} == 0 )) && return 0
-	${mkdir} -p "${PMODULES_DISTFILESDIR}"
+	mkdir -p "${PMODULES_DISTFILESDIR}"
 	local i=0
-	local source_fname
+
 	for ((i = 0; i < ${#SOURCE_URLS[@]}; i++)); do
-		download_source_file \
-			source_fname \
-			"${SOURCE_URLS[i]}" \
-			"${SOURCE_NAMES[i]}" \
-			"${PMODULES_DISTFILESDIR}" \
-			"${BUILDBLOCK_DIR}" ||
-			std::die 4 \
-				 "%s " "${module_name}/${module_version}:" \
-				 "sources for not found."
-		local dir=''
-		local key="${SOURCE_NAMES[i]}"
-		if [[ -v SOURCE_UNPACK_DIRS[${key}] ]]; then
-			dir="${SOURCE_UNPACK_DIRS[${key}]}"
-		else
-			dir="${SRC_DIR}"
+		local -- src_dir=''
+		local -i ec=0
+		# if file name is not specified, use last component of URL as file name
+		# check whether file exist
+		# try to download if not and URL is specified
+		[[ -z "${SOURCE_NAMES[i]}" ]] && SOURCE_NAMES[i]="${SOURCE_URLS[i]##*/}"
+		if [[ -n "${SOURCE_NAMES[i]}" ]]; then
+			if ! search_source_file src_dir "${SOURCE_NAMES[i]}"; then
+				if [[ -n "${SOURCE_URLS[i]}" ]]; then
+					src_dir="${PMODULES_DISTFILESDIR}"
+					download_source_file "${src_dir}" "$i"
+				fi
+			fi
 		fi
-		local strip_dirs="${SOURCE_STRIP_DIRS[i]}"
-		local unpacker="${SOURCE_UNPACKER[i]}"
-		unpack "${source_fname}" "${dir}" "${strip_dirs}" "${unpacker}"
+		if [[ -n "${SOURCE_NAMES[i]}" ]]; then
+			check_hash_sum "${src_dir}" "$i"
+			unpack "${src_dir}" "$i"
+		fi
+		if [[ -n "${SOURCE_PATCH_FILES[i]}" ]]; then
+			search_source_file src_dir "${SOURCE_PATCH_FILES[i]}" || \
+				std::die 42 \
+					 "%s " \
+					 "${module_name}/${module_version}:" \
+					 "patch file '${SOURCE_PATCH_FILES[i]}' not found!"
+			local -- target_dir=''
+			if [[ -z "${SOURCE_UNPACK_DIRS[i]}" ]]; then
+				target_dir="${SRC_DIR}"
+			else
+				target_dir="$(envsubst <<<"${SOURCE_UNPACK_DIRS[i]}")"
+			fi
+			mkdir -p "${target_dir}"
+
+			apply_patch \
+				"${src_dir}/${SOURCE_PATCH_FILES[i]}" \
+				 "${SOURCE_PATCH_STRIPS[i]:-${PATCH_STRIP_DEFAULT}}" \
+				"${target_dir}"
+		fi
 	done
 	patch_sources
 	# create build directory
-	${mkdir} -p "${BUILD_DIR}"
+	mkdir -p "${BUILD_DIR}"
 }
 
 ###############################################################################

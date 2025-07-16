@@ -482,6 +482,7 @@ declare -A Yaml_default_config=(
 	['systems']=''			# !!seq of strings
 	['target_cpus']=''		# !!seq of strings
 	['urls']=''			# !!map
+	['sources']=''			# !!map; alias for urls
 	['use_flags']=''		# !!seq
 	['use_overlays']=''		# !!seq
 	['variant']=''			# !!str
@@ -494,6 +495,16 @@ declare -A Yaml_default_config=(
 declare -A Yaml_valid_vk_keys=(
 	['config']='1'			# !!map
 	['variants']='1'		# !!map
+)
+
+declare -A Yaml_source_keys=(
+	['url']=''
+	['name']=''
+	['strip_dirs']=1
+	['unpacker']='tar'
+	['unpack_dir']=''
+	['patch_file']=''
+	['patch_strip']=0
 )
 
 declare -A Unpackers=(
@@ -743,12 +754,13 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
-				urls | sub_packages )
+				urls | sources | sub_packages )
 					yml::get_value \
 						value \
 						yaml_input \
 						"${node}.${key}" '!!seq' || \
 						yml::die_parsing "${yaml_input}"
+					[[ "${key,,}" == 'sources' ]] && key='urls'
 					cfg[${key,,}]="${value}"
 					;;
 				build_requires|configure_args|docfiles|patch_files|runtime_deps|systems|use_overlays|variant )
@@ -1128,31 +1140,31 @@ build_modules_yaml_v1(){
 		local -i i=0
 		local -- url_yaml=''
 		for ((i=0; i<l; i++)); do
+			local -A source=()
+			local -- key=''
+			for key in "${!Yaml_source_keys[@]}"; do
+				source[${key}]="${Yaml_source_keys[${key}]}"
+			done
 			url_yaml=$(${yq} -Ne e ".[$i]" <<<"${yaml}" 2>/dev/null) || \
 				die_parsing "{yaml}"
-			local url=''
-			local fname=''
-			local strip_dirs=''
-			local unpacker=''
-			local key=''
-			local value=''
+			local -- value=''
 			while read -r key value; do
 				key=${key:0:-1}
 				case "${key}" in
-					url )
-						url=$(${envsubst} <<<"${value}")
+					url | name | patch_file )
+						source[${key}]=$(${envsubst} <<<"${value}")
 						;;
-					name )
-						fname=$(${envsubst} <<<"${value}")
+					unpack_dir )
+						source[${key}]="${value}"
 						;;
-					strip_dirs )
+					strip_dirs | patch_strip )
 						[[ ${value} =~ ^[0-9]+$ ]] || \
 							die_invalid_value \
 								"${url_yaml}" \
 								'list of URLS' \
 								'strip_dirs' \
 								"${value}"
-						strip_dirs="${value}"
+						source[${key}]="${value}"
 						;;
 					unpacker )
 						[[ -v Unpackers[${value}] ]] || \
@@ -1161,7 +1173,7 @@ build_modules_yaml_v1(){
 								'list of URLs' \
 								'unpacker' \
 								"${value}"
-						unpacker="${value}"
+						source[${key}]="${value}"
 						;;
 					* )
 						die_invalid_key \
@@ -1171,15 +1183,15 @@ build_modules_yaml_v1(){
 						;;
 				esac
 			done <<<"${url_yaml}"
-			[[ -z "${url}" ]] && \
+			[[ -z "${source['url']}" && \
+				   -z "${source['name']}" && \
+				   -z "${source['patch_file']}" ]] && \
 				die_missing_key \
 					"${url_yaml}" \
-					'list of URLs' \
-					'url'
-			[[ -z "${fname}" ]] && fname="${url##*/}"
-			[[ -z "${strip_dirs}" ]] && strip_dirs=1
-			[[ -z "${unpacker}" ]] && unpacker='tar'
-			pbuild.set_urls "${url}" "${fname}" "${strip_dirs}" "${unpacker}"
+					'list of URLs/sources' \
+					'url or name or patch_file'
+			#[[ -v sources['name'] ]] && sources['name']="${sources['url']##*/}"
+			pbuild.set_urls source
 		done
 	}
 
