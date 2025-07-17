@@ -2536,7 +2536,7 @@ subcommand_list() {
 		# get list of loaded modules with stripped MODULEPATH
 		IFS=':' read -r -a modules \
 		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
-		local -- strs=()
+		local -a strs=()
 		local -i n=1		# enumeration of loaded modules
 		local -i colsize=0
 		local -- s=''
@@ -3319,8 +3319,8 @@ USAGE:
 #..............................................................................
 subcommand_whatis() {
 	local -r __doc__='Implementation of the sub-command whatis.'
-	local -- opts=('--newest')
-	local -- args=()
+	local -a opts=('--newest')
+	local -a args=()
 
 	while (( $# > 0 )); do
 		case $1 in
