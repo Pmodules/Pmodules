@@ -401,10 +401,10 @@ build_modules(){
 
 
 parse_version() {
-	local v="$1"
+	local -- v="$1"
 	V="$1"
 
-	local tmp=''
+	local -- tmp=''
 	SUFFIX=''
 
 	if [[ "$v" =~ "_" ]]; then
@@ -861,7 +861,7 @@ build_modules_yaml_v1(){
 			# loop over semicolon separated list of keys
 			for k in ${key//;/ }; do
 				# brace expansion of key
-				local list=()
+				local -a list=()
 				list=( $(${bash} -c "echo $k") )
 				if [[ ${list[@]} =~ ${version} ]]; then
 					result+=("${key}")
@@ -913,8 +913,8 @@ build_modules_yaml_v1(){
 		local -n with_modules="$3"	# [out] list of required modules
 
 		local -a modules=()
-		local key
-		local keys=()
+		local -- key
+		local -a keys=()
 		yml::get_keys keys yaml_input ".${group,,}"
 		for key in "${keys[@]}"; do
 			local -- version
@@ -944,7 +944,7 @@ build_modules_yaml_v1(){
 	is_subset(){
 		local -n subset="$1"
 		shift 1
-		local el=''
+		local -- el=''
 		for el in "${subset[@]}"; do
 			is_in_array "${el}" "$@" || return 1
 		done
@@ -981,7 +981,7 @@ build_modules_yaml_v1(){
 			'Compiler' with_compiler
 		debug "${with_compiler[@]}"
 		
-		local compiler=''
+		local -- compiler=''
 		for compiler in "${with_compiler[@]}"; do
 			# build if opt_with_modules is empty or compiler is in this array
 			(( ${#opt_with_modules[@]} != 0 )) \
@@ -1273,7 +1273,7 @@ build_modules_yaml_v1(){
 		}
 
 		# build this variant?
-		local build_variant="${opt_variant:-${config['default_variant']}}"
+		local -- build_variant="${opt_variant:-${config['default_variant']}}"
 		if [[ ":${config['variant']}:" != *:${build_variant}:* ]]; then
 			debug "don't build this variant: ${config['variant']} !=  *:${build_variant}:*"
 			return 0
@@ -1290,7 +1290,7 @@ build_modules_yaml_v1(){
 		local -n module_config="$3"
 
 		debug "build variant ${module_name}/${module_version}"
-		local ol_name="${module_config['overlay']}"
+		local -- ol_name="${module_config['overlay']}"
 		[[ -v OverlayInfo[${ol_name}:install_root] ]] || \
 			std::die 2 "%s" \
 				 "Overlay doesn't exist - ${ol_name}"
@@ -1333,7 +1333,7 @@ build_modules_yaml_v1(){
 			[MPI]=build_modules_mpi
 			[HDF5]=build_modules_hdf5
 		)
-		local func=build_modules_other
+		local -- func=build_modules_other
 		if [[ -v build_functions[${module_config['group']}] ]]; then
 			func=${build_functions[${module_config['group']}]}
 		fi
@@ -1353,8 +1353,8 @@ build_modules_yaml_v1(){
 		# loop over comma separated list of keys
 		for k in ${key//;/ }; do
 			# do curly brackets expansion {}
-			local l
-			local list=()
+			local -- l
+			local -a list=()
 			list=( $(${bash} -c "echo $k" ) )
 			for l in "${list[@]}"; do
 				if [[ $l =~ ${version} ]]; then
@@ -1373,7 +1373,7 @@ build_modules_yaml_v1(){
 		'.'
 
 	local -A mod_config=()
-	local key=''
+	local -- key=''
 	for key in "${!Yaml_default_config[@]}"; do
 		mod_config[${key}]="${Yaml_default_config[${key}]}"
 	done
@@ -1386,7 +1386,7 @@ build_modules_yaml_v1(){
 					mod_config \
 				;;
 			'shasums' )
-				local yaml_shasums=''
+				local -- yaml_shasums=''
 				yaml_shasums=$(${yq} ".${key}" <<<"${yaml_module_config}" 2>/dev/null)
 				while read -r key value; do
 					[[ -z ${key} ]] && continue
@@ -1429,7 +1429,7 @@ build_modules_yaml_v1(){
 	local -- version_key=''
 	local -i num_variants=0
 	for version_key in "${version_keys[@]}"; do
-		local node=".versions.\"${version_key}\""
+		local -- node=".versions.\"${version_key}\""
 		yml::get_keys \
 			found_keys \
 			yaml_module_config \
@@ -1460,9 +1460,9 @@ build_modules_yaml_v1(){
 			esac
 		done
 
-		local versions=()
+		local -a versions=()
 		expand_version_key versions "${version_key}" "${version}"
-		local version=''
+		local -- version=''
 		for version in "${versions[@]}"; do
 			debug "version: $version"
 			P="${name}"
