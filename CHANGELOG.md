@@ -1,4 +1,91 @@
 # Changelog of Pmodules
+## Version 2.0.1
+### modulecmd
+* Output hints in sub-command help if module exist but is
+  not available.
+  (#434)
+* (Re-)build cache only if a modulefile has been added/changed.
+  (#430)
+* Call `modulecmd`, `lmod` and `spider` via a wrapper function.
+  (#428)
+
+### build-system
+* A module with the same name/version can now be in multiple overlays.
+  Till now this was only possible with the base overlay plus another
+  overlay. The option `--cleanup-modulefiles` can be used to remove
+  all modulefiles from all overlays but the configured.
+  (#432)
+* Get hostname via the system binary `hostname(1)`. On a cluster with
+  Slurm the compute nodes might inherit the hostname from a login node.
+  In this case the value `$HOSTNAME` is wrong.
+  (#431)
+* The key `source` can now be used as alias for `urls`.
+  The structure of `urls` has been extended. It's now possible to
+  define the directory to unpack a source and add patch files.
+  (#429)
+
+### both
+* Code review: local variables must be declared local. This most likely
+  fixes some strange behavior/bugs.
+  (#433)
+* Call system binaries via a function. In this function `LD_PRELOAD` and 
+  `LD_LIBRARY_PATH` are unset.
+  (#427)
+
+### compiling Pmodules
+* Bugfix in compiling Lmod.
+  (#426)
+
+## Version 2.0.0
+### modulecmd
+* building/removing sub-packages fixed
+  (#423)
+* Call system binaries via a shell function. Unset `LD_LIBRARY_PATH` and
+  `LD_PRELOAD` before calling the binary.
+  (#422)
+* bugfix in `module search`: not all matching modules were listed.
+  (#421, #424)
+* don't print a message after loading a stable module.
+  (#420)
+* cache timeout increased to 4h.
+  (#419)
+* `module whatis|appropos` fixed.
+  (#418)
+* `module search|spider` fixed for hierachical Lmod modules.
+  (#417)
+* Initialize `MANPATH` if not already set.
+  (#416)
+* reverse sort output of `module avail|search` only if called without
+  patternen. 
+  (#415)
+* bugfix in loading Lmod modules.
+  (#414)
+* more verbose deprecated message.
+  (#413)
+* `module avail|search` must be case-insensitive.
+  (#410)
+* Under certain conditions `module avail` showed modules which were
+  hidden/shadowed be an overlay. This change fixed the issue for 
+  non-hierarchical groups but not 100% for hierarchical groups. 
+  (#408)
+* re-initialize the Pmodules env after a `module purge`
+  (#406, #409)
+* Don't export the environment variables `OSrelease` and `SystemCPU`
+  in `PMODULES_ENV`. This causes issues on inhomogenious clusters.
+  (#405)OSrelease und SystemCPU
+* bugfix in defining doc-string fixed 
+  (#404)
+* bugfix in using/un-using groups
+  (#403, #407)
+
+### build-system
+* The check whether the main package has to be rebuild was wrong.
+  (#412)
+* code to set RPATH simplified and made more robust.
+  (#411)
+
+
+### both
 
 ## Version 1.1.23
 ### modulecmd
@@ -29,7 +116,7 @@
 * bugfix in reading group dependencies from the YAML config file.
   (#382)
 
-### both
+### Both
 * Tcl, Lua, Lmod, yq and BASH updated to current versions.
   (#392, #394, #395)
 * code review/refactoring

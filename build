@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 
-declare -rx VERSION='1.1.23'
+declare -rx VERSION='2.0.1'
 declare -rx BASH5_VERSION='5.2.37'
 declare -rx TCL_VERSION='8.6.16'
 declare -rx TCLLIB_VERSION='1.21'
@@ -11,7 +11,6 @@ declare -rx LMOD_VERSION='8.7.56'
 # for macOS only
 declare -rx GETOPT_VERSION='1.1.6'
 declare -rx FINDUTILS_VERSION='4.9.0'
-
 
 if (( "${BASH_VERSINFO[0]}" < 5 )); then
 	echo "BASH version 5.0 or newer is required and must be available in PATH!" 1>&2
