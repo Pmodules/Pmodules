@@ -791,11 +791,16 @@ subcommand_load() {
 	#
 	get_load_hints() {
 		local -n output="$1"	# [out] ref.var to return result
-		local relstage=''
 		output=''
+
+		local -- search_result="$(set +x; subcommand_search  "${m}" -a --no-header 2>&1)"
+		echo "search: ---" 1>&2
+		echo "${search_result}" 1>&2
+		echo "search: ---" 1>&2
+		local -- relstage=''
 		while read -r -a line; do
                         (( ${#line[@]} == 0 )) && continue
-			relstage=${line[1]}
+			relstage="${line[1]}"
 			if [[ ! ":${UsedReleaseStages}:" == *:${relstage}:* ]]; then
 				output+="module use ${relstage}; "
 			fi
