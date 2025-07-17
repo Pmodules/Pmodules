@@ -1290,7 +1290,9 @@ _build_module() {
 		#
 		# FIXME: Can it happen, that we remove module-/config-files which
 		#        we shouldn't remove?
-		#        For now we exclude removing from the overlay 'base' only.
+		#        For now we exclude removing from the overlay 'base' only
+		#	 This function is only called if the option '--cleanup-modulefiles'
+		#	 was specified.
 		#
 		[[ "${is_subpkg}" == 'yes' ]] && return 0
 		local ol=''
@@ -1612,7 +1614,9 @@ _build_module() {
 		bm::build_sub_packages "${ModuleConfig['sub_packages']}"
 
 	fi
-	bm::cleanup_modulefiles
+	if [[ "${opt_cleanup_modulefiles}" == 'yes' ]]; then
+		bm::cleanup_modulefiles
+	fi
  	std::info \
 		"\n%s\n%s" \
 		"${module_name}/${module_version}: done" \

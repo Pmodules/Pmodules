@@ -80,6 +80,9 @@ BUILD-STEPS OPTIONS:
 --update-modulefiles
 	Only install the modulefile and set the release.
 
+--cleanup-modulefiles
+	Remove modulefiles in other overlays.
+
 MISCELLANEOUS OPTIONS:
 
 -? | -h | --help
@@ -144,6 +147,7 @@ declare         opt_enable_cleanup_src='yes'
 declare         opt_force_rebuild='no'
 declare -i      opt_jobs=0
 declare         opt_update_modulefiles='no'
+declare		opt_cleanup_modulefiles='no'
 declare         opt_system=''
 declare         opt_verbose='no'
 # array collecting all modules specified on the command line via '--with=module'
@@ -265,6 +269,9 @@ parse_args() {
 			;;
 		--update-modulefiles )
 			opt_update_modulefiles='yes'
+			;;
+		--cleanup-modulefiles )
+			opt_cleanup_modulefiles='yes'
 			;;
 		--config-file | --config-file=* )
 			if [[ $1 == *=* ]]; then
