@@ -338,6 +338,7 @@ pbuild::prep() {
 		)
 		# return if neither a URL nor a file name given
 		[[ -n "${fname}" ]] || return 0
+		local -- dir=''
 		for dir in "${dirs[@]}"; do
 			if [[ -r "${dir}/${fname}" ]]; then
 				ref_dir="${dir}"
@@ -396,7 +397,7 @@ pbuild::prep() {
 		local -ri idx="$2"
 		local -r fname="${SOURCE_NAMES[i]}"
 		if [[ -v SHASUMS[${fname}] ]]; then
-			local hash_sum=''
+			local -- hash_sum=''
 			hash_sum=$(sha256sum "${src_dir}/${fname}" | awk '{print $1}')
 			test "${hash_sum}" == "${SHASUMS[${fname}]}" || \
 				std::die 42 \
@@ -428,7 +429,7 @@ pbuild::prep() {
 	}
 
 	patch_sources() {
-		local _i=0
+		local -i _i=0
 		for ((_i = 0; _i < ${#PATCH_FILES[@]}; _i++)); do
 			local -i strip=
 			apply_patch \
@@ -440,8 +441,7 @@ pbuild::prep() {
 
 	(( ${#SOURCE_URLS[@]} == 0 )) && return 0
 	mkdir -p "${PMODULES_DISTFILESDIR}"
-	local i=0
-
+	local -i i=0
 	for ((i = 0; i < ${#SOURCE_URLS[@]}; i++)); do
 		local -- src_dir=''
 		local -i ec=0
@@ -634,7 +634,7 @@ pbuild::post_compile() {
 	:
 }
 pbuild::compile() {
-	local v_save="$V"
+	local -- v_save="$V"
 	unset V
 	(( JOBS == 0 )) && JOBS=$(_get_num_cores)
 	${make} -j${JOBS} || \
@@ -824,14 +824,14 @@ _build_module() {
 		#
 		build_dependency() {
 			find_build_script(){
-				local p=$1
-				local script=''
+				local -- p="$1"
+				local -- script=''
 				script=$(${find} "${BUILDBLOCK_DIR}/../.." \
 						 -path "*/$p/build")
 				std::get_abspath "${script}"
 			}
 
-			local -r m=$1
+			local -r m="$1"
 			std::debug "${m}: module not available"
 			[[ ${dry_run} == yes ]] && \
 				std::die 1 \
@@ -862,7 +862,7 @@ _build_module() {
 				shift
 			done
 
-			local buildscript=''
+			local -- buildscript=''
 			buildscript=$(find_build_script "${m%/*}")
 			[[ -x "${buildscript}" ]] || \
 				std::die 1 \
@@ -873,7 +873,7 @@ _build_module() {
 			fi
 		}
 
-		local m=''
+		local -- m=''
 		for m in "${with_modules[@]}"; do
 
 			# module name prefixes in dependency declarations:
@@ -904,7 +904,7 @@ _build_module() {
 			# from 'module avail' and the full version should be set
 			# in the variants file, we look for the first exact
 			# match.
-			local release_of_dependency=''
+			local -- release_of_dependency=''
 			if ! pbuild::module_is_avail "$m" release_of_dependency; then
 				build_dependency "$m"
 				pbuild::module_is_avail "$m" release_of_dependency || \
@@ -1131,7 +1131,7 @@ _build_module() {
 			#
 			find_modulefile() {
 				local -n _modulefile="$1"
-				local fname=''
+				local -- fname=''
 				for fname in "${VERSIONS[@]/#/modulefile-}" 'modulefile'; do
 					if [[ -r "${BUILDBLOCK_DIR}/${fname}" ]]; then
 						_modulefile="${BUILDBLOCK_DIR}/${fname}"
@@ -1141,7 +1141,7 @@ _build_module() {
 				[[ -n "${_modulefile}" ]]
 			}
 			[[ "${is_subpkg}" == 'yes' ]] && return 0
-			local src=''
+			local -- src=''
 			if [[ -n "${ModuleConfig['modulefile']}" ]]; then
 				src="${ModuleConfig['modulefile']}"
 			elif ! find_modulefile src; then
@@ -1169,8 +1169,8 @@ _build_module() {
 					"%s " \
 					"${module_name}/${module_version}:" \
 					"writing run-time dependencies to ${fname} ..."
-				local dep
 				echo -n "" > "${fname}"
+				local -- dep=''
 				for dep in "$@"; do
 					[[ -z $dep ]] && continue
 					if [[ ! $dep == */* ]]; then
@@ -1238,6 +1238,7 @@ _build_module() {
 				echo "relstage: ${module_release}" > "${yaml_config_file}"
 				if (( ${#Systems[@]} > 0 )); then
 					echo -n "systems: [${Systems[0]}" >> "${yaml_config_file}"
+					local -- system=''
 					for system in "${Systems[@]:1}"; do
 						echo -n ", ${system}" >> "${yaml_config_file}"
 					done
@@ -1295,13 +1296,13 @@ _build_module() {
 		#	 was specified.
 		#
 		[[ "${is_subpkg}" == 'yes' ]] && return 0
-		local ol=''
+		local -- ol=''
 		for ol in "${Overlays[@]}"; do
 			[[ "${ol}" == "${ol_name}" ]] && continue
 			[[ "${ol}" == 'base' ]] && continue
-			local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
-			local dir="${modulefile_dir/${ol_modulefiles_root}/${modulefiles_root}}"
-			local fname="${dir}/${module_version}"
+			local -- modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
+			local -- dir="${modulefile_dir/${ol_modulefiles_root}/${modulefiles_root}}"
+			local -- fname="${dir}/${module_version}"
 			if [[ -e "${fname}" ]]; then
 				std::info "%s "\
 					  "${module_name}/${module_version}:" \
@@ -1363,8 +1364,8 @@ _build_module() {
 	# build module ${module_name}/${module_version}
 	bm::compile_and_install() {
 		build_target() {
-			local dir="$1"		# src or build directory, depends on target
-			local target="$2"	# prep, configure, compile or install
+			local -- dir="$1"		# src or build directory, depends on target
+			local -- target="$2"	# prep, configure, compile or install
 
 			if [[ -e "${BUILD_DIR}/.${target}" ]] && \
 				   [[ ${force_rebuild} == 'no' ]]; then
@@ -1386,6 +1387,7 @@ _build_module() {
 				"%s " \
 				"${module_name}/${module_version}:" \
 				"${target_info[${target}]} ..."
+			local -- t=''
 			for t in ${ModuleConfig[target_funcs:${target}]}; do
 				# We cd into the dir before calling the function -
 				# just to be sure we are in the right directory.
@@ -1437,7 +1439,7 @@ _build_module() {
 				"removing modulefile '${modulefile_name}' ..."
 			[[ "${dry_run}" == 'no' ]] && ${rm} -vf "${modulefile_name}"
 		fi
-		local release_file="${modulefile_dir}/.release-${module_version}"
+		local -- release_file="${modulefile_dir}/.release-${module_version}"
 		if [[ -e "${release_file}" ]]; then
 			std::info \
 				"%s " \
@@ -1565,8 +1567,8 @@ _build_module() {
 	
 	# module name including path in hierarchy and version
 	# (ex: 'gcc/6.1.0/openmpi/1.10.2' for openmpi compiled with gcc 6.1.0)
-	local    modulefile_dir=''
-	local    modulefile_name=''
+	local -- modulefile_dir=''
+	local -- modulefile_name=''
 
 	# the group must have been defined - otherwise we cannot continue
 	[[ -n ${GROUP} ]] || \
