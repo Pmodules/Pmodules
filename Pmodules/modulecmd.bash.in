@@ -93,12 +93,13 @@ declare -r CacheDir="${HOME}/.cache/Pmodules"
 ${mkdir} -p "${CacheDir}" || \
 	std::die 1 "Oops: unable to create cache directoy '${CacheDir}"
 declare -- SpiderCache=''
+# force creation of cache, if cache doesn't exist
+declare -i MtimeOfSpiderCache=-1
 
 HostName=$(${hostname} -f)
 declare -r HostName
 
-CurTime=$( ${date} --date=now +%s )
-declare -r CurTime
+declare -i MtimeOfNewstModulefile=0
 
 declare -r CMD='module'
 declare -- SubCommand=''
@@ -807,7 +808,8 @@ subcommand_load() {
 			fi
 			local -i n=$(( ${GroupDepths[${group}]}/2 ))
 			output+="module load ${line[*]:4:$n} ${line[0]}\n"
-		done < <(set +x; subcommand_search  "${m}" -a --no-header 2>&1)
+		done <<<"${search_result}"
+
 		if [[ -n ${output} ]]; then
 			output="\n\nTry with one of the following command(s):\n${output}"
 		fi
@@ -1217,12 +1219,15 @@ subcommand_show() {
 		local -- modulefile=''
 		local -- relstage=''
 		local -- moduledir=''
-		find_modulefile \
-			modulefile \
-			relstage \
-			moduledir \
-			modulecmd \
-			"${arg}"
+		if ! find_modulefile \
+		     modulefile \
+		     relstage \
+		     moduledir \
+		     modulecmd \
+		     "${arg}"; then
+			print_help_hints "${arg}"
+			continue
+		fi
 		"${modulecmd}" 'bash' 'show' "${modulefile}"
 	done
 }
@@ -1244,8 +1249,8 @@ get_available_modules() {
 		module_name_2
 		...
 	      )'
-	local -- mode="$1"
-        local -n result="$2"		# [out] reference variable to return result
+	local -- mode="$1"		# [in]  either 'search' or 'load'
+        local -n ref_result="$2"	# [out] reference variable to return result
 	local -r pattern="$3"		# [in]  search pattern
 	local -r relstages="$4"		# [in]  excepted release stages
 	shift 4
@@ -1284,12 +1289,18 @@ get_available_modules() {
 		# its sub-directories
 		local -- short_module_name=''	# module name
 		local -- long_module_name=''	# module name & version
-                while read -r rel_modulefile; do
+		local -- modtime=''
+                while read -r modtime rel_modulefile; do
+			# mtime returned by find includes usec, remove them
+			modtime="${modtime%.*}"
+			if (( ${modtime} > ${MtimeOfNewstModulefile} )); then
+				MtimeOfNewstModulefile=${modtime}
+			fi
 			IFS='/' read -a toks <<<"${rel_modulefile}"
 			if (( ${#toks[@]} == 0 )); then
 				continue
 			elif (( ${#toks[@]} == 1 )); then
-				short_module_name="${mod}"
+				short_module_name="${toks[0]}"
 				long_module_name="${toks[0]}"
 			else
 				short_module_name="${toks[-2]}"
@@ -1351,7 +1362,7 @@ get_available_modules() {
 			fi
                         modules[${rel_modulefile}]=1
 
-			result+=(
+			ref_result+=(
 				"${long_module_name}"
 				"${relstage}"
 				"${dir}"
@@ -1366,7 +1377,7 @@ get_available_modules() {
 				 \( "${opt_regex}" "${fpattern}" \
 				 -regextype posix-basic \) \
 				 \( -type f -o -type l \) \
-				 -printf "%P\n" \
+				 -printf "%T@ %P\n" \
 				 | ${sort} ${opt_sort} --version-sort)
         done
 } # get_available_modules()
@@ -2648,6 +2659,38 @@ subcommand_clear() {
 	pmodules_setup 'init'
 }
 
+get_spider_cache_mtime() {
+	if [[ -r "${SpiderCache}" ]]; then
+		MtimeOfSpiderCache=$( stat --format %Y "${SpiderCache}" )
+	else
+		MtimeOfSpiderCache=-1
+	fi
+}
+
+read_spider_cache(){
+	local -n yaml_keys="$1"
+	local -n yaml_output="$2"
+
+	if (( MtimeOfNewstModulefile > MtimeOfSpiderCache )); then
+		std::info "(Re-)building the Pmodules cache. Please be patient ..."
+		local -- output=''
+		output="$( Spider_cmd -o spider-json "${modulepath}" | \
+				 ${yq} -p j -o y '.*' |
+				${yq} '(.*.parentAA|select(.)) as $i ireduce({}; setpath($i | path; $i))')"
+		echo "${output}" > "${SpiderCache}"
+		get_spider_cache_mtime
+		std::info "Done ..."
+	fi
+	yaml_output=$(< "${SpiderCache}")
+
+	local -a keys=()
+	mapfile -t keys < <( ${yq} '.|keys[]' "${SpiderCache}" )
+	local -- key=''
+	for key in "${keys[@]}"; do
+		yaml_keys[${key}]=1
+	done
+}
+
 ##############################################################################
 Subcommands['search']='search'
 Subcommands['find']='search'
@@ -2716,8 +2759,6 @@ subcommand_search() {
 	local opt_wrap='no'
 	local opt_newest='no'
 	local -- opt_print_raw='no'
-	local -A spider_keys=()
-	local -- spider_output=''
 
 	#.....................................................................
 	#
@@ -2843,6 +2884,8 @@ subcommand_search() {
 		if [[ ${opt_newest} == 'yes' ]]; then
 			_script='{} END{print}'
 		fi
+		"${sort}" --version-sort -k 1,1 -k 6,6 -k 7,7 "${TmpFile}" | \
+                                 ${awk} "${with_modules} ${_script}" > /tmp/PM.$$ 
                 ${func_print_header}
 		local -a toks=()
                 while read -r -a toks; do
@@ -2857,9 +2900,12 @@ subcommand_search() {
 	#
 	search () {
 		local -r module="$1"		# name/pattern to search
-		shift 1
-		local -a modulepath=("$@")	# directories to search
+		local -n ref_spider_path="$2"
+		shift 2
+		local -a modulepath_list=("$@")	# directories to search
 		local -i depth=0
+		local -A spider_keys=()
+		local -- spider_output=''
 
 		# get and print all available modules in $mpath
 		# with respect to the requested release stage
@@ -2870,7 +2916,9 @@ subcommand_search() {
 			mods \
 			"${module}" \
 			"${opt_use_relstages}" \
-			"${modulepath[@]}"
+			"${modulepath_list[@]}"
+		read_spider_cache spider_keys spider_output "${ref_spider_path}"
+
 		local i=0
 		for (( i=0; i<${#mods[@]}; i+=6 )); do
 			local -- name="${mods[i]}"
@@ -3057,37 +3105,15 @@ subcommand_search() {
 	       "${modulepath_other[@]}"
 	modulepath="${modulepath%:}"
 
-	local hash=$(echo "${modulepath}" | md5sum)
+	local -- hash=$(echo "${modulepath}" | md5sum)
 	SpiderCache="${CacheDir}/spider-${hash:0:16}.yaml"
-
-	local -- update_cache='yes'
-	if [[ -r "${SpiderCache}" ]]; then
-		local -i mtime=0
-		mtime=$( ${stat} --format %Y "${SpiderCache}" )
-		# cache expiration time is 4h
-		(( CurTime - mtime <= 14400 )) && update_cache='no'
-	fi
-	if [[ "${update_cache}" == 'yes' ]]; then
-		std::info "(Re-)building the Pmodules cache. Please be patient ..."
-		spider_output="$( ${Spider_cmd} -o spider-json "${modulepath}" | \
-				  ${yq} -p j -o y '.*' |
-				  ${yq} '(.*.parentAA|select(.)) as $i ireduce({}; setpath($i | path; $i))')"
-		echo "${spider_output}" > "${SpiderCache}"
-		std::info "Done ..."
-	else
-		spider_output=$(< "${SpiderCache}")
-	fi
-	local -a keys=()
-	mapfile -t keys < <( ${yq} '.|keys[]' "${SpiderCache}" )
-	local -- key=''
-	for key in "${keys[@]}"; do
-		spider_keys[${key}]=1
-	done
+	get_spider_cache_mtime
 
 	#......................................................................
-	local -- module=''
-	for module in "${modules[@]}"; do
-		search "${module}" \
+	local -- pattern=''
+	for pattern in "${modules[@]}"; do
+		search "${pattern}" \
+		       modulepath \
 		       "${modulepath_spack[@]%/Core}" \
 		       "${modulepath_pmodules[@]}" \
 		       "${modulepath_other[@]}"
