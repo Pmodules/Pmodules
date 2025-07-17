@@ -90,7 +90,7 @@ std::version_compare () {
         IFS='.' read -r -a ver2 <<<"$2"
 
         # fill empty fields in ver1 with zeros
-        local i
+        local -i i=0
         for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
                 ver1[i]=0
         done
@@ -115,11 +115,11 @@ std::version_lt() {
 	    >=1: otherwise
 	"
 	if (( $# == 1 )); then
-		local vers1="${V_PKG}"
-		local vers2="$1"
+		local -- vers1="${V_PKG}"
+		local -- vers2="$1"
 	else
-		local vers1="$1"
-		local vers2="$2"
+		local -- vers1="$1"
+		local -- vers2="$2"
 	fi
         std::version_compare "${vers1}" "${vers2}"
         (( $? == 2 ))
@@ -133,11 +133,11 @@ std::version_le() {
 	    >=1: otherwise
 	"
 	if (( $# == 1 )); then
-		local vers1="${V_PKG}"
-		local vers2="$1"
+		local -- vers1="${V_PKG}"
+		local -- vers2="$1"
 	else
-		local vers1="$1"
-		local vers2="$2"
+		local -- vers1="$1"
+		local -- vers2="$2"
 	fi
         std::version_compare "${vers1}" "${vers2}"
         local -i exit_code=$?
@@ -152,11 +152,11 @@ std::version_gt() {
 	    >=1: otherwise
 	"
 	if (( $# == 1 )); then
-		local vers1="${V_PKG}"
-		local vers2="$1"
+		local -- vers1="${V_PKG}"
+		local -- vers2="$1"
 	else
-		local vers1="$1"
-		local vers2="$2"
+		local -- vers1="$1"
+		local -- vers2="$2"
 	fi
         std::version_compare "${vers1}" "${vers2}"
         (( $? == 1 ))
@@ -173,11 +173,11 @@ std::version_ge() {
 	"
 	#	- returns 0 if version numbers are equal
 	if (( $# == 1 )); then
-		local vers1="${V_PKG}"
-		local vers2="$1"
+		local -- vers1="${V_PKG}"
+		local -- vers2="$1"
 	else
-		local vers1="$1"
-		local vers2="$2"
+		local -- vers1="$1"
+		local -- vers2="$2"
 	fi
         std::version_compare "${vers1}" "${vers2}"
         (( $? == 1 ))
@@ -193,11 +193,11 @@ std::version_eq() {
 	    >=1 otherwise
 	"
 	if (( $# == 1 )); then
-		local vers1="${V_PKG}"
-		local vers2="$1"
+		local -- vers1="${V_PKG}"
+		local -- vers2="$1"
 	else
-		local vers1="$1"
-		local vers2="$2"
+		local -- vers1="$1"
+		local -- vers2="$2"
 	fi
         std::version_compare "${vers1}" "${vers2}"
 }
@@ -260,7 +260,7 @@ fi
 #
 std::get_YN_answer() {
 	local -r prompt="$1"
-	local ans
+	local -- ans
 	read -r -p "${prompt}" ans
 	case ${ans} in
 		y|Y ) 
@@ -341,10 +341,11 @@ std::remove_path() {
 
 	local -a _path=()
 	IFS=':' read -r -a _path <<<"${path}"
-	local dir=''
+	local -- dir=''
 	for dir in "${remove_dirs[@]}"; do
 		# loop over all entries in path and mark
 		# the to be deleted directories.
+		local -i i=0
 		for ((i=0; i<${#_path[@]}; i++)); do
 			[[ "${_path[i]}" == "${dir}" ]] && _path[i]=''
 		done
@@ -359,8 +360,8 @@ std::remove_path() {
 
 std.get_os_release_linux() {
         #local lsb_release=$(which lsb_release)
-        local ID=''
-        local VERSION_ID=''
+        local -- ID=''
+        local -- VERSION_ID=''
 
         if [[ -n $(which lsb_release 2>/dev/null) ]]; then
                 ID=$(lsb_release -is)
