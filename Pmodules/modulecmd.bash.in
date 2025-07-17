@@ -794,12 +794,9 @@ subcommand_load() {
 		output=''
 
 		local -- search_result="$(set +x; subcommand_search  "${m}" -a --no-header 2>&1)"
-		echo "search: ---" 1>&2
-		echo "${search_result}" 1>&2
-		echo "search: ---" 1>&2
 		local -- relstage=''
 		while read -r -a line; do
-                        (( ${#line[@]} == 0 )) && continue
+			(( ${#line[@]} == 0 )) && continue
 			relstage="${line[1]}"
 			if [[ ! ":${UsedReleaseStages}:" == *:${relstage}:* ]]; then
 				output+="module use ${relstage}; "
@@ -807,7 +804,7 @@ subcommand_load() {
 			local group=${line[2]}
 			#echo "group=${group}" 1>&2
 			[[ "${group}" != 'none' ]] || continue
-	        	if [[ ! ":${UsedGroups}:" == *:${group}:* ]] && \
+			if [[ ! ":${UsedGroups}:" == *:${group}:* ]] && \
 				   (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "
 			fi
