@@ -162,6 +162,9 @@ declare --	module_name=''
 declare --	module_type='module'
 declare --	echo=':'
 
+HostName=$(hostname -f)
+declare -r HostName
+
 parse_args() {
 	#
 	# The first argument ($1) is the build-script, if called in the
@@ -1223,7 +1226,7 @@ build_modules_yaml_v1(){
 			local -- system
 			for system in "${systems[@]}"; do
 				[[ "${opt_system}" =~ ${system} ]] && return 0
-				[[ "${HOSTNAME}" =~ ${system} ]] && return 0
+				[[ "${HostName}" =~ ${system} ]] && return 0
 			done
 			std::info "%s " "Skipping variant '${version}'" \
 				  "for the system(s): ${systems[@]}"
