@@ -55,8 +55,8 @@ compute_group_depth () {
 		${mkdir} -p "${dir}" || \
 			std::die 1 "Cannot create directory -- ${dir}"
 	fi
-        local group=${dir%/*}
-        local group=${group##*/}
+        local -- group=${dir%/*}
+        local -- group=${group##*/}
 	result=$(${find} "${dir}" -depth \( -type f -o -type l \) \
                           -printf "%d" -quit 2>/dev/null)
 	(( result-=2 )) || :
@@ -74,10 +74,10 @@ scan_groups () {
 	local -i depth=0
         for ol in "$@"; do
 		[[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]] || continue
-		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
-		local dir=''
+		local -- modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
+		local -- dir=''
 		for dir in "${modulefiles_root}"/*/"${__MODULEFILES_DIR__}"; do
-			local group="${dir%/*}"
+			local -- group="${dir%/*}"
 			group="${group##*/}"
 			if [[ ! -v GroupDepths[${group}] ]]; then
 				compute_group_depth depth "${dir}"
@@ -405,7 +405,7 @@ pm::read_config(){
 		if [[ -z "${OverlayInfo[${ol_name}:modulefiles_root]}" ]]; then
 			OverlayInfo[${ol_name}:modulefiles_root]=${OverlayInfo[${ol_name}:install_root]}
 		fi
-		local modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
+		local -- modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
 		Dir2OverlayMap[${modulefiles_root}]="${ol_name}"
 	}
 
