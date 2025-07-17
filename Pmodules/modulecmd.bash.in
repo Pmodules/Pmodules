@@ -3246,20 +3246,20 @@ DOCUMENTATION:
 	http://pmodules.gitpages.psi.ch
 '
 #..............................................................................
+print_help_hints(){
+	local -- pattern="$1"
+	local -- modules=''
+	find_matching_modules modules "${pattern}" -a
+
+	std::info "A module with the name '${pattern}' is not available in the current module path!\n"
+	local -- output=''
+	create_module_tab output "${modules}" || return 0
+	std::info "The following modules are matching the given name:\n"
+	std::info "${output}"
+	std::info "To get info for a specific module, the runtime dependencies must be loaded first!"
+}
+
 subcommand_help() {
-	print_help_hints(){
-		local -- pattern="$1"
-		local -- modules=''
-		find_matching_modules modules "${pattern}" -a
-
-		std::info "A module with the name '${pattern}' is not available in the current module path!\n"
-		local -- output=''
-		create_module_tab output "${modules}" || return 0
-		std::info "The following modules are matching the given name:\n"
-		std::info "${output}"
-		std::info "To get help for a specific module, the runtime dependencies must be loaded first!"
-	}
-
 	local -r __doc__='Implementation of the sub-command help.'
 	local -a args=()
 	while (( $# > 0 )); do
