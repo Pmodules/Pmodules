@@ -155,7 +155,7 @@ save_env() {
 		esac
 	}
 
-	local vars=()
+	local -a vars=()
 	vars+=( 'Version' )
 	vars+=( 'UsedReleaseStages' 'UsedGroups' )
 	vars+=( 'DefaultGroups' 'DefaultReleaseStages' )
@@ -169,7 +169,7 @@ save_env() {
 	vars+=( 'ModulePathAppend' )
 	vars+=( 'ModulePathPrepend' )
 	vars+=( 'MaskedGroups' )
-	local s=''
+	local -- s=''
 	s=$(typeset -p "${vars[@]}")
 	declare -gx PMODULES_ENV=$( encode_base64 "$s" )
 }
@@ -548,7 +548,7 @@ find_overlay () {
 	path="${path%/"${__MODULEFILES_DIR__}"*}"
 	local -- ol=''
 	for ol in "${UsedOverlays[@]}"; do
-		local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
+		local -- modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 		if [[ "${path}" == ${modulefiles_root}/* ]]; then
 			ref_ol="${ol}"
 			if [[ "${OverlayInfo[${ref_ol}:layout]}" == 'Pmodules' ]]; then
@@ -801,7 +801,7 @@ subcommand_load() {
 			if [[ ! ":${UsedReleaseStages}:" == *:${relstage}:* ]]; then
 				output+="module use ${relstage}; "
 			fi
-			local group=${line[2]}
+			local -- group=${line[2]}
 			#echo "group=${group}" 1>&2
 			[[ "${group}" != 'none' ]] || continue
 			if [[ ! ":${UsedGroups}:" == *:${group}:* ]] && \
@@ -835,9 +835,9 @@ subcommand_load() {
 	}
 
 	#......................................................................
-	local args=()
-	local opts=()
-        local overlay
+	local -a args=()
+	local -a opts=()
+        local -- overlay
 	while (($# > 0)); do
 		case $1 in
                         -\? | -H | --help )
@@ -873,7 +873,7 @@ subcommand_load() {
 		_LMFILES_=''
         fi
 
-        local m=''
+        local -- m=''
 	for m in "${args[@]}"; do
 		if [[ "$m" == *:* ]]; then
 			local -a toks=()
@@ -911,7 +911,7 @@ subcommand_load() {
 		fi # handle extended module names
 
 		find_modulefile current_modulefile relstage moduledir modulecmd "${m}" || {
-			local hints=''
+			local -- hints=''
 			get_load_hints hints
 			if [[ -z "${hints}" ]]; then
 				die_module_nexist "${m}"
@@ -942,7 +942,7 @@ subcommand_load() {
 		[[ ":${LOADEDMODULES}:" == *:${m}:* ]] && continue
 
 		# show info file
-		local prefix=''
+		local -- prefix=''
 		get_module_prefix prefix "${current_modulefile}"
 		[[ -n ${prefix} && -r "${prefix}/.info" ]] && cat "${prefix}/.info" 1>&2
 
@@ -959,7 +959,7 @@ subcommand_load() {
 
 		# load module
 		modulecmd="${interp[${current_modulefile}]}"
-		local output=''
+		local -- output=''
 		output=$("${modulecmd}" 'bash' "${opts[@]}" 'load' \
                                               "${current_modulefile}" 2> "${TmpFile}")
 
@@ -974,10 +974,10 @@ subcommand_load() {
 		# Handle errors from Lmod.
 		# :FIXME:
 		# In some cases the error message is unclear.
-		local error=''
+		local -- error=''
 		error=$( < "${TmpFile}")
 		if [[ "${error}" == *:ERROR:* ]]; then
-			local s=${error%%$'\n'*}
+			local -- s=${error%%$'\n'*}
                         [[ "$s" =~ ' conflicts ' ]] && \
 				die_module_conflict "${m}"
 			die_module_cmd_failed "${m}"
@@ -1033,7 +1033,7 @@ subcommand_unload() {
               be another module. For the time being the modules requiring
 	      this module will be unloaded too.
 	'
-	local args=()
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
@@ -1063,7 +1063,7 @@ subcommand_unload() {
 	# fail. Instead of comparing the name of the module to unload
 	# with 'Pmodules', we save the value and set it at the end of
 	# the loop again, if it has been unset.
-	local saved_home="${PMODULES_HOME}"
+	local -- saved_home="${PMODULES_HOME}"
 
 	if [[ ! -v _LMFILES_ ]]; then
 		declare -x _LMFILES_=''
@@ -1071,8 +1071,8 @@ subcommand_unload() {
 	fi
 
 	IFS=':' read -r -a _lmfiles_ <<< "${_LMFILES_}"
-        local arg
-	local lmfile
+        local -- arg
+	local -- lmfile
 	for arg in "${args[@]}"; do
 		# is the module loaded?
 		for lmfile in "${_lmfiles_[@]}" '_zzzz_'; do
@@ -1086,7 +1086,7 @@ subcommand_unload() {
 		# yes, module has been loaded
 		is_modulefile modulecmd "${lmfile}" || die_module_not_a_modulefile "${arg}"
 
-	        local output=''
+	        local -- output=''
 		output=$("${modulecmd}" 'bash' 'unload' "${arg}")
 		if [[ -n "${output}" ]]; then
 			eval "$(echo "${output}"|${sed} -e 's/;unalias [^;]*//g')"
@@ -1146,7 +1146,7 @@ subcommand_swap() {
 	local -r __doc__='
 	      Swap two modules.
 	'
-	local args=()
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
@@ -1216,7 +1216,7 @@ subcommand_show() {
         (( ${#args[@]} == 0 )) && \
 		die_args_missing
 
-        local arg
+        local -- arg
 	for arg in "${args[@]}"; do
 		local -- modulefile=''
 		local -- relstage=''
@@ -1310,7 +1310,7 @@ get_available_modules() {
 			fi
 			[[ -n ${OverlayExcludes} \
 				   && "${long_module_name}" =~ ${OverlayExcludes} ]] && continue
-			local add='no'
+			local -- add='no'
 			if [[ -n "${ol_name}" && "${ol_name,,}" != 'none' ]]; then
 				# module is in an overlay
 				#
@@ -1510,8 +1510,8 @@ subcommand_avail() {
 				cur_dir="${mods[i+2]}"
 			fi
 
-			local mod=${mods[i]%.lua}
-			local relstage=${mods[i+1]}
+			local -- mod=${mods[i]%.lua}
+			local -- relstage=${mods[i+1]}
 			case ${relstage} in
 				stable )
 					out=''
@@ -1547,8 +1547,8 @@ subcommand_avail() {
 				cur_group="${mods[i+5]}"
 				cur_dir="${mods[i+2]}"
 			fi
-			local mod=${mods[i]%.lua}
-			local relstage=${mods[i+1]}
+			local -- mod=${mods[i]%.lua}
+			local -- relstage=${mods[i+1]}
 			case ${relstage} in
 				stable )
 					out=''
@@ -1566,7 +1566,7 @@ subcommand_avail() {
 	human_readable_output() {
 		local -- cur_group=''
 		local -- cur_dir=''
-		local mod=''
+		local -- mod=''
 		local -i colsize=16
 		local -i column=$cols		# force a line-break
 		for ((i=0; i<${#mods[@]}; i+=6)); do
@@ -1581,7 +1581,7 @@ subcommand_avail() {
 				cur_dir="${mods[i+2]}"
 			fi
 			if [[ ${Verbosity_lvl} == 'verbose' ]]; then
-			        local  relstage=${mods[i+1]}
+			        local -- relstage=${mods[i+1]}
 			        case ${relstage} in
 					stable )
 						mod="${mods[i]%.lua}"
@@ -1612,11 +1612,11 @@ subcommand_avail() {
 	}
 
 	#......................................................................
-	local pattern=()
-	local output_function='human_readable_output'
-	local opt_use_relstages="${UsedReleaseStages}"
+	local -a pattern=()
+	local --output_function='human_readable_output'
+	local -- opt_use_relstages="${UsedReleaseStages}"
 	local -A opt_groups=()
-	local val=''
+	local -- val=''
 	while (($# > 0)); do
 		case $1 in
                         -\? | -H | --help )
@@ -1689,6 +1689,7 @@ subcommand_avail() {
 	done
 	local -a path=()
 	IFS=':' read -r -a path <<<"${modulepath%:}"
+	local -- string=''
 	for string in "${pattern[@]}"; do
 		get_available_modules \
 			'search' \
@@ -1796,7 +1797,7 @@ subcommand_use() {
 	local -r __doc__='Implementation of the sub-command use.'
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
-        local add2path_func='std::append_path'
+        local -- add2path_func='std::append_path'
 
 	#......................................................................
         group_is_used() {
@@ -1806,13 +1807,13 @@ subcommand_use() {
 	#......................................................................
 	print_info() {
 		print_ol_info(){
-			local used="$1" # print used or unused overlays
-			local ol=''
+			local -- used="$1" # print used or unused overlays
+			local -- ol=''
 			for ol in "${Overlays[@]}"; do
 				[[ ${OverlayInfo[${ol}:used]} == "${used}" ]] || continue
-				local install_root="${OverlayInfo[${ol}:install_root]}"
-				local modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
-				local txt="\t${ol}"
+				local -- install_root="${OverlayInfo[${ol}:install_root]}"
+				local -- modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
+				local -- txt="\t${ol}"
 				if [[ ${install_root} == "${modulefiles_root}" ]]; then
 					txt+="\n\t\t${install_root}"
 				else
@@ -1831,15 +1832,15 @@ subcommand_use() {
 			done
 		}
 
-		local f
-		local r
+		local -- f
+		local -- r
 		std::info "Used groups:"
 		for f in ${UsedGroups//:/ }; do
 			std::info "\t${f}"
 		done
 		std::info ''
 		std::info "Unused groups:"
-		local _group
+		local -- _group
 		for _group in "${!GroupDepths[@]}"; do
 			local -i depth=${GroupDepths[${_group}]}
 			if ! group_is_used "${_group}" && (( depth == 0 )); then
@@ -1868,7 +1869,7 @@ subcommand_use() {
 		std::info "Additonal directories in MODULEPATH:"
 		local -i i=0
 		local -i n=0
-                local group
+                local -- group
 		for (( i=0; i<${#modulepath[@]}; i++)); do
 			if ! find_overlay ol group "${modulepath[i]}"; then
 			        std::info "\t${modulepath[i]}"
@@ -1897,7 +1898,7 @@ subcommand_use() {
 		}
 		#..............................................................
                 use_overlay() {
-			local ol_name="$1"
+			local -- ol_name="$1"
 			
 			[[ -n "${LOADEDMODULES}" ]] && \
 				[[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]] && \
@@ -1906,6 +1907,7 @@ subcommand_use() {
 			[[ ${OverlayInfo[${ol_name}:used]} == 'yes' ]] && return 0
 
 			local -a conflicts=( "${OverlayInfo[${ol_name}:conflicts]//:/ }" )
+			local -- ol=''
 			for ol in "${UsedOverlays[@]}"; do
 				for conflict in "${conflicts[@]}"; do
 					[[ "${ol}" == ${conflict} ]] && \
@@ -1940,11 +1942,11 @@ subcommand_use() {
 					MaskedGroups[${group}]="${ol_name}:${MaskedGroups[${group}]}"
 				done
 			fi
+			local -- group=''
 			if [[ -n "${OverlayInfo[${ol_name}:groups]}" ]]; then
 				local -- grp_changes=':'
 				local -a groups=()
 				IFS=':' read -r -a groups <<< "${OverlayInfo[${ol_name}:groups]}"
-				local -- group=''
 				for group in "${groups[@]}"; do
 					if [[ "${group:0:1}" == '~' ]]; then
 						if [[ ":${UsedGroups}:" == *:${group:1}:* ]]; then
@@ -1962,7 +1964,7 @@ subcommand_use() {
 			fi
 			scan_groups "${ol_name}"
                         for group in ${UsedGroups//:/ }; do
-                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
+                                local -- dir="${OverlayInfo[${ol_name}:modulefiles_root]}/"
                                 dir+="${group}/${__MODULEFILES_DIR__}"
                                 if [[ -d "${dir}" ]]; then
                                         std::prepend_path MODULEPATH "${dir}"
@@ -1997,7 +1999,7 @@ subcommand_use() {
 			local -i n="${#UsedOverlays[@]}"
                         for ((i=n-1; i>=0; i--)); do
 				ol_name="${UsedOverlays[i]}"
-                                local dir="${OverlayInfo[${ol_name}:modulefiles_root]}/${grp}/${__MODULEFILES_DIR__}"
+                                local -- dir="${OverlayInfo[${ol_name}:modulefiles_root]}/${grp}/${__MODULEFILES_DIR__}"
                                 [[ -d "${dir}" ]] || continue
                                 std::prepend_path MODULEPATH "${dir}"
 				[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && break
@@ -2025,7 +2027,7 @@ subcommand_use() {
                         return ${rc}
                 fi
 		if [[ -d ${arg} ]]; then
-			local dir=''
+			local -- dir=''
 			dir=$(std::get_abspath "${arg}")
 			if [[ "${opt_append}" == 'yes' ]]; then
 				std::append_path MODULEPATH "${dir}" || rc=$?
@@ -2069,6 +2071,7 @@ subcommand_use() {
 	        print_info
                 return
         fi
+	local -- arg=''
         for arg in "${args[@]}"; do
 		use "${arg}"
         done
@@ -2109,7 +2112,7 @@ subcommand_unuse() {
 
 		#..............................................................
                 unuse_overlay() {
-			local ol_name="$1"
+			local -- ol_name="$1"
 
 			if [[ -n "${LOADEDMODULES}" ]] && \
 				   [[ "${LOADEDMODULES}" != Pmodules/+([.0-9rc]) ]]; then
@@ -2202,7 +2205,7 @@ subcommand_unuse() {
 			unset_ol_modulepaths "${ol_name}"
 
 			# remove root of overlay
-                        local dir
+                        local -- dir=''
                         for dir in "${modulepath[@]}"; do
                                 [[ "${dir}" == "${OverlayInfo[${ol_name}:modulefiles_root]}" ]] && \
                                         std::remove_path MODULEPATH "${dir}"
@@ -2218,21 +2221,21 @@ subcommand_unuse() {
 				die_grp_invalid "${grp}"
 
 			if [[ -v PMODULES_LOADED_${grp^^} ]]; then 
-				local var="PMODULES_LOADED_${grp^^}"
+				local -- var="PMODULES_LOADED_${grp^^}"
 				[[ -n "${!var}" ]] && \
 					die_grp_cannot_be_removed "${grp}"
 			fi
                         std::remove_path UsedGroups "${grp}"
-                        local overlay
+                        local -- overlay=''
                         for overlay in "${UsedOverlays[@]}"; do
-				local dir="${OverlayInfo[${overlay}:modulefiles_root]}"
+				local -- dir="${OverlayInfo[${overlay}:modulefiles_root]}"
 				dir+="/${grp}/${__MODULEFILES_DIR__}"
 			        std::remove_path MODULEPATH "${dir}"
                         done
 		}
 
 		#..............................................................
-                local arg=$1
+                local -- arg="$1"
 
                 if is_release_stage "${arg}"; then
 			unuse_relstage "${arg}"
@@ -2243,7 +2246,7 @@ subcommand_unuse() {
 			return 0
 		fi
 		if [[ -d ${arg} ]]; then
-			local dir=''
+			local -- dir=''
 			dir=$(std::get_abspath "${arg}")
 			std::remove_path MODULEPATH "${dir}"
 			std::remove_path ModulePathAppend "${dir}"
@@ -2276,6 +2279,7 @@ subcommand_unuse() {
 		shift
 	done
 	(( ${#args[@]} == 0 )) && die_args_missing
+	local -- arg=''
         for arg in "${args[@]}"; do
                 unuse "${args[@]}"
         done
@@ -2324,7 +2328,7 @@ pmodules_setup() {
 	local -r mode="${1:-check}"
 	init_used_groups() {
 		declare -gx UsedGroups=''
-		local group
+		local -- group
 		for group in ${DefaultGroups//:/ }; do
 			std::append_path UsedGroups "${group}"
 		done
@@ -2347,11 +2351,11 @@ pmodules_setup() {
 
 	init_modulepath() {
 		declare -gx MODULEPATH=''
-		local group
-		local ol
+		local -- group
+		local -- ol
 		for ol in "${UsedOverlays[@]}"; do
 			for group in ${UsedGroups//:/ }; do
-				local dir="${OverlayInfo[${ol}:modulefiles_root]}"
+				local -- dir="${OverlayInfo[${ol}:modulefiles_root]}"
 				dir+="/${group}/${__MODULEFILES_DIR__}"
 				if [[ -d "${dir}" ]]; then
 					std::prepend_path MODULEPATH "${dir}"
@@ -2466,6 +2470,7 @@ subcommand_purge() {
 
 	# unload all modules (except Pmodules itself)
 	IFS=':' read -r -a modules <<< "${LOADEDMODULES}"
+	local -i i=0
 	for (( i=${#modules[@]}-1; i>=0; i-- )); do
 		[[ ${modules[$i]} == Pmodules/* ]] && continue
 		subcommand_unload "${modules[$i]}"
@@ -2531,7 +2536,7 @@ subcommand_list() {
 		# get list of loaded modules with stripped MODULEPATH
 		IFS=':' read -r -a modules \
 		   < <( ${sed} "s;${MODULEPATH//:/\/\\\|}/;;g" <<< "${_LMFILES_}" )
-		local -- strs=()
+		local -a strs=()
 		local -i n=1		# enumeration of loaded modules
 		local -i colsize=0
 		local -- s=''
@@ -2570,7 +2575,7 @@ subcommand_list() {
 		printf "Currently Loaded Modules:\n" 1>&2
 		local -i fmt_field_width=0
 		local -i length=0
-		local module
+		local -- module
 		for module in "${modules[@]}"; do
 			length=${#module}
 		        (( length > fmt_field_width )) && fmt_field_width=length
@@ -2591,8 +2596,8 @@ subcommand_list() {
 		printf -- "\n\n" 1>&2
 	}
 	
-        local args=()
-	local output_function='human_readable_output'
+        local -a args=()
+	local -- output_function='human_readable_output'
 	while (( $# > 0 )); do
 		case $1 in
                         -\? | -H | --help )
@@ -2752,14 +2757,14 @@ subcommand_search() {
 	local -i cols=80
 	[[ -t 1 && -t 2 ]] && cols=$(${tput} cols)	# get number of columns of terminal
 	local -i max_len_modulename=0
-	local opt_print_header='yes'
-	local opt_print_modulefiles='no'
-	local opt_print_csv='no'
-        local opt_print_verbose='no'
-	local opt_use_relstages=':'
-	local opt_all_deps='no'
-	local opt_wrap='no'
-	local opt_newest='no'
+	local -- opt_print_header='yes'
+	local -- opt_print_modulefiles='no'
+	local -- opt_print_csv='no'
+        local -- opt_print_verbose='no'
+	local -- opt_use_relstages=':'
+	local -- opt_all_deps='no'
+	local --  opt_wrap='no'
+	local -- opt_newest='no'
 	local -- opt_print_raw='no'
 
 	#.....................................................................
@@ -2774,9 +2779,9 @@ subcommand_search() {
 	#   with_modules
 	#
 	print_result() {
-                local func_print_header=''
-                local func_print_line=''
-                local fmt=''
+                local -- func_print_header=''
+                local -- func_print_line=''
+                local -- fmt=''
                 
                 print_default() {
 			fmt="%-${max_len_modulename}s %-10s %-12s %-12s %-s"
@@ -2796,7 +2801,7 @@ subcommand_search() {
 
                 print_line_default() {
 			write_line() {
-				local str="$1"
+				local -- str="$1"
 				if [[ -t 1 && -t 2 ]] && (( ${#str} >= cols )); then
 					str="${str:0:$((cols-1))}>"
 				fi
@@ -2833,7 +2838,7 @@ subcommand_search() {
 	        }
 
                 print_line_verbose() {
-			local deps="${*:6}"
+			local -- deps="${*:6}"
 			[[ -z ${deps} ]] && deps="(none)"
 			std::info "$1:"
 			std::info "  release stage: $2"
@@ -2882,7 +2887,7 @@ subcommand_search() {
                         print_default
                 fi
 
-		local _script=''
+		local -- _script=''
 		if [[ ${opt_newest} == 'yes' ]]; then
 			_script='{} END{print}'
 		fi
@@ -2938,9 +2943,9 @@ subcommand_search() {
 			if [[ "${OverlayInfo[${ol}:layout]}" == 'Pmodules' ]]; then
 				if [[ "${opt_print_verbose}" == 'yes' ]] || \
 					   [[ "${opt_all_deps}" == 'yes' ]]; then
-					local prefix=''
+					local -- prefix=''
 					get_module_prefix prefix "${modulefile}"
-					local dependencies_file="${prefix}/.dependencies"
+					local -- dependencies_file="${prefix}/.dependencies"
 					if [[ -n ${prefix} ]] && [[ -r "${dependencies_file}" ]]; then
 						mapfile -t deps < "${dependencies_file}"
 					fi
@@ -3003,10 +3008,10 @@ subcommand_search() {
 				;;
 			--release-stage | --release-stage=* )
                                 if [[ "$1" == "--release" ]]; then
-                                        local arg=$2
+                                        local -- arg="$2"
                                         shift
                                 else
-                                        local arg=${1/--release=}
+                                        local -- arg="${1/--release=}"
                                 fi
 				is_release_stage "${arg}" || \
 					die_relstage_invalid "${arg}"
@@ -3014,16 +3019,17 @@ subcommand_search() {
 				;;
 			--with | --with=* )
                                 if [[ "$1" == --with ]]; then
-                                        local arg=$2
+                                        local -- arg="$2"
                                         shift
                                 else
-                                        local arg=${1/--with=}
+                                        local -- arg="${1/--with=}"
                                 fi
 				if [[ -z ${arg} ]] || [[ "${arg}" == -* ]]; then
 					die_args_invalid_value '--with' "${arg}"
 				fi
                                 arg=${arg//:/ }
                                 arg=${arg//,/ }
+				local -- module=''
                                 for module in ${arg}; do
 				        with_modules+=" && / ${module//\//\\/}/"
                                 done
@@ -3062,6 +3068,7 @@ subcommand_search() {
 	local -a modulepath_pmodules=()
 	local -a modulepath_other=()
 	# search in overlays with layout 'Spack'
+	local -- ol_name=''
 	for ol_name in "${UsedOverlays[@]}"; do
 		[[ "${OverlayInfo[${ol_name}:layout]}" != 'Spack' ]] && break
 		[[ "${OverlayInfo[${ol_name}:type]}" == "${ol_replacing}" ]] && \
@@ -3277,7 +3284,7 @@ subcommand_help() {
 	if (( ${#args[@]} == 0 )); then
 	        print_help 'help'
         fi
-        local arg
+        local -- arg=''
         for arg in "${args[@]}"; do
         	if [[ -v Help[${arg}] ]] ; then
                 	print_help "${arg}"
@@ -3312,8 +3319,8 @@ USAGE:
 #..............................................................................
 subcommand_whatis() {
 	local -r __doc__='Implementation of the sub-command whatis.'
-	local -- opts=('--newest')
-	local -- args=()
+	local -a opts=('--newest')
+	local -a args=()
 
 	while (( $# > 0 )); do
 		case $1 in
@@ -3354,7 +3361,7 @@ subcommand_whatis() {
 		else
 			modulecmd="Tcl_cmd"
 		fi
-		local whatis=''
+		local -- whatis=''
 		whatis=$("${modulecmd}" bash \
 					whatis \
 					"${modulename}" \
@@ -3379,8 +3386,8 @@ USAGE:
 #..............................................................................
 subcommand_apropos() {
 	local -r __doc__='Implementation of the sub-command apropos|keyword'
-	local opts=()
-	local args=()
+	local -a opts=()
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | --help )
@@ -3405,7 +3412,7 @@ subcommand_apropos() {
 	(( ${#args[@]} > 1 )) && \
 		die_args_too_many
 
-	local arg="${args[0],,}"
+	local -- arg="${args[0],,}"
 
 	local -- modules=''
 	find_matching_modules modules '' "${opts[@]}"
@@ -3424,7 +3431,7 @@ subcommand_apropos() {
 		else
 			modulecmd="Tcl_cmd"
 		fi
-		local whatis=''
+		local -- whatis=''
 		whatis=$("${modulecmd}" bash \
 					whatis \
 					"${modulefile}" \
@@ -3497,7 +3504,7 @@ subcommand_save(){
 	if [[ "${opt_system}" == 'yes' ]]; then
 		basedir="${UsedOverlays[0]}/collections"
 	fi
-	local collection=''
+	local -- collection=''
 	if (( ${#args[@]} == 0 )); then
 		collection="${basedir}/default"
 	else
@@ -3531,9 +3538,9 @@ subcommand_save(){
 	# save additional module directories
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<< "${MODULEPATH}"
-	local dir=''
-	local ol=''
-	local grp=''
+	local -- dir=''
+	local -- ol=''
+	local -- grp=''
 	for dir in "${modulepath[@]}"; do
 		find_overlay ol grp "${dir}" && continue
 		s+="module use \"${dir}\";\n"
@@ -3682,8 +3689,8 @@ subcommand_savelist() {
 		local -n gc_dirs="$2"
 		shift 2
 		_result=()
-		local _pattern
-		local _coll
+		local -- _pattern
+		local -- _coll
 		for _pattern in "$@"; do
 			while read -r _coll; do
 				_result+=( "${_coll}" )
@@ -3732,7 +3739,7 @@ subcommand_savelist() {
 	local -a _dirs=( "${UsrCollectionsDir[@]}" )
 	print_collections "User collections:"     _dirs "${args[@]}"
 	_dirs=()
-	local _ol
+	local -- _ol
 	for _ol in "${UsedOverlays[@]}"; do
 		_dirs+=( "${OverlayInfo[${_ol}:install_root]}/collections" )
 	done
@@ -3921,7 +3928,7 @@ subcommand_initswitch() {
 	local -r __doc__='
 	      Implementation of the initswitch sub-command.'
 
-	local args=()
+	local -a args=()
 	while (( $# > 0 )); do
 		case $1 in
 			-\? | --help )
