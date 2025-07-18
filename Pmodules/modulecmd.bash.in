@@ -1613,7 +1613,7 @@ subcommand_avail() {
 
 	#......................................................................
 	local -a pattern=()
-	local --output_function='human_readable_output'
+	local -- output_function='human_readable_output'
 	local -- opt_use_relstages="${UsedReleaseStages}"
 	local -A opt_groups=()
 	local -- val=''
