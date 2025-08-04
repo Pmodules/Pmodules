@@ -793,7 +793,9 @@ _build_module() {
 	#	$1	module name
 	#
 	bm::is_loaded() {
-		[[ :${LOADEDMODULES}: =~ :$1: ]]
+		[[ :${LOADEDMODULES}: =~ :$1: ]] && return 0
+		[[ :${LOADEDMODULES}: =~ :$1.lua: ]] && return 0
+		return 1
 	}
 
 	bm::load_overlays(){
