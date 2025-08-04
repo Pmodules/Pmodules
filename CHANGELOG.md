@@ -1,15 +1,28 @@
 # Changelog of Pmodules
 ## Version 2.0.1
 ### modulecmd
+* Keeping tack of used overlays was broken.
+  (#440)
+* Code cleanup
+  (#437, #443)
 * Output hints in sub-command help if module exist but is
   not available.
-  (#434)
+  (#434, #436)
 * (Re-)build cache only if a modulefile has been added/changed.
   (#430)
 * Call `modulecmd`, `lmod` and `spider` via a wrapper function.
   (#428)
 
 ### build-system
+* Print message with used overlays
+  (#442)
+* Work-around for bash(?) bug in calling make
+  (#441)
+* Check for loaded modules missed Lua modules.
+  (#439)
+* Setting configure args was broken. When building multiple variants the
+  configure args were appended instead of (re-)set.
+  (#438)
 * A module with the same name/version can now be in multiple overlays.
   Till now this was only possible with the base overlay plus another
   overlay. The option `--cleanup-modulefiles` can be used to remove
@@ -27,7 +40,7 @@
 ### both
 * Code review: local variables must be declared local. This most likely
   fixes some strange behavior/bugs.
-  (#433)
+  (#433, #436)
 * Call system binaries via a function. In this function `LD_PRELOAD` and 
   `LD_LIBRARY_PATH` are unset.
   (#427)
