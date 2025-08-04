@@ -51,12 +51,13 @@ proc _pmodules_parse_pmodules_env { } {
 				array set ::OverlayInfo $tmp_olinfo
 			}
 		        UsedOverlays {
-			        array set tmp [regsub -all  {[]=[]} $value " "]
-  			        set ::UsedOverlays {}
-				set l [lsort [array names tmp]]
-			        foreach k $l {
-				        lappend ::UsedOverlays $tmp($k)
-			        }
+				# convert a string like
+				# [0]="Alps_A100" [1]="PSI" [2]="Alps" [3]="merlin" [4]="base"
+				# to
+				# Alps_A100 PSI Alps merlin base
+				set tmpstr [regsub -all  {\[[0-9]+\]=} $value ""]
+				set tmpstr [regsub -all  {\"} $tmpstr ""]
+  			        set ::UsedOverlays [split $tmpstr]
 			}
 			UsedGroups {
 				set ::UsedGroups $value
@@ -93,8 +94,9 @@ proc module-addgroup { group } {
 				break
 			}
 		}
-		foreach overlay [lreverse_n $overlays_to_add 1] {
+		foreach overlay [lreverse $overlays_to_add] {
 			debug "overlay=$overlay"
+			debug "modulefiles_root=$::OverlayInfo($overlay:modulefiles_root)"
 			debug "group=$group"
 			debug "::variant=$::variant"
 			set dir [file join \
@@ -102,7 +104,6 @@ proc module-addgroup { group } {
 				     $group \
 				     $::MODULEFILES_DIR \
 				     {*}$::variant]
-		        debug "dir=$dir"
 			if { [file isdirectory $dir] } {
 				debug "prepend $dir to MODULEPATH "
 				prepend-path MODULEPATH $dir
