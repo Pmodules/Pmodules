@@ -800,6 +800,8 @@ _build_module() {
 
 	bm::load_overlays(){
 		[[ -n ${ModuleConfig['use_overlays']} ]] || return 0
+		std::info "%s " \
+			  "using overlays ${ModuleConfig['use_overlays']}"
 		eval "$( "${modulecmd}" bash use ${ModuleConfig['use_overlays']} )"
 	}
 
