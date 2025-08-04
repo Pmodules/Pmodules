@@ -2481,9 +2481,7 @@ subcommand_purge() {
 	#   - used groups
 	local -- saved_groups="${UsedGroups}"
 	#   - used overlays
-	local -- saved_overlays=''
-	printf -v saved_overlays "%s:" "${UsedOverlays[@]}"
-	saved_overlays="${saved_overlays%:}"
+	local -a saved_overlays=( "${UsedOverlays[@]}" )
 	#   - additional directories in MODULEPATH
 	local -- item=''
         local -- group=''
@@ -2499,12 +2497,14 @@ subcommand_purge() {
 	pmodules_setup init
 
 	# - restore
+	# release stages
 	IFS=':' read -r -a items <<<"${saved_relstages}"
 	for item in "${items[@]}"; do
 		subcommand_use "${item}"
 	done
-	IFS=':' read -r -a items <<<"${saved_overlays}"
-	for item in "${items[@]}"; do
+	# overlays
+	for (( i=${#saved_overlays[@]}-1; i>=0; i-- )); do
+		item="${saved_overlays[i]}"
 		[[ -v OverlayInfo[${item}:used] ]] || continue
 		subcommand_use "${item}"
 	done
