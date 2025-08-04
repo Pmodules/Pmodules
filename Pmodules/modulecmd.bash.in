@@ -67,7 +67,6 @@ declare -- ReleaseStages=':unstable:stable:deprecated:'
 # set releases which should be available after initialization
 declare -- DefaultReleaseStages='stable'
 
-declare -A Dir2OverlayMap=()
 declare -A GroupDepths=()
 declare -- ModulePathAppend=''
 declare -- ModulePathPrepend=''
@@ -164,7 +163,7 @@ save_env() {
 	vars+=( 'Overlays' )
 	vars+=( 'UsedOverlays' )
 	vars+=( 'OverlayExcludes' )
-	vars+=( 'OverlayInfo' 'Dir2OverlayMap')
+	vars+=( 'OverlayInfo' )
 	vars+=( 'PmFiles' )
 	vars+=( 'ModulePathAppend' )
 	vars+=( 'ModulePathPrepend' )

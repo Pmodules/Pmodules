@@ -6,7 +6,6 @@ declare -A GroupDepths=(['none']=0)
 
 declare -a Overlays=()
 declare -A OverlayInfo
-declare -A Dir2OverlayMap
 
 # An overlay has a type defining the way modules in this overlay
 # make modules in the other overlays unavailable.
@@ -68,7 +67,7 @@ compute_group_depth () {
 scan_groups () {
 	: "
 	(Re-)Scan available groups in the overlays $@ and compute group depth's.
-	Set GroupDepths[group] and Dir2OverlayMap[ol:dir].
+	Set GroupDepths[group].
 	"
         local -- ol=''
 	local -i depth=0
@@ -83,9 +82,6 @@ scan_groups () {
 				compute_group_depth depth "${dir}"
 				GroupDepths[$group]=${depth}
 			fi
-			# :FIXME: do we need this?
-			Dir2OverlayMap[${dir}]="${ol}"
-			Dir2OverlayMap[${dir%/"${__MODULEFILES_DIR__}"*}]="${ol}"
 		done
         done
 	GroupDepths['none']=0
@@ -405,8 +401,6 @@ pm::read_config(){
 		if [[ -z "${OverlayInfo[${ol_name}:modulefiles_root]}" ]]; then
 			OverlayInfo[${ol_name}:modulefiles_root]=${OverlayInfo[${ol_name}:install_root]}
 		fi
-		local -- modulefiles_root=${OverlayInfo[${ol_name}:modulefiles_root]}
-		Dir2OverlayMap[${modulefiles_root}]="${ol_name}"
 	}
 
 	get_config(){
