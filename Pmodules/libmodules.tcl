@@ -1,7 +1,4 @@
 #
-# :TODO:
-# switch/swap
-# unload modules if parent removed
 #
 
 if {[info exists env(PMODULES_DEBUG)] && $env(PMODULES_DEBUG)} {
@@ -67,7 +64,6 @@ proc _pmodules_parse_pmodules_env { } {
 	debug "return"
 }
 
-debug "module-addgroup"
 proc module-addgroup { group } {
 	global env
 	global name
