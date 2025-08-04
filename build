@@ -103,6 +103,10 @@ read_config_file() {
 	eval $(std::parse_yaml "${fname}" '') || \
 		std::die 1 "Cannot read configuration file '${fname}'"
 
+	# In the YAML configuration file the root of the base overlay must be
+	# defined with Overlays.base.install_root. The function
+	# std::parse_yaml() stores the value in the environment variable
+	# 'Overlays_base_install_root'.
 	declare -xg INSTALL_ROOT="${Overlays_base_install_root}"
 	if [[ -z "${INSTALL_ROOT}" ]]; then
 		std::die 1 "Error in configuration file '${fname}': install root not defined!"

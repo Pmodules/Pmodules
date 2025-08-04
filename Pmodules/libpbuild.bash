@@ -931,7 +931,8 @@ _build_module() {
 			fi
 
 			std::info "Loading module: ${m}"
-			eval "$( "${modulecmd}" bash load "${m}" )"
+			local output="$("${modulecmd}" bash load "${m}")";
+			eval "${output}"
 			if ! bm::is_loaded "$m"; then
 				"${modulecmd}" bash list
 				std::die 5 \
