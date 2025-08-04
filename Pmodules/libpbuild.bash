@@ -637,7 +637,7 @@ pbuild::compile() {
 	local -- v_save="$V"
 	unset V
 	(( JOBS == 0 )) && JOBS=$(_get_num_cores)
-	${make} -j${JOBS} || \
+	/bin/bash -c ${make} -j${JOBS} -e || \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "compilation failed!"
