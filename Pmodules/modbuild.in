@@ -1208,7 +1208,7 @@ build_modules_yaml_v1(){
 	set_configure_args(){
 		local -a args=()
 		readarray -t args <<< "$1"
-		pbuild.add_configure_args "${args[@]}"
+		pbuild.set_configure_args "${args[@]}"
 	}
 
 	set_patch_files(){
