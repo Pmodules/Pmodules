@@ -6,6 +6,8 @@ declare -rx BASH5_VERSION='5.2.37'
 declare -rx TCL_VERSION='8.6.16'
 declare -rx TCLLIB_VERSION='1.21'
 declare -rx MODULES_VERSION='3.2.10.2'
+declare -rx LUA_VERSION='5.4.7'
+declare -rx LUAROCKS_VERSION='3.9.2'
 declare -rx LMOD_VERSION='8.7.56'
 
 # for macOS only
@@ -68,6 +70,7 @@ std::die() {
         fi
         exit $ec
 }
+
 std::parse_yaml() {
 	#
 	# parse a YAML file
@@ -145,7 +148,7 @@ illegal_arg(){
 build::help_help(){
 	local prog="$(basename "$0")"
 	echo "
-Usage: ${prog} help|configure|compile|install
+Usage: ${prog} help|configure|compile|install|tar
 
 This script must be used to
 - Bootstrap/configure a new Pmodules environment,
@@ -561,6 +564,97 @@ build::install() {
 	echo "Done..."
 }
 
+build::help_tar(){
+		echo "
+Usage: $(basename $0) tar [OPTION...]
+
+Create a Pmodules tar-ball.
+
+Options:
+--debug
+	Enable verbose/debug output.
+
+--help|-h|-?
+	Print this help text.
+
+" 1>&2
+	std::die 1 ""
+}
+
+build::tar(){
+	while (( $# > 0 )); do
+		case $1 in
+			--debug )
+				set -x
+				;;
+			--help | -h | -\? )
+				build::help_tar
+				;;
+			-* )
+				illegal_option 'tar' "$1"
+				;;
+			* )
+				illegal_arg 'tar' "$1"
+				;;
+		esac
+		shift 1
+	done
+
+	local -r target_dir="${BOOTSTRAP_DIR}/Pmodules-${VERSION}"
+	mkdir -p "${target_dir}/src/etc"
+	mkdir -p "${target_dir}/src/init"
+	mkdir -p "${target_dir}/src/profiles"
+	mkdir -p "${target_dir}/config"
+
+	cp -v CHANGELOG.md LICENSE mkindex.tcl "${target_dir}"
+
+	local -- sed_cmd=''
+	sed_cmd+="s:@PMODULES_VERSION@:${VERSION}:g;"
+	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
+	sed_cmd+="s:@VERSIONING@:#:g;"
+	sed_cmd+="s:@TCL_VERSION@:${TCL_VERSION%.*}:g;"
+	sed_cmd+="s:@PMODULES_TMPDIR@:${DEFAULT_INSTALL_ROOT}/${DEFAULT_TMP_DIR}:g;"
+	sed_cmd+="s:@PMODULES_DISTFILESDIR@:${DEFAULT_INSTALL_ROOT}/${DEFAULT_DISTFILES_DIR}:g;"
+	sed_cmd+="s:@INSTALL_ROOT@:${DEFAULT_INSTALL_ROOT}:g;"
+
+	local -- libexec_dir='/usr/share/Pmodules/libexec'
+	sed_cmd+="s:@BASH@:${libexec_dir}/bash:g;"
+	sed_cmd+="s:@MODULECMD@:${libexec_dir}/modulecmd.bash:g;"
+
+	sed "${sed_cmd}" "${SRC_DIR}/profile.bash.in" \
+	    > "${target_dir}/src/profiles/profile.bash"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.csh.in" \
+	    > "${target_dir}/src/profiles/profile.csh"
+	sed "${sed_cmd}" "${SRC_DIR}/profile.zsh.in" \
+	    > "${target_dir}/src/profiles/profile.zsh"
+
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.in" \
+            > "${target_dir}/src/modulecmd"
+	sed "${sed_cmd}" "${SRC_DIR}/modulecmd.bash.in" \
+	    > "${target_dir}/src/modulecmd.bash"
+
+	sed "${sed_cmd}" "${SRC_DIR}/libpmodules.bash.in" \
+	    > "${target_dir}/src/libpmodules.bash"
+
+        sed "${sed_cmd}" "${SRC_DIR}/modbuild.in" \
+            > "${target_dir}/src/modbuild"
+
+	sed "${sed_cmd}" "${BOOTSTRAP_DIR}/config/Pmodules.yaml.in" \
+	    > "${target_dir}/config/Pmodules.yaml"
+
+	cp -v "${SRC_DIR}/yq.$(uname -m)_$(uname -s)"	"${target_dir}/src/yq"
+	cp -v "${SRC_DIR}/bash"		"${target_dir}/src/init"
+	cp -v "${SRC_DIR}/bash_completion"	"${target_dir}/src/init"
+	cp -v "${SRC_DIR}/csh"		"${target_dir}/src/init"
+	cp -v "${SRC_DIR}/Pmodules.py"	"${target_dir}/src/init"
+	cp -v "${SRC_DIR}/zsh"		"${target_dir}/src/init"
+
+	cp -v "${SRC_DIR}/libpbuild.bash"	"${target_dir}/src"
+	cp -v "${SRC_DIR}/libstd.bash"	"${target_dir}/src"
+	cp -v "${SRC_DIR}/libmodules.tcl"	"${target_dir}/src"
+	tar cvzf "Pmodules-${VERSION}.tar.gz" "Pmodules-${VERSION}"
+}
+
 #=============================================================================
 #
 declare subcmd=''
@@ -577,7 +671,7 @@ while (( $# > 0 )); do
 		-* )
 			std::die 1 "$1: illegal option"
 			;;
-		help | configure | compile | install )
+		help | configure | compile | install | tar )
 			subcmd="$1"
 			shift 1
 			subcmd_args=( "$@" )
