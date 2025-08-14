@@ -303,7 +303,7 @@ parse_path_config(){
 
 pm::read_config(){
 	: "
-	Read Pmodules configuration files '${PMODULES_ROOT}/config/Pmodules.yaml'
+	Read Pmodules configuration files 'PMODULES_ROOT/config/Pmodules.yaml'
 	and '${HOME}/.Pmodules/Pmodules.yaml'.
 	"
 	get_config_of_overlay(){
