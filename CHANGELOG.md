@@ -1,7 +1,9 @@
 # Changelog of Pmodules
 ## Version 2.0.1
 ### modulecmd
-* Keeping tack of used overlays was broken.
+* There were several issues with the stack of used overlays. This could
+  result in certain modules being incorrectly not listed with the 'avail'
+  and 'search/spider' sub-commands.
   (#440)
 * Code cleanup
   (#437, #443)
@@ -38,6 +40,8 @@
   (#429)
 
 ### both
+* Unused variable in doc-string fixed
+  (#447)
 * Code review: local variables must be declared local. This most likely
   fixes some strange behavior/bugs.
   (#433, #436)
@@ -45,10 +49,16 @@
   `LD_LIBRARY_PATH` are unset.
   (#427)
 
-### compiling Pmodules
+### build/compiling Pmodules
+* Sub-command to create a tar-ball added. This tar-ball can be used to 
+  to build a Pmodules RPM.
+  (#445)
 * Bugfix in compiling Lmod.
   (#426)
 
+### Repo
+* Unsed files removed.
+  (#446)
 ## Version 2.0.0
 ### modulecmd
 * building/removing sub-packages fixed
