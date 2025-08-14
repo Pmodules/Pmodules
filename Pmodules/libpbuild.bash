@@ -497,10 +497,10 @@ pbuild.set_configure_args(){
 }
 readonly -f pbuild.set_configure_args
 
-pbuild.add_configure_args(){
+pbuild::add_configure_args(){
 	CONFIGURE_ARGS+=( "$@" )
 }
-readonly -f pbuild.add_configure_args
+readonly -f pbuild::add_configure_args
 
 #..............................................................................
 #
