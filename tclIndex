@@ -1,0 +1,9 @@
+# Tcl autoload index file, version 2.0
+
+set auto_index(module-addgroup) [list source [file join $dir libmodules.tcl]]
+set auto_index(set-family) [list source [file join $dir libmodules.tcl]]
+set auto_index(module-url) [list source [file join $dir libmodules.tcl]]
+set auto_index(module-license) [list source [file join $dir libmodules.tcl]]
+set auto_index(module-maintainer) [list source [file join $dir libmodules.tcl]]
+set auto_index(module-help) [list source [file join $dir libmodules.tcl]]
+set auto_index(ModulesHelp) [list source [file join $dir libmodules.tcl]]
