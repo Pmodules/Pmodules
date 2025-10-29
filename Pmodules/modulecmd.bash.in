@@ -3240,7 +3240,7 @@ SUBCOMMANDS:
 
 DOCUMENTATION:
 	Full documentation is available at 
-	http://pmodules.gitpages.psi.ch
+	https://pmodules.github.io
 '
 #..............................................................................
 print_help_hints(){
