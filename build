@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 
-declare -rx VERSION='2.0.1'
-declare -rx BASH5_VERSION='5.2.37'
+declare -rx VERSION='2.0.2'
+declare -rx BASH5_VERSION='5.3'
 declare -rx TCL_VERSION='8.6.16'
 declare -rx TCLLIB_VERSION='1.21'
 declare -rx MODULES_VERSION='3.2.10.2'
@@ -499,7 +499,6 @@ build::install() {
 	echo "  Pmodule prefix:               ${PREFIX}"
 	sed_cmd+="s:@PMODULES_VERSION@:${VERSION}:g;"
 	sed_cmd+="s:@MODULES_VERSION@:${MODULES_VERSION}:g;"
-	sed_cmd+="s:@VERSIONING@:#:g;"
 	sed_cmd+="s:@BASH@:${PREFIX}/${UTILBIN_DIR}/bash:g;"
 	sed_cmd+="s:@MODULECMD@:${PREFIX}/${UTILBIN_DIR}/modulecmd.bash:g;"
 	sed_cmd+="s:@TCL_VERSION@:${TCL_VERSION%.*}:g;"
