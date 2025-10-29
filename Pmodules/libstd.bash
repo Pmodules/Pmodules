@@ -367,7 +367,8 @@ std.get_os_release_linux() {
                 ID=$(lsb_release -is)
                 VERSION_ID=$(lsb_release -rs)
         elif [[ -r '/etc/os-release' ]]; then
-	        source /etc/os-release
+		# ignore errors in this file
+	        source /etc/os-release 2>/dev/null
         else
                 std::die 4 "Cannot determin OS release!\n"
         fi

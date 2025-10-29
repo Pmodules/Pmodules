@@ -2,8 +2,6 @@
 #
 # shellcheck -x  -e SC1008,SC2239,SC2317,SC2034,SC2128,SC2059,SC2178
 #
-declare -r VERSION='@PMODULES_VERSION@'
-
 unset CDPATH	# unset CDPATH, otherwise 'cd' prints the directoy!
 unset IFS	# use default IFS
 
