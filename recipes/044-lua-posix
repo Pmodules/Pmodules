@@ -6,7 +6,7 @@
 LUA_PREFIX="${PREFIX}/libexec/lua"
 PATH="${LUA_PREFIX}/bin:$PATH" 
 
-luarocks install luaposix
+luarocks install --tree "${LUA_PREFIX}/share/lua/5.4" luaposix
 
 #---
 # Local Variables:
