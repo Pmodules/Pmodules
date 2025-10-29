@@ -634,14 +634,30 @@ pbuild::post_compile() {
 	:
 }
 pbuild::compile() {
-	local -- v_save="$V"
-	unset V
+	local -- tmp_v="$V"
+	local -- restore='no'
+	local -- tmp_verbose=''
+	if [[ -v VERBOSE ]]; then
+		tmp_verbose="${VERBOSE}"
+		restore='yes'
+	fi
+	if (( opt_verbose > 0 )); then
+		declare -g V=1
+		declare -g VERBOSE=1
+	else
+		unset V
+	fi
 	(( JOBS == 0 )) && JOBS=$(_get_num_cores)
-	/bin/bash -c "${make} -j${JOBS} -e" || \
+	std::info "CC=$CC"
+	std::info "CXX=$CXX"
+	/bin/bash -c "CC=$CC CXX=$CXX ${make} -j${JOBS} -e" || \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "compilation failed!"
-	declare -g V="${v_save}"
+	declare -g V="${tmp_v}"
+	if [[ "${restore}" == 'yes' ]]; then
+		VERBOSE="${tmp_verbose}"
+	fi
 }
 
 ##############################################################################
@@ -1538,7 +1554,7 @@ _build_module() {
 			[[ -n "${pkg_version}" ]] || \
 				die_sub_package_version_missing "${yaml}"
 
-			[[ "${opt_verbose}" == 'yes' ]] && \
+			(( opt_verbose > 0 )) && \
 				pkg_build_args+=( '--verbose' )
 			[[ "${opt_debug}" == 'yes' ]] && \
 				pkg_build_args+=( '--debug' )

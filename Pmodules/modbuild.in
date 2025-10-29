@@ -149,7 +149,7 @@ declare -i      opt_jobs=0
 declare         opt_update_modulefiles='no'
 declare		opt_cleanup_modulefiles='no'
 declare         opt_system=''
-declare         opt_verbose='no'
+declare -i      opt_verbose=0
 # array collecting all modules specified on the command line via '--with=module'
 declare -a      opt_with_modules=()
 declare -A	opt_with_dict=()
@@ -190,7 +190,7 @@ parse_args() {
 			;;
 		-v | --verbose )
 			trap 'echo "$BASH_COMMAND"' DEBUG
-                        opt_verbose='yes'
+                        (( opt_verbose+=1 ))
 			echo='echo'
 			;;
 		--debug )
@@ -1526,7 +1526,7 @@ parse_args "$@"
 #
 declare -r logfile="${BUILDBLOCK_DIR}/pbuild.log"
 ${rm} -f "${logfile}"
-if [[ "${opt_verbose}" == 'yes' ]]; then
+if (( opt_verbose > 0 )); then
 	exec  > >(${tee} -a "${logfile}")
 else
 	exec > >(${cat} >> "${logfile}")
