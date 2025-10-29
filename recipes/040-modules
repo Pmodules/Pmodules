@@ -9,6 +9,9 @@ DOWNLOAD_URL="https://amas.web.psi.ch/Downloads/$P/$P-$V.tar.bz2"
 
 source "$(dirname "$0")/librecipes.bash"
 
+cd "${SRC_DIR}"
+make distclean
+
 #---
 # configure
 mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
@@ -24,6 +27,7 @@ case $(uname -s) in
 		exit ${PB_ERR_SYSTEM}
 		;;
 esac
+
 CPPFLAGS="-DUSE_INTERP_ERRORLINE" \
 "${SRC_DIR}"/configure \
 	--prefix="${PREFIX}" \
