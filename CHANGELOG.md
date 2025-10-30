@@ -1,4 +1,34 @@
 # Changelog of Pmodules
+
+## Version 2.0.2
+
+Migragtion to GitHub:
+Old Gitlab issue numbers and GitHub numbers do not match!
+
+### modulecmd
+* bugfix: type error fixed
+  (#1314)
+* bugfix: if lsb_release is not installed on a Linux system, `/etc/os-release`
+  was sourced. This triggered an error message, since the variable VERSION was
+  defined  as read-only in modulecmd. 
+  (#1299)
+* fix: reference to documentation in help text fixed
+
+### build system
+* enhancement: if verbose output is enabled, run make in verbose 
+  mode.
+  (#1312)
+
+### building Pmodules
+* bugfix in recipe to build luaposix: specify installation path.
+  (#1306)
+* bugfix in recipe to build 'modules': we have to run a distclean
+  before configuring.
+  (#1304)
+* enhancement: cBash updated to version 5.3
+  (#1302)
+
+
 ## Version 2.0.1
 ### modulecmd
 * There were several issues with the stack of used overlays. This could
@@ -16,6 +46,10 @@
   (#428)
 
 ### build-system
+* use of undefined LOADEDMODULES fixed
+  (#451)
+* rename of pbuild::add\_configure\_args() reverted
+  (#449)
 * Print message with used overlays
   (#442)
 * Work-around for bash(?) bug in calling make
@@ -50,6 +84,8 @@
   (#427)
 
 ### build/compiling Pmodules
+* don't use mkindex.tcl to create tclIndex file for libmodules.tcl.
+  (#450)
 * Sub-command to create a tar-ball added. This tar-ball can be used to 
   to build a Pmodules RPM.
   (#445)
