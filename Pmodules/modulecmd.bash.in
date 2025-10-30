@@ -1680,12 +1680,12 @@ subcommand_avail() {
 		fi
 		std::append_path groups "${group}"
         done
-	local -a modulepath=()
+	local -- path=''
         for group in ${groups//:/ }; do
-		modulepath+="${modulepath_of_group[${group}]}:"
+		path+="${modulepath_of_group[${group}]}:"
 	done
-	local -a path=()
-	IFS=':' read -r -a path <<<"${modulepath%:}"
+	local -a path_list=()
+	IFS=':' read -r -a path_list <<<"${path%:}"
 	local -- string=''
 	for string in "${pattern[@]}"; do
 		get_available_modules \
@@ -1693,7 +1693,7 @@ subcommand_avail() {
 			mods \
 			"${string}" \
                         "${opt_use_relstages}" \
-			"${path[@]}"
+			"${path_list[@]}"
 		${output_function}
 	done
 } # subcommand_avail()
