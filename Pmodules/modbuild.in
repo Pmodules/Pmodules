@@ -1547,15 +1547,6 @@ pbuild.system "${opt_system}"
 #
 pm::read_config
 
-# :FIXME: should dist files go to
-#         ${pm_root}/var/distfiles
-#         or
-#         ${overlay}/var/distfiles
-#         ?
-PMODULES_DISTFILESDIR=${PMODULES_DISTFILESDIR:-"${PMODULES_HOME%%/Tools*}/var/distfiles"}
-PMODULES_TMPDIR="${PMODULES_TMPDIR:-/var/tmp/${USER}}"
-export PMODULES_DISTFILESDIR PMODULES_TMPDIR
-
 declare -r BUILD_SCRIPT
 declare -r BUILDBLOCK_DIR
 

@@ -45,7 +45,7 @@ std::def_cmd2(){
         bin=$(which $1) || std::die 255 "'${name}' not found!"
 
         eval "${name}(){
-                LD_LIBRARY_PATH= LD_PRELOAD= ${bin} \"\$@\"
+                LD_PRELOAD= LD_LIBRARY_PATH= ${bin} \"\$@\"
         }
         declare -g ${name}=${name}
         readonly -f ${name}"
@@ -226,6 +226,7 @@ std::def_cmd2 'mktemp'
 std::def_cmd2 'modulecmd'
 std::def_cmd2 'patch'
 std::def_cmd2 'pwd'
+std::def_cmd2 'readlink'
 std::def_cmd2 'rm'
 std::def_cmd2 'rmdir'
 std::def_cmd2 'sed'

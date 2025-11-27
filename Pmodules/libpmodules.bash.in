@@ -92,11 +92,11 @@ declare -A DefaultPmodulesConfig=(
 	['default_groups']='Tools:Programming'
 	['defaultreleasestages']='stable'
 	['default_reltages']='stable'
-	['tmpdir']="/opt/psi/var/tmp/${USER}"
-	['tmp_dir']="/opt/psi/var/tmp/${USER}"
-	['distfilesdir']='/opt/psi/var/distfiles'
-	['distfiles_dir']='/opt/psi/var/distfiles'
-	['download_dir']='/opt/psi/var/distfiles'
+	['tmpdir']="/var/tmp/${USER}"
+	['tmp_dir']="/var/tmp/${USER}"
+	['distfilesdir']="${HOME}/.cache/Pmodules/distfiles"
+	['distfiles_dir']="${HOME}/.cache/Pmodules/distfiles"
+	['download_dir']="${HOME}/.cache/Pmodules/distfiles"
 	['overlays']=''
 )
 
@@ -471,6 +471,10 @@ pm::read_config(){
 	fi
 	OverlayInfo[none:type]='n'
 	OverlayInfo[none:layout]='flat'
+
+	PMODULES_DISTFILESDIR=${PMODULES_DISTFILESDIR:-"${DistfilesDir}"}
+	PMODULES_TMPDIR="${PMODULES_TMPDIR:-${TmpDir}"
+	export PMODULES_DISTFILESDIR PMODULES_TMPDIR
 }
 
 # Local Variables:

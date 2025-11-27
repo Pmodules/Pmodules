@@ -9,6 +9,10 @@
 
 ### build system
 * set CC and CXX if not defined. This was a bug introduced in 2.0.2
+  (#1322)
+* default values for `PMODULES_TMPDIR` and `PMODULES_DISTFILESDIR` are now 
+  more general.
+  (#1325)
 
 ### building Pmodules
 * path to Lua installation fixed in recipe to build luarocks
