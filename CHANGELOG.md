@@ -1,5 +1,16 @@
 # Changelog of Pmodules
 
+## Version 2.0.3
+
+### modulecmd
+
+### build system
+* set CC and CXX if not defined. This was a bug introduced in 2.0.2
+
+### building Pmodules
+* path to Lua installation fixed in recipe to build luarocks
+  (#1320)
+
 ## Version 2.0.2
 
 Migragtion to GitHub:
