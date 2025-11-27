@@ -485,7 +485,11 @@ pbuild::prep() {
 	# create build directory
 	mkdir -p "${BUILD_DIR}"
 }
+pbuild::prep_pip3(){
+	python3 -m venv "${PREFIX}"
+	source "${PREFIX}/bin/activate"
 
+}
 ###############################################################################
 #
 # functions to configure the sources
@@ -691,6 +695,27 @@ pbuild::pre_install() {
 pbuild::post_install() {
 	:
 }
+pbuild::post_install_pip3(){
+	mkdir -p "${PREFIX}/.bin"
+	mv "${PREFIX}/bin/python3"  "${PREFIX}/.bin"
+	rm -vf \
+	   "${PREFIX}"/bin/activate*\
+	   "${PREFIX}"/bin/python*\
+	   "${PREFIX}"/bin/pip\
+	   "${PREFIX}"/bin/pip3*\
+	   "${PREFIX}"/bin/normalizer
+	local -a scripts=()
+	if [[ -d "${PREFIX}/bin" ]]; then
+		scripts=( $(find "${PREFIX}/bin" -type f -exec grep -Il '^#!.*python' {} \;) )
+	fi
+	if [[ -d "${PREFIX}/sbin" ]]; then
+		scripts+=( $(find "${PREFIX}/sbin" -type f -exec grep -Il '^#!.*python' {} \;) )
+	fi
+	for script in "${scripts[@]}"; do
+		sed -i "1s|^#!.*|#!${PREFIX}/.bin/python3|" "${script}"
+	done
+}
+
 pbuild::install() {
 	${make} install || \
 		std::die 3 \
