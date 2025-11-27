@@ -3,16 +3,18 @@
 ## Version 2.0.3
 
 ### modulecmd
-* Misleading error message fix if system configuration file is not
-  readable.
+* Misleading error message fixed if system configuration file is not readable.
   (#1316)
 
 ### build system
-* set CC and CXX if not defined. This was a bug introduced in 2.0.2
-  (#1322)
+* pbuild::install_docfiles() is now obsolete. If called it exists with
+  an error message.
+  (#1327)
 * default values for `PMODULES_TMPDIR` and `PMODULES_DISTFILESDIR` are now 
   more general.
   (#1325)
+* set CC and CXX if not defined. This was a bug introduced in 2.0.2
+  (#1322)
 
 ### building Pmodules
 * path to Lua installation fixed in recipe to build luarocks
