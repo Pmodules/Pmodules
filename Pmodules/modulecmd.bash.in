@@ -136,7 +136,7 @@ save_env() {
 		via a trap handler.'
 	encode_base64(){
 		local -- os_name=''
-		os_name=$(${uname} -s)
+		os_name=$(uname -s)
 
 		case "${os_name}" in
 			Linux )
