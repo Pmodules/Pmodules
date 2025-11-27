@@ -451,10 +451,11 @@ pm::read_config(){
 	if [[ -v PMODULES_CONFIG_FILE && -n "${PMODULES_CONFIG_FILE}" ]]; then
 		sys_config_file="${PMODULES_HOME%%/Tools*}/config/${PMODULES_CONFIG_FILE}"
 	fi
+	sys_config_file=$(readlink "${sys_config_file}")
 	test -r "${sys_config_file}" || \
 		std::die 3 \
 			 "%s %s -- %s" \
-			 "base overlay definition file" \
+			 "Configuration file " \
 			 "does not exist or is not readable" \
 			 "$_"
 	DefaultGroups="${DefaultPmodulesConfig['default_groups']}"

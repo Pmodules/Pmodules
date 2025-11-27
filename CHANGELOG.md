@@ -3,6 +3,9 @@
 ## Version 2.0.3
 
 ### modulecmd
+* Misleading error message fix if system configuration file is not
+  readable.
+  (#1316)
 
 ### build system
 * set CC and CXX if not defined. This was a bug introduced in 2.0.2
