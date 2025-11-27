@@ -451,7 +451,7 @@ pm::read_config(){
 	if [[ -v PMODULES_CONFIG_FILE && -n "${PMODULES_CONFIG_FILE}" ]]; then
 		sys_config_file="${PMODULES_HOME%%/Tools*}/config/${PMODULES_CONFIG_FILE}"
 	fi
-	sys_config_file=$(readlink "${sys_config_file}")
+	sys_config_file=$(readlink -f "${sys_config_file}")
 	test -r "${sys_config_file}" || \
 		std::die 3 \
 			 "%s %s -- %s" \
@@ -472,8 +472,8 @@ pm::read_config(){
 	OverlayInfo[none:type]='n'
 	OverlayInfo[none:layout]='flat'
 
-	PMODULES_DISTFILESDIR=${PMODULES_DISTFILESDIR:-"${DistfilesDir}"}
-	PMODULES_TMPDIR="${PMODULES_TMPDIR:-${TmpDir}"
+	PMODULES_DISTFILESDIR="${PMODULES_DISTFILESDIR:-${DistfilesDir}}"
+	PMODULES_TMPDIR="${PMODULES_TMPDIR:-${TmpDir}}"
 	export PMODULES_DISTFILESDIR PMODULES_TMPDIR
 }
 
