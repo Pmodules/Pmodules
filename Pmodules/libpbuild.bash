@@ -648,8 +648,8 @@ pbuild::compile() {
 		unset V
 	fi
 	(( JOBS == 0 )) && JOBS=$(_get_num_cores)
-	std::info "CC=$CC"
-	std::info "CXX=$CXX"
+	[[ -v CC ]] || CC=cc
+	[[ -v CXX ]] || CXX=c++
 	/bin/bash -c "CC=$CC CXX=$CXX ${make} -j${JOBS} -e" || \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
