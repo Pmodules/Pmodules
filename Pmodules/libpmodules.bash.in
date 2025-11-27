@@ -425,9 +425,11 @@ pm::read_config(){
 					;;
 				tmpdir | tmp_dir )
 					yml::get_value TmpDir yaml_input ".${key}" '!!str'
+					TmpDir="$(envsubst <<<"${TmpDir}")"
 					;;
 				distfilesdir | download_dir )
 					yml::get_value DistfilesDir yaml_input ".${key}" '!!str'
+					DistfilesDir="$(envsubst <<<"${DistfilesDir}")"
 					;;
 				overlays )
 					local -- overlay=''
