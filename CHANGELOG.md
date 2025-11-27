@@ -7,6 +7,8 @@
   (#1316, #1331)
 
 ### build system
+* Substitute environment variables in TmpDir and DistFilesDir in Pmodules.yaml
+  (#1333)
 * Function to simplify building modules with pip3 added. 
   (#1329)
 * pbuild::install_docfiles() is now obsolete. If called it exists with
