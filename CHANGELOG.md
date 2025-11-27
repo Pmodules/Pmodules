@@ -7,6 +7,8 @@
   (#1316)
 
 ### build system
+* Function to simplify building modules with pip3 added. 
+  (#1329)
 * pbuild::install_docfiles() is now obsolete. If called it exists with
   an error message.
   (#1327)
