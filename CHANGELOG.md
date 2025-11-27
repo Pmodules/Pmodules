@@ -4,7 +4,7 @@
 
 ### modulecmd
 * Misleading error message fixed if system configuration file is not readable.
-  (#1316)
+  (#1316, #1331)
 
 ### build system
 * Function to simplify building modules with pip3 added. 
@@ -14,7 +14,7 @@
   (#1327)
 * default values for `PMODULES_TMPDIR` and `PMODULES_DISTFILESDIR` are now 
   more general.
-  (#1325)
+  (#1325, #1331)
 * set CC and CXX if not defined. This was a bug introduced in 2.0.2
   (#1322)
 
