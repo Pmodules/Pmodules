@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if [[ ${UID} -ge 1000 ]]; then
+  if [[ -r @PREFIX@/share/Pmodules/init/bash ]]; then
+    source @PREFIX@/share/Pmodules/init/bash
+  fi
+fi
