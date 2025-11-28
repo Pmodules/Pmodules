@@ -24,6 +24,9 @@
 * path to Lua installation fixed in recipe to build luarocks
   (#1320)
 
+### other changes
+* shell profile for RPM added
+
 ## Version 2.0.2
 
 Migragtion to GitHub:
