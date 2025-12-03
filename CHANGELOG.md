@@ -7,6 +7,8 @@
   (#1316, #1331)
 
 ### build system
+* typo in error message in function pbuild::configure() fixed.
+  (#1338)
 * Substitute environment variables in TmpDir and DistFilesDir in Pmodules.yaml
   (#1333)
 * Function to simplify building modules with pip3 added. 
