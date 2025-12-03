@@ -568,7 +568,7 @@ pbuild::configure() {
         		if [[ ! -r "${SRC_DIR}/configure" ]]; then
 				std::die 3 \
 					 "%s " "${module_name}/${module_version}:" \
-					 "${FNCNAME[0]}:" \
+					 "${FUNCNAME[0]}:" \
 					 "autotools configuration not available, aborting..."
 			fi
 			;;
@@ -576,7 +576,7 @@ pbuild::configure() {
 			if [[ ! -r "${SRC_DIR}/CMakeLists.txt" ]]; then
 				std::die 3 \
 					 "%s " "${module_name}/${module_version}:" \
-					 "${FNCNAME[0]}:" \
+					 "${FUNCNAME[0]}:" \
 					 "CMake script not available, aborting..."
 			fi
 			;;
