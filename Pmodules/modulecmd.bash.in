@@ -1073,13 +1073,10 @@ subcommand_unload() {
 	for arg in "${args[@]}"; do
 		# is the module loaded?
 		for lmfile in "${_lmfiles_[@]}" '_zzzz_'; do
-			if [[ $lmfile =~ ${arg} ]]; then
-				break
-			fi
+			[[ /${lmfile} =~ /${arg}$ ]] && break
 		done
-		if [[ "${lmfile}" == '_zzzz_' ]]; then
-			continue
-		fi
+		[[ "${lmfile}" == '_zzzz_' ]] && continue
+
 		# yes, module has been loaded
 		is_modulefile modulecmd "${lmfile}" || die_module_not_a_modulefile "${arg}"
 

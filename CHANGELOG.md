@@ -3,6 +3,9 @@
 ## Version 2.0.3
 
 ### modulecmd
+* Bugfix in unloading modules. Under certain conditions unloading a module
+  failed due to a wrong check in the test whether a module is loaded or not.
+  (#1340)
 * Misleading error message fixed if system configuration file is not readable.
   (#1316, #1331)
 
