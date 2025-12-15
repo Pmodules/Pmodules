@@ -3,6 +3,8 @@
 ## Version 2.0.3
 
 ### modulecmd
+* It was not possible to load a module with it's absolute path.
+  (#1343)
 * Bugfix in unloading modules. Under certain conditions unloading a module
   failed due to a wrong check in the test whether a module is loaded or not.
   (#1340)
