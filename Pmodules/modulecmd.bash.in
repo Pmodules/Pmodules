@@ -367,6 +367,14 @@ die_ol_not_on_top_of_stack(){
 		 "$1"
 }
 
+die_ol_absname_not_allowed(){
+	std::die 3 "%s %s: %s %s -- %s" \
+		 "${CMD}" "${SubCommand}" \
+		 "Using an absolute name is not allowed" \
+		 "for a module in an overlay" \
+		 "$1"
+}
+
 print_deprecated_msg(){
 	local -- msg=''
 	printf -v msg "
@@ -535,7 +543,7 @@ is_release_stage() {
 #..............................................................................
 find_overlay () {
 	local -r __doc__='
-	      Check whether a given moduledir is in an used overlay.
+	      Check whether a given moduledir is in an overlay.
 	      If yes, return 0 otherwise return 1
 	'
         local -n ref_ol="$1"		# [out] ref.var to return overlay name
@@ -544,7 +552,7 @@ find_overlay () {
 
 	path="${path%/"${__MODULEFILES_DIR__}"*}"
 	local -- ol=''
-	for ol in "${UsedOverlays[@]}"; do
+	for ol in "${Overlays[@]}"; do
 		local -- modulefiles_root="${OverlayInfo[${ol}:modulefiles_root]}"
 		if [[ "${path}" == ${modulefiles_root}/* ]]; then
 			ref_ol="${ol}"
@@ -906,8 +914,8 @@ subcommand_load() {
 				subcommand_use "${relstage}"
 			fi
 		fi # handle extended module names
-
-		find_modulefile current_modulefile relstage moduledir modulecmd "${m}" || {
+		find_modulefile current_modulefile relstage moduledir \
+				modulecmd "${m}" || {
 			local -- hints=''
 			get_load_hints hints
 			if [[ -z "${hints}" ]]; then
