@@ -3,6 +3,8 @@
 ## Version 2.0.3
 
 ### modulecmd
+* Don't allow absolute path names for modules in an overlay.
+  (#1344)
 * It was not possible to load a module with it's absolute path.
   (#1343)
 * Bugfix in unloading modules. Under certain conditions unloading a module
