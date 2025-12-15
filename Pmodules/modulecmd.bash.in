@@ -1398,19 +1398,32 @@ find_modulefile(){
 
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
-	local -a mods=()
-	local -- relstages="${UsedReleaseStages}"
-	[[ "${modulename}" = */* ]] && relstages="${ReleaseStages}"
-	get_available_modules \
-		'load' \
-		mods \
-		"${modulename}" \
-                "${relstages}" \
-		"${modulepath[@]}"
-	(( ${#mods[@]} == 0 )) && return 1
-	ref_relstage="${mods[1]}"
-	ref_moduledir="${mods[2]}"
-	ref_modulefile="${mods[2]}/${mods[3]}"
+	if [[ "${m:0:1}" = '/' || -r "${m}" ]]; then
+		# handle absolut or relative module names
+		local -- absname=$(std::get_abspath "${m}")
+		local -- ol_name=''
+		local -- group=''
+		find_overlay ol_name group "${absname}"
+		[[ "${ol_name}" != 'none' ]] && \
+			die_ol_absname_not_allowed "${m}"
+		ref_modulefile="${absname}"
+		ref_relstage='stable'
+		ref_moduledir="${absname%/*}"
+	else
+		local -a mods=()
+		local -- relstages="${UsedReleaseStages}"
+		[[ "${modulename}" = */* ]] && relstages="${ReleaseStages}"
+		get_available_modules \
+			'load' \
+			mods \
+			"${modulename}" \
+			"${relstages}" \
+			"${modulepath[@]}"
+		(( ${#mods[@]} == 0 )) && return 1
+		ref_relstage="${mods[1]}"
+		ref_moduledir="${mods[2]}"
+		ref_modulefile="${mods[2]}/${mods[3]}"
+	fi
 	is_modulefile ref_interp "${ref_modulefile}" || \
 		die_module_not_a_modulefile "${modulename}"
 	if [[ "${modulecmd}" == "Lmod_cmd" ]]; then
