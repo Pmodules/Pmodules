@@ -676,7 +676,7 @@ pbuild::compile() {
 #   $@: documentation files relative to source
 #
 pbuild::install_docfiles() {
-	std::die \
+	std::die 1 \
 		"Using ${FUNCNAME[0]} is deprecated with YAML module configuration files."
 	MODULE_DOCFILES+=("$@")
 }
