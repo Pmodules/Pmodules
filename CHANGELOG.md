@@ -10,6 +10,8 @@
   (#1316, #1331)
 
 ### build system
+* calling std::die in pbuild::install_docfiles() fixed.
+  (#1342)
 * typo in error message in function pbuild::configure() fixed.
   (#1338)
 * Substitute environment variables in TmpDir and DistFilesDir in Pmodules.yaml
