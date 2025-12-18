@@ -3,6 +3,8 @@
 ## Version 2.0.3
 
 ### modulecmd
+* Issue with Lmod spider command fixed.
+  (#1348)
 * Don't allow absolute path names for modules in an overlay.
   (#1344)
 * It was not possible to load a module with it's absolute path.
