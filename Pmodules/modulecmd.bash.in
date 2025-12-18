@@ -38,7 +38,7 @@ Lmod_cmd(){
 readonly -f Lmod_cmd
 
 Spider_cmd(){
-	LD_PRELOAD='' LD_LIBRARY_PATH='' \
+	LD_PRELOAD='' LD_LIBRARY_PATH='' TCLLIBPATH=''\
 		  "${PMODULES_HOME}/libexec/lmod/lmod/libexec/spider" "$@"
 }
 readonly -f Spider_cmd
