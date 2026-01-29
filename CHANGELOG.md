@@ -8,6 +8,8 @@
   (#1354)
 
 ### build system
+* Don't pass an empty string as argument to configure/cmake.
+  (#1356)
 
 ## Version 2.0.3
 
