@@ -14,6 +14,10 @@
   (#1360)
 * Don't pass an empty string as argument to configure/cmake.
   (#1356)
+  
+### other changesg
+* Download URL for Modules fixed.
+  (#1362)
 
 ## Version 2.0.3
 
@@ -54,7 +58,7 @@
 
 ### other changes
 * shell profile for RPM added
-Pmod
+
 ## Version 2.0.2
 
 Migragtion to GitHub:
