@@ -1406,14 +1406,14 @@ find_modulefile(){
 
 	local -a modulepath=()
 	IFS=':' read -r -a modulepath <<<"${MODULEPATH}"
-	if [[ "${m:0:1}" = '/' || -r "${m}" ]]; then
+	if [[ "${modulename:0:1}" = '/' || -r "${modulename}" ]]; then
 		# handle absolut or relative module names
 		local -- absname=$(std::get_abspath "${m}")
 		local -- ol_name=''
 		local -- group=''
 		find_overlay ol_name group "${absname}"
 		[[ "${ol_name}" != 'none' ]] && \
-			die_ol_absname_not_allowed "${m}"
+			die_ol_absname_not_allowed "${modulename}"
 		ref_modulefile="${absname}"
 		ref_relstage='stable'
 		ref_moduledir="${absname%/*}"
