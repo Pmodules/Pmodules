@@ -10,6 +10,8 @@
   (#1354)
 
 ### build system
+* Don't set CC and CXX in pbuild::compile()
+  (#1360)
 * Don't pass an empty string as argument to configure/cmake.
   (#1356)
 
