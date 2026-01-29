@@ -652,9 +652,10 @@ pbuild::compile() {
 		unset V
 	fi
 	(( JOBS == 0 )) && JOBS=$(_get_num_cores)
-	[[ -v CC ]] || CC=cc
-	[[ -v CXX ]] || CXX=c++
-	/bin/bash -c "CC=$CC CXX=$CXX ${make} -j${JOBS} -e" || \
+	#[[ -v CC ]] || CC=cc
+	#[[ -v CXX ]] || CXX=c++
+	#CC=$CC CXX=$CXX
+	${make} -j${JOBS} -e || \
 		std::die 3 \
 			 "%s " "${module_name}/${module_version}:" \
 			 "compilation failed!"
