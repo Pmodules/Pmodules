@@ -3,6 +3,9 @@
 ## Version 2.0.4
 
 ### modulecmd
+* Bugfix in unloading modules. A versioned module couldn't be
+  unloaded if only the name was specified.
+  (#1364)
 * Use of unset variable fixed in find_modulefile().
   (#1358)
 * When loading multiple modules, `LD_LIBRARY_PATH` may not have
