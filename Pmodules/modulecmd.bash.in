@@ -1082,6 +1082,7 @@ subcommand_unload() {
 		# is the module loaded?
 		for lmfile in "${_lmfiles_[@]}" '_zzzz_'; do
 			[[ /${lmfile} =~ /${arg}$ ]] && break
+			[[ /${lmfile} =~ /${arg}/.* ]] && break
 		done
 		[[ "${lmfile}" == '_zzzz_' ]] && continue
 
