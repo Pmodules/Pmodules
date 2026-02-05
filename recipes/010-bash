@@ -9,6 +9,18 @@ DOWNLOAD_URL="https://ftp.gnu.org/gnu/$P/${FNAME}"
 
 source "$(dirname "$0")/librecipes.bash"
 
+if [[ "$V" == '5.3' ]]; then
+	cd "${SRC_DIR}"
+	for ((i=1; i<=9; i++)); do
+		patch_name="bash53-00$i"
+		src_file="${DOWNLOADS_DIR}/${patch_name}"
+		url="https://ftp.gnu.org/gnu/$P/$P-$V-patches/${patch_name}"
+		test -r "${src_file}" || curl -L --output "$_" "${url}" \
+			|| exit ${PB_ERR_DOWNLOAD}
+		patch -p0 < "${src_file}"
+	done
+fi
+
 #---
 # configure
 mkdir -p "${BUILD_DIR}" && cd "$_" || exit ${PB_ERR_SYSTEM}
