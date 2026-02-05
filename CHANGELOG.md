@@ -19,6 +19,8 @@
   (#1356)
   
 ### other changesg
+* Bash updated to version 5.3.9
+  (#1366)
 * Download URL for Modules fixed.
   (#1362)
 
