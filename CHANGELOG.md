@@ -12,6 +12,8 @@
 
 ## Version 2.0.5
 ### modulecmd
+* Bugfixes: cherry-pick fixes for issues #1368 and #1371
+  (#1375)
 
 ## Version 2.0.4
 
