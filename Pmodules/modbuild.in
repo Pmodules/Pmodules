@@ -1272,15 +1272,26 @@ build_modules_yaml_v1(){
 
 		}
 
-		# build this variant?
-		local -- build_variant="${opt_variant:-${config['default_variant']}}"
-		if [[ ":${config['variant']}:" != *:${build_variant}:* ]]; then
-			debug "don't build this variant: ${config['variant']} !=  *:${build_variant}:*"
-			return 0
-		fi
+		check_variant(){
+			local -- build_variant="${opt_variant:-${config['default_variant']}}"
+			# don't build if a variant has be specified on the command line or
+			# a default variant has been set in the config file, but no
+			# variant name is defined here
+	      		[[ -n ${build_variant} && -z ${config['variant']} ]] && return 1
+			[[ -z ${config['variant']} ]] && return 1
+			set -o noglob
+			local -a items=( "${config['variant'],,}" )
+			set +o noglob
+			local item=''
+			for item in "${items[@]}"; do
+				[[ "${opt_variant}" == "${item}" ]] && return 0
+			done
+		}
+
 		check_kernel     module_config || return 1
 		check_target_cpu module_config || return 1
 		check_system     module_config || return 1
+		check_variant    module_config || return 1
 		return 0
 	}
 
