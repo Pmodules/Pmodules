@@ -6,6 +6,10 @@
   GroupDepths($group) was undefined in the function get\_load\_hints().
   (#1368)
 
+### Build system
+* Bugfix: Selecting the variant to build on the cmd-line did not work.
+  (#1371)
+
 ## Version 2.0.5
 ### modulecmd
 
