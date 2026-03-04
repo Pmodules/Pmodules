@@ -809,6 +809,8 @@ subcommand_load() {
 			fi
 			local -- group=${line[2]}
 			[[ "${group}" != 'none' ]] || continue
+			[[ -v GroupDepths[${group}] ]] || \
+                                scan_groups "${UsedOverlays[@]}"
 			if [[ ! ":${UsedGroups}:" == *:${group}:* ]] && \
 				   (( ${GroupDepths[${group}]} == 0 )); then
 				output+="module use ${group}; "
