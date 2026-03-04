@@ -1,5 +1,14 @@
 # Changelog of Pmodules
 
+## Version 2.1.0
+### modulecmd
+* Bugfix: Under some conditions it could happen, that the variable
+  GroupDepths($group) was undefined in the function get\_load\_hints().
+  (#1368)
+
+## Version 2.0.5
+### modulecmd
+
 ## Version 2.0.4
 
 ### modulecmd
