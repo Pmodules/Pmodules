@@ -563,9 +563,11 @@ pbuild::post_configure() {
 	:
 }
 pbuild::configure() {
+	local -- src_dir="${SRC_DIR}"
+	[[ -n "${ModuleConfig['src_dir']}" ]] && src_dir+="/${ModuleConfig['src_dir']}"
 	case "${configure_with}" in
 		autotools )
-        		if [[ ! -r "${SRC_DIR}/configure" ]]; then
+        		if [[ ! -r "${src_dir}/configure" ]]; then
 				std::die 3 \
 					 "%s " "${module_name}/${module_version}:" \
 					 "${FUNCNAME[0]}:" \
@@ -573,7 +575,7 @@ pbuild::configure() {
 			fi
 			;;
 		cmake )
-			if [[ ! -r "${SRC_DIR}/CMakeLists.txt" ]]; then
+			if [[ ! -r "${src_dir}/CMakeLists.txt" ]]; then
 				std::die 3 \
 					 "%s " "${module_name}/${module_version}:" \
 					 "${FUNCNAME[0]}:" \
@@ -586,24 +588,24 @@ pbuild::configure() {
 	for arg in "${CONFIGURE_ARGS[@]}"; do
 		config_args+=( "$(envsubst <<<"${arg}")" )
 	done
-	if [[ -r "${SRC_DIR}/configure" ]] && \
+	if [[ -r "${src_dir}/configure" ]] && \
 		   [[ "${configure_with}" == 'auto' ]] || \
 			   [[ "${configure_with}" == 'autotools' ]]; then
-		std::info "%s " "${SRC_DIR}/configure --prefix=${PREFIX} ${config_args[@]}"
-		"${SRC_DIR}/configure" \
+		std::info "%s " "${src_dir}/configure --prefix=${PREFIX} ${config_args[@]}"
+		"${src_dir}/configure" \
 			  --prefix="${PREFIX}" \
 			  "${config_args[@]}" || \
 			std::die 3 \
 				 "%s " "${module_name}/${module_version}:" \
 				 "configure failed"
-	elif [[ -r "${SRC_DIR}/CMakeLists.txt" ]] && \
+	elif [[ -r "${src_dir}/CMakeLists.txt" ]] && \
 		     [[ "${configure_with}" == 'auto' ]] || \
 			     [[ "${configure_with}" == "cmake" ]]; then
 		# note: in most/many cases a cmake module is used!
 		cmake \
 			-DCMAKE_INSTALL_PREFIX="${PREFIX}" \
 			"${config_args[@]}" \
-			"${SRC_DIR}" || \
+			"${src_dir}" || \
 			std::die 3 \
 				 "%s " "${module_name}/${module_version}:" \
 				 "cmake failed"

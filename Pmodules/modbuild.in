@@ -487,6 +487,7 @@ declare -A Yaml_default_config=(
 	['relstage']='unstable'		# !!str
 	['runtime_deps']=''		# !!seq of strings
 	['script']='build'		# !!str
+	['src_dir']=''    		# !!str
 	['sub_packages']=''		# !!map
 	['suffix']=''			# !!str
 	['systems']=''			# !!seq of strings
@@ -716,7 +717,7 @@ build_modules_yaml_v1(){
 							;;
 					esac
 					;;
-				default_variant | download_dir | group | modulefile | overlay | script | suffix )
+				default_variant | download_dir | group | modulefile | overlay | script | src_dir | suffix )
 					yml::get_value \
 						value \
 						yaml_input \
