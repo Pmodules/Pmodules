@@ -12,6 +12,22 @@
 
 ## Version 2.0.5
 ### modulecmd
+* Bugfix: Under some conditions it could happen, that the variable
+  GroupDepths($group) was undefined in the function get\_load\_hints().
+  The PR for issue #1368 didn't fix the bug.
+  (#1384)
+* Bugfixes: cherry-pick fixes for issues #1368 and #1371
+  (#1375)
+
+### build-system
+* Enhancemnet: It is now possible to specify a sub-directory relative to
+  $SRC_DIR used by cmake/autotools in the YAML config file.
+  (#1382)
+* Bugfix: remove comments while reading YAML config files
+  (#1380)
+* Bugfix: test whether a variant has to be build or not fixed
+  (#1377)
+
 
 ## Version 2.0.4
 

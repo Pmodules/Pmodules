@@ -799,7 +799,8 @@ subcommand_load() {
 		local -n output="$1"	# [out] ref.var to return result
 		output=''
 
-		local -- search_result="$(set +x; subcommand_search  "${m}" -a --no-header 2>&1)"
+		local -- search_result=''
+		find_matching_modules search_result -a "${m}"
 		local -- relstage=''
 		while read -r -a line; do
 			(( ${#line[@]} == 0 )) && continue
@@ -816,7 +817,7 @@ subcommand_load() {
 				output+="module use ${group}; "
 			fi
 			local -i n=$(( ${GroupDepths[${group}]}/2 ))
-			output+="module load ${line[*]:4:$n} ${line[0]}\n"
+			output+="module load ${line[*]:5:$n} ${line[0]}\n"
 		done <<<"${search_result}"
 
 		if [[ -n ${output} ]]; then
