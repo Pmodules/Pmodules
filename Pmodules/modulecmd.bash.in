@@ -2225,7 +2225,7 @@ subcommand_unuse() {
 			# remove root of overlay
                         local -- dir=''
                         for dir in "${modulepath[@]}"; do
-                                [[ "${dir}" == "${OverlayInfo[${ol_name}:modulefiles_root]}" ]] && \
+                                [[ "${dir}"/* == "${OverlayInfo[${ol_name}:modulefiles_root]}/*" ]] && \
                                         std::remove_path MODULEPATH "${dir}"
 
                         done
