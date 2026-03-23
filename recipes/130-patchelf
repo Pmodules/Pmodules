@@ -3,7 +3,7 @@
 # https://github.com/NixOS/patchelf
 #
 P=patchelf
-V=${PATCHELF_VERSION:-0.12}
+V=${PATCHELF_VERSION:-0.14.5}
 FNAME="$P-$V.tar.xz"
 DOWNLOAD_URL="https://github.com/NixOS/$P/archive/$V.tar.gz"
 
