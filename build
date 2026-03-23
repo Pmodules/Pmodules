@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 
-declare -rx VERSION='2.0.4'
+declare -rx VERSION='2.1.0'
 declare -rx BASH5_VERSION='5.3'
 declare -rx TCL_VERSION='8.6.16'
 declare -rx TCLLIB_VERSION='1.21'
@@ -9,6 +9,7 @@ declare -rx MODULES_VERSION='3.2.10.2'
 declare -rx LUA_VERSION='5.4.7'
 declare -rx LUAROCKS_VERSION='3.9.2'
 declare -rx LMOD_VERSION='8.7.56'
+declare -rx PATCHELF_VERSION='0.14.5'
 
 # for macOS only
 declare -rx GETOPT_VERSION='1.1.6'
