@@ -2,22 +2,31 @@
 
 ## Version 2.1.0
 ### modulecmd
+* Stub functions `module-hide` and `module-tag` added. The main purpose is 
+  to make migration to the Tcl Env. Modules easier.
+  (#1395g)
+* Bugfix: un-using an overlay didn't remove the directories of the overlay
+  in all cases.
+  (#1387)
 * Bugfix: Under some conditions it could happen, that the variable
   GroupDepths($group) was undefined in the function get\_load\_hints().
   (#1368)
 
 ### Build system
+* Use patchelf 0.14.5 and Lmod 9.1.1
+  (#1391, #1393)
 * Bugfix: Selecting the variant to build on the cmd-line did not work.
   (#1371)
 
 ## Version 2.0.5
 ### modulecmd
+* Bugfix: un-using an overlay didn't remove the directories of the overlay
+  in all cases.
+  (#1387)
 * Bugfix: Under some conditions it could happen, that the variable
   GroupDepths($group) was undefined in the function get\_load\_hints().
   The PR for issue #1368 didn't fix the bug.
-  (#1384)
-* Bugfixes: cherry-pick fixes for issues #1368 and #1371
-  (#1375)
+  (#1368, #1384)
 
 ### build-system
 * Enhancemnet: It is now possible to specify a sub-directory relative to
@@ -27,7 +36,8 @@
   (#1380)
 * Bugfix: test whether a variant has to be build or not fixed
   (#1377)
-
+* Bugfix: Selecting the variant to build on the cmd-line did not work.
+  (#1371)
 
 ## Version 2.0.4
 
