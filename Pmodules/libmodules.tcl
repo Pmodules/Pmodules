@@ -252,6 +252,12 @@ proc module-help { help } {
 	set ::g_help ${help}
 }
 
+proc module-tag { } {
+}
+
+proc module-hide { } {
+}
+
 proc ModulesHelp { } {
 	if { [info exists ::whatis] } {
 		puts stderr "${::whatis}"
