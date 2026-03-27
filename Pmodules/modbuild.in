@@ -1060,6 +1060,7 @@ build_modules_yaml_v1(){
 
 		local -- compiler
 		local -- mpi
+		local -i n=0
 		for compiler in "${with_compiler[@]}"; do
 			for mpi in "${with_mpi[@]}"; do
 				# build if opt_with_modules is empty or compiler is in this array
@@ -1075,9 +1076,11 @@ build_modules_yaml_v1(){
 					"$3" \
 					"${compiler}" \
 					"${mpi}" \
-					"${@:4}"
+					"${@:4}" || std::die 42 "Fatal error building the module!"
+				(( n++ ))
 			done
 		done
+		(( n > 0 ))
 	}
 
 	build_modules_hdf5(){
@@ -1508,7 +1511,7 @@ build_modules_yaml_v1(){
 						variant_config || continue
 					build_modules_variant \
 						"${name}" "${version}" \
-						variant_config
+						variant_config || continue
 					if [[ "${mod_config['build_variants']}" == 'first_match' ]]; then
 						break
 					fi
