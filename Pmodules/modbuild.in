@@ -1277,19 +1277,23 @@ build_modules_yaml_v1(){
 		}
 
 		check_variant(){
+			# if a variant is neither passed as argument nor a default,
+			# is defined, therefore let's build this variant.
 			local -- build_variant="${opt_variant:-${config['default_variant']}}"
-			# don't build if a variant has be specified on the command line or
-			# a default variant has been set in the config file, but no
-			# variant name is defined here
-	      		[[ -n ${build_variant} && -z ${config['variant']} ]] && return 1
+			[[ -z "${build_variant}" ]] && return 0
+
+			# a variant has been passed as argument or a default variant is
+			# defined. If this variant is not named, we don't build it.
 			[[ -z ${config['variant']} ]] && return 1
+
 			set -o noglob
-			local -a items=( "${config['variant'],,}" )
+			local -a variants=( "${config['variant'],,}" )
 			set +o noglob
-			local item=''
-			for item in "${items[@]}"; do
-				[[ "${opt_variant}" == "${item}" ]] && return 0
+			local variant=''
+			for variant in "${variants[@]}"; do
+				[[ "${build_variant}" == "${variant}" ]] && return 0
 			done
+			return 1
 		}
 
 		check_kernel     module_config || return 1
