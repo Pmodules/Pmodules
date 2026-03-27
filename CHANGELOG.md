@@ -2,17 +2,20 @@
 
 ## Version 2.1.0
 ### modulecmd
-* Stub functions `module-hide` and `module-tag` added. The main purpose is 
-  to make migration to the Tcl Env. Modules easier.
-  (#1395g)
+* Enhancemnet: Stub functions `module-hide` and `module-tag` added. The main
+  purpose is to make migration to the Tcl Env. Modules easier.
+  (#1395)
 * Bugfix: un-using an overlay didn't remove the directories of the overlay
   in all cases.
   (#1387)
 * Bugfix: Under some conditions it could happen, that the variable
   GroupDepths($group) was undefined in the function get\_load\_hints().
-  (#1368)
+  (#1368, #1384)
 
 ### Build system
+* Bugfix: Issue selecting the correct variant fixed if 'first_match' was set
+  as variant.
+  (#1401)
 * Use patchelf 0.14.5 and Lmod 9.1.1
   (#1391, #1393)
 * Bugfix: Selecting the variant to build on the cmd-line did not work.
@@ -24,11 +27,14 @@
   in all cases.
   (#1387)
 * Bugfix: Under some conditions it could happen, that the variable
-  GroupDepths($group) was undefined in the function get\_load\_hints().
+  GroupDepths($group) was undefined in the function get_load_hints().
   The PR for issue #1368 didn't fix the bug.
   (#1368, #1384)
 
 ### build-system
+* Bugfix: Issue selecting the correct variant fixed if 'first_match' was set
+  as variant.
+  (#1401)
 * Enhancemnet: It is now possible to specify a sub-directory relative to
   $SRC_DIR used by cmake/autotools in the YAML config file.
   (#1382)
