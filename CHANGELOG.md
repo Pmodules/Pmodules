@@ -18,7 +18,10 @@
   (#1401)
 * Enhancemnet: Use patchelf 0.14.5 and Lmod 9.1.1
   (#1391, #1393)
-* Bugfix: test whether a variant has to be build or not fixed
+* Enhancemnet: It is now possible to specify a sub-directory relative to
+  $SRC_DIR used by cmake/autotools in the YAML config file.
+  (#1382)
+c* Bugfix: test whether a variant has to be build or not fixed
   (#1377)
 * Bugfix: Selecting the variant to build on the cmd-line did not work.
   (#1371)
