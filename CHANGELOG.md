@@ -1,25 +1,22 @@
 # Changelog of Pmodules
 
-## Version 2.1.0
-### modulecmd
-* Bugfix: Under some conditions it could happen, that the variable
-  GroupDepths($group) was undefined in the function get\_load\_hints().
-  (#1368)
-
-### Build system
-* Bugfix: Selecting the variant to build on the cmd-line did not work.
-  (#1371)
-
 ## Version 2.0.5
 ### modulecmd
 * Bugfix: Under some conditions it could happen, that the variable
   GroupDepths($group) was undefined in the function get\_load\_hints().
   The PR for issue #1368 didn't fix the bug.
   (#1384)
+* Bugfix: Under some conditions it could happen, that the variable
+  GroupDepths($group) was undefined in the function get_load_hints().
+  The PR for issue #1368 didn't fix the bug.
+  (#1368, #1384)
 * Bugfixes: cherry-pick fixes for issues #1368 and #1371
   (#1375)
 
 ### build-system
+* Bugfix: Issue selecting the correct variant fixed if 'first_match' was set
+  as variant.
+  (#1403)
 * Enhancemnet: It is now possible to specify a sub-directory relative to
   $SRC_DIR used by cmake/autotools in the YAML config file.
   (#1382)
