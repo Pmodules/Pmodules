@@ -146,7 +146,7 @@ yml::read_file(){
 	local -- yml_fname="$2"
 	local -- yml_node="$3"
 
-	yml_content=$( ${yq} -Ne e "${yml_node}|explode(.)" "${yml_fname}" 2>/dev/null ) || \
+	yml_content=$( ${yq} -Ne e "... comments=\"\"|${yml_node}|explode(.)" "${yml_fname}" 2>/dev/null ) || \
 		yml::die_read_file "${yml_fname}"
 }
 
