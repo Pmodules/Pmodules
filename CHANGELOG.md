@@ -18,12 +18,17 @@
 * Bugfix: Issue selecting the correct variant fixed if 'first_match' was set
   as variant.
   (#1401)
-* Use patchelf 0.14.5 and Lmod 9.1.1
+* Enhancemnet: Use patchelf 0.14.5 and Lmod 9.1.1
   (#1391, #1393)
 * Bugfix: test whether a variant has to be build or not fixed
   (#1377)
 * Bugfix: Selecting the variant to build on the cmd-line did not work.
   (#1371)
+  
+### other changes
+* Bugfix: remove comments while reading YAML config files
+  (#1380)
+
 
 ## Version 2.0.5
 ### modulecmd
@@ -42,12 +47,14 @@
 * Enhancemnet: It is now possible to specify a sub-directory relative to
   $SRC_DIR used by cmake/autotools in the YAML config file.
   (#1382)
-* Bugfix: remove comments while reading YAML config files
-  (#1380)
 * Bugfix: test whether a variant has to be build or not fixed
   (#1377)
 * Bugfix: Selecting the variant to build on the cmd-line did not work.
   (#1371)
+
+### other changes
+* Bugfix: remove comments while reading YAML config files
+  (#1380)
 
 ## Version 2.0.4
 
@@ -67,7 +74,7 @@
 * Don't pass an empty string as argument to configure/cmake.
   (#1356)
   
-### other changesg
+### other changes
 * Bash updated to version 5.3.9
   (#1366)
 * Download URL for Modules fixed.
