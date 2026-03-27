@@ -7,7 +7,7 @@
   (#1395g)
 * Bugfix: un-using an overlay didn't remove the directories of the overlay
   in all cases.
-  (#1387)
+  (#1387, #1398)
 * Bugfix: Under some conditions it could happen, that the variable
   GroupDepths($group) was undefined in the function get\_load\_hints().
   (#1368)
